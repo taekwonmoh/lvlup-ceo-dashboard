@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"> 
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -162,7 +162,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <div class="app" id="app"><p style="text-align:center;padding:80px;color:var(--gray-400);">Loading dashboard...</p></div>
 
 <script>
-/* ââ Firebase Config (same project as VA dashboard) ââ */
+/* ── Firebase Config (same project as VA dashboard) ── */
 const firebaseConfig = {
   apiKey: "AIzaSyDABx4H7EpCRABaD9h3lGTD3hBp2QFfhQg",
   authDomain: "va-dashboard-bf7ca.firebaseapp.com",
@@ -177,7 +177,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const CEO = 'ceo'; // root path in Firebase
 
-/* ââ State ââ */
+/* ── State ── */
 let state = {
   activeSection: 'scorecard',
   weekOffset: 0,
@@ -193,7 +193,7 @@ let state = {
 let debounceTimers = {};
 let activeListeners = [];
 
-/* ââ Locations & Metrics Config ââ */
+/* ── Locations & Metrics Config ── */
 const LOCATIONS = [
   { id: 'waunakee', name: 'LVLUP Waunakee', short: 'WAU', color: '#1a1a2e', revenueGoal: 80000 },
   { id: 'eastmad', name: 'LVLUP East Madison', short: 'E.MAD', color: '#0f3460', revenueGoal: 18920 },
@@ -226,7 +226,7 @@ const SCORECARD_PEOPLE = {
   goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
 };
 
-/* ââ Helpers ââ */
+/* ── Helpers ── */
 function getWeekKey(offset) {
   const now = new Date();
   const day = now.getDay();
@@ -287,7 +287,7 @@ function revPctClass(val, goal) {
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-/* ââ Firebase Helpers ââ */
+/* ── Firebase Helpers ── */
 function fbRef(path) { return db.ref(CEO + '/' + path); }
 
 function fbSet(path, val) {
@@ -299,7 +299,7 @@ function fbDebounce(path, val, ms) {
   debounceTimers[path] = setTimeout(() => fbSet(path, val), 500);
 }
 
-/* ââ Data Loading ââ */
+/* ── Data Loading ── */
 function listenAll() {
   activeListeners.forEach(l => l.ref.off(l.event));
   activeListeners = [];
@@ -352,11 +352,11 @@ function listenAll() {
   activeListeners.push({ ref: kpiRef, event: 'value' });
 }
 
-/* ââ Navigation ââ */
+/* ── Navigation ── */
 function setSection(s) { state.activeSection = s; render(); }
 function changeWeek(d) { state.weekOffset += d; listenAll(); }
 
-/* ââ Update functions ââ */
+/* ── Update functions ── */
 function updateScorecard(locId, personId, metricId, weekIdx, val) {
   const weekKey = getWeekKey(state.weekOffset - weekIdx);
   fbDebounce('scorecard/weekly/' + weekKey + '/' + locId + '/' + personId + '/' + metricId, val);
@@ -392,7 +392,7 @@ function updateKPI(locId, metric, val) {
   fbDebounce('kpis/2026/' + monthKey + '/' + locId + '/' + metric, val);
 }
 
-/* ââ Seed default data ââ */
+/* ── Seed default data ── */
 function seedIfEmpty() {
   fbRef('rocks/company').once('value', snap => {
     if (!snap.val()) {
@@ -431,7 +431,7 @@ function seedIfEmpty() {
   });
 }
 
-/* ââ Render ââ */
+/* ── Render ── */
 function render() {
   const app = document.getElementById('app');
   const s = state.activeSection;
@@ -461,7 +461,7 @@ function renderHeader() {
     '</div></div>';
 }
 
-/* ââ Scorecard Page ââ */
+/* ── Scorecard Page ── */
 function renderScorecardPage() {
   const monthKey = getMonthKey();
   const monthData = state.scorecard.monthly || {};
@@ -515,7 +515,7 @@ function renderScorecardPage() {
 
   // Monthly revenue/members table
   let monthlyHtml = '<div class="section">' +
-    '<div class="section-header"><h2>Monthly Totals â ' + getCurrentMonth() + '</h2><div class="badge">MTD</div></div>' +
+    '<div class="section-header"><h2>Monthly Totals — ' + getCurrentMonth() + '</h2><div class="badge">MTD</div></div>' +
     '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
     '<th>Who</th><th>Measurable</th><th>March Goal</th><th>Current</th>' +
     '</tr></thead><tbody>';
@@ -536,7 +536,7 @@ function renderScorecardPage() {
   return kpiHtml + tableHtml + monthlyHtml;
 }
 
-/* ââ KPIs Page (Monthly KPIs for 3 LVLUP locations) ââ */
+/* ── KPIs Page (Monthly KPIs for 3 LVLUP locations) ── */
 function renderKPIsPage() {
   const LVLUP_LOCS = LOCATIONS.filter(l => ['waunakee','eastmad','verona'].includes(l.id));
   const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -565,7 +565,7 @@ function renderKPIsPage() {
     const attrNum = parseFloat(String(attrPct).replace('%','')) || 0;
     const cls = attrNum <= 1 ? 'green' : attrNum <= 2 ? 'orange' : 'red';
     html += '<div class="kpi-card ' + cls + '">' +
-      '<div class="kpi-label">' + loc.short + ' â ' + monthLabels[currentMonthIdx] + '</div>' +
+      '<div class="kpi-label">' + loc.short + ' — ' + monthLabels[currentMonthIdx] + '</div>' +
       '<div class="kpi-value">' + newMem + ' <span style="font-size:14px;color:var(--gray-400);">new members</span></div>' +
       '<div class="kpi-sub">Attrition: ' + esc(String(attrPct)) + '</div>' +
       '</div>';
@@ -576,7 +576,7 @@ function renderKPIsPage() {
   LVLUP_LOCS.forEach(loc => {
     const memData = state.membership[loc.id] || {};
 
-    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' â Monthly KPIs</h2><div class="badge">2026</div></div>';
+    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' — Monthly KPIs</h2><div class="badge">2026</div></div>';
     html += '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>';
     html += '<th style="text-align:left;">Month</th>';
     KPI_DEFS.forEach(kpi => { html += '<th>' + kpi.label + '</th>'; });
@@ -592,9 +592,9 @@ function renderKPIsPage() {
       html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
 
       // Leads - from scorecard weekly (aggregated) or empty
-      html += '<td><input value="' + esc(String(md.leads || '')) + '" placeholder="â" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'leads\',this.value)" /></td>';
+      html += '<td><input value="' + esc(String(md.leads || '')) + '" placeholder="—" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'leads\',this.value)" /></td>';
       // Intros
-      html += '<td><input value="' + esc(String(md.intros || '')) + '" placeholder="â" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'intros\',this.value)" /></td>';
+      html += '<td><input value="' + esc(String(md.intros || '')) + '" placeholder="—" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'intros\',this.value)" /></td>';
       // New Members
       html += '<td>' + esc(String(md.newMem || '')) + '</td>';
       // Attrition
@@ -606,7 +606,7 @@ function renderKPIsPage() {
       })();
       html += '<td class="pct-cell ' + attrCls + '">' + esc(String(attrVal)) + '</td>';
       // Google Reviews
-      html += '<td><input value="' + esc(String(md.googleReviews || '')) + '" placeholder="â" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'googleReviews\',this.value)" /></td>';
+      html += '<td><input value="' + esc(String(md.googleReviews || '')) + '" placeholder="—" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'googleReviews\',this.value)" /></td>';
 
       html += '</tr>';
     }
@@ -617,7 +617,7 @@ function renderKPIsPage() {
   return html;
 }
 
-/* ââ Financials Page (All 3 LVLUP Locations) ââ */
+/* ── Financials Page (All 3 LVLUP Locations) ── */
 function renderFinancialsPage() {
   const LVLUP_LOCS = LOCATIONS.filter(l => ['waunakee','eastmad','verona'].includes(l.id));
   const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -653,7 +653,7 @@ function renderFinancialsPage() {
     const memData = state.membership[loc.id] || {};
 
     // Financial table
-    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' â 2026 Financials</h2></div>';
+    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' — 2026 Financials</h2></div>';
     html += '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>';
     html += '<th style="text-align:left;">Month</th><th>Gross TY</th><th>Gross LY</th><th>TY vs LY</th><th>ARM</th><th>LEG</th><th>LTV</th>';
     html += '</tr></thead><tbody>';
@@ -722,7 +722,7 @@ function renderFinancialsPage() {
   return html;
 }
 
-/* ââ Rocks Page ââ */
+/* ── Rocks Page ── */
 function renderRocksPage() {
   const rocks = state.rocks || {};
   const company = rocks.company || [];
@@ -730,7 +730,7 @@ function renderRocksPage() {
   const statuses = ['not-started','in-progress','on-track','complete','off-track'];
   const statusLabels = { 'not-started':'Not Started', 'in-progress':'In Progress', 'on-track':'On Track', 'complete':'Complete', 'off-track':'Off Track' };
 
-  let html = '<div class="section"><div class="section-header"><h2>Company Rocks â Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
+  let html = '<div class="section"><div class="section-header"><h2>Company Rocks — Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
 
   if (company.length) {
     company.forEach((r, i) => {
@@ -750,7 +750,7 @@ function renderRocksPage() {
   Object.keys(individual).forEach(personKey => {
     const personRocks = individual[personKey] || [];
     const label = personKey === 'mrsMoh' ? 'Mrs. Moh' : personKey === 'mrMoh' ? 'Mr. Moh' : personKey;
-    html += '<div class="section"><div class="section-header"><h2>Individual Rocks â ' + esc(label) + '</h2></div>';
+    html += '<div class="section"><div class="section-header"><h2>Individual Rocks — ' + esc(label) + '</h2></div>';
     personRocks.forEach((r, i) => {
       html += '<div class="rock-item">' +
         '<div class="rock-num">' + (i + 1) + '</div>' +
@@ -765,7 +765,7 @@ function renderRocksPage() {
   return html;
 }
 
-/* ââ Events Page ââ */
+/* ── Events Page ── */
 function renderEventsPage() {
   const events = state.events || [];
   const locGroups = {};
@@ -794,7 +794,7 @@ function renderEventsPage() {
   return html;
 }
 
-/* ââ Goals Page ââ */
+/* ── Goals Page ── */
 function renderGoalsPage() {
   const goals = state.goals || {};
   let total = 0;
@@ -816,14 +816,14 @@ function renderGoalsPage() {
   return html;
 }
 
-/* ââ Connection Status ââ */
+/* ── Connection Status ── */
 function updateConnStatus(online) {
   const el = document.getElementById('connStatus');
   el.className = 'conn-status ' + (online ? 'online' : 'offline');
   el.textContent = online ? '\ud83d\udfe2 Synced' : '\ud83d\udd34 Offline';
 }
 
-/* ââ Init ââ */
+/* ── Init ── */
 async function init() {
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
   seedIfEmpty();
