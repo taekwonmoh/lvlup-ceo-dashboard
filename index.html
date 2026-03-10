@@ -596,7 +596,7 @@ function renderKPIsPage() {
     html += '<div style="padding:0 0.75rem 0.75rem">';
     html += '<div style="overflow-x:auto"><table><thead><tr><th>Month</th><th>Leads</th><th>Intros</th><th>New Members</th><th>Upgrades</th><th>Attrition</th><th>Google Reviews</th><th>Conversion</th></tr></thead><tbody>';
     let ytdLeads=0,ytdIntros=0,ytdNew=0,ytdUpg=0,ytdAttr=0,ytdReviews=0;
-    monthNames.forEach((mk,mi) => { const mKey=monthKeys[mi]; {
+    monthNames.forEach((mk,mi) => { const mKey=monthKeys[mi];
       const md = memData[mKey] || {};
       const l=md.leads||0, i=md.intros||0, n=md.newMem||0, u=md.upgrades||0, a=md.attrition||0, g=md.googleReviews||0;
       ytdLeads+=l; ytdIntros+=i; ytdNew+=n; ytdUpg+=u; ytdAttr+=a; ytdReviews+=g;
