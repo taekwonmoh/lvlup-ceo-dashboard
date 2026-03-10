@@ -721,7 +721,7 @@ function renderFinancialsPage() {
 
     for (let m = 0; m < 12; m++) {
       const mk = monthNames[m];
-      const md = memData[mKey] || {};
+      const md = memData[mk] || {};
       if (!md.total && m > currentMonthIdx && !md.goal) continue;
       const attrCls = (() => {
         const n = parseFloat(String(md.attrition || '').replace('%',''));
