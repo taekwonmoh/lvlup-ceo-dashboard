@@ -740,7 +740,7 @@ function renderRocksPage() {
         '<div class="rock-status"><select onchange="updateRockStatus(\'company\',' + i + ',this.value)">' +
         statuses.map(s => '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + statusLabels[s] + '</option>').join('') +
         '</select></div></div>';
-    });
+    }) 
   } else {
     html += '<div style="padding:20px;color:var(--gray-400);text-align:center;">No company rocks yet</div>';
   }
