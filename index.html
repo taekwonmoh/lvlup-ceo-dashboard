@@ -155,7 +155,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   .nav-tabs { overflow-x: auto; }
 }
 .hidden { display: none; }
+
+/* KPI Charts */
+.kpi-charts-section{margin:1.5rem 0}
+.kpi-charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.2rem;margin-top:1rem}
+.kpi-chart-box{background:var(--surface);border-radius:12px;padding:1rem;border:1px solid var(--border)}
+.kpi-chart-box h4{margin:0 0 .5rem;color:var(--text);font-size:.95rem;text-align:center}
+.kpi-chart-box canvas{width:100%!important;max-height:220px}
+.trend-up{color:#22c55e;font-weight:600}
+.trend-down{color:#ef4444;font-weight:600}
+.trend-flat{color:#94a3b8;font-weight:600}
+.ytd-row{background:var(--surface);font-weight:700;border-top:2px solid var(--blue)}
+.conv-rate{font-size:.8rem;color:var(--muted)}
+.upgrades-badge{background:var(--blue);color:#fff;padding:2px 8px;border-radius:10px;font-size:.8rem}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="conn-status offline" id="connStatus">Connecting...</div>
@@ -455,7 +469,7 @@ function renderHeader() {
     { id: 'goals', label: 'Goal Tracker' },
   ];
   return '<div class="header">' +
-    '<h1>LVLUP / <span class="accent">Go Ninja</span> CEO Dashboard</h1>' +
+    '<h1><span style="color:var(--blue)">LVLUP</span> / <span class="accent">Go Ninja</span> CEO Dashboard</h1>' +
     '<div class="nav-tabs">' +
     sections.map(s => '<button class="nav-tab ' + (state.activeSection === s.id ? 'active' : '') + '" onclick="setSection(\'' + s.id + '\')">' + s.label + '</button>').join('') +
     '</div></div>';
@@ -470,6 +484,7 @@ function renderScorecardPage() {
   let kpiHtml = '<div class="kpi-grid">';
   LOCATIONS.forEach(loc => {
     const locData = monthData[loc.id] || {};
+if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
     const rev = parseFloat(locData.grossRevenue) || 0;
     const goal = loc.revenueGoal;
     const pct = goal ? Math.round(rev / goal * 100) : 0;
@@ -538,83 +553,90 @@ function renderScorecardPage() {
 
 /* ── KPIs Page (Monthly KPIs for 3 LVLUP locations) ── */
 function renderKPIsPage() {
-  const LVLUP_LOCS = LOCATIONS.filter(l => ['waunakee','eastmad','verona'].includes(l.id));
-  const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
-  const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const currentMonthIdx = new Date().getMonth();
-
-  // KPI metrics we show
-  const KPI_DEFS = [
-    { id: 'leads', label: 'Leads' },
-    { id: 'intros', label: 'Intros' },
-    { id: 'newMembers', label: 'New Members' },
-    { id: 'attrition', label: 'Attrition' },
-    { id: 'googleReviews', label: 'Google Reviews' },
-  ];
-
-  let html = '';
-
-  // Summary cards - current month KPIs from membership data
-  html += '<div class="kpi-grid">';
-  LVLUP_LOCS.forEach(loc => {
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const now = new Date();
+  const curMonth = monthNames[now.getMonth()];
+  const prevMonth = now.getMonth() > 0 ? monthNames[now.getMonth()-1] : null;
+  let html = '<div class="page-header"><h2>KPI Metrics</h2><p>Member acquisition, retention & growth tracking</p></div>';
+  // Charts section
+  html += '<div class="kpi-charts-section"><h3 style="margin-bottom:0.5rem">Month-over-Month Trends</h3>';
+  html += '<div class="kpi-charts-grid">';
+  html += '<div class="kpi-chart-box"><h4>New Members</h4><canvas id="chartNewMembers" height="200"></canvas></div>';
+  html += '<div class="kpi-chart-box"><h4>Leads</h4><canvas id="chartLeads" height="200"></canvas></div>';
+  html += '<div class="kpi-chart-box"><h4>Intros / Trials</h4><canvas id="chartIntros" height="200"></canvas></div>';
+  html += '<div class="kpi-chart-box"><h4>Upgrades</h4><canvas id="chartUpgrades" height="200"></canvas></div>';
+  html += '</div></div>';
+  // Summary cards
+  html += '<div class="grid" style="margin-bottom:1.5rem">';
+  let totalLeads=0,totalIntros=0,totalNew=0,totalAttr=0,totalUpg=0;
+  let prevLeads=0,prevIntros=0,prevNew=0;
+  LOCATIONS.forEach(loc => {
     const memData = state.membership[loc.id] || {};
-    const curMonth = monthNames[currentMonthIdx];
-    const curMem = memData[curMonth] || {};
-    const newMem = parseFloat(curMem.newMem) || 0;
-    const attrPct = curMem.attrition || '0%';
-    const attrNum = parseFloat(String(attrPct).replace('%','')) || 0;
-    const cls = attrNum <= 1 ? 'green' : attrNum <= 2 ? 'orange' : 'red';
-    html += '<div class="kpi-card ' + cls + '">' +
-      '<div class="kpi-label">' + loc.short + ' — ' + monthLabels[currentMonthIdx] + '</div>' +
-      '<div class="kpi-value">' + newMem + ' <span style="font-size:14px;color:var(--gray-400);">new members</span></div>' +
-      '<div class="kpi-sub">Attrition: ' + esc(String(attrPct)) + '</div>' +
-      '</div>';
+    const cur = memData[curMonth] || {};
+    const prev = prevMonth ? (memData[prevMonth] || {}) : {};
+    totalLeads += (cur.leads||0); totalIntros += (cur.intros||0);
+    totalNew += (cur.newMembers||0); totalAttr += (cur.attrition||0);
+    totalUpg += (cur.upgrades||0);
+    prevLeads += (prev.leads||0); prevIntros += (prev.intros||0); prevNew += (prev.newMembers||0);
   });
+  function trend(cur,prev){if(!prev)return'';if(cur>prev)return' <span class="trend-up">\u25B2 '+(cur-prev)+'</span>';if(cur<prev)return' <span class="trend-down">\u25BC '+(prev-cur)+'</span>';return' <span class="trend-flat">\u25AC</span>';}
+  html += '<div class="card"><div class="card-label">Total Leads ('+curMonth+')</div><div class="card-value">'+totalLeads+trend(totalLeads,prevLeads)+'</div></div>';
+  html += '<div class="card"><div class="card-label">Total Intros ('+curMonth+')</div><div class="card-value">'+totalIntros+trend(totalIntros,prevIntros)+'</div></div>';
+  html += '<div class="card"><div class="card-label">New Members ('+curMonth+')</div><div class="card-value">'+totalNew+trend(totalNew,prevNew)+'</div></div>';
+  html += '<div class="card"><div class="card-label">Attrition ('+curMonth+')</div><div class="card-value">'+totalAttr+'</div></div>';
+  html += '<div class="card"><div class="card-label">Upgrades ('+curMonth+')</div><div class="card-value"><span class="upgrades-badge">'+totalUpg+'</span></div></div>';
+  const convRate = totalLeads > 0 ? (totalNew/totalLeads*100).toFixed(1) : '0.0';
+  html += '<div class="card"><div class="card-label">Conversion Rate ('+curMonth+')</div><div class="card-value">'+convRate+'% <span class="conv-rate">new/leads</span></div></div>';
   html += '</div>';
-
-  // Per-location monthly KPI tables
-  LVLUP_LOCS.forEach(loc => {
+  // Per-location details
+  LOCATIONS.forEach(loc => {
     const memData = state.membership[loc.id] || {};
-
-    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' — Monthly KPIs</h2><div class="badge">2026</div></div>';
-    html += '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>';
-    html += '<th style="text-align:left;">Month</th>';
-    KPI_DEFS.forEach(kpi => { html += '<th>' + kpi.label + '</th>'; });
-    html += '</tr></thead><tbody>';
-
-    for (let m = 0; m < 12; m++) {
-      const mk = monthNames[m];
+    const curMem = memData[curMonth] || {};
+    html += '<details class="section-card" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:600;font-size:1.1rem;padding:0.75rem">'+loc.short+' — '+loc.name+'</summary>';
+    html += '<div style="padding:0 0.75rem 0.75rem">';
+    html += '<div style="overflow-x:auto"><table><thead><tr><th>Month</th><th>Leads</th><th>Intros</th><th>New Members</th><th>Upgrades</th><th>Attrition</th><th>Google Reviews</th><th>Conversion</th></tr></thead><tbody>';
+    let ytdLeads=0,ytdIntros=0,ytdNew=0,ytdUpg=0,ytdAttr=0,ytdReviews=0;
+    monthNames.forEach(mk => {
       const md = memData[mk] || {};
-      const isFuture = m > currentMonthIdx;
-      const rowStyle = isFuture ? ' style="color:var(--gray-300);"' : '';
-
-      html += '<tr' + rowStyle + '>';
-      html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
-
-      // Leads - from scorecard weekly (aggregated) or empty
-      html += '<td><input value="' + esc(String(md.leads || '')) + '" placeholder="—" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'leads\',this.value)" /></td>';
-      // Intros
-      html += '<td><input value="' + esc(String(md.intros || '')) + '" placeholder="—" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'intros\',this.value)" /></td>';
-      // New Members
-      html += '<td>' + esc(String(md.newMem || '')) + '</td>';
-      // Attrition
-      const attrVal = md.attrition || '';
-      const attrCls = (() => {
-        const n = parseFloat(String(attrVal).replace('%',''));
-        if (isNaN(n) || n === 0) return '';
-        return n <= 1 ? 'pct-green' : n <= 2 ? 'pct-orange' : 'pct-red';
-      })();
-      html += '<td class="pct-cell ' + attrCls + '">' + esc(String(attrVal)) + '</td>';
-      // Google Reviews
-      html += '<td><input value="' + esc(String(md.googleReviews || '')) + '" placeholder="—" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'googleReviews\',this.value)" /></td>';
-
-      html += '</tr>';
-    }
-
-    html += '</tbody></table></div></div>';
+      const l=md.leads||0, i=md.intros||0, n=md.newMembers||0, u=md.upgrades||0, a=md.attrition||0, g=md.googleReviews||0;
+      ytdLeads+=l; ytdIntros+=i; ytdNew+=n; ytdUpg+=u; ytdAttr+=a; ytdReviews+=g;
+      const conv = l>0?(n/l*100).toFixed(1)+'%':'—';
+      html += '<tr><td><strong>'+mk+'</strong></td>';
+      html += '<td><input type="number" value="'+l+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mk+'\',\'leads\',this.value)" style="width:70px"></td>';
+      html += '<td><input type="number" value="'+i+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mk+'\',\'intros\',this.value)" style="width:70px"></td>';
+      html += '<td><input type="number" value="'+n+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mk+'\',\'newMembers\',this.value)" style="width:70px"></td>';
+      html += '<td><input type="number" value="'+u+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mk+'\',\'upgrades\',this.value)" style="width:70px"></td>';
+      html += '<td><input type="number" value="'+a+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mk+'\',\'attrition\',this.value)" style="width:70px"></td>';
+      html += '<td><input type="number" value="'+g+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mk+'\',\'googleReviews\',this.value)" style="width:70px"></td>';
+      html += '<td>'+conv+'</td></tr>';
+    });
+    // YTD row
+    const ytdConv = ytdLeads>0?(ytdNew/ytdLeads*100).toFixed(1)+'%':'—';
+    html += '<tr class="ytd-row"><td><strong>YTD</strong></td><td>'+ytdLeads+'</td><td>'+ytdIntros+'</td><td>'+ytdNew+'</td><td>'+ytdUpg+'</td><td>'+ytdAttr+'</td><td>'+ytdReviews+'</td><td>'+ytdConv+'</td></tr>';
+    html += '</tbody></table></div></div></details>';
   });
-
   return html;
+}
+
+function initKPICharts(){
+  if(typeof Chart==='undefined')return;
+  const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const now=new Date();
+  const curMonthIdx=now.getMonth();
+  const labels=monthNames.slice(0,curMonthIdx+1);
+  const colors=['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6'];
+  const metrics=[{id:'chartNewMembers',field:'newMembers'},{id:'chartLeads',field:'leads'},{id:'chartIntros',field:'intros'},{id:'chartUpgrades',field:'upgrades'}];
+  metrics.forEach(m=>{
+    const canvas=document.getElementById(m.id);
+    if(!canvas)return;
+    const datasets=LOCATIONS.map((loc,li)=>{
+      const memData=state.membership[loc.id]||{};
+      const data=labels.map(mk=>{const md=memData[mk]||{};return md[m.field]||0;});
+      return{label:loc.short,data,backgroundColor:colors[li%colors.length],borderRadius:4};
+    });
+    if(canvas._chart)canvas._chart.destroy();
+    canvas._chart=new Chart(canvas,{type:'bar',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:8,font:{size:11}}}},scales:{y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.06)'}},x:{grid:{display:false}}}}});
+  });
 }
 
 /* ── Financials Page (All 3 LVLUP Locations) ── */
