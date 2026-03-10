@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LVLUP / Go Ninja CEO Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+:root {
+  --bg: #f0f2f5;
+  --card: #ffffff;
+  --primary: #1a1a2e;
+  --accent: #e94560;
+  --accent-light: #fce4ec;
+  --blue: #0f3460;
+  --blue-light: #e3f2fd;
+  --green: #22c55e;
+  --green-light: #dcfce7;
+  --orange: #f59e0b;
+  --orange-light: #fef3c7;
+  --red: #ef4444;
+  --red-light: #fef2f2;
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--gray-900); }
+.app { max-width: 1400px; margin: 0 auto; padding: 20px; }
+.conn-status { position: fixed; top: 10px; right: 14px; font-size: 11px; padding: 5px 12px; border-radius: 999px; z-index: 100; font-weight: 600; }
+.conn-status.online { background: var(--green-light); color: var(--green); }
+.conn-status.offline { background: var(--red-light); color: var(--red); }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+.header h1 { font-size: 22px; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
+.header h1 .accent { color: var(--accent); }
+.nav-tabs { display: flex; gap: 4px; background: var(--card); border-radius: 10px; padding: 3px; box-shadow: var(--shadow); }
+.nav-tab { padding: 8px 16px; border-radius: 8px; border: none; background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--gray-500); white-space: nowrap; transition: all 0.15s; }
+.nav-tab.active { background: var(--primary); color: #fff; }
+.nav-tab:not(.active):hover { background: var(--gray-100); }
+
+/* KPI Cards */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.kpi-card { background: var(--card); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); border-left: 4px solid var(--gray-200); }
+.kpi-card.green { border-left-color: var(--green); }
+.kpi-card.orange { border-left-color: var(--orange); }
+.kpi-card.red { border-left-color: var(--red); }
+.kpi-card.blue { border-left-color: var(--blue); }
+.kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray-500); margin-bottom: 4px; }
+.kpi-value { font-size: 26px; font-weight: 700; }
+.kpi-sub { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+.kpi-bar { background: var(--gray-200); border-radius: 999px; height: 6px; margin-top: 8px; overflow: hidden; }
+.kpi-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease; }
+.kpi-fill.green { background: var(--green); }
+.kpi-fill.orange { background: var(--orange); }
+.kpi-fill.red { background: var(--red); }
+
+/* Section Cards */
+.section { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 20px; overflow: hidden; }
+.section-header { padding: 16px 20px; border-bottom: 1px solid var(--gray-100); display: flex; justify-content: space-between; align-items: center; }
+.section-header h2 { font-size: 15px; font-weight: 700; }
+.section-header .badge { font-size: 11px; background: var(--gray-100); color: var(--gray-600); padding: 3px 10px; border-radius: 999px; }
+
+/* Scorecard Table */
+.sc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sc-table th { background: var(--gray-50); padding: 10px 12px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--gray-500); border-bottom: 2px solid var(--gray-200); position: sticky; top: 0; }
+.sc-table td { padding: 8px 12px; border-bottom: 1px solid var(--gray-100); }
+.sc-table tr:hover { background: var(--gray-50); }
+.sc-table input { width: 80px; border: 1px solid transparent; background: transparent; padding: 4px 6px; border-radius: 6px; font-size: 13px; font-family: inherit; text-align: right; }
+.sc-table input:hover { border-color: var(--gray-300); background: var(--gray-50); }
+.sc-table input:focus { outline: none; border-color: var(--accent); background: #fff; }
+.sc-table .loc-header { background: var(--primary); color: #fff; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.sc-table .loc-header td { padding: 8px 12px; border: none; }
+.sc-table .pct-cell { font-weight: 600; }
+.pct-green { color: var(--green); }
+.pct-orange { color: var(--orange); }
+.pct-red { color: var(--red); }
+.currency { font-variant-numeric: tabular-nums; }
+
+/* Rocks */
+.rock-item { padding: 14px 20px; border-bottom: 1px solid var(--gray-100); display: flex; gap: 12px; align-items: flex-start; }
+.rock-item:last-child { border-bottom: none; }
+.rock-num { width: 28px; height: 28px; border-radius: 8px; background: var(--blue-light); color: var(--blue); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.rock-content { flex: 1; }
+.rock-text { font-size: 14px; margin-bottom: 4px; }
+.rock-owner { font-size: 12px; color: var(--gray-400); }
+.rock-status { flex-shrink: 0; }
+.rock-status select { border: 1px solid var(--gray-200); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; background: var(--card); color: var(--gray-700); cursor: pointer; }
+
+/* Events */
+.event-row { padding: 12px 20px; border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; gap: 12px; }
+.event-row:last-child { border-bottom: none; }
+.event-date { background: var(--accent-light); color: var(--accent); font-weight: 700; font-size: 12px; padding: 6px 10px; border-radius: 8px; min-width: 48px; text-align: center; flex-shrink: 0; }
+.event-name { font-size: 14px; font-weight: 500; flex: 1; }
+.event-loc { font-size: 12px; color: var(--gray-400); flex-shrink: 0; }
+.event-link { font-size: 12px; color: var(--blue); text-decoration: none; font-weight: 600; flex-shrink: 0; }
+.event-link:hover { text-decoration: underline; }
+
+/* Goal Tracker */
+.goal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; padding: 20px; }
+.goal-month { background: var(--gray-50); border-radius: 10px; padding: 14px; text-align: center; }
+.goal-month .month-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray-500); margin-bottom: 6px; }
+.goal-month input { width: 100%; border: 1px solid var(--gray-200); border-radius: 8px; padding: 6px; font-size: 14px; font-weight: 600; text-align: center; font-family: inherit; }
+.goal-month input:focus { outline: none; border-color: var(--accent); }
+.goal-month.has-value { background: var(--green-light); }
+
+/* Financials Table */
+.fin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fin-table th { background: var(--primary); color: #fff; padding: 10px 12px; text-align: right; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+.fin-table th:first-child { text-align: left; }
+.fin-table td { padding: 8px 12px; border-bottom: 1px solid var(--gray-100); text-align: right; }
+.fin-table td:first-child { text-align: left; font-weight: 500; }
+.fin-table tr:hover { background: var(--gray-50); }
+.fin-table .qtr-row td { font-weight: 700; background: var(--gray-50); }
+.fin-table .year-row td { font-weight: 800; background: var(--gray-100); }
+.fin-table input { width: 100px; border: 1px solid transparent; background: transparent; padding: 4px 6px; border-radius: 6px; font-size: 13px; font-family: inherit; text-align: right; }
+.fin-table input:hover { border-color: var(--gray-300); background: var(--gray-50); }
+.fin-table input:focus { outline: none; border-color: var(--accent); background: #fff; }
+.positive { color: var(--green); }
+.negative { color: var(--red); }
+
+/* Week navigation for scorecard */
+.week-nav { display: flex; align-items: center; gap: 8px; }
+.week-nav button { background: var(--card); border: 1px solid var(--gray-200); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; color: var(--gray-700); }
+.week-nav button:hover { background: var(--blue-light); border-color: var(--blue); color: var(--blue); }
+.week-label { font-size: 13px; font-weight: 600; color: var(--gray-700); }
+
+/* Membership Table */
+.mem-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mem-table th { background: var(--gray-800); color: #fff; padding: 8px 12px; text-align: right; font-size: 11px; text-transform: uppercase; }
+.mem-table th:first-child { text-align: left; }
+.mem-table td { padding: 8px 12px; border-bottom: 1px solid var(--gray-100); text-align: right; }
+.mem-table td:first-child { text-align: left; font-weight: 500; }
+.mem-table input { width: 70px; border: 1px solid transparent; background: transparent; padding: 3px 5px; border-radius: 6px; font-size: 13px; font-family: inherit; text-align: right; }
+.mem-table input:hover { border-color: var(--gray-300); }
+.mem-table input:focus { outline: none; border-color: var(--accent); background: #fff; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .sc-table { font-size: 12px; }
+  .sc-table input { width: 60px; }
+  .header { flex-direction: column; align-items: flex-start; }
+  .nav-tabs { overflow-x: auto; }
+}
+.hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="conn-status offline" id="connStatus">Connecting...</div>
+<div class="app" id="app"><p style="text-align:center;padding:80px;color:var(--gray-400);">Loading dashboard...</p></div>
+
+<script>
+/* ââ Firebase Config (same project as VA dashboard) ââ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDABx4H7EpCRABaD9h3lGTD3hBp2QFfhQg",
+  authDomain: "va-dashboard-bf7ca.firebaseapp.com",
+  databaseURL: "https://va-dashboard-bf7ca-default-rtdb.firebaseio.com",
+  projectId: "va-dashboard-bf7ca",
+  storageBucket: "va-dashboard-bf7ca.firebasestorage.app",
+  messagingSenderId: "427134566708",
+  appId: "1:427134566708:web:1b88d86e9b2fd1505f2561"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const CEO = 'ceo'; // root path in Firebase
+
+/* ââ State ââ */
+let state = {
+  activeSection: 'scorecard',
+  weekOffset: 0,
+  scorecard: { weekly: {}, monthly: {} },
+  rocks: { company: [], individual: {} },
+  events: [],
+  goals: {},
+  financials: {},
+  membership: {}
+};
+
+let debounceTimers = {};
+let activeListeners = [];
+
+/* ââ Locations & Metrics Config ââ */
+const LOCATIONS = [
+  { id: 'waunakee', name: 'LVLUP Waunakee', short: 'WAU', color: '#1a1a2e', revenueGoal: 80000 },
+  { id: 'eastmad', name: 'LVLUP East Madison', short: 'E.MAD', color: '#0f3460', revenueGoal: 18920 },
+  { id: 'verona', name: 'LVLUP Verona', short: 'VER', color: '#16537e', revenueGoal: 26445 },
+  { id: 'goninjaW', name: 'Go Ninja Waunakee', short: 'GN-W', color: '#e94560', revenueGoal: 30000 },
+  { id: 'goninjaV', name: 'Go Ninja Verona', short: 'GN-V', color: '#c73e54', revenueGoal: 5000 },
+];
+
+const WEEKLY_METRICS = [
+  { id: 'attrition', label: 'Attrition', goal: true },
+  { id: 'newMembers', label: 'New TKD Members' },
+  { id: 'trials', label: 'Trials' },
+  { id: 'leads', label: 'Leads' },
+  { id: 'leadToTrial', label: 'Lead to Trial %', pct: true, goal: true },
+];
+
+const MONTHLY_METRICS = [
+  { id: 'grossRevenue', label: 'Gross Revenue', currency: true },
+  { id: 'totalMembers', label: 'Total TKD Members' },
+];
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTHS_SHORT = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+const SCORECARD_PEOPLE = {
+  waunakee: [{ id: 'goad', name: 'Mr. Goad' }, { id: 'msk', name: 'Ms. K' }],
+  eastmad: [{ id: 'bein', name: 'Mrs. Bein' }, { id: 'msk_em', name: 'Ms. K' }],
+  verona: [{ id: 'mrz', name: 'Mr. Z' }, { id: 'msk_v', name: 'Ms. K' }],
+  goninjaW: [{ id: 'smith', name: 'Ms. Smith' }],
+  goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
+};
+
+/* ââ Helpers ââ */
+function getWeekKey(offset) {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1) + (offset * 7);
+  const mon = new Date(new Date().setDate(diff));
+  const yr = mon.getFullYear();
+  const oneJan = new Date(yr, 0, 1);
+  const days = Math.floor((mon - oneJan) / 86400000);
+  const wk = Math.ceil((days + oneJan.getDay() + 1) / 7);
+  return yr + '-W' + String(wk).padStart(2, '0');
+}
+
+function getWeekLabel(offset) {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1) + (offset * 7);
+  const mon = new Date(new Date().setDate(diff));
+  const fmt = d => (d.getMonth()+1) + '/' + d.getDate();
+  return fmt(mon);
+}
+
+function getMonthKey() {
+  const now = new Date();
+  return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+}
+
+function getCurrentMonth() {
+  return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function fmtCurrency(v) {
+  if (v === null || v === undefined || v === '') return '';
+  const n = parseFloat(v);
+  if (isNaN(n)) return v;
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtPct(v) {
+  if (v === null || v === undefined || v === '') return '';
+  return parseFloat(v).toFixed(1) + '%';
+}
+
+function pctClass(val, goal) {
+  if (!val || !goal) return '';
+  const pct = (parseFloat(val) / parseFloat(goal)) * 100;
+  if (pct >= 80) return 'pct-green';
+  if (pct >= 50) return 'pct-orange';
+  return 'pct-red';
+}
+
+function revPctClass(val, goal) {
+  if (!val || !goal) return '';
+  const pct = (parseFloat(val) / parseFloat(goal)) * 100;
+  if (pct >= 80) return 'green';
+  if (pct >= 50) return 'orange';
+  return 'red';
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+/* ââ Firebase Helpers ââ */
+function fbRef(path) { return db.ref(CEO + '/' + path); }
+
+function fbSet(path, val) {
+  fbRef(path).set(val);
+}
+
+function fbDebounce(path, val, ms) {
+  clearTimeout(debounceTimers[path]);
+  debounceTimers[path] = setTimeout(() => fbSet(path, val), 500);
+}
+
+/* ââ Data Loading ââ */
+function listenAll() {
+  activeListeners.forEach(l => l.ref.off(l.event));
+  activeListeners = [];
+
+  // Scorecard weekly
+  const weekKey = getWeekKey(state.weekOffset);
+  const scWeekRef = fbRef('scorecard/weekly/' + weekKey);
+  scWeekRef.on('value', snap => { state.scorecard.weekly = snap.val() || {}; render(); });
+  activeListeners.push({ ref: scWeekRef, event: 'value' });
+
+  // Scorecard monthly
+  const monthKey = getMonthKey();
+  const scMonthRef = fbRef('scorecard/monthly/' + monthKey);
+  scMonthRef.on('value', snap => { state.scorecard.monthly = snap.val() || {}; render(); });
+  activeListeners.push({ ref: scMonthRef, event: 'value' });
+
+  // Rocks
+  const rocksRef = fbRef('rocks');
+  rocksRef.on('value', snap => {
+    const val = snap.val() || {};
+    state.rocks = val;
+    render();
+  });
+  activeListeners.push({ ref: rocksRef, event: 'value' });
+
+  // Events
+  const eventsRef = fbRef('events');
+  eventsRef.on('value', snap => { state.events = snap.val() || []; render(); });
+  activeListeners.push({ ref: eventsRef, event: 'value' });
+
+  // Goals
+  const goalsRef = fbRef('goals/2026');
+  goalsRef.on('value', snap => { state.goals = snap.val() || {}; render(); });
+  activeListeners.push({ ref: goalsRef, event: 'value' });
+
+  // Financials
+  const finRef = fbRef('financials/waunakee/2026');
+  finRef.on('value', snap => { state.financials = snap.val() || {}; render(); });
+  activeListeners.push({ ref: finRef, event: 'value' });
+
+  // Membership
+  const memRef = fbRef('membership/waunakee/2026');
+  memRef.on('value', snap => { state.membership = snap.val() || {}; render(); });
+  activeListeners.push({ ref: memRef, event: 'value' });
+}
+
+/* ââ Navigation ââ */
+function setSection(s) { state.activeSection = s; render(); }
+function changeWeek(d) { state.weekOffset += d; listenAll(); }
+
+/* ââ Update functions ââ */
+function updateScorecard(locId, personId, metricId, weekIdx, val) {
+  const weekKey = getWeekKey(state.weekOffset - weekIdx);
+  fbDebounce('scorecard/weekly/' + weekKey + '/' + locId + '/' + personId + '/' + metricId, val);
+}
+
+function updateMonthly(locId, metricId, val) {
+  const monthKey = getMonthKey();
+  fbDebounce('scorecard/monthly/' + monthKey + '/' + locId + '/' + metricId, val);
+}
+
+function updateRockStatus(type, idx, val) {
+  fbSet('rocks/' + type + '/' + idx + '/status', val);
+}
+
+function updateGoal(monthIdx, val) {
+  fbDebounce('goals/2026/' + MONTHS_SHORT[monthIdx], val);
+}
+
+function updateFinancial(month, field, val) {
+  fbDebounce('financials/waunakee/2026/' + month + '/' + field, val);
+}
+
+function updateMembership(month, field, val) {
+  fbDebounce('membership/waunakee/2026/' + month + '/' + field, val);
+}
+
+/* ââ Seed default data ââ */
+function seedIfEmpty() {
+  fbRef('rocks/company').once('value', snap => {
+    if (!snap.val()) {
+      fbSet('rocks/company', [
+        { text: 'Finalize 2025 P&L by 1/9/26, Create 26 Budget by 1/12/26 and Create Staff Goals by 1/15/26', owner: 'Mrs. Moh', status: 'in-progress' },
+        { text: 'Create Customer Nurturing Road Map by 1/15/26 and implement by 1/31/26', owner: 'Mrs. Moh', status: 'in-progress' },
+        { text: 'Define Integrator role and description and post on recruiting sites and tap personal network to ID 2-3 candidates & hire one to start end of Q1', owner: 'Mr. Moh', status: 'in-progress' },
+        { text: 'Define punch list of updates to schools, order needed supplies, schedule time to do work and complete by 1/31/26', owner: 'Mr. Moh', status: 'in-progress' },
+        { text: 'Roll out "legacy" updates, invite 5 new members and schedule certification camp by Feb. 25th', owner: 'Mr. Moh', status: 'in-progress' },
+      ]);
+      fbSet('rocks/individual/mrsMoh', [
+        { text: 'Create list of needed CRM data and schedule call with success rep by 1/15 and get solution to access data needed', status: 'in-progress' },
+      ]);
+      fbSet('rocks/individual/mrMoh', [
+        { text: 'Design and order mini tiger belts', status: 'in-progress' },
+        { text: 'New Website to help with contact info, update fitboxing heading', status: 'in-progress' },
+        { text: 'Finalize Customer Commitment Journey', status: 'in-progress' },
+      ]);
+    }
+  });
+
+  fbRef('events').once('value', snap => {
+    if (!snap.val()) {
+      fbSet('events', [
+        { date: '2/13', event: 'Teen Night', location: 'Waunakee', link: '' },
+        { date: '3/28', event: 'Leadership Training', location: 'Waunakee', link: 'https://lvlupwaunakee.gymdesk.com/book?date=2026-03-28&s=1458188&schedule=27854' },
+        { date: '3/6', event: 'East Madison PNO', location: 'E. Mad', link: 'https://lvlupeastmadison.gymdesk.com/book?date=2026-03-06&s=1428111&schedule=27821' },
+        { date: '4/24', event: 'PNO', location: 'E. Mad', link: '' },
+        { date: '3/22', event: 'Laser Tag PNO', location: 'Verona', link: 'https://lvlupverona.gymdesk.com/book?date=2026-03-22&s=1488500&schedule=27822' },
+        { date: '4/4', event: 'Spring Nationals Prep', location: 'Verona', link: '' },
+        { date: '2/27', event: 'Laser Tag PNO-Verona', location: 'Go Ninja', link: 'https://goninjaverona.gymdesk.com/book?date=2026-02-27&s=1451714&schedule=27916' },
+        { date: '4/3', event: 'Beast Games Verona', location: 'Go Ninja', link: 'https://goninjaverona.gymdesk.com/book?date=2026-04-03&s=1451721&schedule=27916' },
+        { date: '4/4', event: 'Beast Games Waunakee', location: 'Go Ninja', link: 'https://goninjawaunakee.gymdesk.com/book?date=2026-04-04&s=1451727&schedule=27860' },
+      ]);
+    }
+  });
+}
+
+/* ââ Render ââ */
+function render() {
+  const app = document.getElementById('app');
+  const s = state.activeSection;
+
+  app.innerHTML = renderHeader() +
+    (s === 'scorecard' ? renderScorecardPage() :
+     s === 'financials' ? renderFinancialsPage() :
+     s === 'rocks' ? renderRocksPage() :
+     s === 'events' ? renderEventsPage() :
+     s === 'goals' ? renderGoalsPage() : '');
+}
+
+function renderHeader() {
+  const sections = [
+    { id: 'scorecard', label: 'Scorecard' },
+    { id: 'financials', label: 'Financials' },
+    { id: 'rocks', label: 'Rocks' },
+    { id: 'events', label: 'Events' },
+    { id: 'goals', label: 'Goal Tracker' },
+  ];
+  return '<div class="header">' +
+    '<h1>LVLUP / <span class="accent">Go Ninja</span> CEO Dashboard</h1>' +
+    '<div class="nav-tabs">' +
+    sections.map(s => '<button class="nav-tab ' + (state.activeSection === s.id ? 'active' : '') + '" onclick="setSection(\'' + s.id + '\')">' + s.label + '</button>').join('') +
+    '</div></div>';
+}
+
+/* ââ Scorecard Page ââ */
+function renderScorecardPage() {
+  const monthKey = getMonthKey();
+  const monthData = state.scorecard.monthly || {};
+
+  // KPI cards from monthly data
+  let kpiHtml = '<div class="kpi-grid">';
+  LOCATIONS.forEach(loc => {
+    const locData = monthData[loc.id] || {};
+    const rev = parseFloat(locData.grossRevenue) || 0;
+    const goal = loc.revenueGoal;
+    const pct = goal ? Math.round(rev / goal * 100) : 0;
+    const cls = pct >= 80 ? 'green' : pct >= 50 ? 'orange' : 'red';
+    kpiHtml += '<div class="kpi-card ' + cls + '">' +
+      '<div class="kpi-label">' + loc.short + ' Revenue MTD</div>' +
+      '<div class="kpi-value currency">' + fmtCurrency(rev) + '</div>' +
+      '<div class="kpi-sub">Goal: ' + fmtCurrency(goal) + ' (' + pct + '%)</div>' +
+      '<div class="kpi-bar"><div class="kpi-fill ' + cls + '" style="width:' + Math.min(pct, 100) + '%"></div></div>' +
+      '</div>';
+  });
+  kpiHtml += '</div>';
+
+  // Weekly scorecard table
+  const weekKey = getWeekKey(state.weekOffset);
+  const weekLabel = getWeekLabel(state.weekOffset);
+  const weekData = state.scorecard.weekly || {};
+
+  let tableHtml = '<div class="section">' +
+    '<div class="section-header"><h2>Weekly Scorecard</h2>' +
+    '<div class="week-nav"><button onclick="changeWeek(-1)">&larr;</button>' +
+    '<span class="week-label">' + weekLabel + ' (' + weekKey + ')</span>' +
+    '<button onclick="changeWeek(1)">&rarr;</button></div></div>' +
+    '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
+    '<th>Who</th><th>Measurable</th><th>Goal</th><th>This Week</th>' +
+    '</tr></thead><tbody>';
+
+  LOCATIONS.forEach(loc => {
+    tableHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
+    const people = SCORECARD_PEOPLE[loc.id] || [];
+    people.forEach(person => {
+      WEEKLY_METRICS.forEach(metric => {
+        const val = weekData[loc.id] && weekData[loc.id][person.id] && weekData[loc.id][person.id][metric.id] || '';
+        const goalVal = metric.id === 'attrition' ? '0.67%' : metric.id === 'leadToTrial' ? '35%' : '';
+        tableHtml += '<tr><td>' + person.name + '</td><td>' + metric.label + '</td>' +
+          '<td>' + goalVal + '</td>' +
+          '<td><input value="' + esc(String(val)) + '" onchange="updateScorecard(\'' + loc.id + '\',\'' + person.id + '\',\'' + metric.id + '\',0,this.value)" /></td></tr>';
+      });
+    });
+  });
+
+  tableHtml += '</tbody></table></div></div>';
+
+  // Monthly revenue/members table
+  let monthlyHtml = '<div class="section">' +
+    '<div class="section-header"><h2>Monthly Totals â ' + getCurrentMonth() + '</h2><div class="badge">MTD</div></div>' +
+    '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
+    '<th>Who</th><th>Measurable</th><th>March Goal</th><th>Current</th>' +
+    '</tr></thead><tbody>';
+
+  LOCATIONS.forEach(loc => {
+    monthlyHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
+    MONTHLY_METRICS.forEach(metric => {
+      const val = monthData[loc.id] && monthData[loc.id][metric.id] || '';
+      const goal = metric.id === 'grossRevenue' ? fmtCurrency(loc.revenueGoal) : '';
+      monthlyHtml += '<tr><td>' + loc.short + '</td><td>' + metric.label + '</td>' +
+        '<td>' + goal + '</td>' +
+        '<td><input value="' + esc(String(val)) + '" onchange="updateMonthly(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td></tr>';
+    });
+  });
+
+  monthlyHtml += '</tbody></table></div></div>';
+
+  return kpiHtml + tableHtml + monthlyHtml;
+}
+
+/* ââ Financials Page ââ */
+function renderFinancialsPage() {
+  const fin = state.financials || {};
+  const mem = state.membership || {};
+
+  let html = '<div class="section"><div class="section-header"><h2>2026 LVLUP Waunakee Financials</h2><div class="badge">Year View</div></div>' +
+    '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>' +
+    '<th>Month</th><th>Gross TY</th><th>Gross LY</th><th>TY v. LY</th><th>ARM</th><th>LEG</th><th>LTV</th><th>2026 Goal</th>' +
+    '</tr></thead><tbody>';
+
+  const quarters = [[0,1,2],[3,4,5],[6,7,8],[9,10,11]];
+  const qtrLabels = ['1st Qtr','2nd Qtr','3rd Qtr','4th Qtr'];
+
+  MONTHS.forEach((m, i) => {
+    const mKey = m.toLowerCase();
+    const d = fin[mKey] || {};
+    const grossTY = d.grossTY || '';
+    const grossLY = d.grossLY || '';
+    const diff = (grossTY && grossLY) ? (parseFloat(grossTY) - parseFloat(grossLY)) : '';
+    const diffClass = diff !== '' ? (diff >= 0 ? 'positive' : 'negative') : '';
+
+    html += '<tr>' +
+      '<td>' + m + '</td>' +
+      '<td><input value="' + esc(String(grossTY)) + '" onchange="updateFinancial(\'' + mKey + '\',\'grossTY\',this.value)" /></td>' +
+      '<td><input value="' + esc(String(grossLY)) + '" onchange="updateFinancial(\'' + mKey + '\',\'grossLY\',this.value)" /></td>' +
+      '<td class="' + diffClass + '">' + (diff !== '' ? fmtCurrency(diff) : '') + '</td>' +
+      '<td><input value="' + esc(String(d.arm || '')) + '" onchange="updateFinancial(\'' + mKey + '\',\'arm\',this.value)" /></td>' +
+      '<td><input value="' + esc(String(d.leg || '')) + '" onchange="updateFinancial(\'' + mKey + '\',\'leg\',this.value)" /></td>' +
+      '<td><input value="' + esc(String(d.ltv || '')) + '" onchange="updateFinancial(\'' + mKey + '\',\'ltv\',this.value)" /></td>' +
+      '<td><input value="' + esc(String(d.goal || '')) + '" onchange="updateFinancial(\'' + mKey + '\',\'goal\',this.value)" /></td>' +
+      '</tr>';
+
+    // Check if end of quarter
+    quarters.forEach((q, qi) => {
+      if (q[2] === i) {
+        html += '<tr class="qtr-row"><td><strong>' + qtrLabels[qi] + '</strong></td>' +
+          '<td colspan="7"></td></tr>';
+      }
+    });
+  });
+
+  html += '</tbody></table></div></div>';
+
+  // Membership section
+  html += '<div class="section"><div class="section-header"><h2>Waunakee Membership</h2><div class="badge">2026</div></div>' +
+    '<div style="overflow-x:auto;"><table class="mem-table"><thead><tr>' +
+    '<th>Month</th><th>Total Members</th><th>New Members</th><th>Lost Members</th>' +
+    '</tr></thead><tbody>';
+
+  MONTHS.forEach((m, i) => {
+    const mKey = m.toLowerCase();
+    const d = mem[mKey] || {};
+    html += '<tr><td>' + m + '</td>' +
+      '<td><input value="' + esc(String(d.total || '')) + '" onchange="updateMembership(\'' + mKey + '\',\'total\',this.value)" /></td>' +
+      '<td><input value="' + esc(String(d.newMem || '')) + '" onchange="updateMembership(\'' + mKey + '\',\'newMem\',this.value)" /></td>' +
+      '<td><input value="' + esc(String(d.lost || '')) + '" onchange="updateMembership(\'' + mKey + '\',\'lost\',this.value)" /></td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table></div></div>';
+
+  return html;
+}
+
+/* ââ Rocks Page ââ */
+function renderRocksPage() {
+  const rocks = state.rocks || {};
+  const company = rocks.company || [];
+  const individual = rocks.individual || {};
+  const statuses = ['not-started','in-progress','on-track','complete','off-track'];
+  const statusLabels = { 'not-started':'Not Started', 'in-progress':'In Progress', 'on-track':'On Track', 'complete':'Complete', 'off-track':'Off Track' };
+
+  let html = '<div class="section"><div class="section-header"><h2>Company Rocks â Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
+
+  if (company.length) {
+    company.forEach((r, i) => {
+      html += '<div class="rock-item">' +
+        '<div class="rock-num">' + (i + 1) + '</div>' +
+        '<div class="rock-content"><div class="rock-text">' + esc(r.text) + '</div><div class="rock-owner">' + esc(r.owner) + '</div></div>' +
+        '<div class="rock-status"><select onchange="updateRockStatus(\'company\',' + i + ',this.value)">' +
+        statuses.map(s => '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + statusLabels[s] + '</option>').join('') +
+        '</select></div></div>';
+    });
+  } else {
+    html += '<div style="padding:20px;color:var(--gray-400);text-align:center;">No company rocks yet</div>';
+  }
+  html += '</div>';
+
+  // Individual rocks
+  Object.keys(individual).forEach(personKey => {
+    const personRocks = individual[personKey] || [];
+    const label = personKey === 'mrsMoh' ? 'Mrs. Moh' : personKey === 'mrMoh' ? 'Mr. Moh' : personKey;
+    html += '<div class="section"><div class="section-header"><h2>Individual Rocks â ' + esc(label) + '</h2></div>';
+    personRocks.forEach((r, i) => {
+      html += '<div class="rock-item">' +
+        '<div class="rock-num">' + (i + 1) + '</div>' +
+        '<div class="rock-content"><div class="rock-text">' + esc(r.text) + '</div></div>' +
+        '<div class="rock-status"><select onchange="updateRockStatus(\'individual/' + personKey + '\',' + i + ',this.value)">' +
+        statuses.map(s => '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + statusLabels[s] + '</option>').join('') +
+        '</select></div></div>';
+    });
+    html += '</div>';
+  });
+
+  return html;
+}
+
+/* ââ Events Page ââ */
+function renderEventsPage() {
+  const events = state.events || [];
+  const locGroups = {};
+  events.forEach(e => {
+    if (!locGroups[e.location]) locGroups[e.location] = [];
+    locGroups[e.location].push(e);
+  });
+
+  let html = '';
+  Object.keys(locGroups).forEach(loc => {
+    html += '<div class="section"><div class="section-header"><h2>' + esc(loc) + '</h2><div class="badge">' + locGroups[loc].length + ' events</div></div>';
+    locGroups[loc].forEach(e => {
+      html += '<div class="event-row">' +
+        '<div class="event-date">' + esc(e.date) + '</div>' +
+        '<div class="event-name">' + esc(e.event) + '</div>' +
+        (e.link ? '<a class="event-link" href="' + esc(e.link) + '" target="_blank">Book &rarr;</a>' : '<span class="event-loc" style="color:var(--gray-300)">No link</span>') +
+        '</div>';
+    });
+    html += '</div>';
+  });
+
+  if (!events.length) {
+    html = '<div class="section"><div style="padding:40px;text-align:center;color:var(--gray-400);">No events configured yet</div></div>';
+  }
+
+  return html;
+}
+
+/* ââ Goals Page ââ */
+function renderGoalsPage() {
+  const goals = state.goals || {};
+  let total = 0;
+  MONTHS_SHORT.forEach(m => { total += parseFloat(goals[m]) || 0; });
+
+  let html = '<div class="section"><div class="section-header"><h2>2026 Goal Tracker</h2><div class="badge">Total: ' + fmtCurrency(total) + '</div></div>' +
+    '<div class="goal-grid">';
+
+  MONTHS_SHORT.forEach((m, i) => {
+    const val = goals[m] || '';
+    const hasVal = val !== '' && parseFloat(val) > 0;
+    html += '<div class="goal-month ' + (hasVal ? 'has-value' : '') + '">' +
+      '<div class="month-label">' + m + '</div>' +
+      '<input value="' + esc(String(val)) + '" placeholder="$0.00" onchange="updateGoal(' + i + ',this.value)" />' +
+      '</div>';
+  });
+
+  html += '</div></div>';
+  return html;
+}
+
+/* ââ Connection Status ââ */
+function updateConnStatus(online) {
+  const el = document.getElementById('connStatus');
+  el.className = 'conn-status ' + (online ? 'online' : 'offline');
+  el.textContent = online ? '\ud83d\udfe2 Synced' : '\ud83d\udd34 Offline';
+}
+
+/* ââ Init ââ */
+async function init() {
+  db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
+  seedIfEmpty();
+  listenAll();
+}
+
+init();
+</script>
+</body>
+</html>
