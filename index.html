@@ -185,8 +185,9 @@ let state = {
   rocks: { company: [], individual: {} },
   events: [],
   goals: {},
-  financials: {},
-  membership: {}
+  financials: { waunakee: {}, eastmad: {}, verona: {} },
+  membership: { waunakee: {}, eastmad: {}, verona: {} },
+  kpis: {}
 };
 
 let debounceTimers = {};
@@ -334,15 +335,21 @@ function listenAll() {
   goalsRef.on('value', snap => { state.goals = snap.val() || {}; render(); });
   activeListeners.push({ ref: goalsRef, event: 'value' });
 
-  // Financials
-  const finRef = fbRef('financials/waunakee/2026');
-  finRef.on('value', snap => { state.financials = snap.val() || {}; render(); });
-  activeListeners.push({ ref: finRef, event: 'value' });
+  // Financials for all 3 LVLUP locations
+  ['waunakee', 'eastmad', 'verona'].forEach(loc => {
+    const finRef = fbRef('financials/' + loc + '/2026');
+    finRef.on('value', snap => { state.financials[loc] = snap.val() || {}; render(); });
+    activeListeners.push({ ref: finRef, event: 'value' });
 
-  // Membership
-  const memRef = fbRef('membership/waunakee/2026');
-  memRef.on('value', snap => { state.membership = snap.val() || {}; render(); });
-  activeListeners.push({ ref: memRef, event: 'value' });
+    const memRef = fbRef('membership/' + loc + '/2026');
+    memRef.on('value', snap => { state.membership[loc] = snap.val() || {}; render(); });
+    activeListeners.push({ ref: memRef, event: 'value' });
+  });
+
+  // KPIs (all locations, current month)
+  const kpiRef = fbRef('kpis/2026/' + getMonthKey());
+  kpiRef.on('value', snap => { state.kpis = snap.val() || {}; render(); });
+  activeListeners.push({ ref: kpiRef, event: 'value' });
 }
 
 /* ââ Navigation ââ */
@@ -368,12 +375,21 @@ function updateGoal(monthIdx, val) {
   fbDebounce('goals/2026/' + MONTHS_SHORT[monthIdx], val);
 }
 
-function updateFinancial(month, field, val) {
-  fbDebounce('financials/waunakee/2026/' + month + '/' + field, val);
+function updateFinancial(locId, month, field, val) {
+  fbDebounce('financials/' + locId + '/2026/' + month + '/' + field, val);
 }
 
-function updateMembership(month, field, val) {
-  fbDebounce('membership/waunakee/2026/' + month + '/' + field, val);
+function updateMembership(locId, month, field, val) {
+  fbDebounce('membership/' + locId + '/2026/' + month + '/' + field, val);
+}
+
+function updateMembershipKPI(locId, month, field, val) {
+  fbDebounce('membership/' + locId + '/2026/' + month + '/' + field, val);
+}
+
+function updateKPI(locId, metric, val) {
+  const monthKey = getMonthKey();
+  fbDebounce('kpis/2026/' + monthKey + '/' + locId + '/' + metric, val);
 }
 
 /* ââ Seed default data ââ */
@@ -422,6 +438,7 @@ function render() {
 
   app.innerHTML = renderHeader() +
     (s === 'scorecard' ? renderScorecardPage() :
+     s === 'kpis' ? renderKPIsPage() :
      s === 'financials' ? renderFinancialsPage() :
      s === 'rocks' ? renderRocksPage() :
      s === 'events' ? renderEventsPage() :
@@ -431,6 +448,7 @@ function render() {
 function renderHeader() {
   const sections = [
     { id: 'scorecard', label: 'Scorecard' },
+    { id: 'kpis', label: 'KPIs' },
     { id: 'financials', label: 'Financials' },
     { id: 'rocks', label: 'Rocks' },
     { id: 'events', label: 'Events' },
@@ -518,66 +536,188 @@ function renderScorecardPage() {
   return kpiHtml + tableHtml + monthlyHtml;
 }
 
-/* ââ Financials Page ââ */
+/* ââ KPIs Page (Monthly KPIs for 3 LVLUP locations) ââ */
+function renderKPIsPage() {
+  const LVLUP_LOCS = LOCATIONS.filter(l => ['waunakee','eastmad','verona'].includes(l.id));
+  const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const currentMonthIdx = new Date().getMonth();
+
+  // KPI metrics we show
+  const KPI_DEFS = [
+    { id: 'leads', label: 'Leads' },
+    { id: 'intros', label: 'Intros' },
+    { id: 'newMembers', label: 'New Members' },
+    { id: 'attrition', label: 'Attrition' },
+    { id: 'googleReviews', label: 'Google Reviews' },
+  ];
+
+  let html = '';
+
+  // Summary cards - current month KPIs from membership data
+  html += '<div class="kpi-grid">';
+  LVLUP_LOCS.forEach(loc => {
+    const memData = state.membership[loc.id] || {};
+    const curMonth = monthNames[currentMonthIdx];
+    const curMem = memData[curMonth] || {};
+    const newMem = parseFloat(curMem.newMem) || 0;
+    const attrPct = curMem.attrition || '0%';
+    const attrNum = parseFloat(String(attrPct).replace('%','')) || 0;
+    const cls = attrNum <= 1 ? 'green' : attrNum <= 2 ? 'orange' : 'red';
+    html += '<div class="kpi-card ' + cls + '">' +
+      '<div class="kpi-label">' + loc.short + ' â ' + monthLabels[currentMonthIdx] + '</div>' +
+      '<div class="kpi-value">' + newMem + ' <span style="font-size:14px;color:var(--gray-400);">new members</span></div>' +
+      '<div class="kpi-sub">Attrition: ' + esc(String(attrPct)) + '</div>' +
+      '</div>';
+  });
+  html += '</div>';
+
+  // Per-location monthly KPI tables
+  LVLUP_LOCS.forEach(loc => {
+    const memData = state.membership[loc.id] || {};
+
+    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' â Monthly KPIs</h2><div class="badge">2026</div></div>';
+    html += '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>';
+    html += '<th style="text-align:left;">Month</th>';
+    KPI_DEFS.forEach(kpi => { html += '<th>' + kpi.label + '</th>'; });
+    html += '</tr></thead><tbody>';
+
+    for (let m = 0; m < 12; m++) {
+      const mk = monthNames[m];
+      const md = memData[mk] || {};
+      const isFuture = m > currentMonthIdx;
+      const rowStyle = isFuture ? ' style="color:var(--gray-300);"' : '';
+
+      html += '<tr' + rowStyle + '>';
+      html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
+
+      // Leads - from scorecard weekly (aggregated) or empty
+      html += '<td><input value="' + esc(String(md.leads || '')) + '" placeholder="â" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'leads\',this.value)" /></td>';
+      // Intros
+      html += '<td><input value="' + esc(String(md.intros || '')) + '" placeholder="â" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'intros\',this.value)" /></td>';
+      // New Members
+      html += '<td>' + esc(String(md.newMem || '')) + '</td>';
+      // Attrition
+      const attrVal = md.attrition || '';
+      const attrCls = (() => {
+        const n = parseFloat(String(attrVal).replace('%',''));
+        if (isNaN(n) || n === 0) return '';
+        return n <= 1 ? 'pct-green' : n <= 2 ? 'pct-orange' : 'pct-red';
+      })();
+      html += '<td class="pct-cell ' + attrCls + '">' + esc(String(attrVal)) + '</td>';
+      // Google Reviews
+      html += '<td><input value="' + esc(String(md.googleReviews || '')) + '" placeholder="â" style="width:60px;" onchange="updateMembershipKPI(\'' + loc.id + '\',\'' + mk + '\',\'googleReviews\',this.value)" /></td>';
+
+      html += '</tr>';
+    }
+
+    html += '</tbody></table></div></div>';
+  });
+
+  return html;
+}
+
+/* ââ Financials Page (All 3 LVLUP Locations) ââ */
 function renderFinancialsPage() {
-  const fin = state.financials || {};
-  const mem = state.membership || {};
+  const LVLUP_LOCS = LOCATIONS.filter(l => ['waunakee','eastmad','verona'].includes(l.id));
+  const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const currentMonthIdx = new Date().getMonth();
 
-  let html = '<div class="section"><div class="section-header"><h2>2026 LVLUP Waunakee Financials</h2><div class="badge">Year View</div></div>' +
-    '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>' +
-    '<th>Month</th><th>Gross TY</th><th>Gross LY</th><th>TY v. LY</th><th>ARM</th><th>LEG</th><th>LTV</th><th>2026 Goal</th>' +
-    '</tr></thead><tbody>';
-
-  const quarters = [[0,1,2],[3,4,5],[6,7,8],[9,10,11]];
-  const qtrLabels = ['1st Qtr','2nd Qtr','3rd Qtr','4th Qtr'];
-
-  MONTHS.forEach((m, i) => {
-    const mKey = m.toLowerCase();
-    const d = fin[mKey] || {};
-    const grossTY = d.grossTY || '';
-    const grossLY = d.grossLY || '';
-    const diff = (grossTY && grossLY) ? (parseFloat(grossTY) - parseFloat(grossLY)) : '';
-    const diffClass = diff !== '' ? (diff >= 0 ? 'positive' : 'negative') : '';
-
-    html += '<tr>' +
-      '<td>' + m + '</td>' +
-      '<td><input value="' + esc(String(grossTY)) + '" onchange="updateFinancial(\'' + mKey + '\',\'grossTY\',this.value)" /></td>' +
-      '<td><input value="' + esc(String(grossLY)) + '" onchange="updateFinancial(\'' + mKey + '\',\'grossLY\',this.value)" /></td>' +
-      '<td class="' + diffClass + '">' + (diff !== '' ? fmtCurrency(diff) : '') + '</td>' +
-      '<td><input value="' + esc(String(d.arm || '')) + '" onchange="updateFinancial(\'' + mKey + '\',\'arm\',this.value)" /></td>' +
-      '<td><input value="' + esc(String(d.leg || '')) + '" onchange="updateFinancial(\'' + mKey + '\',\'leg\',this.value)" /></td>' +
-      '<td><input value="' + esc(String(d.ltv || '')) + '" onchange="updateFinancial(\'' + mKey + '\',\'ltv\',this.value)" /></td>' +
-      '<td><input value="' + esc(String(d.goal || '')) + '" onchange="updateFinancial(\'' + mKey + '\',\'goal\',this.value)" /></td>' +
-      '</tr>';
-
-    // Check if end of quarter
-    quarters.forEach((q, qi) => {
-      if (q[2] === i) {
-        html += '<tr class="qtr-row"><td><strong>' + qtrLabels[qi] + '</strong></td>' +
-          '<td colspan="7"></td></tr>';
-      }
-    });
+  // Revenue summary cards
+  let html = '<div class="kpi-grid">';
+  LVLUP_LOCS.forEach(loc => {
+    const finData = state.financials[loc.id] || {};
+    // Sum YTD revenue
+    let ytd = 0;
+    for (let m = 0; m <= currentMonthIdx; m++) {
+      ytd += parseFloat((finData[monthNames[m]] || {}).grossTY) || 0;
+    }
+    const goal = loc.revenueGoal;
+    const curMonth = finData[monthNames[currentMonthIdx]] || {};
+    const curRev = parseFloat(curMonth.grossTY) || 0;
+    const pct = goal ? Math.round(curRev / goal * 100) : 0;
+    const cls = pct >= 80 ? 'green' : pct >= 50 ? 'orange' : 'red';
+    html += '<div class="kpi-card ' + cls + '">' +
+      '<div class="kpi-label">' + loc.short + ' Revenue MTD</div>' +
+      '<div class="kpi-value currency">' + fmtCurrency(curRev) + '</div>' +
+      '<div class="kpi-sub">Goal: ' + fmtCurrency(goal) + ' (' + pct + '%) | YTD: ' + fmtCurrency(ytd) + '</div>' +
+      '<div class="kpi-bar"><div class="kpi-fill ' + cls + '" style="width:' + Math.min(pct, 100) + '%"></div></div>' +
+      '</div>';
   });
+  html += '</div>';
 
-  html += '</tbody></table></div></div>';
+  // Per-location financial tables
+  LVLUP_LOCS.forEach(loc => {
+    const finData = state.financials[loc.id] || {};
+    const memData = state.membership[loc.id] || {};
 
-  // Membership section
-  html += '<div class="section"><div class="section-header"><h2>Waunakee Membership</h2><div class="badge">2026</div></div>' +
-    '<div style="overflow-x:auto;"><table class="mem-table"><thead><tr>' +
-    '<th>Month</th><th>Total Members</th><th>New Members</th><th>Lost Members</th>' +
-    '</tr></thead><tbody>';
+    // Financial table
+    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' â 2026 Financials</h2></div>';
+    html += '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>';
+    html += '<th style="text-align:left;">Month</th><th>Gross TY</th><th>Gross LY</th><th>TY vs LY</th><th>ARM</th><th>LEG</th><th>LTV</th>';
+    html += '</tr></thead><tbody>';
 
-  MONTHS.forEach((m, i) => {
-    const mKey = m.toLowerCase();
-    const d = mem[mKey] || {};
-    html += '<tr><td>' + m + '</td>' +
-      '<td><input value="' + esc(String(d.total || '')) + '" onchange="updateMembership(\'' + mKey + '\',\'total\',this.value)" /></td>' +
-      '<td><input value="' + esc(String(d.newMem || '')) + '" onchange="updateMembership(\'' + mKey + '\',\'newMem\',this.value)" /></td>' +
-      '<td><input value="' + esc(String(d.lost || '')) + '" onchange="updateMembership(\'' + mKey + '\',\'lost\',this.value)" /></td>' +
-      '</tr>';
+    let ytdTY = 0, ytdLY = 0;
+    for (let m = 0; m < 12; m++) {
+      const mk = monthNames[m];
+      const fd = finData[mk] || {};
+      const grossTY = parseFloat(fd.grossTY) || 0;
+      const grossLY = parseFloat(fd.grossLY) || 0;
+      ytdTY += grossTY;
+      ytdLY += grossLY;
+      const diff = grossTY - grossLY;
+      const isFuture = m > currentMonthIdx && !grossTY;
+
+      if (isFuture && !grossLY) continue; // Skip empty future months
+
+      html += '<tr>';
+      html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
+      html += '<td class="currency">' + (grossTY ? fmtCurrency(grossTY) : '') + '</td>';
+      html += '<td class="currency" style="color:var(--gray-400);">' + (grossLY ? fmtCurrency(grossLY) : '') + '</td>';
+      html += '<td class="' + (diff >= 0 ? 'positive' : 'negative') + '">' + (grossTY && grossLY ? fmtCurrency(diff) : '') + '</td>';
+      html += '<td class="currency">' + (fd.arm ? fmtCurrency(fd.arm) : '') + '</td>';
+      html += '<td>' + esc(String(fd.leg || '')) + '</td>';
+      html += '<td class="currency">' + (fd.ltv ? fmtCurrency(fd.ltv) : '') + '</td>';
+      html += '</tr>';
+    }
+
+    // YTD row
+    const ytdDiff = ytdTY - ytdLY;
+    html += '<tr class="year-row">';
+    html += '<td style="text-align:left;">YTD</td>';
+    html += '<td class="currency">' + fmtCurrency(ytdTY) + '</td>';
+    html += '<td class="currency" style="color:var(--gray-400);">' + fmtCurrency(ytdLY) + '</td>';
+    html += '<td class="' + (ytdDiff >= 0 ? 'positive' : 'negative') + '">' + fmtCurrency(ytdDiff) + '</td>';
+    html += '<td></td><td></td><td></td></tr>';
+    html += '</tbody></table></div>';
+
+    // Membership table
+    html += '<div style="margin-top:2px;"><table class="mem-table"><thead><tr>';
+    html += '<th style="text-align:left;">Month</th><th>Total Members</th><th>New</th><th>Lost</th><th>Attrition</th><th>Goal</th>';
+    html += '</tr></thead><tbody>';
+
+    for (let m = 0; m < 12; m++) {
+      const mk = monthNames[m];
+      const md = memData[mk] || {};
+      if (!md.total && m > currentMonthIdx && !md.goal) continue;
+      const attrCls = (() => {
+        const n = parseFloat(String(md.attrition || '').replace('%',''));
+        if (isNaN(n) || n === 0) return '';
+        return n <= 1 ? 'pct-green' : n <= 2 ? 'pct-orange' : 'pct-red';
+      })();
+      html += '<tr>';
+      html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
+      html += '<td>' + esc(String(md.total || '')) + '</td>';
+      html += '<td>' + esc(String(md.newMem || '')) + '</td>';
+      html += '<td>' + esc(String(md.lost || '')) + '</td>';
+      html += '<td class="pct-cell ' + attrCls + '">' + esc(String(md.attrition || '')) + '</td>';
+      html += '<td>' + esc(String(md.goal || '')) + '</td>';
+      html += '</tr>';
+    }
+
+    html += '</tbody></table></div></div>';
   });
-
-  html += '</tbody></table></div></div>';
 
   return html;
 }
