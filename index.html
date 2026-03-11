@@ -218,6 +218,20 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .modal-actions .btn-cancel{background:var(--gray-100);color:var(--gray-600)}
 .goals-form{padding:20px}
 .goals-section-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--blue);margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--blue-light)}
+    .goals-subsection-title {
+      font-weight:600; font-size:0.95rem; color:var(--primary);
+      margin:20px 0 8px; padding:4px 0; border-bottom:1px dashed var(--gray-200);
+    }
+    .goals-highlight .goals-label, .goals-label.goals-highlight {
+      font-weight:700; color:#dc2626;
+    }
+    .goals-highlight {
+      background:var(--red-light); border-radius:6px; padding:2px 0;
+    }
+    .goals-arm-note {
+      font-size:0.85rem; color:var(--accent); font-weight:600;
+      padding:8px 0; margin:4px 0 12px; font-style:italic;
+    }
 .goals-section-title:first-child{margin-top:0}
 .goals-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
 .goals-label{font-size:13px;color:var(--gray-700);flex:1;min-width:200px}
@@ -463,30 +477,43 @@ const GONINJA_CYCLE = {
 };
 const LVLUP_GOALS_FIELDS = {
   membership:[
-    {id:'currentMembership',label:'Current Membership #',type:'number'},
+    {id:'currentMembership',label:'Current membership # as of 1st day of month',type:'number'},
     {id:'newIntros',label:'New Intros',type:'number'},
-    {id:'newMemberships',label:'New Memberships (80%+ of intros)',type:'number'},
+    {id:'newMemberships',label:'New Memberships (80%+ of New Intros #)',type:'number'},
     {id:'attritionTarget',label:'Attrition (goal is 3% or less)',type:'text'},
-    {id:'eomGoal',label:'End of Month Student Count Goal',type:'number'},
+    {id:'eomGoal',label:'End of Month Student Count Goal',type:'number',highlight:true},
+  ],
+  rationale:[
+    {id:'rationale',label:'Rationale',type:'textarea'},
   ],
   revenue:[
+    {id:'totalMonthlyRevenue',label:'Total Expected Billing',type:'currency'},
+  ],
+  revenueStreams:[
     {id:'revIntros',label:'New Intros x $39',type:'currency'},
-    {id:'revNewMem',label:'New Memberships x $60',type:'currency'},
+    {id:'revNewMem',label:'New Memberships x $60 (pro-rated avg)',type:'currency'},
     {id:'revLeadership',label:'Leadership Upgrades x $299',type:'currency'},
     {id:'revLegacy',label:'Legacy Upgrades x $349',type:'currency'},
     {id:'revMerch',label:'Merchandise',type:'currency'},
-    {id:'revEvents',label:'Events',type:'text'},
+    {id:'revEvent1',label:'Event #1',type:'currency'},
+    {id:'revEvent2',label:'Event #2',type:'currency'},
     {id:'revTesting',label:'Testing',type:'currency'},
     {id:'revTournament',label:'Tournament',type:'currency'},
     {id:'revCamps',label:'Camps',type:'currency'},
-    {id:'totalMonthlyRevenue',label:'Total Monthly Revenue',type:'currency'},
+    {id:'totalRevenueStreamGoal',label:'Total Revenue Stream Goal',type:'currency',highlight:true},
+    {id:'eomRevenueGoal',label:'End of Month Revenue Goal',type:'currency',highlight:true},
   ],
-  plan:[{id:'strategies',label:'Actionable Strategies',type:'textarea'}],
+  assumptions:[
+    {id:'assumptions',label:'Assumptions',type:'textarea'},
+  ],
+  plan:[
+    {id:'strategies',label:'Actionable Strategies',type:'textarea'},
+  ],
   events:[
     {id:'event1Name',label:'Event #1 Name',type:'text'},
-    {id:'event1Purpose',label:'Event #1 Purpose',type:'text'},
+    {id:'event1Purpose',label:'Event #1 Purpose (leads, profit, retention)',type:'text'},
     {id:'event2Name',label:'Event #2 Name',type:'text'},
-    {id:'event2Purpose',label:'Event #2 Purpose',type:'text'},
+    {id:'event2Purpose',label:'Event #2 Purpose (leads, profit, retention)',type:'text'},
   ],
 };
 const GONINJA_GOALS_FIELDS = {
@@ -494,26 +521,36 @@ const GONINJA_GOALS_FIELDS = {
     {id:'mvmtMembership',label:'Day 1 MVMT Membership',type:'number'},
     {id:'afterschoolMembership',label:'Day 1 Afterschool Membership',type:'number'},
     {id:'newIntros',label:'New Intros',type:'number'},
-    {id:'newMemberships',label:'New Memberships (80%+ of intros)',type:'number'},
+    {id:'newMemberships',label:'New Memberships (80%+ of New Intros #)',type:'number'},
     {id:'attritionTarget',label:'Attrition (goal is 3% or less)',type:'text'},
-    {id:'eomGoal',label:'End of Month Student Count Goal',type:'number'},
+    {id:'eomGoal',label:'End of Month Student Count Goal',type:'number',highlight:true},
+  ],
+  rationale:[
+    {id:'rationale',label:'Rationale',type:'textarea'},
   ],
   revenue:[
+    {id:'totalMonthlyRevenue',label:'Total Expected Billing',type:'currency'},
+  ],
+  revenueStreams:[
     {id:'revNewMem',label:'New Memberships x $50',type:'currency'},
     {id:'revMerch',label:'Merchandise',type:'currency'},
-    {id:'revEvents',label:'Events',type:'text'},
+    {id:'revEvent1',label:'Event #1',type:'currency'},
+    {id:'revEvent2',label:'Event #2',type:'currency'},
     {id:'revCamps',label:'Camps',type:'currency'},
-    {id:'totalMonthlyRevenue',label:'Total Monthly Revenue',type:'currency'},
+    {id:'totalRevenueStreamGoal',label:'Total Revenue Stream Goal',type:'currency',highlight:true},
+    {id:'eomRevenueGoal',label:'End of Month Revenue Goal',type:'currency',highlight:true},
+  ],
+  assumptions:[
+    {id:'assumptions',label:'Assumptions',type:'textarea'},
   ],
   plan:[
     {id:'strategies',label:'Actionable Strategies',type:'textarea'},
-    {id:'timeline',label:'Timeline',type:'textarea'},
   ],
   events:[
     {id:'event1Name',label:'Event #1 Name',type:'text'},
-    {id:'event1Purpose',label:'Event #1 Purpose',type:'text'},
+    {id:'event1Purpose',label:'Event #1 Purpose (leads, profit, retention)',type:'text'},
     {id:'event2Name',label:'Event #2 Name',type:'text'},
-    {id:'event2Purpose',label:'Event #2 Purpose',type:'text'},
+    {id:'event2Purpose',label:'Event #2 Purpose (leads, profit, retention)',type:'text'},
   ],
 };
 const ARM_VALUES = {verona:200,waunakee:210,eastmad:180};
@@ -1326,39 +1363,95 @@ function renderInitialsModal(){
 }
 /* ââ Render Monthly Goals Page ââ */
 function renderMonthlyGoalsPage(){
-  const loc=state.goalsLoc,mk=state.goalsMonth;
-  const data=(state.goalsData[loc]||{})[mk]||{};
-  const fields=getGoalsFields(loc);
-  const locObj=LOCATIONS.find(l=>l.id===loc);
-  let html='<div class="loc-selector">';
-  LOCATIONS.forEach(l=>{
-    const cls=l.id===loc?(isGoNinja(l.id)?'active':'active lvlup'):'';
-    html+='<button class="loc-btn '+cls+'" onclick="setGoalsLoc(\''+l.id+'\')">'+l.short+'</button>';
-  });
-  html+='</div><div class="month-selector">';
-  MONTHS_SHORT.forEach((m,i)=>{
-    const mKey=new Date().getFullYear()+'-'+String(i+1).padStart(2,'0');
-    html+='<button class="month-btn '+(mKey===mk?'active':'')+'" onclick="setGoalsMonth(\''+mKey+'\')">'+m+'</button>';
-  });
-  html+='</div>';
-  html+='<div class="section"><div class="section-header"><h2>'+locObj.name+' \u2014 Monthly Goals Planner</h2><div class="badge">'+MONTHS[parseInt(mk.split('-')[1])-1]+' '+mk.split('-')[0]+'</div></div><div class="goals-form">';
-  if(!isGoNinja(loc)&&ARM_VALUES[loc])html+='<div class="goals-calc">ARM Value: $'+ARM_VALUES[loc]+'</div>';
-  html+='<div class="goals-section-title">Membership Targets</div>';
-  fields.membership.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-  html+='<div class="goals-section-title">Revenue Projection</div>';
-  fields.revenue.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-  html+='<div class="goals-section-title">The Plan</div>';
-  fields.plan.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-  html+='<div class="goals-section-title">Events</div>';
-  fields.events.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-  html+='</div></div>';return html;
-}
+    const loc=state.goalsLoc,mk=state.goalsMonth;
+    const data=(state.goalsData[loc]||{})[mk]||{};
+    const fields=getGoalsFields(loc);
+    const locObj=LOCATIONS.find(l=>l.id===loc);
+    let html='<div class="loc-selector">';
+    LOCATIONS.forEach(l=>{
+      const cls=l.id===loc?(isGoNinja(l.id)?'active':'active lvlup'):'';
+      html+='<button class="loc-btn '+cls+'" onclick="setGoalsLoc(\''+l.id+'\')">'+l.short+'</button>';
+    });
+    html+='</div><div class="month-selector">';
+    MONTHS_SHORT.forEach((m,i)=>{
+      const mKey=new Date().getFullYear()+'-'+String(i+1).padStart(2,'0');
+      html+='<button class="month-btn '+(mKey===mk?'active':'')+'" onclick="setGoalsMonth(\''+mKey+'\')">'+m+'</button>';
+    });
+    html+='</div>';
+    html+='<div class="section"><div class="section-header"><h2>'+locObj.name+' \u2014 Monthly Goals Planner</h2><div class="badge">'+MONTHS[parseInt(mk.split('-')[1])-1]+' '+mk.split('-')[0]+'</div></div><div class="goals-form">';
+    if(!isGoNinja(loc)&&ARM_VALUES[loc])html+='<div class="goals-calc">ARM Value: 
 function renderGoalField(field,value){
-  if(field.type==='textarea'){
-    return '<div class="goals-row"><span class="goals-label">'+esc(field.label)+'</span></div><textarea class="goals-textarea" onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea>';
+    const hl = field.highlight ? ' goals-highlight' : '';
+    if(field.type==='textarea'){
+      return '<div class="goals-row"><span class="goals-label'+hl+'">'+esc(field.label)+'</span></div><textarea class="goals-textarea" onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea>';
+    }
+    return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
   }
-  return '<div class="goals-row"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
+async function init() {
+  db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
+  seedIfEmpty();
+  listenAll();
+    listenTasks();
+    listenGoals();
 }
+
+init();
+</script>
+</body>
+</html>
++ARM_VALUES[loc]+'</div>';
+    html+='<div class="goals-section-title">Membership Targets</div>';
+    fields.membership.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    if(fields.rationale){
+      html+='<div class="goals-section-title">Rationale?</div>';
+      fields.rationale.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    }
+    html+='<div class="goals-section-title">Revenue Projection</div>';
+    fields.revenue.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    if(fields.revenueStreams){
+      html+='<div class="goals-subsection-title">Revenue Streams:</div>';
+      fields.revenueStreams.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+      if(!isGoNinja(loc)&&ARM_VALUES[loc]){
+        html+='<div class="goals-arm-note">'+Object.entries(ARM_VALUES).map(([k,v])=>{const n=LOCATIONS.find(l=>l.id===k);return n?n.short+' ARM = 
+function renderGoalField(field,value){
+    const hl = field.highlight ? ' goals-highlight' : '';
+    if(field.type==='textarea'){
+      return '<div class="goals-row"><span class="goals-label'+hl+'">'+esc(field.label)+'</span></div><textarea class="goals-textarea" onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea>';
+    }
+    return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
+  }
+async function init() {
+  db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
+  seedIfEmpty();
+  listenAll();
+    listenTasks();
+    listenGoals();
+}
+
+init();
+</script>
+</body>
+</html>
++v:'';}).filter(Boolean).join(' | ')+'</div>';
+      }
+    }
+    if(fields.assumptions){
+      html+='<div class="goals-section-title">Assumptions</div>';
+      fields.assumptions.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    }
+    html+='<div class="goals-section-title">The Plan</div>';
+    fields.plan.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    html+='<div class="goals-section-title">Events</div>';
+    fields.events.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    html+='</div></div>';return html;
+  }
+function renderGoalField(field,value){
+    const hl = field.highlight ? ' goals-highlight' : '';
+    if(field.type==='textarea'){
+      return '<div class="goals-row"><span class="goals-label'+hl+'">'+esc(field.label)+'</span></div><textarea class="goals-textarea" onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea>';
+    }
+    return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
+  }
 async function init() {
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
   seedIfEmpty();
