@@ -237,7 +237,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <div class="app" id="app"><p style="text-align:center;padding:80px;color:var(--gray-400);">Loading dashboard...</p></div>
 
 <script>
-/* ── Firebase Config (same project as VA dashboard) ── */
+/* ââ Firebase Config (same project as VA dashboard) ââ */
 const firebaseConfig = {
   apiKey: "AIzaSyDABx4H7EpCRABaD9h3lGTD3hBp2QFfhQg",
   authDomain: "va-dashboard-bf7ca.firebaseapp.com",
@@ -252,11 +252,11 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const CEO = 'ceo'; // root path in Firebase
 
-/* ── State ── */
+/* ââ State ââ */
 let state = {
   activeSection: 'scorecard',
   weekOffset: 0,
-  scorecard: { weekly: {}, monthly: {} },
+  scorecard: { weekly: {}, monthly: {}, goals: {} },
   rocks: { company: [], individual: {} },
   events: [],
   goals: {},
@@ -268,7 +268,7 @@ let state = {
 let debounceTimers = {};
 let activeListeners = [];
 
-/* ── Locations & Metrics Config ── */
+/* ââ Locations & Metrics Config ââ */
 const LOCATIONS = [
   { id: 'waunakee', name: 'LVLUP Waunakee', short: 'WAU', color: '#1a1a2e', revenueGoal: 80000 },
   { id: 'eastmad', name: 'LVLUP East Madison', short: 'E.MAD', color: '#0f3460', revenueGoal: 18920 },
@@ -278,11 +278,15 @@ const LOCATIONS = [
 ];
 
 const WEEKLY_METRICS = [
-  { id: 'attrition', label: 'Attrition', goal: true },
-  { id: 'newMem', label: 'New TKD Members' },
+  { id: 'attrition', label: 'Attrition', pct: true },
+  { id: 'newMembers', label: 'New TKD Members' },
   { id: 'trials', label: 'Trials' },
   { id: 'leads', label: 'Leads' },
-  { id: 'leadToTrial', label: 'Lead to Trial %', pct: true, goal: true },
+  { id: 'leadToTrial', label: 'Lead to Trial %', pct: true },
+];
+const GONINJA_METRICS = [
+  { id: 'summerCampWeeks', label: 'Summer Camp Weeks' },
+  { id: 'bdayParties', label: 'Bday Parties' },
 ];
 
 const MONTHLY_METRICS = [
@@ -301,7 +305,7 @@ const SCORECARD_PEOPLE = {
   goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
 };
 
-/* ── Task Definitions ── */
+/* ââ Task Definitions ââ */
 const LVLUP_DAILY = [
   {id:'clock',text:'Clock in/out via Homebase'},
   {id:'tv',text:'Update TV & whiteboard announcements'},
@@ -514,7 +518,7 @@ const GONINJA_GOALS_FIELDS = {
 };
 const ARM_VALUES = {verona:200,waunakee:210,eastmad:180};
 
-/* ── Helpers ── */
+/* ââ Helpers ââ */
 function getWeekKey(offset) {
   const now = new Date();
   const day = now.getDay();
@@ -575,7 +579,7 @@ function revPctClass(val, goal) {
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-/* ── Firebase Helpers ── */
+/* ââ Firebase Helpers ââ */
 function fbRef(path) { return db.ref(CEO + '/' + path); }
 
 function fbSet(path, val) {
@@ -587,7 +591,7 @@ function fbDebounce(path, val, ms) {
   debounceTimers[path] = setTimeout(() => fbSet(path, val), 500);
 }
 
-/* ── Data Loading ── */
+/* ââ Data Loading ââ */
 function listenAll() {
   activeListeners.forEach(l => l.ref.off(l.event));
   activeListeners = [];
@@ -597,6 +601,11 @@ function listenAll() {
   const scWeekRef = fbRef('scorecard/weekly/' + weekKey);
   scWeekRef.on('value', snap => { state.scorecard.weekly = snap.val() || {}; render(); });
   activeListeners.push({ ref: scWeekRef, event: 'value' });
+
+  // Scorecard goals
+  const scGoalsRef = fbRef('scorecard/goals');
+  scGoalsRef.on('value', snap => { state.scorecard.goals = snap.val() || {}; render(); });
+  activeListeners.push({ ref: scGoalsRef, event: 'value' });
 
   // Scorecard monthly
   const monthKey = getMonthKey();
@@ -640,11 +649,11 @@ function listenAll() {
   activeListeners.push({ ref: kpiRef, event: 'value' });
 }
 
-/* ── Navigation ── */
+/* ââ Navigation ââ */
 function setSection(s) { state.activeSection = s; render(); }
 function changeWeek(d) { state.weekOffset += d; listenAll(); }
 
-/* ── Update functions ── */
+/* ââ Update functions ââ */
 function updateScorecard(locId, personId, metricId, weekIdx, val) {
   const weekKey = getWeekKey(state.weekOffset - weekIdx);
   fbDebounce('scorecard/weekly/' + weekKey + '/' + locId + '/' + personId + '/' + metricId, val);
@@ -680,7 +689,7 @@ function updateKPI(locId, metric, val) {
   fbDebounce('kpis/2026/' + monthKey + '/' + locId + '/' + metric, val);
 }
 
-/* ── Seed default data ── */
+/* ââ Seed default data ââ */
 function seedIfEmpty() {
   fbRef('rocks/company').once('value', snap => {
     if (!snap.val()) {
@@ -719,7 +728,7 @@ function seedIfEmpty() {
   });
 }
 
-/* ── Render ── */
+/* ââ Render ââ */
 function render() {
   const app = document.getElementById('app');
   const s = state.activeSection;
@@ -754,7 +763,7 @@ function renderHeader() {
     '</div></div>';
 }
 
-/* ── Scorecard Page ── */
+/* ââ Scorecard Page ââ */
 function renderScorecardPage() {
   const monthKey = getMonthKey();
   const monthData = state.scorecard.monthly || {};
@@ -781,6 +790,7 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
   const weekKey = getWeekKey(state.weekOffset);
   const weekLabel = getWeekLabel(state.weekOffset);
   const weekData = state.scorecard.weekly || {};
+  const goalsData = state.scorecard.goals || {};
 
   let tableHtml = '<div class="section">' +
     '<div class="section-header"><h2>Weekly Scorecard</h2>' +
@@ -795,12 +805,15 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
     tableHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
     const people = SCORECARD_PEOPLE[loc.id] || [];
     people.forEach(person => {
-      WEEKLY_METRICS.forEach(metric => {
-        const val = weekData[loc.id] && weekData[loc.id][person.id] && weekData[loc.id][person.id][metric.id] || '';
-        const goalVal = metric.id === 'attrition' ? '0.67%' : metric.id === 'leadToTrial' ? '35%' : '';
+      const metricsForLoc = (loc.id === 'goninjaW' || loc.id === 'goninjaV') ? GONINJA_METRICS : WEEKLY_METRICS;
+      metricsForLoc.forEach(metric => {
+        const rawVal = weekData[loc.id] && weekData[loc.id][person.id] ? weekData[loc.id][person.id][metric.id] : undefined;
+        const val = rawVal !== undefined && rawVal !== null && rawVal !== '' ? (metric.pct ? (parseFloat(rawVal) * 100).toFixed(1) + '%' : rawVal) : 0;
+        const rawGoal = goalsData[loc.id] && goalsData[loc.id][person.id] && goalsData[loc.id][person.id][metric.id];
+        const goalVal = rawGoal !== undefined && rawGoal !== null ? (metric.pct ? (rawGoal * 100).toFixed(1) + '%' : rawGoal) : '';
         tableHtml += '<tr><td>' + person.name + '</td><td>' + metric.label + '</td>' +
           '<td>' + goalVal + '</td>' +
-          '<td><input value="' + esc(String(val)) + '" onchange="updateScorecard(\'' + loc.id + '\',\'' + person.id + '\',\'' + metric.id + '\',0,this.value)" /></td></tr>';
+          '<td><input value="' + esc(String(rawVal !== undefined && rawVal !== null && rawVal !== '' ? rawVal : 0)) + '" onchange="updateScorecard(\'' + loc.id + '\',\'' + person.id + '\',\'' + metric.id + '\',0,this.value)" /></td></tr>';
       });
     });
   });
@@ -809,7 +822,7 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
 
   // Monthly revenue/members table
   let monthlyHtml = '<div class="section">' +
-    '<div class="section-header"><h2>Monthly Totals — ' + getCurrentMonth() + '</h2><div class="badge">MTD</div></div>' +
+    '<div class="section-header"><h2>Monthly Totals â ' + getCurrentMonth() + '</h2><div class="badge">MTD</div></div>' +
     '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
     '<th>Who</th><th>Measurable</th><th>March Goal</th><th>Current</th>' +
     '</tr></thead><tbody>';
@@ -833,7 +846,7 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
   return kpiHtml + tableHtml + monthlyHtml;
 }
 
-/* ── KPIs Page (Monthly KPIs for 3 LVLUP locations) ── */
+/* ââ KPIs Page (Monthly KPIs for 3 LVLUP locations) ââ */
 function renderKPIsPage() {
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; const monthKeys=['january','february','march','april','may','june','july','august','september','october','november','december'];
   const now = new Date();
@@ -886,7 +899,7 @@ function renderKPIsPage() {
   LOCATIONS.forEach(loc => {
     const memData = state.membership[loc.id] || {};
     const curMem = memData[curMonth] || {};
-    html += '<details class="section-card" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:600;font-size:1.1rem;padding:0.75rem">'+loc.short+' — '+loc.name+'</summary>';
+    html += '<details class="section-card" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:600;font-size:1.1rem;padding:0.75rem">'+loc.short+' â '+loc.name+'</summary>';
     html += '<div style="padding:0 0.75rem 0.75rem">';
     html += '<div style="overflow-x:auto"><table><thead><tr><th>Month</th><th>Total Members</th><th>Goal</th><th>+/\u2212</th><th>Leads</th><th>Intros</th><th>New Members</th><th>Upgrades</th><th>Attrition</th><th>Google Reviews</th><th>Conversion</th></tr></thead><tbody>';
     let ytdLeads=0,ytdIntros=0,ytdNew=0,ytdUpg=0,ytdAttr=0,ytdReviews=0;
@@ -942,7 +955,7 @@ function initKPICharts(){
   });
 }
 
-/* ── Financials Page (All 3 LVLUP Locations) ── */
+/* ââ Financials Page (All 3 LVLUP Locations) ââ */
 function renderFinancialsPage() {
   const LVLUP_LOCS = LOCATIONS.filter(l => ['waunakee','eastmad','verona'].includes(l.id));
   const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -978,7 +991,7 @@ function renderFinancialsPage() {
     const memData = state.membership[loc.id] || {};
 
     // Financial table
-    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' — 2026 Financials</h2></div>';
+    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' â 2026 Financials</h2></div>';
     html += '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>';
     html += '<th style="text-align:left;">Month</th><th>Gross TY</th><th>Gross LY</th><th>TY vs LY</th><th>ARM</th><th>LEG</th><th>LTV</th>';
     html += '</tr></thead><tbody>';
@@ -1047,7 +1060,7 @@ function renderFinancialsPage() {
   return html;
 }
 
-/* ── Rocks Page ── */
+/* ââ Rocks Page ââ */
 function renderRocksPage() {
   const rocks = state.rocks || {};
   const company = rocks.company || [];
@@ -1055,7 +1068,7 @@ function renderRocksPage() {
   const statuses = ['not-started','in-progress','on-track','complete','off-track'];
   const statusLabels = { 'not-started':'Not Started', 'in-progress':'In Progress', 'on-track':'On Track', 'complete':'Complete', 'off-track':'Off Track' };
 
-  let html = '<div class="section"><div class="section-header"><h2>Company Rocks — Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
+  let html = '<div class="section"><div class="section-header"><h2>Company Rocks â Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
 
   if (company.length) {
     company.forEach((r, i) => {
@@ -1075,7 +1088,7 @@ function renderRocksPage() {
   Object.keys(individual).forEach(personKey => {
     const personRocks = individual[personKey] || [];
     const label = personKey === 'mrsMoh' ? 'Mrs. Moh' : personKey === 'mrMoh' ? 'Mr. Moh' : personKey;
-    html += '<div class="section"><div class="section-header"><h2>Individual Rocks — ' + esc(label) + '</h2></div>';
+    html += '<div class="section"><div class="section-header"><h2>Individual Rocks â ' + esc(label) + '</h2></div>';
     personRocks.forEach((r, i) => {
       html += '<div class="rock-item">' +
         '<div class="rock-num">' + (i + 1) + '</div>' +
@@ -1090,7 +1103,7 @@ function renderRocksPage() {
   return html;
 }
 
-/* ── Events Page ── */
+/* ââ Events Page ââ */
 function renderEventsPage() {
   const events = state.events || [];
   const locGroups = {};
@@ -1119,7 +1132,7 @@ function renderEventsPage() {
   return html;
 }
 
-/* ── Goals Page ── */
+/* ââ Goals Page ââ */
 function renderGoalsPage() {
   const goals = state.goals || {};
   let total = 0;
@@ -1141,7 +1154,7 @@ function renderGoalsPage() {
   return html;
 }
 
-/* ── Connection Status ── */
+/* ââ Connection Status ââ */
 function updateConnStatus(online) {
   const el = document.getElementById('connStatus');
   if (!el) return;
@@ -1149,9 +1162,9 @@ function updateConnStatus(online) {
   el.textContent = online ? '\ud83d\udfe2 Synced' : '\ud83d\udd34 Offline';
 }
 
-/* ── Init ── */
+/* ââ Init ââ */
 
-/* ── Tasks Hub State ── */
+/* ââ Tasks Hub State ââ */
 state.tasksLoc = 'waunakee';
 state.tasksDate = new Date().toISOString().split('T')[0];
 state.tasksCycleWeek = 1;
@@ -1176,7 +1189,7 @@ function getTaskWeekKey(dateStr){
   return yr+'-W'+String(wk).padStart(2,'0');
 }
 
-/* ── Tasks Firebase Listeners ── */
+/* ââ Tasks Firebase Listeners ââ */
 function listenTasks(){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
   const dailyRef=fbRef('tasks/'+loc+'/daily/'+dateKey);
@@ -1207,7 +1220,7 @@ function listenGoals(){
   });activeListeners.push({ref:ref,event:'value'});
 }
 
-/* ── Task Completion ── */
+/* ââ Task Completion ââ */
 function showInitialsModal(section,taskId){state.modalTask={section,taskId};render();}
 function confirmTask(){
   const input=document.getElementById('initialsInput');if(!input)return;
@@ -1240,7 +1253,7 @@ function updateGoalField(field,val){
   fbDebounce('monthlyGoals/'+state.goalsLoc+'/'+state.goalsMonth+'/'+field,val);
 }
 
-/* ── Render Tasks Page ── */
+/* ââ Render Tasks Page ââ */
 function renderTasksPage(){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
   const locData=state.tasksData[loc]||{};
@@ -1309,7 +1322,7 @@ function renderTaskItem(section,task,doneData){
 function renderInitialsModal(){
   return '<div class="modal-overlay" onclick="cancelModal()"><div class="modal-box" onclick="event.stopPropagation()"><h3>Complete Task</h3><p>Enter your initials to mark as done</p><input id="initialsInput" maxlength="4" placeholder="e.g. MM" autofocus onkeydown="if(event.key===\'Enter\')confirmTask()" /><div class="modal-actions"><button class="btn-cancel" onclick="cancelModal()">Cancel</button><button class="btn-confirm" onclick="confirmTask()">Complete</button></div></div></div>';
 }
-/* ── Render Monthly Goals Page ── */
+/* ââ Render Monthly Goals Page ââ */
 function renderMonthlyGoalsPage(){
   const loc=state.goalsLoc,mk=state.goalsMonth;
   const data=(state.goalsData[loc]||{})[mk]||{};
