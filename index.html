@@ -168,6 +168,67 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .ytd-row{background:var(--surface);font-weight:700;border-top:2px solid var(--blue)}
 .conv-rate{font-size:.8rem;color:var(--muted)}
 .upgrades-badge{background:var(--blue);color:#fff;padding:2px 8px;border-radius:10px;font-size:.8rem}
+
+/* Tasks Hub */
+.tasks-hub{padding:0}
+.loc-selector{display:flex;gap:4px;background:var(--card);border-radius:10px;padding:3px;box-shadow:var(--shadow);margin-bottom:16px;flex-wrap:wrap}
+.loc-btn{padding:8px 14px;border-radius:8px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);transition:all .15s;white-space:nowrap}
+.loc-btn.active{background:var(--accent);color:#fff}
+.loc-btn:not(.active):hover{background:var(--gray-100)}
+.loc-btn.lvlup.active{background:var(--primary);color:#fff}
+.task-section{background:var(--card);border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.task-section-header{padding:14px 20px;border-bottom:1px solid var(--gray-100);display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none}
+.task-section-header h3{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.task-section-header .chevron{transition:transform .2s;font-size:12px;color:var(--gray-400)}
+.task-section-header .chevron.open{transform:rotate(90deg)}
+.progress-pill{font-size:11px;padding:3px 10px;border-radius:999px;font-weight:600}
+.progress-pill.complete{background:var(--green-light);color:var(--green)}
+.progress-pill.partial{background:var(--orange-light);color:var(--orange)}
+.progress-pill.empty{background:var(--gray-100);color:var(--gray-500)}
+.task-list{padding:0}
+.task-list.collapsed{display:none}
+.task-cat{padding:8px 20px 4px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);font-weight:700;background:var(--gray-50);border-top:1px solid var(--gray-100)}
+.task-item{display:flex;align-items:center;padding:10px 20px;border-bottom:1px solid var(--gray-50);gap:12px;transition:background .15s}
+.task-item:last-child{border-bottom:none}
+.task-item:hover{background:var(--gray-50)}
+.task-item.done{background:var(--green-light)}
+.task-item.done .task-text{text-decoration:line-through;color:var(--gray-400)}
+.task-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--gray-300);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:11px;font-weight:700;transition:all .15s}
+.task-check.checked{background:var(--green);border-color:var(--green);color:#fff}
+.task-text{flex:1;font-size:13px;line-height:1.4}
+.task-initials{font-size:11px;color:var(--gray-500);font-weight:600;flex-shrink:0;min-width:36px;text-align:center}
+.task-time{font-size:10px;color:var(--gray-400);flex-shrink:0}
+.date-nav{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.date-nav button{background:var(--card);border:1px solid var(--gray-200);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--gray-700)}
+.date-nav button:hover{background:var(--blue-light);border-color:var(--blue);color:var(--blue)}
+.date-label{font-size:14px;font-weight:600;color:var(--gray-700)}
+.cycle-week-nav{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.cycle-week-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--gray-200);background:var(--card);cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-600)}
+.cycle-week-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.cycle-week-btn:not(.active):hover{background:var(--blue-light)}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;justify-content:center}
+.modal-box{background:var(--card);border-radius:14px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2);min-width:280px;text-align:center}
+.modal-box h3{font-size:16px;margin-bottom:4px}
+.modal-box p{font-size:13px;color:var(--gray-500);margin-bottom:16px}
+.modal-box input{width:100px;font-size:20px;font-weight:700;text-align:center;padding:8px;border:2px solid var(--gray-200);border-radius:10px;text-transform:uppercase;letter-spacing:2px}
+.modal-box input:focus{outline:none;border-color:var(--accent)}
+.modal-actions{display:flex;gap:8px;justify-content:center;margin-top:16px}
+.modal-actions button{padding:8px 20px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600}
+.modal-actions .btn-confirm{background:var(--green);color:#fff}
+.modal-actions .btn-cancel{background:var(--gray-100);color:var(--gray-600)}
+.goals-form{padding:20px}
+.goals-section-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--blue);margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--blue-light)}
+.goals-section-title:first-child{margin-top:0}
+.goals-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.goals-label{font-size:13px;color:var(--gray-700);flex:1;min-width:200px}
+.goals-input{width:140px;border:1px solid var(--gray-200);border-radius:8px;padding:6px 10px;font-size:14px;font-weight:500;font-family:inherit;text-align:right}
+.goals-input:focus{outline:none;border-color:var(--accent)}
+.goals-textarea{width:100%;border:1px solid var(--gray-200);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;min-height:80px;resize:vertical}
+.goals-textarea:focus{outline:none;border-color:var(--accent)}
+.goals-calc{font-size:12px;color:var(--gray-400);font-style:italic}
+.month-selector{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px}
+.month-btn{padding:6px 10px;border-radius:8px;border:1px solid var(--gray-200);background:var(--card);cursor:pointer;font-size:11px;font-weight:600}
+.month-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
@@ -239,6 +300,219 @@ const SCORECARD_PEOPLE = {
   goninjaW: [{ id: 'smith', name: 'Ms. Smith' }],
   goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
 };
+
+/* ── Task Definitions ── */
+const LVLUP_DAILY = [
+  {id:'clock',text:'Clock in/out via Homebase'},
+  {id:'tv',text:'Update TV & whiteboard announcements'},
+  {id:'attendance',text:'Log attendance in MyStudio'},
+  {id:'retail',text:'Fulfill retail orders'},
+  {id:'mats',text:'Mats mopped & lobby cleaned'},
+  {id:'bathrooms',text:'Bathrooms spot-checked & cleaned'},
+  {id:'eos',text:'EOS report submitted'},
+];
+const GONINJA_DAILY = [
+  {id:'clock',text:'Clock in/out via Homebase'},
+  {id:'tv',text:'Update TV & whiteboard announcements'},
+  {id:'attendance',text:'Log attendance in system'},
+  {id:'retail',text:'Fulfill retail orders'},
+  {id:'mats',text:'Mats mopped & lobby cleaned'},
+  {id:'bathrooms',text:'Bathrooms spot-checked & cleaned'},
+  {id:'eos',text:'End-of-day report submitted'},
+];
+const LVLUP_WEEKLY_REC = [
+  {id:'newsletter',text:'Send LVLUP newsletter (by Tuesday)'},
+  {id:'lifelinks',text:'Review LifeLinks nominations & award belt clips'},
+  {id:'social',text:'Post 2x on social media'},
+];
+const GONINJA_WEEKLY_REC = [
+  {id:'newsletter',text:'Send Go Ninja newsletter (by Tuesday)'},
+  {id:'social',text:'Post 2x on social media'},
+];
+const LVLUP_CYCLE = {
+  1:{name:'Cycle Launch',tasks:[
+    {id:'w1a1',cat:'Admin',text:'Announce cycle theme + lifeskill'},
+    {id:'w1a2',cat:'Admin',text:'Update MyStudio curriculum videos'},
+    {id:'w1a3',cat:'Admin',text:'Schedule holidays/events on calendar'},
+    {id:'w1s1',cat:'Student Mgmt',text:'Reset stoplight report'},
+    {id:'w1s2',cat:'Student Mgmt',text:'Run baseline Red/Yellow/Green report'},
+    {id:'w1s3',cat:'Student Mgmt',text:'Outreach to non-testers from last cycle'},
+    {id:'w1s4',cat:'Student Mgmt',text:'Send black belt testing requirements'},
+    {id:'w1c1',cat:'Cleaning',text:'Deep clean mats & equipment'},
+    {id:'w1r1',cat:'Reporting',text:'LVLUP Dashboard updated'},
+  ]},
+  2:{name:'Engagement Push',tasks:[
+    {id:'w2a1',cat:'Admin',text:'Update physical signage for new cycle'},
+    {id:'w2a2',cat:'Admin',text:'Social highlight - new drills/forms'},
+    {id:'w2a3',cat:'Admin',text:'Plan & launch PNO event'},
+    {id:'w2a4',cat:'Admin',text:'Birthday parties check - send invites'},
+    {id:'w2a5',cat:'Admin',text:'Enter new students into atamartialarts.com'},
+    {id:'w2s1',cat:'Student Mgmt',text:'Update stoplight report'},
+    {id:'w2s2',cat:'Student Mgmt',text:'Continue outreach to non-testers'},
+    {id:'w2s3',cat:'Student Mgmt',text:'Celebrate students with great attendance'},
+    {id:'w2s4',cat:'Student Mgmt',text:'Promote PNO & upcoming events'},
+    {id:'w2c1',cat:'Cleaning',text:'Deep clean front desk & lobby'},
+  ]},
+  3:{name:'Momentum + Leadership Push',tasks:[
+    {id:'w3a1',cat:'Admin',text:'Leadership/Legacy golden tickets awarded'},
+    {id:'w3a2',cat:'Admin',text:'Launch retail promo'},
+    {id:'w3a3',cat:'Admin',text:'Promote upcoming PNO'},
+    {id:'w3a4',cat:'Admin',text:'Secure community event/engagement'},
+    {id:'w3s1',cat:'Student Mgmt',text:'Update stoplight report'},
+    {id:'w3s2',cat:'Student Mgmt',text:'Run student MIA report in MyStudio'},
+    {id:'w3s3',cat:'Student Mgmt',text:'ID at-risk students & schedule free booster lessons'},
+    {id:'w3c1',cat:'Cleaning',text:'Deep clean lobby & pro shop'},
+  ]},
+  4:{name:'Mid-Cycle Calibration',tasks:[
+    {id:'w4a1',cat:'Admin',text:'Update signage (testing dates, tourney, events)'},
+    {id:'w4a2',cat:'Admin',text:'Send parent email - testing date reminder'},
+    {id:'w4a3',cat:'Admin',text:'Close leadership upgrades'},
+    {id:'w4s1',cat:'Student Mgmt',text:'Update stoplight report'},
+    {id:'w4s2',cat:'Student Mgmt',text:'Attendance follow-up (book boosters)'},
+    {id:'w4s3',cat:'Student Mgmt',text:'Extra outreach to yellow students'},
+    {id:'w4c1',cat:'Cleaning',text:'Deep clean storage & instructor rooms'},
+  ]},
+  5:{name:'Testing Ramp-Up',tasks:[
+    {id:'w5a1',cat:'Admin',text:'Send parent email reminder about testing'},
+    {id:'w5a2',cat:'Admin',text:'Set retention training event'},
+    {id:'w5s1',cat:'Student Mgmt',text:'Update stoplight report'},
+    {id:'w5s2',cat:'Student Mgmt',text:'Attendance follow-up'},
+    {id:'w5s3',cat:'Student Mgmt',text:'Extra outreach to yellow students'},
+    {id:'w5c1',cat:'Cleaning',text:'Digital cleaning (clean up email inbox, etc.)'},
+  ]},
+  6:{name:'Prep Intensifies (Target 70%)',tasks:[
+    {id:'w6a1',cat:'Admin',text:'Push leadership/extra classes'},
+    {id:'w6a2',cat:'Admin',text:'Social: testing prep tips'},
+    {id:'w6a3',cat:'Admin',text:'Secure community event/engagement'},
+    {id:'w6s1',cat:'Student Mgmt',text:'Update stoplight report'},
+    {id:'w6s2',cat:'Student Mgmt',text:'Push registration - Goal: 70%'},
+    {id:'w6s3',cat:'Student Mgmt',text:'Yellow/red outreach'},
+    {id:'w6s4',cat:'Student Mgmt',text:'Invite tigers to beginners class'},
+    {id:'w6s5',cat:'Student Mgmt',text:'Email yellow belts about safety gear'},
+    {id:'w6c1',cat:'Cleaning',text:'Deep clean front desk & lobby'},
+    {id:'w6r1',cat:'Reporting',text:'Testing % recorded - assign grade'},
+  ]},
+  7:{name:'Testing Finalization',tasks:[
+    {id:'w7a1',cat:'Admin',text:'Email incoming red/black belts testing requirements'},
+    {id:'w7a2',cat:'Admin',text:'Choose student of the cycle, get photo/certificate'},
+    {id:'w7s1',cat:'Student Mgmt',text:'Confirm final test registration list'},
+    {id:'w7s2',cat:'Student Mgmt',text:'Outreach to unregistered families (final push)'},
+    {id:'w7c1',cat:'Cleaning',text:'Deep clean - full school reset before testing'},
+    {id:'w7r1',cat:'Reporting',text:'Final testing % recorded'},
+  ]},
+  8:{name:'Testing Week',tasks:[
+    {id:'w8a1',cat:'Admin',text:'Announce promotions & celebrate success'},
+    {id:'w8a2',cat:'Admin',text:'Email parents with results'},
+    {id:'w8a3',cat:'Admin',text:'Collect feedback for next cycle'},
+    {id:'w8s1',cat:'Student Mgmt',text:'Confirm attendance of registered testers'},
+    {id:'w8s2',cat:'Student Mgmt',text:'Support students during warm-ups/staging'},
+    {id:'w8c1',cat:'Cleaning',text:'Full school reset post-testing'},
+    {id:'w8r1',cat:'Reporting',text:'Final testing results & promotion list recorded'},
+  ]},
+};
+const GONINJA_CYCLE = {
+  1:{name:'Cycle Launch',tasks:[
+    {id:'w1a1',cat:'Admin',text:'Announce new cycle theme'},
+    {id:'w1a2',cat:'Admin',text:'Update class schedules/calendar'},
+    {id:'w1s1',cat:'Student Mgmt',text:'Check enrollment numbers'},
+    {id:'w1c1',cat:'Cleaning',text:'Deep clean mats & equipment'},
+  ]},
+  2:{name:'Engagement Push',tasks:[
+    {id:'w2a1',cat:'Admin',text:'Update signage for new cycle'},
+    {id:'w2a2',cat:'Admin',text:'Plan community engagement event'},
+    {id:'w2s1',cat:'Student Mgmt',text:'Follow up with absent students'},
+    {id:'w2c1',cat:'Cleaning',text:'Deep clean front desk & lobby'},
+  ]},
+  3:{name:'Momentum Building',tasks:[
+    {id:'w3a1',cat:'Admin',text:'Launch promo or special event'},
+    {id:'w3s1',cat:'Student Mgmt',text:'Run attendance report'},
+    {id:'w3s2',cat:'Student Mgmt',text:'Reach out to at-risk students'},
+    {id:'w3c1',cat:'Cleaning',text:'Deep clean lobby & retail area'},
+  ]},
+  4:{name:'Mid-Cycle Check',tasks:[
+    {id:'w4a1',cat:'Admin',text:'Review event calendar for next month'},
+    {id:'w4s1',cat:'Student Mgmt',text:'Attendance follow-up'},
+    {id:'w4c1',cat:'Cleaning',text:'Deep clean storage rooms'},
+  ]},
+  5:{name:'Event Prep',tasks:[
+    {id:'w5a1',cat:'Admin',text:'Finalize upcoming event details'},
+    {id:'w5s1',cat:'Student Mgmt',text:'Send event reminders to families'},
+    {id:'w5c1',cat:'Cleaning',text:'General cleaning & organization'},
+  ]},
+  6:{name:'Growth Push',tasks:[
+    {id:'w6a1',cat:'Admin',text:'Push enrollment & referral campaign'},
+    {id:'w6s1',cat:'Student Mgmt',text:'Follow up with trial attendees'},
+    {id:'w6c1',cat:'Cleaning',text:'Deep clean front desk & lobby'},
+  ]},
+  7:{name:'Wrap-Up Prep',tasks:[
+    {id:'w7a1',cat:'Admin',text:'Prepare end-of-cycle communications'},
+    {id:'w7s1',cat:'Student Mgmt',text:'Final attendance check'},
+    {id:'w7c1',cat:'Cleaning',text:'Deep clean - full facility'},
+  ]},
+  8:{name:'Cycle Close',tasks:[
+    {id:'w8a1',cat:'Admin',text:'Send cycle recap to families'},
+    {id:'w8a2',cat:'Admin',text:'Collect parent feedback'},
+    {id:'w8s1',cat:'Student Mgmt',text:'Celebrate student achievements'},
+    {id:'w8c1',cat:'Cleaning',text:'Full facility reset'},
+    {id:'w8r1',cat:'Reporting',text:'Cycle summary report'},
+  ]},
+};
+const LVLUP_GOALS_FIELDS = {
+  membership:[
+    {id:'currentMembership',label:'Current Membership #',type:'number'},
+    {id:'newIntros',label:'New Intros',type:'number'},
+    {id:'newMemberships',label:'New Memberships (80%+ of intros)',type:'number'},
+    {id:'attritionTarget',label:'Attrition Target (2%)',type:'text'},
+    {id:'eomGoal',label:'End of Month Student Count Goal',type:'number'},
+  ],
+  revenue:[
+    {id:'totalBilling',label:'Total Expected Billing',type:'currency'},
+    {id:'revIntros',label:'New Intros x $39',type:'currency'},
+    {id:'revNewMem',label:'New Memberships x $60',type:'currency'},
+    {id:'revLeadership',label:'Leadership Upgrades x $299',type:'currency'},
+    {id:'revLegacy',label:'Legacy Upgrades x $349',type:'currency'},
+    {id:'revMerch',label:'Merchandise',type:'currency'},
+    {id:'revEvents',label:'Events',type:'currency'},
+    {id:'revTesting',label:'Testing',type:'currency'},
+    {id:'revTournament',label:'Tournament',type:'currency'},
+    {id:'revCamps',label:'Camps',type:'currency'},
+  ],
+  plan:[{id:'strategies',label:'Actionable Strategies',type:'textarea'}],
+  events:[
+    {id:'event1Name',label:'Event #1 Name',type:'text'},
+    {id:'event1Purpose',label:'Event #1 Purpose',type:'text'},
+    {id:'event2Name',label:'Event #2 Name',type:'text'},
+    {id:'event2Purpose',label:'Event #2 Purpose',type:'text'},
+  ],
+};
+const GONINJA_GOALS_FIELDS = {
+  membership:[
+    {id:'mvmtMembership',label:'Day 1 MVMT Membership',type:'number'},
+    {id:'afterschoolMembership',label:'Day 1 Afterschool Membership',type:'number'},
+    {id:'newIntros',label:'New Intros',type:'number'},
+    {id:'newMemberships',label:'New Memberships (80%+ of intros)',type:'number'},
+    {id:'attritionTarget',label:'Attrition Target (2%)',type:'text'},
+    {id:'eomGoal',label:'End of Month Student Count Goal',type:'number'},
+  ],
+  revenue:[
+    {id:'totalBilling',label:'Total Expected Billing',type:'currency'},
+    {id:'revNewMem',label:'New Memberships x $50',type:'currency'},
+    {id:'revMerch',label:'Merchandise',type:'currency'},
+    {id:'revEvents',label:'Events',type:'currency'},
+    {id:'revCamps',label:'Camps',type:'currency'},
+  ],
+  plan:[
+    {id:'strategies',label:'Actionable Strategies',type:'textarea'},
+    {id:'timeline',label:'Timeline',type:'textarea'},
+  ],
+  events:[
+    {id:'event1Name',label:'Event #1 Name',type:'text'},
+    {id:'event1Purpose',label:'Event #1 Purpose',type:'text'},
+    {id:'event2Name',label:'Event #2 Name',type:'text'},
+    {id:'event2Purpose',label:'Event #2 Purpose',type:'text'},
+  ],
+};
+const ARM_VALUES = {verona:200,waunakee:210,eastmad:180};
 
 /* ── Helpers ── */
 function getWeekKey(offset) {
@@ -456,7 +730,9 @@ function render() {
      s === 'financials' ? renderFinancialsPage() :
      s === 'rocks' ? renderRocksPage() :
      s === 'events' ? renderEventsPage() :
-     s === 'goals' ? renderGoalsPage() : '');
+     s === 'goals' ? renderGoalsPage() :
+          s === 'tasks' ? renderTasksPage() :
+          s === 'monthlyGoals' ? renderMonthlyGoalsPage() : '');
     if(s === 'kpis') initKPICharts();
 }
 
@@ -468,7 +744,9 @@ function renderHeader() {
     { id: 'rocks', label: 'Rocks' },
     { id: 'events', label: 'Events' },
     { id: 'goals', label: 'Goal Tracker' },
-  ];
+        { id: 'tasks', label: 'Tasks' },
+      { id: 'monthlyGoals', label: 'Monthly Goals' },
+    ];
   return '<div class="header">' +
     '<h1><span style="color:var(--blue)">LVLUP</span> / <span class="accent">Go Ninja</span> CEO Dashboard</h1>' +
     '<div class="nav-tabs">' +
@@ -872,10 +1150,206 @@ function updateConnStatus(online) {
 }
 
 /* ── Init ── */
+
+/* ── Tasks Hub State ── */
+state.tasksLoc = 'waunakee';
+state.tasksDate = new Date().toISOString().split('T')[0];
+state.tasksCycleWeek = 1;
+state.tasksData = {};
+state.collapsedSections = {};
+state.goalsLoc = 'waunakee';
+state.goalsMonth = getMonthKey();
+state.goalsData = {};
+state.modalTask = null;
+
+function isGoNinja(locId){return locId==='goninjaW'||locId==='goninjaV';}
+function getDailyTasks(locId){return isGoNinja(locId)?GONINJA_DAILY:LVLUP_DAILY;}
+function getWeeklyRec(locId){return isGoNinja(locId)?GONINJA_WEEKLY_REC:LVLUP_WEEKLY_REC;}
+function getCycleTasks(locId){return isGoNinja(locId)?GONINJA_CYCLE:LVLUP_CYCLE;}
+function getGoalsFields(locId){return isGoNinja(locId)?GONINJA_GOALS_FIELDS:LVLUP_GOALS_FIELDS;}
+function getTaskWeekKey(dateStr){
+  const d=new Date(dateStr+'T12:00:00');const day=d.getDay();
+  const diff=d.getDate()-day+(day===0?-6:1);const mon=new Date(d);mon.setDate(diff);
+  const yr=mon.getFullYear();const oneJan=new Date(yr,0,1);
+  const days=Math.floor((mon-oneJan)/86400000);
+  const wk=Math.ceil((days+oneJan.getDay()+1)/7);
+  return yr+'-W'+String(wk).padStart(2,'0');
+}
+
+/* ── Tasks Firebase Listeners ── */
+function listenTasks(){
+  const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
+  const dailyRef=fbRef('tasks/'+loc+'/daily/'+dateKey);
+  dailyRef.on('value',snap=>{
+    if(!state.tasksData[loc])state.tasksData[loc]={};
+    if(!state.tasksData[loc].daily)state.tasksData[loc].daily={};
+    state.tasksData[loc].daily[dateKey]=snap.val()||{};render();
+  });activeListeners.push({ref:dailyRef,event:'value'});
+  const weeklyRef=fbRef('tasks/'+loc+'/weekly/'+weekKey);
+  weeklyRef.on('value',snap=>{
+    if(!state.tasksData[loc])state.tasksData[loc]={};
+    if(!state.tasksData[loc].weekly)state.tasksData[loc].weekly={};
+    state.tasksData[loc].weekly[weekKey]=snap.val()||{};render();
+  });activeListeners.push({ref:weeklyRef,event:'value'});
+  const cycleRef=fbRef('tasks/'+loc+'/cycle/'+weekKey);
+  cycleRef.on('value',snap=>{
+    if(!state.tasksData[loc])state.tasksData[loc]={};
+    if(!state.tasksData[loc].cycle)state.tasksData[loc].cycle={};
+    state.tasksData[loc].cycle[weekKey]=snap.val()||{};render();
+  });activeListeners.push({ref:cycleRef,event:'value'});
+}
+function listenGoals(){
+  const loc=state.goalsLoc,mk=state.goalsMonth;
+  const ref=fbRef('monthlyGoals/'+loc+'/'+mk);
+  ref.on('value',snap=>{
+    if(!state.goalsData[loc])state.goalsData[loc]={};
+    state.goalsData[loc][mk]=snap.val()||{};render();
+  });activeListeners.push({ref:ref,event:'value'});
+}
+
+/* ── Task Completion ── */
+function showInitialsModal(section,taskId){state.modalTask={section,taskId};render();}
+function confirmTask(){
+  const input=document.getElementById('initialsInput');if(!input)return;
+  const initials=input.value.trim().toUpperCase();
+  if(!initials){input.style.borderColor='var(--red)';return;}
+  const m=state.modalTask,loc=state.tasksLoc,dateKey=state.tasksDate;
+  const weekKey=getTaskWeekKey(dateKey),ts=Date.now();
+  if(m.section==='daily')fbSet('tasks/'+loc+'/daily/'+dateKey+'/'+m.taskId,{initials,ts});
+  else if(m.section==='weekly')fbSet('tasks/'+loc+'/weekly/'+weekKey+'/'+m.taskId,{initials,ts});
+  else if(m.section==='cycle')fbSet('tasks/'+loc+'/cycle/'+weekKey+'/'+m.taskId,{initials,ts});
+  state.modalTask=null;render();
+}
+function undoTask(section,taskId){
+  const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
+  if(section==='daily')fbSet('tasks/'+loc+'/daily/'+dateKey+'/'+taskId,null);
+  else if(section==='weekly')fbSet('tasks/'+loc+'/weekly/'+weekKey+'/'+taskId,null);
+  else if(section==='cycle')fbSet('tasks/'+loc+'/cycle/'+weekKey+'/'+taskId,null);
+}
+function cancelModal(){state.modalTask=null;render();}
+function setTasksLoc(locId){state.tasksLoc=locId;listenTasks();}
+function changeTasksDate(delta){
+  const d=new Date(state.tasksDate+'T12:00:00');d.setDate(d.getDate()+delta);
+  state.tasksDate=d.toISOString().split('T')[0];listenTasks();
+}
+function setTasksCycleWeek(w){state.tasksCycleWeek=w;render();}
+function toggleSection(key){state.collapsedSections[key]=!state.collapsedSections[key];render();}
+function setGoalsLoc(locId){state.goalsLoc=locId;listenGoals();}
+function setGoalsMonth(mk){state.goalsMonth=mk;listenGoals();}
+function updateGoalField(field,val){
+  fbDebounce('monthlyGoals/'+state.goalsLoc+'/'+state.goalsMonth+'/'+field,val);
+}
+
+/* ── Render Tasks Page ── */
+function renderTasksPage(){
+  const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
+  const locData=state.tasksData[loc]||{};
+  const dailyData=(locData.daily||{})[dateKey]||{};
+  const weeklyData=(locData.weekly||{})[weekKey]||{};
+  const cycleData=(locData.cycle||{})[weekKey]||{};
+  const dailyTasks=getDailyTasks(loc),weeklyRec=getWeeklyRec(loc);
+  const cycleDefs=getCycleTasks(loc),cycleWeek=state.tasksCycleWeek;
+  const cw=cycleDefs[cycleWeek]||{name:'',tasks:[]};
+  const dateObj=new Date(dateKey+'T12:00:00');
+  const dateLabel=dateObj.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric',year:'numeric'});
+  let html='<div class="loc-selector">';
+  LOCATIONS.forEach(l=>{
+    const cls=l.id===loc?(isGoNinja(l.id)?'active':'active lvlup'):'';
+    html+='<button class="loc-btn '+cls+'" onclick="setTasksLoc(\''+l.id+'\')">'+l.short+'</button>';
+  });
+  html+='</div><div class="date-nav">';
+  html+='<button onclick="changeTasksDate(-1)">&larr; Prev</button>';
+  html+='<span class="date-label">'+dateLabel+'</span>';
+  html+='<button onclick="changeTasksDate(1)">Next &rarr;</button></div>';
+  html+=renderTaskSection('daily','Daily Tasks',dailyTasks,dailyData);
+  html+=renderTaskSection('weekly','Weekly Recurring ('+weekKey+')',weeklyRec,weeklyData);
+  html+='<div class="cycle-week-nav">';
+  for(let w=1;w<=8;w++){
+    html+='<button class="cycle-week-btn '+(w===cycleWeek?'active':'')+'" onclick="setTasksCycleWeek('+w+')">Wk '+w+'</button>';
+  }
+  html+='</div>';
+  html+=renderCycleSection('cycle','Week '+cycleWeek+': '+cw.name,cw.tasks,cycleData);
+  if(state.modalTask)html+=renderInitialsModal();
+  return html;
+}
+function renderTaskSection(section,title,tasks,completionData){
+  const key=section,collapsed=state.collapsedSections[key];
+  const completed=tasks.filter(t=>completionData[t.id]).length,total=tasks.length;
+  const pillCls=completed===total&&total>0?'complete':completed>0?'partial':'empty';
+  let html='<div class="task-section"><div class="task-section-header" onclick="toggleSection(\''+key+'\')"><h3><span class="chevron '+(collapsed?'':'open')+'">&#9654;</span>'+title+'</h3><span class="progress-pill '+pillCls+'">'+completed+'/'+total+'</span></div><div class="task-list '+(collapsed?'collapsed':'')+'">';
+  tasks.forEach(t=>{html+=renderTaskItem(section,t,completionData[t.id]);});
+  html+='</div></div>';return html;
+}
+function renderCycleSection(section,title,tasks,completionData){
+  const key='cycle',collapsed=state.collapsedSections[key];
+  const completed=tasks.filter(t=>completionData[t.id]).length,total=tasks.length;
+  const pillCls=completed===total&&total>0?'complete':completed>0?'partial':'empty';
+  let html='<div class="task-section"><div class="task-section-header" onclick="toggleSection(\''+key+'\')"><h3><span class="chevron '+(collapsed?'':'open')+'">&#9654;</span>'+title+'</h3><span class="progress-pill '+pillCls+'">'+completed+'/'+total+'</span></div><div class="task-list '+(collapsed?'collapsed':'')+'">';
+  let lastCat='';
+  tasks.forEach(t=>{
+    if(t.cat&&t.cat!==lastCat){html+='<div class="task-cat">'+esc(t.cat)+'</div>';lastCat=t.cat;}
+    html+=renderTaskItem(section,t,completionData[t.id]);
+  });
+  html+='</div></div>';return html;
+}
+function renderTaskItem(section,task,doneData){
+  const isDone=!!doneData,initials=doneData?doneData.initials:'';
+  const ts=doneData?doneData.ts:0;
+  const timeStr=ts?new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
+  let html='<div class="task-item '+(isDone?'done':'')+'">';
+  if(isDone){
+    html+='<div class="task-check checked" onclick="undoTask(\''+section+'\',\''+task.id+'\')">'+esc(initials)+'</div>';
+  }else{
+    html+='<div class="task-check" onclick="showInitialsModal(\''+section+'\',\''+task.id+'\')" title="Click to complete"></div>';
+  }
+  html+='<span class="task-text">'+esc(task.text)+'</span>';
+  if(isDone){html+='<span class="task-initials">'+esc(initials)+'</span><span class="task-time">'+timeStr+'</span>';}
+  html+='</div>';return html;
+}
+function renderInitialsModal(){
+  return '<div class="modal-overlay" onclick="cancelModal()"><div class="modal-box" onclick="event.stopPropagation()"><h3>Complete Task</h3><p>Enter your initials to mark as done</p><input id="initialsInput" maxlength="4" placeholder="e.g. MM" autofocus onkeydown="if(event.key===\'Enter\')confirmTask()" /><div class="modal-actions"><button class="btn-cancel" onclick="cancelModal()">Cancel</button><button class="btn-confirm" onclick="confirmTask()">Complete</button></div></div></div>';
+}
+/* ── Render Monthly Goals Page ── */
+function renderMonthlyGoalsPage(){
+  const loc=state.goalsLoc,mk=state.goalsMonth;
+  const data=(state.goalsData[loc]||{})[mk]||{};
+  const fields=getGoalsFields(loc);
+  const locObj=LOCATIONS.find(l=>l.id===loc);
+  let html='<div class="loc-selector">';
+  LOCATIONS.forEach(l=>{
+    const cls=l.id===loc?(isGoNinja(l.id)?'active':'active lvlup'):'';
+    html+='<button class="loc-btn '+cls+'" onclick="setGoalsLoc(\''+l.id+'\')">'+l.short+'</button>';
+  });
+  html+='</div><div class="month-selector">';
+  MONTHS_SHORT.forEach((m,i)=>{
+    const mKey=new Date().getFullYear()+'-'+String(i+1).padStart(2,'0');
+    html+='<button class="month-btn '+(mKey===mk?'active':'')+'" onclick="setGoalsMonth(\''+mKey+'\')">'+m+'</button>';
+  });
+  html+='</div>';
+  html+='<div class="section"><div class="section-header"><h2>'+locObj.name+' \u2014 Monthly Goals Planner</h2><div class="badge">'+MONTHS[parseInt(mk.split('-')[1])-1]+' '+mk.split('-')[0]+'</div></div><div class="goals-form">';
+  if(!isGoNinja(loc)&&ARM_VALUES[loc])html+='<div class="goals-calc">ARM Value: $'+ARM_VALUES[loc]+'</div>';
+  html+='<div class="goals-section-title">Membership Targets</div>';
+  fields.membership.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+  html+='<div class="goals-section-title">Revenue Projection</div>';
+  fields.revenue.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+  html+='<div class="goals-section-title">The Plan</div>';
+  fields.plan.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+  html+='<div class="goals-section-title">Events</div>';
+  fields.events.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+  html+='</div></div>';return html;
+}
+function renderGoalField(field,value){
+  if(field.type==='textarea'){
+    return '<div class="goals-row"><span class="goals-label">'+esc(field.label)+'</span></div><textarea class="goals-textarea" onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea>';
+  }
+  return '<div class="goals-row"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
+}
 async function init() {
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
   seedIfEmpty();
   listenAll();
+    listenTasks();
+    listenGoals();
 }
 
 init();
