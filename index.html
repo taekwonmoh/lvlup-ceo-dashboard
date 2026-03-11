@@ -9,7 +9,7 @@
 <style>
 :root {  
   --bg: #f0f2f5;
-  --card: #ffffff;
+  --card: #ffffff
   --primary: #1a1a2e;
   --accent: #e94560;
   --accent-light: #fce4ec;
@@ -866,6 +866,7 @@ function renderGoalsPage() {
 /* ── Connection Status ── */
 function updateConnStatus(online) {
   const el = document.getElementById('co nnStatus');
+  if (!el) return;
   el.className = 'conn-status ' + (online ? 'online' : 'offline');
   el.textContent = online ? '\ud83d\udfe2 Synced' : '\ud83d\udd34 Offline';
 }
