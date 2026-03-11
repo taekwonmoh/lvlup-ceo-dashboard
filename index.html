@@ -748,7 +748,7 @@ function renderHeader() {
       { id: 'monthlyGoals', label: 'Monthly Goals' },
     ];
   return '<div class="header">' +
-    '<h1><span style="color:var(--blue)">LVLUP</span> / <span class="accent">Go Ninja</span> CEO Dashboard</h1>' +
+    '<h1><span style="color:#4169E1">LVLUP</span> / <span class="accent">Go Ninja</span> CEO Dashboard</h1>' +
     '<div class="nav-tabs">' +
     sections.map(s => '<button class="nav-tab ' + (state.activeSection === s.id ? 'active' : '') + '" onclick="setSection(\'' + s.id + '\')">' + s.label + '</button>').join('') +
     '</div></div>';
