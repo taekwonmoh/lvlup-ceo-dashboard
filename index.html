@@ -9,12 +9,12 @@
 <style>
 :root {
   --bg: #f0f2f5;
-  --card: #ffffff
+  --card: #ffffff;
   --primary: #1a1a2e;
   --accent: #e94560;
   --accent-light: #fce4ec;
   --blue: #0f3460;
-  --blue-light: #e3f2fd
+  --blue-light: #e3f2fd;
   --green: #22c55e;
   --green-light: #dcfce7;
   --orange: #f59e0b;
@@ -600,7 +600,7 @@ function listenAll() {
 
   // Scorecard monthly
   const monthKey = getMonthKey();
-  const scMonthRef = fbRef('scorecard/monthly/' + monthKey);
+  const scMonthRef = fbRef('kpis/2026/' + monthKey);
   scMonthRef.on('value', snap => { state.scorecard.monthly = snap.val() || {}; render(); });
   activeListeners.push({ ref: scMonthRef, event: 'value' });
 
@@ -764,7 +764,7 @@ function renderScorecardPage() {
   LOCATIONS.forEach(loc => {
     const locData = monthData[loc.id] || {};
 if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
-    const rev = parseFloat(locData.grossRevenue) || 0;
+    const rev = parseFloat(locData.revenue) || 0;
     const goal = loc.revenueGoal;
     const pct = goal ? Math.round(rev / goal * 100) : 0;
     const cls = pct >= 80 ? 'green' : pct >= 50 ? 'orange' : 'red';
