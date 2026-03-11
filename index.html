@@ -540,7 +540,10 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
     monthlyHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
     MONTHLY_METRICS.forEach(metric => {
       const val = monthData[loc.id] && monthData[loc.id][metric.id] || '';
-      const goal = metric.id === 'grossRevenue' ? fmtCurrency(loc.revenueGoal) : '';
+      const curMonthKey = MONTHS[new Date().getMonth()].toLowerCase();
+        const goal = metric.id === 'grossRevenue' ? fmtCurrency(loc.revenueGoal) :
+          (metric.id === 'totalMembers' && ['waunakee','eastmad','verona'].includes(loc.id)) ?
+          (state.membership[loc.id] && state.membership[loc.id][curMonthKey] && state.membership[loc.id][curMonthKey].goal || '') : '';
       monthlyHtml += '<tr><td>' + loc.short + '</td><td>' + metric.label + '</td>' +
         '<td>' + goal + '</td>' +
         '<td><input value="' + esc(String(val)) + '" onchange="updateMonthly(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td></tr>';
@@ -588,6 +591,18 @@ function renderKPIsPage() {
   html += '<div class="card"><div class="card-label">Upgrades ('+curLabel+')</div><div class="card-value"><span class="upgrades-badge">'+totalUpg+'</span></div></div>';
   const convRate = totalLeads > 0 ? (totalNew/totalLeads*100).toFixed(1) : '0.0';
   html += '<div class="card"><div class="card-label">Conversion Rate ('+curLabel+')</div><div class="card-value">'+convRate+'% <span class="conv-rate">new/leads</span></div></div>';
+    // Total Members summary
+    let totalMemAll=0, prevTotalMemAll=0;
+    ['waunakee','eastmad','verona'].forEach(lid => {
+      const memD = state.membership[lid] || {};
+      const curD = memD[curMonth] || {};
+      const prevD = prevMonth ? (memD[prevMonth] || {}) : {};
+      totalMemAll += parseInt(curD.total) || 0;
+      prevTotalMemAll += parseInt(prevD.total) || 0;
+    });
+    const memDelta = prevTotalMemAll ? totalMemAll - prevTotalMemAll : null;
+    const memDeltaStr = memDelta !== null ? (memDelta >= 0 ? ' <span class="trend-up">\u25B2 +'+memDelta+'</span>' : ' <span class="trend-down">\u25BC '+memDelta+'</span>') : '';
+    html += '<div class="card"><div class="card-label">Total Members - All Locations ('+curLabel+')</div><div class="card-value">'+totalMemAll+memDeltaStr+'</div></div>';
   html += '</div>';
   // Per-location details
   LOCATIONS.forEach(loc => {
@@ -595,25 +610,34 @@ function renderKPIsPage() {
     const curMem = memData[curMonth] || {};
     html += '<details class="section-card" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:600;font-size:1.1rem;padding:0.75rem">'+loc.short+' — '+loc.name+'</summary>';
     html += '<div style="padding:0 0.75rem 0.75rem">';
-    html += '<div style="overflow-x:auto"><table><thead><tr><th>Month</th><th>Leads</th><th>Intros</th><th>New Members</th><th>Upgrades</th><th>Attrition</th><th>Google Reviews</th><th>Conversion</th></tr></thead><tbody>';
+    html += '<div style="overflow-x:auto"><table><thead><tr><th>Month</th><th>Total Members</th><th>Goal</th><th>+/\u2212</th><th>Leads</th><th>Intros</th><th>New Members</th><th>Upgrades</th><th>Attrition</th><th>Google Reviews</th><th>Conversion</th></tr></thead><tbody>';
     let ytdLeads=0,ytdIntros=0,ytdNew=0,ytdUpg=0,ytdAttr=0,ytdReviews=0;
-    monthNames.forEach((mk,mi) => { const mKey=monthKeys[mi];
-      const md = memData[mKey] || {};
-      const l=md.leads||0, i=md.intros||0, n=md.newMem||0, u=md.upgrades||0, a=md.attrition||0, g=md.googleReviews||0;
-      ytdLeads+=l; ytdIntros+=i; ytdNew+=n; ytdUpg+=u; ytdAttr+=a; ytdReviews+=g;
-      const conv = l>0?(n/l*100).toFixed(1)+'%':'—';
-      html += '<tr><td><strong>'+mKey+'</strong></td>';
-      html += '<td><input type="number" value="'+l+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'leads\',this.value)" style="width:70px"></td>';
-      html += '<td><input type="number" value="'+i+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'intros\',this.value)" style="width:70px"></td>';
-      html += '<td><input type="number" value="'+n+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'newMem\',this.value)" style="width:70px"></td>';
-      html += '<td><input type="number" value="'+u+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'upgrades\',this.value)" style="width:70px"></td>';
-      html += '<td><input type="number" value="'+a+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'attrition\',this.value)" style="width:70px"></td>';
-      html += '<td><input type="number" value="'+g+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'googleReviews\',this.value)" style="width:70px"></td>';
-      html += '<td>'+conv+'</td></tr>';
+    let prevTotal = null;
+    monthNames.forEach((mk,mi) => {
+        const mKey=monthKeys[mi];
+        const md = memData[mKey] || {};
+        const l=md.leads||0, i=md.intros||0, n=md.newMem||0, u=md.upgrades||0, a=md.attrition||0, g=md.googleReviews||0;
+        const tot=md.total||0, goal=md.goal||'';
+        ytdLeads+=l; ytdIntros+=i; ytdNew+=n; ytdUpg+=u; ytdAttr+=a; ytdReviews+=g;
+        const conv = l>0?(n/l*100).toFixed(1)+'%':'\u2014';
+        const delta = (prevTotal !== null && tot) ? tot - prevTotal : null;
+        const deltaStr = delta !== null ? (delta >= 0 ? '<span class="trend-up">+'+delta+'</span>' : '<span class="trend-down">'+delta+'</span>') : '';
+        html += '<tr><td><strong>'+mKey+'</strong></td>';
+        html += '<td><strong>'+(tot||'')+'</strong></td>';
+        html += '<td>'+(goal||'')+'</td>';
+        html += '<td>'+deltaStr+'</td>';
+        html += '<td><input type="number" value="'+l+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'leads\',this.value)" style="width:70px"></td>';
+        html += '<td><input type="number" value="'+i+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'intros\',this.value)" style="width:70px"></td>';
+        html += '<td><input type="number" value="'+n+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'newMem\',this.value)" style="width:70px"></td>';
+        html += '<td><input type="number" value="'+u+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'upgrades\',this.value)" style="width:70px"></td>';
+        html += '<td><input type="number" value="'+a+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'attrition\',this.value)" style="width:70px"></td>';
+        html += '<td><input type="number" value="'+g+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'googleReviews\',this.value)" style="width:70px"></td>';
+        html += '<td>'+conv+'</td></tr>';
+        if(tot) prevTotal = tot;
     });
     // YTD row
-    const ytdConv = ytdLeads>0?(ytdNew/ytdLeads*100).toFixed(1)+'%':'—';
-    html += '<tr class="ytd-row"><td><strong>YTD</strong></td><td>'+ytdLeads+'</td><td>'+ytdIntros+'</td><td>'+ytdNew+'</td><td>'+ytdUpg+'</td><td>'+ytdAttr+'</td><td>'+ytdReviews+'</td><td>'+ytdConv+'</td></tr>';
+    const ytdConv = ytdLeads>0?(ytdNew/ytdLeads*100).toFixed(1)+'%':'\u2014';
+    html += '<tr class="ytd-row"><td><strong>YTD</strong></td><td></td><td></td><td></td><td>'+ytdLeads+'</td><td>'+ytdIntros+'</td><td>'+ytdNew+'</td><td>'+ytdUpg+'</td><td>'+ytdAttr+'</td><td>'+ytdReviews+'</td><td>'+ytdConv+'</td></tr>';
     html += '</tbody></table></div></div></details>';
   });
   return html;
@@ -841,7 +865,7 @@ function renderGoalsPage() {
 
 /* ── Connection Status ── */
 function updateConnStatus(online) {
-  const el = document.getElementById('connStatus');
+  const el = document.getElementById('co nnStatus');
   el.className = 'conn-status ' + (online ? 'online' : 'offline');
   el.textContent = online ? '\ud83d\udfe2 Synced' : '\ud83d\udd34 Offline';
 }
