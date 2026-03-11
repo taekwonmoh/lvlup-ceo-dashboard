@@ -1379,8 +1379,33 @@ function renderMonthlyGoalsPage(){
     });
     html+='</div>';
     html+='<div class="section"><div class="section-header"><h2>'+locObj.name+' \u2014 Monthly Goals Planner</h2><div class="badge">'+MONTHS[parseInt(mk.split('-')[1])-1]+' '+mk.split('-')[0]+'</div></div><div class="goals-form">';
-    if(!isGoNinja(loc)&&ARM_VALUES[loc])html+='<div class="goals-calc">ARM Value: 
-function renderGoalField(field,value){
+    if(!isGoNinja(loc)&&ARM_VALUES[loc])html+='<div class="goals-calc">ARM Value: $'+ARM_VALUES[loc]+'</div>';
+    html+='<div class="goals-section-title">Membership Targets</div>';
+    fields.membership.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    if(fields.rationale){
+      html+='<div class="goals-section-title">Rationale?</div>';
+      fields.rationale.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    }
+    html+='<div class="goals-section-title">Revenue Projection</div>';
+    fields.revenue.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    if(fields.revenueStreams){
+      html+='<div class="goals-subsection-title">Revenue Streams:</div>';
+      fields.revenueStreams.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+      if(!isGoNinja(loc)&&ARM_VALUES[loc]){
+        html+='<div class="goals-arm-note">'+Object.entries(ARM_VALUES).map(([k,v])=>{const n=LOCATIONS.find(l=>l.id===k);return n?n.short+' ARM = $'+v:'';}).filter(Boolean).join(' | ')+'</div>';
+      }
+    }
+    if(fields.assumptions){
+      html+='<div class="goals-section-title">Assumptions</div>';
+      fields.assumptions.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    }
+    html+='<div class="goals-section-title">The Plan</div>';
+    fields.plan.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    html+='<div class="goals-section-title">Events</div>';
+    fields.events.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    html+='</div></div>';return html;
+  }
+  function renderGoalField(field,value){
     const hl = field.highlight ? ' goals-highlight' : '';
     if(field.type==='textarea'){
       return '<div class="goals-row"><span class="goals-label'+hl+'">'+esc(field.label)+'</span></div><textarea class="goals-textarea" onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea>';
