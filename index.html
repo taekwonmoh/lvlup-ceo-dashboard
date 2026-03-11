@@ -457,6 +457,7 @@ function render() {
      s === 'rocks' ? renderRocksPage() :
      s === 'events' ? renderEventsPage() :
      s === 'goals' ? renderGoalsPage() : '');
+    if(s === 'kpis') initKPICharts();
 }
 
 function renderHeader() {
