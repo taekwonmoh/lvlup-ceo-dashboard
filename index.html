@@ -1,4 +1,4 @@
-<!DOCTYPE html >
+<!DOCTYPE html>
 <html lang="en">  
 <head>
 <meta charset="UTF-8" />
@@ -822,7 +822,7 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
 
   // Monthly revenue/members table
   let monthlyHtml = '<div class="section">' +
-    '<div class="section-header"><h2>Monthly Totals â ' + getCurrentMonth() + '</h2><div class="badge">MTD</div></div>' +
+    '<div class="section-header"><h2>Monthly Totals &mdash; ' + getCurrentMonth() + '</h2><div class="badge">MTD</div></div>' +
     '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
     '<th>Who</th><th>Measurable</th><th>March Goal</th><th>Current</th>' +
     '</tr></thead><tbody>';
@@ -830,14 +830,16 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
   LOCATIONS.forEach(loc => {
     monthlyHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
     MONTHLY_METRICS.forEach(metric => {
-      const val = monthData[loc.id] && monthData[loc.id][metric.id] || '';
+      if (metric.id === 'totalMembers' && (loc.id === 'goninjaW' || loc.id === 'goninjaV')) return;
+      const rawMVal = monthData[loc.id] && monthData[loc.id][metric.id === 'grossRevenue' ? 'revenue' : metric.id];
+      const val = rawMVal !== undefined && rawMVal !== null && rawMVal !== '' ? rawMVal : '';
       const curMonthKey = MONTHS[new Date().getMonth()].toLowerCase();
         const goal = metric.id === 'grossRevenue' ? fmtCurrency(loc.revenueGoal) :
           (metric.id === 'totalMembers' && ['waunakee','eastmad','verona'].includes(loc.id)) ?
           (state.membership[loc.id] && state.membership[loc.id][curMonthKey] && state.membership[loc.id][curMonthKey].goal || '') : '';
       monthlyHtml += '<tr><td>' + loc.short + '</td><td>' + metric.label + '</td>' +
         '<td>' + goal + '</td>' +
-        '<td><input value="' + esc(String(val)) + '" onchange="updateMonthly(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td></tr>';
+        '<td><input value="' + (metric.currency && val !== '' ? fmtCurrency(parseFloat(val) || 0) : esc(String(val))) + '" onchange="updateMonthly(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td></tr>';
     });
   });
 
