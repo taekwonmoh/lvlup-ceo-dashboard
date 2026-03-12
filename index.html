@@ -7,7 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <style>
-:root {
+:root { 
   --bg: #f0f2f5;
   --card: #ffffff;      
   --primary: #1a1a2e;
@@ -945,7 +945,7 @@ function renderKPIsPage() {
         var memData = state.membership[loc.id] || {};
         var curD = memData[monthKeys[curMonthIdx]] || {};
         var prevD = memData[monthKeys[prevMonth]] || {};
-        totalMemAll += Math.max(parseFloat((state.kpis[loc.id]||{}).totalMembers)||0,parseFloat(curD.total)||0);
+        totalMemAll += parseFloat((state.kpis[loc.id]||{}).totalMembers)||0;
         prevMemAll += parseFloat(prevD.total)||0;
       });
 
@@ -991,10 +991,10 @@ function renderKPIsPage() {
 
       html += '<div class="kpi-charts-section" style="margin-top:24px"><h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--primary)">Trend Charts</h3>';
       html += '<div class="kpi-charts-grid">';
-      html += '<div class="kpi-chart-box"><canvas id="chartNewMembers"></canvas></div>';
-      html += '<div class="kpi-chart-box"><canvas id="chartLost"></canvas></div>';
-      html += '<div class="kpi-chart-box"><canvas id="chartTotal"></canvas></div>';
-      html += '<div class="kpi-chart-box"><canvas id="chartAttrition"></canvas></div>';
+      html += '<div class="kpi-chart-box"><h3 style="margin:0 0 8px 0;font-size:14px;font-weight:600;color:var(--gray-700);">New Members</h3><canvas id="chartNewMembers"></canvas></div>';
+      html += '<div class="kpi-chart-box"><h3 style="margin:0 0 8px 0;font-size:14px;font-weight:600;color:var(--gray-700);">Members Lost</h3><canvas id="chartLost"></canvas></div>';
+      html += '<div class="kpi-chart-box"><h3 style="margin:0 0 8px 0;font-size:14px;font-weight:600;color:var(--gray-700);">Total Members</h3><canvas id="chartTotal"></canvas></div>';
+      html += '<div class="kpi-chart-box"><h3 style="margin:0 0 8px 0;font-size:14px;font-weight:600;color:var(--gray-700);">Attrition Rate (%)</h3><canvas id="chartAttrition"></canvas></div>';
       html += '</div></div>';
 
       html += '<h3 style="margin:24px 0 16px;font-size:1.1rem;color:var(--primary)">Location Details</h3>';
