@@ -9,7 +9,7 @@
 <style>
 :root {
   --bg: #f0f2f5;
-  --card: #ffffff;    
+  --card: #ffffff;     
   --primary: #1a1a2e;
   --accent: #e94560;
   --accent-light: #fce4ec;
@@ -935,8 +935,8 @@ function renderKPIsPage() {
         var cur = memData[monthKeys[curMonthIdx]] || {};
         totalLeads += parseFloat(cur.leads)||0;
         totalIntros += parseFloat(cur.intros)||0;
-        totalNew += parseFloat(cur.newMembers)||0;
-        totalLost += parseFloat(cur.attrition)||0;
+        totalNew += parseFloat(cur.newMem)||0;
+        totalLost += parseFloat(cur.lost)||0;
         totalUpgrades += parseFloat(cur.upgrades)||0;
         totalGR += parseFloat(cur.googleReviews)||0;
       });
@@ -945,8 +945,8 @@ function renderKPIsPage() {
         var memData = state.membership[loc.id] || {};
         var curD = memData[monthKeys[curMonthIdx]] || {};
         var prevD = memData[monthKeys[prevMonth]] || {};
-        totalMemAll += parseFloat(curD.totalMembers)||0;
-        prevMemAll += parseFloat(prevD.totalMembers)||0;
+        totalMemAll += parseFloat(curD.total)||0;
+        prevMemAll += parseFloat(prevD.total)||0;
       });
 
       var netGrowth = totalNew - totalLost;
@@ -1012,12 +1012,12 @@ function renderKPIsPage() {
           var isCur = mi === curMonthIdx;
           var isFuture = mi > curMonthIdx;
           var rowCls = isCur ? 'kpi-current-row' : isFuture ? 'kpi-future-row' : (mi%2===0 ? 'kpi-even-row' : '');
-          var tm = parseFloat(md.totalMembers)||0;
+          var tm = parseFloat(md.total)||0;
           var gl = parseFloat(md.goal)||0;
           var diff = tm - gl;
           var ld = parseFloat(md.leads)||0;
           var intr = parseFloat(md.intros)||0;
-          var nm = parseFloat(md.newMembers)||0;
+          var nm = parseFloat(md.newMem)||0;
           var up = parseFloat(md.upgrades)||0;
           var at = parseFloat(md.attrition)||0;
           var gr = parseFloat(md.googleReviews)||0;
