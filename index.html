@@ -1,4 +1,4 @@
- <!DOCTYPE html>       
+ <!DOCTYPE html>        
 <html lang="en">  
 <head>
 <meta charset="UTF-8" />
@@ -945,7 +945,7 @@ function renderKPIsPage() {
         var memData = state.membership[loc.id] || {};
         var curD = memData[monthKeys[curMonthIdx]] || {};
         var prevD = memData[monthKeys[prevMonth]] || {};
-        totalMemAll += parseFloat(curD.total)||0;
+        totalMemAll += parseFloat((state.kpis[loc.id]||{}).totalMembers)||0;
         prevMemAll += parseFloat(prevD.total)||0;
       });
 
