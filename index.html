@@ -1,4 +1,4 @@
- <!DOCTYPE html>   
+ <!DOCTYPE html>    
 <html lang="en">  
 <head>
 <meta charset="UTF-8" />
@@ -1295,7 +1295,7 @@ function updateGoalField(field,val){
     var rs=fields.revenueStreams||[];
     var sum=0;
     rs.forEach(function(f){
-      if(f.computed)return;
+      if(f.computed||f.highlight)return;
       var el=document.querySelector('[data-field-id="'+f.id+'"]');
       if(el)sum+=parseFloat(el.value.replace(/[^0-9.\-]/g,''))||0;
     });
