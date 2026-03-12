@@ -500,8 +500,7 @@ const LVLUP_GOALS_FIELDS = {
     {id:'revTesting',label:'Testing',type:'currency'},
     {id:'revTournament',label:'Tournament',type:'currency'},
     {id:'revCamps',label:'Camps',type:'currency'},
-    {id:'totalRevenueStreamGoal',label:'Total Revenue Stream Goal',type:'currency',highlight:true},
-    {id:'eomRevenueGoal',label:'End of Month Revenue Goal',type:'currency',highlight:true},
+    {id:'{id:'totalRevenueStreamGoal',label:'Total Revenue Stream Income',type:'currency',highlight:true,computed:true},{id:'eomRevenueGoal',label:'End of Month Revenue Goal',type:'currency',highlight:true},
   ],
   assumptions:[
     {id:'assumptions',label:'Assumptions',type:'textarea'},
@@ -537,8 +536,7 @@ const GONINJA_GOALS_FIELDS = {
     {id:'revEvent1',label:'Event #1',type:'currency'},
     {id:'revEvent2',label:'Event #2',type:'currency'},
     {id:'revCamps',label:'Camps',type:'currency'},
-    {id:'totalRevenueStreamGoal',label:'Total Revenue Stream Goal',type:'currency',highlight:true},
-    {id:'eomRevenueGoal',label:'End of Month Revenue Goal',type:'currency',highlight:true},
+    {id:'{id:'totalRevenueStreamGoal',label:'Total Revenue Stream Income',type:'currency',highlight:true,computed:true},{id:'eomRevenueGoal',label:'End of Month Revenue Goal',type:'currency',highlight:true},
   ],
   assumptions:[
     {id:'assumptions',label:'Assumptions',type:'textarea'},
@@ -1289,8 +1287,22 @@ function toggleSection(key){state.collapsedSections[key]=!state.collapsedSection
 function setGoalsLoc(locId){state.goalsLoc=locId;listenGoals();}
 function setGoalsMonth(mk){state.goalsMonth=mk;listenGoals();}
 function updateGoalField(field,val){
-  fbDebounce('monthlyGoals/'+state.goalsLoc+'/'+state.goalsMonth+'/'+field,val);
-}
+    fbDebounce('monthlyGoals/'+state.goalsLoc+'/'+state.goalsMonth+'/'+field,val);
+    recalcRevTotal();
+  }
+  function recalcRevTotal(){
+    var fields=isGoNinja(state.goalsLoc)?GONINJA_GOALS_FIELDS:LVLUP_GOALS_FIELDS;
+    var rs=fields.revenueStreams||[];
+    var sum=0;
+    rs.forEach(function(f){
+      if(f.computed)return;
+      var el=document.querySelector('[data-field-id="'+f.id+'"]');
+      if(el)sum+=parseFloat(el.value.replace(/[^0-9.\-]/g,''))||0;
+    });
+    var fmt='$'+sum.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+    var tot=document.querySelector('[data-field-id="totalRevenueStreamGoal"]');
+    if(tot)tot.value=fmt;
+  }
 
 /* ââ Render Tasks Page ââ */
 function renderTasksPage(){
@@ -1403,14 +1415,14 @@ function renderMonthlyGoalsPage(){
     fields.plan.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
     html+='<div class="goals-section-title">Events</div>';
     fields.events.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-    html+='</div></div>';return html;
+    html+='</div></div>';setTimeout(recalcRevTotal,50);return html;
   }
   function renderGoalField(field,value){
-    const hl = field.highlight ? ' goals-highlight' : '';
-    if(field.type==='textarea'){
-      return '<div class="goals-row"><span class="goals-label'+hl+'">'+esc(field.label)+'</span></div><textarea class="goals-textarea" onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea>';
+    var hl=field.highlight?' goals-highlight':'';
+    if(field.computed){
+      return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" readonly style="background:#e9ecef;cursor:default" /></div>';
     }
-    return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
+    return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
   }
   async function init() {
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
