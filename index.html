@@ -1412,72 +1412,7 @@ function renderMonthlyGoalsPage(){
     }
     return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
   }
-async function init() {
-  db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
-  seedIfEmpty();
-  listenAll();
-    listenTasks();
-    listenGoals();
-}
-
-init();
-</script>
-</body>
-</html>
-+ARM_VALUES[loc]+'</div>';
-    html+='<div class="goals-section-title">Membership Targets</div>';
-    fields.membership.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-    if(fields.rationale){
-      html+='<div class="goals-section-title">Rationale?</div>';
-      fields.rationale.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-    }
-    html+='<div class="goals-section-title">Revenue Projection</div>';
-    fields.revenue.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-    if(fields.revenueStreams){
-      html+='<div class="goals-subsection-title">Revenue Streams:</div>';
-      fields.revenueStreams.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-      if(!isGoNinja(loc)&&ARM_VALUES[loc]){
-        html+='<div class="goals-arm-note">'+Object.entries(ARM_VALUES).map(([k,v])=>{const n=LOCATIONS.find(l=>l.id===k);return n?n.short+' ARM = 
-function renderGoalField(field,value){
-    const hl = field.highlight ? ' goals-highlight' : '';
-    if(field.type==='textarea'){
-      return '<div class="goals-row"><span class="goals-label'+hl+'">'+esc(field.label)+'</span></div><textarea class="goals-textarea" onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea>';
-    }
-    return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
-  }
-async function init() {
-  db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
-  seedIfEmpty();
-  listenAll();
-    listenTasks();
-    listenGoals();
-}
-
-init();
-</script>
-</body>
-</html>
-+v:'';}).filter(Boolean).join(' | ')+'</div>';
-      }
-    }
-    if(fields.assumptions){
-      html+='<div class="goals-section-title">Assumptions</div>';
-      fields.assumptions.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-    }
-    html+='<div class="goals-section-title">The Plan</div>';
-    fields.plan.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-    html+='<div class="goals-section-title">Events</div>';
-    fields.events.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-    html+='</div></div>';return html;
-  }
-function renderGoalField(field,value){
-    const hl = field.highlight ? ' goals-highlight' : '';
-    if(field.type==='textarea'){
-      return '<div class="goals-row"><span class="goals-label'+hl+'">'+esc(field.label)+'</span></div><textarea class="goals-textarea" onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea>';
-    }
-    return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
-  }
-async function init() {
+  async function init() {
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
   seedIfEmpty();
   listenAll();
