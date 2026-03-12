@@ -9,7 +9,7 @@
 <style>
 :root {
   --bg: #f0f2f5;
-  --card: #ffffff; 
+  --card: #ffffff;  
   --primary: #1a1a2e;
   --accent: #e94560;
   --accent-light: #fce4ec;
@@ -932,7 +932,7 @@ function renderKPIsPage() {
   LOCATIONS.forEach(loc => {
     const memData = state.membership[loc.id] || {};
     const curMem = memData[curMonth] || {};
-    html += '<details class="section-card" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:600;font-size:1.1rem;padding:0.75rem">'+loc.short+' Ã¢ÂÂ '+loc.name+'</summary>';
+    html += '<details class="section-card" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:600;font-size:1.1rem;padding:0.75rem">'+loc.short+'  —  '+loc.name+'</summary>';
     html += '<div style="padding:0 0.75rem 0.75rem">';
     html += '<div style="overflow-x:auto"><table><thead><tr><th>Month</th><th>Total Members</th><th>Goal</th><th>+/\u2212</th><th>Leads</th><th>Intros</th><th>New Members</th><th>Upgrades</th><th>Attrition</th><th>Google Reviews</th><th>Conversion</th></tr></thead><tbody>';
     let ytdLeads=0,ytdIntros=0,ytdNew=0,ytdUpg=0,ytdAttr=0,ytdReviews=0;
@@ -1024,7 +1024,7 @@ function renderFinancialsPage() {
     const memData = state.membership[loc.id] || {};
 
     // Financial table
-    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' Ã¢ÂÂ 2026 Financials</h2></div>';
+    html += '<div class="section"><div class="section-header"><h2>' + loc.name + '  —  2026 Financials</h2></div>';
     html += '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>';
     html += '<th style="text-align:left;">Month</th><th>Gross TY</th><th>Gross LY</th><th>TY vs LY</th><th>ARM</th><th>LEG</th><th>LTV</th>';
     html += '</tr></thead><tbody>';
@@ -1033,7 +1033,8 @@ function renderFinancialsPage() {
     for (let m = 0; m < 12; m++) {
       const mk = monthNames[m];
       const fd = finData[mk] || {};
-      const grossTY = parseFloat(fd.grossTY) || 0;
+      let grossTY = parseFloat(fd.grossTY) || 0;
+      if(grossTY===0 && m===currentMonthIdx){grossTY=parseFloat((state.kpis[loc.id]||{}).revenue)||0;}
       const grossLY = parseFloat(fd.grossLY) || 0;
       ytdTY += grossTY;
       ytdLY += grossLY;
@@ -1101,7 +1102,7 @@ function renderRocksPage() {
   const statuses = ['not-started','in-progress','on-track','complete','off-track'];
   const statusLabels = { 'not-started':'Not Started', 'in-progress':'In Progress', 'on-track':'On Track', 'complete':'Complete', 'off-track':'Off Track' };
 
-  let html = '<div class="section"><div class="section-header"><h2>Company Rocks Ã¢ÂÂ Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
+  let html = '<div class="section"><div class="section-header"><h2>Company Rocks  —  Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
 
   if (company.length) {
     company.forEach((r, i) => {
@@ -1121,7 +1122,7 @@ function renderRocksPage() {
   Object.keys(individual).forEach(personKey => {
     const personRocks = individual[personKey] || [];
     const label = personKey === 'mrsMoh' ? 'Mrs. Moh' : personKey === 'mrMoh' ? 'Mr. Moh' : personKey;
-    html += '<div class="section"><div class="section-header"><h2>Individual Rocks Ã¢ÂÂ ' + esc(label) + '</h2></div>';
+    html += '<div class="section"><div class="section-header"><h2>Individual Rocks  —  ' + esc(label) + '</h2></div>';
     personRocks.forEach((r, i) => {
       html += '<div class="rock-item">' +
         '<div class="rock-num">' + (i + 1) + '</div>' +
