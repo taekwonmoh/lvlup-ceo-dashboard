@@ -1,4 +1,4 @@
- <!DOCTYPE html>    
+ <!DOCTYPE html>     
 <html lang="en">  
 <head>
 <meta charset="UTF-8" />
@@ -1010,7 +1010,7 @@ function renderFinancialsPage() {
     }
     const goal = loc.revenueGoal;
     const curMonth = finData[monthNames[currentMonthIdx]] || {};
-    const curRev = parseFloat(curMonth.grossTY) || 0;
+    const curRev = parseFloat(curMonth.grossTY) || parseFloat((state.kpis[loc.id]||{}).revenue) || 0;
     const pct = goal ? Math.round(curRev / goal * 100) : 0;
     const cls = pct >= 80 ? 'green' : pct >= 50 ? 'orange' : 'red';
     html += '<div class="kpi-card ' + cls + '">' +
@@ -1422,7 +1422,7 @@ function renderMonthlyGoalsPage(){
     if(field.computed){
       return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" readonly style="background:#e9ecef;cursor:default" /></div>';
     }
-    return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
+    if(field.type==='textarea'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><textarea class="goals-input" data-field-id="'+field.id+'" style="min-height:60px;resize:vertical;font-family:inherit;padding:8px" placeholder="Enter details..." onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea></div>';}if(field.type==='text'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';}return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
   }
   async function init() {
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
