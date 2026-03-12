@@ -9,7 +9,7 @@
 <style>
 :root {
   --bg: #f0f2f5;
-  --card: #ffffff;     
+  --card: #ffffff;      
   --primary: #1a1a2e;
   --accent: #e94560;
   --accent-light: #fce4ec;
@@ -945,7 +945,7 @@ function renderKPIsPage() {
         var memData = state.membership[loc.id] || {};
         var curD = memData[monthKeys[curMonthIdx]] || {};
         var prevD = memData[monthKeys[prevMonth]] || {};
-        totalMemAll += parseFloat((state.kpis[loc.id]||{}).totalMembers)||0;
+        totalMemAll += Math.max(parseFloat((state.kpis[loc.id]||{}).totalMembers)||0,parseFloat(curD.total)||0);
         prevMemAll += parseFloat(prevD.total)||0;
       });
 
