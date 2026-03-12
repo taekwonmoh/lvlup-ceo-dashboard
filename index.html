@@ -9,7 +9,7 @@
 <style>
 :root {
   --bg: #f0f2f5;
-  --card: #ffffff;  
+  --card: #ffffff;   
   --primary: #1a1a2e;
   --accent: #e94560;
   --accent-light: #fce4ec;
@@ -243,7 +243,44 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .month-selector{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px}
 .month-btn{padding:6px 10px;border-radius:8px;border:1px solid var(--gray-200);background:var(--card);cursor:pointer;font-size:11px;font-weight:600}
 .month-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-</style>
+
+    /* --- KPI Summary Cards --- */
+    .kpi-summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:16px 0 24px; }
+    .kpi-summary-card { background:var(--card); border-radius:12px; padding:16px 18px; display:flex; align-items:center; gap:14px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid var(--gray-100); transition:box-shadow 0.2s,transform 0.15s; }
+    .kpi-summary-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.1); transform:translateY(-1px); }
+    .kpi-summary-icon { width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0; }
+    .kpi-summary-info { min-width:0; }
+    .kpi-summary-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--gray-500); font-weight:600; margin-bottom:2px; }
+    .kpi-summary-value { font-size:1.5rem; font-weight:700; color:var(--primary); line-height:1.2; }
+    .kpi-summary-sub { font-size:0.75rem; color:var(--gray-400); margin-top:2px; }
+    @media(max-width:900px) { .kpi-summary-grid { grid-template-columns:repeat(2,1fr); } }
+    @media(max-width:500px) { .kpi-summary-grid { grid-template-columns:1fr; } }
+
+    /* --- KPI Detail Cards (per-location) --- */
+    .kpi-detail-card { background:var(--card); border-radius:12px; margin:12px 0; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid var(--gray-100); overflow:hidden; }
+    .kpi-detail-card[open] { box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+    .kpi-detail-summary { padding:14px 20px; font-size:1rem; font-weight:600; color:var(--primary); cursor:pointer; display:flex; align-items:center; gap:10px; list-style:none; }
+    .kpi-detail-summary::-webkit-details-marker { display:none; }
+    .kpi-detail-summary::before { content:'\25b6'; font-size:0.7rem; color:var(--gray-400); transition:transform 0.2s; }
+    .kpi-detail-card[open] .kpi-detail-summary::before { transform:rotate(90deg); }
+    .kpi-loc-badge { background:var(--primary); color:#fff; padding:3px 10px; border-radius:6px; font-size:0.72rem; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; }
+    .kpi-detail-body { padding:0 16px 16px; overflow-x:auto; }
+
+    /* --- KPI Detail Table --- */
+    .kpi-detail-table { width:100%; border-collapse:separate; border-spacing:0; font-size:0.82rem; }
+    .kpi-detail-table thead th { background:var(--gray-50); color:var(--gray-500); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.5px; font-weight:600; padding:8px 10px; border-bottom:2px solid var(--gray-200); text-align:left; white-space:nowrap; position:sticky; top:0; }
+    .kpi-detail-table tbody td { padding:6px 10px; border-bottom:1px solid var(--gray-100); vertical-align:middle; }
+    .kpi-even-row { background:var(--gray-50); }
+    .kpi-current-row { background:var(--blue-light); }
+    .kpi-current-row td { font-weight:600; }
+    .kpi-future-row { opacity:0.45; }
+    .kpi-future-cell { color:var(--gray-300); }
+    .kpi-month-cell { font-weight:600; color:var(--primary); white-space:nowrap; }
+    .kpi-now-badge { background:var(--blue); color:#fff; padding:1px 6px; border-radius:4px; font-size:0.6rem; font-weight:700; letter-spacing:0.5px; vertical-align:middle; margin-left:4px; }
+    .kpi-input { border:1px solid transparent; background:transparent; padding:3px 6px; border-radius:4px; width:60px; font-size:0.82rem; text-align:right; transition:border-color 0.2s,background 0.2s; }
+    .kpi-input:hover { border-color:var(--gray-200); background:var(--gray-50); }
+    .kpi-input:focus { border-color:var(--blue); background:#fff; outline:none; box-shadow:0 0 0 2px var(--blue-light); }
+    </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -883,88 +920,131 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
 function renderKPIsPage() {
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; const monthKeys=['january','february','march','april','may','june','july','august','september','october','november','december'];
   const now = new Date();
-  const curLabel = monthNames[now.getMonth()]; const curMonth = monthKeys[now.getMonth()];
-  const prevMonth = now.getMonth() > 0 ? monthKeys[now.getMonth()-1] : null;
-  let html = '<div class="page-header"><h2>KPI Metrics</h2><p>Member acquisition, retention & growth tracking</p></div>';
-  // Charts section
-  html += '<div class="kpi-charts-section"><h3 style="margin-bottom:0.5rem">Month-over-Month Trends</h3>';
-  html += '<div class="kpi-charts-grid">';
-  html += '<div class="kpi-chart-box"><h4>New Members</h4><canvas id="chartNewMembers" height="200"></canvas></div>';
-  html += '<div class="kpi-chart-box"><h4>Lost Members</h4><canvas id="chartLost" height="200"></canvas></div>';
-  html += '<div class="kpi-chart-box"><h4>Net Total</h4><canvas id="chartTotal" height="200"></canvas></div>';
-  html += '<div class="kpi-chart-box"><h4>Attrition</h4><canvas id="chartAttrition" height="200"></canvas></div>';
-  html += '</div></div>';
-  // Summary cards
-  html += '<div class="grid" style="margin-bottom:1.5rem">';
-  let totalLeads=0,totalIntros=0,totalNew=0,totalAttr=0,totalUpg=0;
-  let prevLeads=0,prevIntros=0,prevNew=0;
-  LOCATIONS.forEach(loc => {
+  const curLabel = monthNames[now.getMonth()];
+  const curMonthIdx = now.getMonth();
+  const prevMonth = curMonthIdx > 0 ? curMonthIdx - 1 : 11;
+  let html = '';
+  
+  // --- Page Header ---
+  html += '<div class="page-header"><h2 style="margin:0;font-size:1.6rem;color:var(--primary)">KPI Metrics</h2>';
+  html += '<p style="margin:4px 0 0;color:var(--gray-500);font-size:0.85rem">Member acquisition, retention & growth tracking</p></div>';
+  
+  // --- Aggregate current month data ---
+  let totalLeads=0, totalIntros=0, totalNew=0, totalLost=0, totalUpgrades=0, totalGoogleReviews=0, totalMemAll=0, prevMemAll=0;
+  const prevLabel = monthNames[prevMonth];
+  
+  locations.forEach(loc => {
     const memData = state.membership[loc.id] || {};
-    const cur = memData[curMonth] || {};
-    const prev = prevMonth ? (memData[prevMonth] || {}) : {};
-    totalLeads += (cur.leads||0); totalIntros += (cur.intros||0);
-    totalNew += (cur.newMem||0); totalAttr += (cur.attrition||0);
-    totalUpg += (cur.upgrades||0);
-    prevLeads += (prev.leads||0); prevIntros += (prev.intros||0); prevNew += (prev.newMem||0);
+    const cur = memData[monthKeys[curMonthIdx]] || {};
+    const prev = memData[monthKeys[prevMonth]] || {};
+    totalLeads += parseFloat(cur.leads) || 0;
+    totalIntros += parseFloat(cur.intros) || 0;
+    totalNew += parseFloat(cur.newMembers) || 0;
+    totalLost += parseFloat(cur.attrition) || 0;
+    totalUpgrades += parseFloat(cur.upgrades) || 0;
+    totalGoogleReviews += parseFloat(cur.googleReviews) || 0;
   });
-  function trend(cur,prev){if(!prev)return'';if(cur>prev)return' <span class="trend-up">\u25B2 '+(cur-prev)+'</span>';if(cur<prev)return' <span class="trend-down">\u25BC '+(prev-cur)+'</span>';return' <span class="trend-flat">\u25AC</span>';}
-  html += '<div class="card"><div class="card-label">Total Leads ('+curLabel+')</div><div class="card-value">'+totalLeads+trend(totalLeads,prevLeads)+'</div></div>';
-  html += '<div class="card"><div class="card-label">Total Intros ('+curLabel+')</div><div class="card-value">'+totalIntros+trend(totalIntros,prevIntros)+'</div></div>';
-  html += '<div class="card"><div class="card-label">New Members ('+curLabel+')</div><div class="card-value">'+totalNew+trend(totalNew,prevNew)+'</div></div>';
-  html += '<div class="card"><div class="card-label">Attrition ('+curLabel+')</div><div class="card-value">'+totalAttr+'</div></div>';
-  html += '<div class="card"><div class="card-label">Upgrades ('+curLabel+')</div><div class="card-value"><span class="upgrades-badge">'+totalUpg+'</span></div></div>';
-  const convRate = totalLeads > 0 ? (totalNew/totalLeads*100).toFixed(1) : '0.0';
-  html += '<div class="card"><div class="card-label">Conversion Rate ('+curLabel+')</div><div class="card-value">'+convRate+'% <span class="conv-rate">new/leads</span></div></div>';
-    // Total Members summary
-    let totalMemAll=0, prevTotalMemAll=0;
-    ['waunakee','eastmad','verona'].forEach(lid => {
-      const memD = state.membership[lid] || {};
-      const curD = memD[curMonth] || {};
-      const prevD = prevMonth ? (memD[prevMonth] || {}) : {};
-      totalMemAll += parseInt(curD.total) || 0;
-      prevTotalMemAll += parseInt(prevD.total) || 0;
-    });
-    const memDelta = prevTotalMemAll ? totalMemAll - prevTotalMemAll : null;
-    const memDeltaStr = memDelta !== null ? (memDelta >= 0 ? ' <span class="trend-up">\u25B2 +'+memDelta+'</span>' : ' <span class="trend-down">\u25BC '+memDelta+'</span>') : '';
-    html += '<div class="card"><div class="card-label">Total Members - All Locations ('+curLabel+')</div><div class="card-value">'+totalMemAll+memDeltaStr+'</div></div>';
+  
+  // Total members calculation
+  locations.forEach(loc => {
+    const memData = state.membership[loc.id] || {};
+    const curD = memData[monthKeys[curMonthIdx]] || {};
+    const prevD = memData[monthKeys[prevMonth]] || {};
+    totalMemAll += parseFloat(curD.totalMembers) || 0;
+    prevMemAll += parseFloat(prevD.totalMembers) || 0;
+  });
+  const memDelta = totalMemAll - prevMemAll;
+  const memDeltaStr = memDelta >= 0 ? '<span style="color:var(--green)">\u25b2 +' + memDelta + '</span>' : '<span style="color:var(--red)">\u25bc ' + memDelta + '</span>';
+  const convRate = totalLeads > 0 ? ((totalNew / totalLeads) * 100).toFixed(1) : '0.0';
+  const netNew = totalNew - totalLost;
+  
+  // --- KPI Summary Cards ---
+  html += '<div class="kpi-summary-grid">';
+  
+  // Card helper
+  function kpiCard(label, value, sub, color, icon) {
+    return '<div class="kpi-summary-card"><div class="kpi-summary-icon" style="background:' + color + '20;color:' + color + '">' + icon + '</div><div class="kpi-summary-info"><div class="kpi-summary-label">' + label + '</div><div class="kpi-summary-value">' + value + '</div>' + (sub ? '<div class="kpi-summary-sub">' + sub + '</div>' : '') + '</div></div>';
+  }
+  
+  html += kpiCard('Total Members', totalMemAll.toLocaleString(), memDeltaStr + ' vs ' + prevLabel, 'var(--blue)', '\ud83d\udc65');
+  html += kpiCard('Net Growth', (netNew >= 0 ? '+' : '') + netNew, totalNew + ' new \u2212 ' + totalLost + ' lost', netNew >= 0 ? 'var(--green)' : 'var(--red)', '\ud83d\udcc8');
+  html += kpiCard('New Members', String(totalNew), totalNew > 0 ? '\u25b2 active' : '\u2014', 'var(--green)', '\u2795');
+  html += kpiCard('Attrition', String(totalLost), totalMemAll > 0 ? (totalLost / totalMemAll * 100).toFixed(1) + '% rate' : '\u2014', 'var(--red)', '\ud83d\udcc9');
+  html += kpiCard('Leads', String(totalLeads), curLabel + ' pipeline', 'var(--orange)', '\ud83c\udfaf');
+  html += kpiCard('Intros', String(totalIntros), totalLeads > 0 ? ((totalIntros/totalLeads)*100).toFixed(0) + '% of leads' : '\u2014', '#8b5cf6', '\ud83d\udc4b');
+  html += kpiCard('Conversion', convRate + '%', 'new / leads', 'var(--blue)', '\ud83d\udd04');
+  html += kpiCard('Upgrades', String(totalUpgrades), curLabel + ' total', '#f59e0b', '\u2b06\ufe0f');
   html += '</div>';
-  // Per-location details
-  LOCATIONS.forEach(loc => {
-    const memData = state.membership[loc.id] || {};
-    const curMem = memData[curMonth] || {};
-    html += '<details class="section-card" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:600;font-size:1.1rem;padding:0.75rem">'+loc.short+'  —  '+loc.name+'</summary>';
-    html += '<div style="padding:0 0.75rem 0.75rem">';
-    html += '<div style="overflow-x:auto"><table><thead><tr><th>Month</th><th>Total Members</th><th>Goal</th><th>+/\u2212</th><th>Leads</th><th>Intros</th><th>New Members</th><th>Upgrades</th><th>Attrition</th><th>Google Reviews</th><th>Conversion</th></tr></thead><tbody>';
-    let ytdLeads=0,ytdIntros=0,ytdNew=0,ytdUpg=0,ytdAttr=0,ytdReviews=0;
-    let prevTotal = null;
-    monthNames.forEach((mk,mi) => {
-        const mKey=monthKeys[mi];
-        const md = memData[mKey] || {};
-        const l=md.leads||0, i=md.intros||0, n=md.newMem||0, u=md.upgrades||0, a=md.attrition||0, g=md.googleReviews||0;
-        const tot=md.total||0, goal=md.goal||'';
-        ytdLeads+=l; ytdIntros+=i; ytdNew+=n; ytdUpg+=u; ytdAttr+=a; ytdReviews+=g;
-        const conv = l>0?(n/l*100).toFixed(1)+'%':'\u2014';
-        const delta = (prevTotal !== null && tot) ? tot - prevTotal : null;
-        const deltaStr = delta !== null ? (delta >= 0 ? '<span class="trend-up">+'+delta+'</span>' : '<span class="trend-down">'+delta+'</span>') : '';
-        html += '<tr><td><strong>'+mKey+'</strong></td>';
-        html += '<td><strong>'+(tot||'')+'</strong></td>';
-        html += '<td>'+(goal||'')+'</td>';
-        html += '<td>'+deltaStr+'</td>';
-        html += '<td><input type="number" value="'+l+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'leads\',this.value)" style="width:70px"></td>';
-        html += '<td><input type="number" value="'+i+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'intros\',this.value)" style="width:70px"></td>';
-        html += '<td><input type="number" value="'+n+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'newMem\',this.value)" style="width:70px"></td>';
-        html += '<td><input type="number" value="'+u+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'upgrades\',this.value)" style="width:70px"></td>';
-        html += '<td><input type="number" value="'+a+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'attrition\',this.value)" style="width:70px"></td>';
-        html += '<td><input type="number" value="'+g+'" onchange="updateMembershipKPI(\''+loc.id+'\',\''+mKey+'\',\'googleReviews\',this.value)" style="width:70px"></td>';
-        html += '<td>'+conv+'</td></tr>';
-        if(tot) prevTotal = tot;
-    });
-    // YTD row
-    const ytdConv = ytdLeads>0?(ytdNew/ytdLeads*100).toFixed(1)+'%':'\u2014';
-    html += '<tr class="ytd-row"><td><strong>YTD</strong></td><td></td><td></td><td></td><td>'+ytdLeads+'</td><td>'+ytdIntros+'</td><td>'+ytdNew+'</td><td>'+ytdUpg+'</td><td>'+ytdAttr+'</td><td>'+ytdReviews+'</td><td>'+ytdConv+'</td></tr>';
-    html += '</tbody></table></div></div></details>';
+
+  // --- Charts Section ---
+  html += '<div class="kpi-charts-section"><h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--primary)">Month-over-Month Trends</h3>';
+  html += '<div class="kpi-charts-grid">';
+  html += '<div class="kpi-chart-box"><h4>New Members</h4><canvas id="chartNewMembers"></canvas></div>';
+  html += '<div class="kpi-chart-box"><h4>Lost Members</h4><canvas id="chartLost"></canvas></div>';
+  html += '<div class="kpi-chart-box"><h4>Net Total</h4><canvas id="chartTotal"></canvas></div>';
+  html += '<div class="kpi-chart-box"><h4>Attrition Rate</h4><canvas id="chartAttrition"></canvas></div>';
+  html += '</div></div>';
+
+  // --- Per-Location Detail Tables ---
+  locations.forEach(loc => {
+    const lid = loc.id;
+    const memData = state.membership[lid] || {};
+    const curMem = memData[monthKeys[curMonthIdx]] || {};
+    html += '<details class="section-card kpi-detail-card"><summary class="kpi-detail-summary"><span class="kpi-loc-badge">' + esc(loc.short) + '</span> ' + esc(loc.name) + '</summary>';
+    html += '<div class="kpi-detail-body">';
+    html += '<table class="kpi-detail-table"><thead><tr><th>Month</th><th>Members</th><th>Goal</th><th>+/\u2212</th><th>Leads</th><th>Intros</th><th>New</th><th>Upgrades</th><th>Attrition</th><th>Reviews</th><th>Conv.</th></tr></thead><tbody>';
+    
+    let ytdLeads=0, prevTotal=0;
+    for (let m = 0; m < 12; m++) {
+      const mKey = monthKeys[m];
+      const md = memData[mKey] || {};
+      const l = parseFloat(md.leads) || 0;
+      const tot = parseFloat(md.totalMembers) || 0;
+      ytdLeads += l;
+      const conv = l > 0 ? ((parseFloat(md.newMembers)||0)/l*100).toFixed(0)+'%' : '\u2014';
+      const delta = m > 0 && prevTotal > 0 ? tot - prevTotal : '';
+      const deltaStr = delta !== '' ? (delta >= 0 ? '<span style="color:var(--green)">+' + delta + '</span>' : '<span style="color:var(--red)">' + delta + '</span>') : '';
+      const isCurrent = m === curMonthIdx;
+      const isFuture = m > curMonthIdx;
+      const rowClass = isCurrent ? ' class="kpi-current-row"' : (isFuture ? ' class="kpi-future-row"' : (m % 2 === 0 ? ' class="kpi-even-row"' : ''));
+      
+      html += '<tr' + rowClass + '>';
+      html += '<td class="kpi-month-cell">' + monthNames[m] + (isCurrent ? ' <span class="kpi-now-badge">NOW</span>' : '') + '</td>';
+      html += '<td style="font-weight:600">' + (tot || '') + '</td>';
+      html += '<td>' + (md.goal || '') + '</td>';
+      html += '<td>' + deltaStr + '</td>';
+      
+      const fields = ['leads','intros','newMembers','upgrades','attrition','googleReviews'];
+      fields.forEach(field => {
+        const val = md[field] !== undefined ? md[field] : '';
+        const displayVal = field === 'attrition' && val !== '' && val !== 0 ? (parseFloat(val)*100).toFixed(1)+'%' : val;
+        if (isFuture && !val) {
+          html += '<td class="kpi-future-cell">\u2014</td>';
+        } else {
+          html += '<td><input class="kpi-input" data-loc="' + lid + '" data-month="' + mKey + '" data-field="' + field + '" value="' + (val !== undefined && val !== null ? val : '') + '" /></td>';
+        }
+      });
+      
+      html += '<td>' + conv + '</td>';
+      html += '</tr>';
+      prevTotal = tot;
+    }
+    html += '</tbody></table></div></details>';
   });
-  return html;
+
+  document.getElementById('app').innerHTML = renderNav('kpis') + html;
+  initKPICharts();
+  
+  // Attach input listeners
+  document.querySelectorAll('.kpi-input').forEach(inp => {
+    inp.addEventListener('change', function() {
+      const loc = this.dataset.loc;
+      const month = this.dataset.month;
+      const field = this.dataset.field;
+      const val = this.value;
+      firebase.database().ref('ceo/membership/' + loc + '/' + month + '/' + field).set(val);
+    });
+  });
 }
 
 function initKPICharts(){
