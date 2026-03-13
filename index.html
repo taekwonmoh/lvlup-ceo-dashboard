@@ -99,16 +99,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .rock-status select { border: 1px solid var(--gray-200); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; background: var(--card); color: var(--gray-700); cursor: pointer; }
 
 /* Events */
-.event-row { padding: 12px 20px; border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; gap: 12px; }
-.event-row:last-child { border-bottom: none; }
-.event-date { background: var(--accent-light); color: var(--accent); font-weight: 700; font-size: 12px; padding: 6px 10px; border-radius: 8px; min-width: 48px; text-align: center; flex-shrink: 0; }
-.event-name { font-size: 14px; font-weight: 500; flex: 1; }
-.event-loc { font-size: 12px; color: var(--gray-400); flex-shrink: 0; }
-.event-link { font-size: 12px; color: var(--blue); text-decoration: none; font-weight: 600; flex-shrink: 0; }
-.event-link:hover { text-decoration: underline; }
-
-/* Goal Tracker */
-.goal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; padding: 20px; }
+.event-row { padding: 12px 20px; border-bottom: 
 .goal-month { background: var(--gray-50); border-radius: 10px; padding: 14px; text-align: center; }
 .goal-month .month-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray-500); margin-bottom: 6px; }
 .goal-month input { width: 100%; border: 1px solid var(--gray-200); border-radius: 8px; padding: 6px; font-size: 14px; font-weight: 600; text-align: center; font-family: inherit; }
@@ -244,6 +235,44 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .month-btn{padding:6px 10px;border-radius:8px;border:1px solid var(--gray-200);background:var(--card);cursor:pointer;font-size:11px;font-weight:600}
 .month-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
+/* Home Page */
+.home-hero{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);color:#fff;border-radius:16px;padding:32px 36px;margin-bottom:20px;position:relative;overflow:hidden}
+.home-hero::after{content:'';position:absolute;top:-50%;right:-20%;width:300px;height:300px;background:radial-gradient(circle,rgba(233,69,96,0.15) 0%,transparent 70%);border-radius:50%}
+.home-hero-cycle{display:flex;align-items:center;gap:12px;margin-bottom:12px;position:relative;z-index:1}
+.home-cycle-badge{background:var(--accent);color:#fff;padding:6px 16px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase}
+.home-week-badge{background:rgba(255,255,255,0.15);color:#fff;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600}
+.home-hero h2{font-size:28px;font-weight:800;margin-bottom:6px;position:relative;z-index:1}
+.home-hero .home-motto{font-size:15px;opacity:0.8;font-style:italic;position:relative;z-index:1}
+.home-test-info{display:flex;gap:20px;margin-top:16px;position:relative;z-index:1;flex-wrap:wrap}
+.home-test-chip{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px;font-size:13px}
+.home-test-chip .chip-icon{font-size:18px}
+.home-test-chip .chip-label{opacity:0.7;font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+.home-test-chip .chip-value{font-weight:700;font-size:15px}
+.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+@media(max-width:900px){.home-grid{grid-template-columns:1fr}}
+.home-card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.home-card-header{padding:16px 20px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;gap:10px}
+.home-card-header h3{font-size:15px;font-weight:700;flex:1}
+.home-card-header .card-icon{font-size:20px}
+.home-card-body{padding:16px 20px}
+.home-motivation{background:linear-gradient(135deg,#fef3c7 0%,#fce4ec 100%);border-radius:14px;padding:24px 28px;margin-bottom:20px;position:relative}
+.home-motivation .quote-mark{font-size:48px;color:var(--accent);opacity:0.3;line-height:1;position:absolute;top:12px;left:16px}
+.home-motivation .quote-text{font-size:16px;font-weight:600;color:var(--gray-800);line-height:1.6;padding-left:24px;position:relative;z-index:1}
+.home-motivation .quote-category{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:700;margin-top:10px;padding-left:24px}
+.mat-chat-section{margin-bottom:12px}
+.mat-chat-label{font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-400);font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.mat-chat-label .mc-icon{font-size:14px}
+.mat-chat-text{font-size:13px;color:var(--gray-700);line-height:1.5;padding:10px 14px;background:var(--gray-50);border-radius:8px;border-left:3px solid var(--accent)}
+.mat-chat-key{display:inline-block;background:var(--accent-light);color:var(--accent);font-weight:700;font-size:12px;padding:3px 10px;border-radius:6px;margin-top:8px}
+.home-event-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gray-100)}
+.home-event-item:last-child{border-bottom:none}
+.home-event-date{background:var(--accent-light);color:var(--accent);font-weight:700;font-size:11px;padding:8px 10px;border-radius:8px;min-width:52px;text-align:center;line-height:1.3}
+.home-event-date .evt-month{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;display:block}
+.home-event-date .evt-day{font-size:18px;display:block}
+.home-event-name{font-size:13px;font-weight:600;flex:1}
+.home-event-loc{font-size:11px;color:var(--gray-400)}
+.home-empty{text-align:center;color:var(--gray-400);font-size:13px;padding:20px}
+
     /* --- KPI Summary Cards --- */
     .kpi-summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:16px 0 24px; }
     .kpi-summary-card { background:var(--card); border-radius:12px; padding:16px 18px; display:flex; align-items:center; gap:14px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid var(--gray-100); transition:box-shadow 0.2s,transform 0.15s; }
@@ -305,7 +334,7 @@ const CEO = 'ceo'; // root path in Firebase
 
 /*  -  -  State  -  -  */
 let state = {
-  activeSection: 'scorecard',
+  activeSection: 'home',
   weekOffset: 0,
   scorecard: { weekly: {}, monthly: {}, goals: {} },
   rocks: { company: [], individual: {} },
@@ -313,7 +342,8 @@ let state = {
   goals: {},
   financials: { waunakee: {}, eastmad: {}, verona: {} },
   membership: { waunakee: {}, eastmad: {}, verona: {} },
-  kpis: {}
+  kpis: {},
+  cycles: {}
 };
 
 let debounceTimers = {};
@@ -506,7 +536,7 @@ const GONINJA_CYCLE = {
   ]},
   8:{name:'Cycle Close',tasks:[
     {id:'w8a1',cat:'Admin',text:'Send cycle recap to families'},
-    {id:'w8a2',cat:'Admin',text:'Collect parent feedback'},
+    {id:'w8b2',cat:'Admin',text:'Collect parent feedback'},
     {id:'w8s1',cat:'Student Mgmt',text:'Celebrate student achievements'},
     {id:'w8c1',cat:'Cleaning',text:'Full facility reset'},
     {id:'w8r1',cat:'Reporting',text:'Cycle summary report'},
@@ -715,6 +745,11 @@ function listenAll() {
   const kpiRef = fbRef('kpis/2026/' + getMonthKey());
   kpiRef.on('value', snap => { state.kpis = snap.val() || {}; render(); });
   activeListeners.push({ ref: kpiRef, event: 'value' });
+
+  // Cycles data (mat chat, life skills, test dates)
+  const cyclesRef = fbRef('cycles');
+  cyclesRef.on('value', snap => { state.cycles = snap.val() || {}; render(); });
+  activeListeners.push({ ref: cyclesRef, event: 'value' });
 }
 
 /*  -  -  Navigation  -  -  */
@@ -802,7 +837,8 @@ function render() {
   const s = state.activeSection;
 
   app.innerHTML = renderHeader() +
-    (s === 'scorecard' ? renderScorecardPage() :
+    (s === 'home' ? renderHomePage() :
+     s === 'scorecard' ? renderScorecardPage() :
      s === 'kpis' ? renderKPIsPage() :
      s === 'financials' ? renderFinancialsPage() :
      s === 'rocks' ? renderRocksPage() :
@@ -815,6 +851,7 @@ function render() {
 
 function renderHeader() {
   const sections = [
+    { id: 'home', label: 'Home' },
     { id: 'scorecard', label: 'Scorecard' },
     { id: 'kpis', label: 'KPIs' },
     { id: 'financials', label: 'Financials' },
@@ -829,6 +866,181 @@ function renderHeader() {
     '<div class="nav-tabs">' +
     sections.map(s => '<button class="nav-tab ' + (state.activeSection === s.id ? 'active' : '') + '" onclick="setSection(\'' + s.id + '\')">' + s.label + '</button>').join('') +
     '</div></div>';
+}
+
+/*  -  -  Home Page  -  -  */
+function getCurrentCycleInfo() {
+  const today = new Date();
+  const cycles = state.cycles || {};
+  let current = null;
+  for (let i = 1; i <= 6; i++) {
+    const c = cycles[i];
+    if (!c) continue;
+    const start = new Date(c.startDate + 'T00:00:00');
+    const test = new Date(c.testDate + 'T23:59:59');
+    if (today >= start && today <= test) {
+      const diffMs = today - start;
+      const weekNum = Math.min(8, Math.floor(diffMs / (7 * 86400000)) + 1);
+      const testDate = new Date(c.testDate + 'T00:00:00');
+      const daysUntilTest = Math.ceil((testDate - today) / 86400000);
+      const weeksLeft = Math.max(0, 8 - weekNum);
+      current = { cycleNum: i, weekNum, weeksLeft, daysUntilTest, ...c };
+      break;
+    }
+  }
+  if (!current && cycles[2]) {
+    current = { cycleNum: 2, weekNum: 2, weeksLeft: 6, daysUntilTest: 48, ...cycles[2] };
+  }
+  return current;
+}
+
+function getMotivationalQuote() {
+  const quotes = [
+    { text: "The only way to do great work is to love what you do. Pour that passion into every class today.", category: "Business" },
+    { text: "A black belt is a white belt who never quit. Remind your students of this today.", category: "Martial Arts" },
+    { text: "Drink water first thing in the morning. Your body is dehydrated after sleep - hydrate before you caffeinate.", category: "Health" },
+    { text: "The strength of the team is each individual member. The strength of each member is the team.", category: "Community" },
+    { text: "Success is not final, failure is not fatal: it is the courage to continue that counts.", category: "Business" },
+    { text: "In martial arts, the ultimate goal is not the perfection of technique, but the perfection of character.", category: "Martial Arts" },
+    { text: "Take care of your body. It is the only place you have to live. Model healthy habits for your students.", category: "Health" },
+    { text: "Alone we can do so little; together we can do so much. Build each other up today.", category: "Community" },
+    { text: "Every expert was once a beginner. Be patient with new students - they will become your best ambassadors.", category: "Martial Arts" },
+    { text: "Your health is an investment, not an expense. Stretch before and after every class you teach.", category: "Health" },
+    { text: "People do not care how much you know until they know how much you care. Show every family they matter.", category: "Business" },
+    { text: "The best time to plant a tree was 20 years ago. The second best time is now. Start that initiative today.", category: "Community" },
+    { text: "Champions are not made in the ring. They are merely recognized there. The real work happens in training.", category: "Martial Arts" },
+    { text: "Move your body for at least 30 minutes today. You cannot pour from an empty cup.", category: "Health" },
+    { text: "Culture eats strategy for breakfast. Build a culture your students never want to leave.", category: "Business" },
+    { text: "Be the change you wish to see in your community. Your school is a beacon of positivity.", category: "Community" },
+    { text: "The mind is everything. What you think, you become. Teach your students to think like champions.", category: "Martial Arts" },
+    { text: "Get 7-8 hours of sleep tonight. Rest is not laziness - it is preparation for tomorrow.", category: "Health" },
+    { text: "Great leaders do not set out to be leaders. They set out to make a difference.", category: "Business" },
+    { text: "Small acts of kindness ripple outward. Compliment a parent, high-five a student, thank a colleague.", category: "Community" },
+    { text: "Fall seven times, stand up eight. Teach resilience by example in every class you lead.", category: "Martial Arts" },
+    { text: "Eat a meal with protein and vegetables today. Fuel your body like the athlete you are.", category: "Health" },
+    { text: "Your vibe attracts your tribe. Bring energy, positivity, and enthusiasm to every interaction.", category: "Business" },
+    { text: "We rise by lifting others. Find one person to encourage today - it may change their week.", category: "Community" },
+    { text: "Discipline is choosing between what you want now and what you want most. Model this for students.", category: "Martial Arts" },
+    { text: "Take 5 minutes of deep breathing today. Calm your mind before you lead others.", category: "Health" },
+    { text: "Customer service is not a department, it is an attitude. Every interaction is a chance to wow someone.", category: "Business" },
+    { text: "The community does not need more successful people. It needs more healers, storytellers, and lovers of all kinds.", category: "Community" },
+    { text: "A true martial artist is not one who fears change, but one who causes things to change for the better.", category: "Martial Arts" },
+    { text: "Smile more today. It reduces stress, boosts your immune system, and is contagious to everyone around you.", category: "Health" },
+  ];
+  const today = new Date();
+  const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 86400000);
+  return quotes[dayOfYear % quotes.length];
+}
+
+function renderHomePage() {
+  const cycle = getCurrentCycleInfo();
+  const quote = getMotivationalQuote();
+  const events = state.events || [];
+
+  let html = '';
+
+  // Motivational quote
+  html += '<div class="home-motivation">';
+  html += '<div class="quote-mark">\u201C</div>';
+  html += '<div class="quote-text">' + esc(quote.text) + '</div>';
+  html += '<div class="quote-category">' + esc(quote.category) + '</div>';
+  html += '</div>';
+
+  if (!cycle) {
+    html += '<div class="home-card"><div class="home-card-body"><div class="home-empty">Cycle data not yet loaded. Please check Firebase.</div></div></div>';
+    return html;
+  }
+
+  // Hero section - current cycle info
+  html += '<div class="home-hero">';
+  html += '<div class="home-hero-cycle">';
+  html += '<span class="home-cycle-badge">Cycle ' + cycle.cycleNum + '</span>';
+  html += '<span class="home-week-badge">Week ' + cycle.weekNum + ' of 8</span>';
+  html += '</div>';
+  html += '<h2>' + esc(cycle.lifeSkill) + '</h2>';
+  html += '<div class="home-motto">' + esc(cycle.lifeSkill) + ' ' + esc(cycle.motto) + '</div>';
+  html += '<div class="home-test-info">';
+  html += '<div class="home-test-chip"><span class="chip-icon">\uD83D\uDCC5</span><div><div class="chip-label">Test Date</div><div class="chip-value">' + formatTestDate(cycle.testDate) + '</div></div></div>';
+  html += '<div class="home-test-chip"><span class="chip-icon">\u23F3</span><div><div class="chip-label">Weeks Remaining</div><div class="chip-value">' + cycle.weeksLeft + ' week' + (cycle.weeksLeft !== 1 ? 's' : '') + '</div></div></div>';
+  html += '<div class="home-test-chip"><span class="chip-icon">\uD83D\uDCC6</span><div><div class="chip-label">Days Until Test</div><div class="chip-value">' + cycle.daysUntilTest + ' day' + (cycle.daysUntilTest !== 1 ? 's' : '') + '</div></div></div>';
+  html += '</div></div>';
+
+  // Two-column grid
+  html += '<div class="home-grid">';
+
+  // Mat Chat card
+  const week = (cycle.weeks || {})[cycle.weekNum] || {};
+  html += '<div class="home-card">';
+  html += '<div class="home-card-header"><span class="card-icon">\uD83D\uDDE3\uFE0F</span><h3>Mat Chat - Week ' + cycle.weekNum + ': ' + esc(week.theme || '') + '</h3></div>';
+  html += '<div class="home-card-body">';
+  if (week.beginning) {
+    html += '<div class="mat-chat-section"><div class="mat-chat-label"><span class="mc-icon">\uD83D\uDD1C</span> Beginning of Class</div>';
+    html += '<div class="mat-chat-text">' + esc(week.beginning) + '</div></div>';
+  }
+  if (week.during) {
+    html += '<div class="mat-chat-section"><div class="mat-chat-label"><span class="mc-icon">\uD83E\uDD4B</span> During Class</div>';
+    html += '<div class="mat-chat-text">' + esc(week.during) + '</div></div>';
+  }
+  if (week.end) {
+    html += '<div class="mat-chat-section"><div class="mat-chat-label"><span class="mc-icon">\uD83C\uDFC1</span> End of Class</div>';
+    html += '<div class="mat-chat-text">' + esc(week.end) + '</div></div>';
+  }
+  if (week.keyPhrase) {
+    html += '<div style="margin-top:10px"><span class="mat-chat-key">\uD83D\uDD11 ' + esc(week.keyPhrase) + '</span></div>';
+  }
+  html += '</div></div>';
+
+  // Events card
+  html += '<div class="home-card">';
+  html += '<div class="home-card-header"><span class="card-icon">\uD83D\uDCC5</span><h3>Upcoming Events</h3></div>';
+  html += '<div class="home-card-body">';
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const upcoming = (Array.isArray(events) ? events : Object.values(events)).filter(e => {
+    if (!e || !e.date) return false;
+    const d = new Date(e.date + 'T00:00:00');
+    return d >= today;
+  }).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 8);
+
+  if (upcoming.length === 0) {
+    // Show test dates as fallback
+    html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">Test Dates:</div>';
+    for (let i = 1; i <= 6; i++) {
+      const c = (state.cycles || {})[i];
+      if (!c) continue;
+      const td = new Date(c.testDate + 'T00:00:00');
+      if (td < today) continue;
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      html += '<div class="home-event-item">';
+      html += '<div class="home-event-date"><span class="evt-month">' + monthNames[td.getMonth()] + '</span><span class="evt-day">' + td.getDate() + '</span></div>';
+      html += '<div class="home-event-name">Cycle ' + i + ' Belt Test - ' + esc(c.lifeSkill) + '</div>';
+      html += '<div class="home-event-loc">' + esc(c.testDay || '') + '</div>';
+      html += '</div>';
+    }
+  } else {
+    upcoming.forEach(e => {
+      const d = new Date(e.date + 'T00:00:00');
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      html += '<div class="home-event-item">';
+      html += '<div class="home-event-date"><span class="evt-month">' + monthNames[d.getMonth()] + '</span><span class="evt-day">' + d.getDate() + '</span></div>';
+      html += '<div class="home-event-name">' + esc(e.name || e.title || '') + '</div>';
+      html += '<div class="home-event-loc">' + esc(e.location || e.loc || '') + '</div>';
+      html += '</div>';
+    });
+  }
+  html += '</div></div>';
+
+  html += '</div>'; // close home-grid
+
+  return html;
+}
+
+function formatTestDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate();
 }
 
 /*  -  -  Scorecard Page  -  -  */
@@ -1112,7 +1324,7 @@ function renderFinancialsPage() {
     const memData = state.membership[loc.id] || {};
 
     // Financial table
-    html += '<div class="section"><div class="section-header"><h2>' + loc.name + '  —  2026 Financials</h2></div>';
+    html += '<div class="section"><div class="section-header"><h2>' + loc.name + '  â  2026 Financials</h2></div>';
     html += '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>';
     html += '<th style="text-align:left;">Month</th><th>Gross TY</th><th>Gross LY</th><th>TY vs LY</th><th>ARM</th><th>LEG</th><th>LTV</th>';
     html += '</tr></thead><tbody>';
@@ -1190,7 +1402,7 @@ function renderRocksPage() {
   const statuses = ['not-started','in-progress','on-track','complete','off-track'];
   const statusLabels = { 'not-started':'Not Started', 'in-progress':'In Progress', 'on-track':'On Track', 'complete':'Complete', 'off-track':'Off Track' };
 
-  let html = '<div class="section"><div class="section-header"><h2>Company Rocks  —  Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
+  let html = '<div class="section"><div class="section-header"><h2>Company Rocks  â  Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
 
   if (company.length) {
     company.forEach((r, i) => {
@@ -1210,7 +1422,7 @@ function renderRocksPage() {
   Object.keys(individual).forEach(personKey => {
     const personRocks = individual[personKey] || [];
     const label = personKey === 'mrsMoh' ? 'Mrs. Moh' : personKey === 'mrMoh' ? 'Mr. Moh' : personKey;
-    html += '<div class="section"><div class="section-header"><h2>Individual Rocks  —  ' + esc(label) + '</h2></div>';
+    html += '<div class="section"><div class="section-header"><h2>Individual Rocks  â  ' + esc(label) + '</h2></div>';
     personRocks.forEach((r, i) => {
       html += '<div class="rock-item">' +
         '<div class="rock-num">' + (i + 1) + '</div>' +
@@ -1503,7 +1715,7 @@ function renderMonthlyGoalsPage(){
     if(field.computed){
       return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" readonly style="background:#e9ecef;cursor:default" /></div>';
     }
-    if(field.type==='textarea'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><textarea class="goals-input" data-field-id="'+field.id+'" style="min-height:60px;resize:vertical;font-family:inherit;padding:8px" placeholder="Enter details..." onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea></div>';}if(field.type==='text'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';}return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onchange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
+    if(field.type==='textarea'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><textarea class="goals-input" data-field-id="'+field.id+'" style="min-height:60px;resize:vertical;font-family:inherit;padding:8px" placeholder="Enter details..." onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea></div>';}if(field.type==='text'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>';}return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
   }
   async function init() {
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
