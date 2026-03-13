@@ -848,22 +848,20 @@ function render() {
   app.innerHTML = renderHeader() +
     (s === 'home' ? renderHomePage() :
      s === 'scorecard' ? renderScorecardPage() :
-     s === 'kpis' ? renderKPIsPage() :
-     s === 'financials' ? renderFinancialsPage() :
+     s === 'performance' ? renderPerformancePage() :
      s === 'rocks' ? renderRocksPage() :
      s === 'events' ? renderEventsPage() :
      s === 'goals' ? renderGoalsPage() :
           s === 'tasks' ? renderTasksPage() :
           s === 'monthlyGoals' ? renderMonthlyGoalsPage() : '');
-    if(s === 'kpis') initKPICharts();
+    if(s === 'performance') initKPICharts();
 }
 
 function renderHeader() {
   const sections = [
     { id: 'home', label: 'Home' },
     { id: 'scorecard', label: 'Scorecard' },
-    { id: 'kpis', label: 'KPIs' },
-    { id: 'financials', label: 'Financials' },
+    { id: 'performance', label: 'Performance' },
     { id: 'rocks', label: 'Rocks' },
     { id: 'events', label: 'Events' },
     { id: 'goals', label: 'Goal Tracker' },
@@ -1134,7 +1132,7 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
 
   monthlyHtml += '</tbody></table></div></div>';
 
-  return kpiHtml + tableHtml + monthlyHtml;
+  return tableHtml + monthlyHtml;
 }
 
 /*  -  -  KPIs Page (Monthly KPIs for 3 LVLUP locations)  -  -  */
@@ -1401,6 +1399,11 @@ function renderFinancialsPage() {
   });
 
   return html;
+}
+
+/*  -  -  Performance Page (Combined KPIs + Financials)  -  -  */
+function renderPerformancePage() {
+    return renderKPIsPage() + renderFinancialsPage();
 }
 
 /*  -  -  Rocks Page  -  -  */
