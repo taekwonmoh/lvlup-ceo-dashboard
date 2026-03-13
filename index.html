@@ -107,6 +107,26 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .event-link { font-size: 12px; color: var(--blue); text-decoration: none; font-weight: 600; flex-shrink: 0; }
 .event-link:hover { text-decoration: underline; }
 
+/* Calendar */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 16px; }
+.cal-hdr { text-align: center; font-size: 11px; font-weight: 700; color: var(--gray-500); padding: 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+.cal-cell { min-height: 70px; background: var(--card); border-radius: 6px; padding: 4px 6px; position: relative; border: 1px solid var(--gray-100); }
+.cal-empty { background: transparent; border-color: transparent; }
+.cal-day { font-size: 12px; font-weight: 600; color: var(--gray-500); margin-bottom: 2px; }
+.cal-today { background: rgba(65,105,225,0.08); border-color: var(--blue); }
+.cal-today .cal-day { color: var(--blue); font-weight: 800; }
+.cal-has-event { border-color: var(--accent); }
+.cal-past { opacity: 0.5; }
+.cal-evt { font-size: 10px; font-weight: 600; color: #fff; background: var(--accent); border-radius: 4px; padding: 2px 5px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-list { display: flex; flex-direction: column; gap: 8px; }
+.cal-list-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--card); border-radius: 10px; border-left: 4px solid var(--accent); }
+.cal-list-past { opacity: 0.5; border-left-color: var(--gray-300); }
+.cal-list-date { font-size: 12px; font-weight: 700; color: var(--accent); min-width: 110px; flex-shrink: 0; }
+.cal-list-past .cal-list-date { color: var(--gray-400); }
+.cal-list-name { font-size: 14px; font-weight: 600; flex: 1; color: var(--primary); }
+.cal-list-link { font-size: 12px; color: var(--blue); text-decoration: none; font-weight: 600; flex-shrink: 0; }
+.cal-list-link:hover { text-decoration: underline; }
+
 /* Goal Tracker */
 .goal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; padding: 20px; }
 .goal-month { background: var(--gray-50); border-radius: 10px; padding: 14px; text-align: center; }
@@ -124,6 +144,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .fin-table tr:hover { background: var(--gray-50); }
 .fin-table .qtr-row td { font-weight: 700; background: var(--gray-50); }
 .fin-table .year-row td { font-weight: 800; background: var(--gray-100); }
+.fin-table .quarter-row td { font-weight: 600; background: rgba(65,105,225,0.06); border-top: 2px solid rgba(65,105,225,0.15); border-bottom: 2px solid rgba(65,105,225,0.15); }
 .fin-table input { width: 100px; border: 1px solid transparent; background: transparent; padding: 4px 6px; border-radius: 6px; font-size: 13px; font-family: inherit; text-align: right; }
 .fin-table input:hover { border-color: var(--gray-300); background: var(--gray-50); }
 .fin-table input:focus { outline: none; border-color: var(--accent); background: #fff; }
@@ -1330,42 +1351,72 @@ function renderFinancialsPage() {
     const finData = state.financials[loc.id] || {};
     const memData = state.membership[loc.id] || {};
 
-    // Financial table
-    html += '<div class="section"><div class="section-header"><h2>' + loc.name + '  â  2026 Financials</h2></div>';
+    // Financial table with Goal column and quarterly subtotals
+    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' \u2014 2026 Financials</h2></div>';
     html += '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>';
-    html += '<th style="text-align:left;">Month</th><th>Gross TY</th><th>Gross LY</th><th>TY vs LY</th><th>ARM</th><th>LEG</th><th>LTV</th>';
+    html += '<th style="text-align:left;">Month</th><th>Goal</th><th>Gross TY</th><th>vs Goal</th><th>Gross LY</th><th>TY vs LY</th><th>ARM</th><th>LEG</th><th>LTV</th>';
     html += '</tr></thead><tbody>';
 
-    let ytdTY = 0, ytdLY = 0;
+    let ytdTY = 0, ytdLY = 0, ytdGoal = 0;
+    let qTY = 0, qLY = 0, qGoal = 0;
     for (let m = 0; m < 12; m++) {
       const mk = monthNames[m];
       const fd = finData[mk] || {};
       let grossTY = parseFloat(fd.grossTY) || 0;
       if(grossTY===0 && m===currentMonthIdx){grossTY=parseFloat((state.kpis[loc.id]||{}).revenue)||0;}
       const grossLY = parseFloat(fd.grossLY) || 0;
-      ytdTY += grossTY;
-      ytdLY += grossLY;
+      const monthGoal = parseFloat(fd.goal) || 0;
+      ytdTY += grossTY; ytdLY += grossLY; ytdGoal += monthGoal;
+      qTY += grossTY; qLY += grossLY; qGoal += monthGoal;
       const diff = grossTY - grossLY;
+      const vsGoal = grossTY - monthGoal;
       const isFuture = m > currentMonthIdx && !grossTY;
 
-      if (isFuture && !grossLY) continue; // Skip empty future months
+      if (isFuture && !grossLY && !monthGoal) {
+        if ((m + 1) % 3 === 0) { qTY = 0; qLY = 0; qGoal = 0; }
+        continue;
+      }
 
       html += '<tr>';
       html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
+      html += '<td class="currency" style="color:var(--gray-500);">' + (monthGoal ? fmtCurrency(monthGoal) : '') + '</td>';
       html += '<td class="currency">' + (grossTY ? fmtCurrency(grossTY) : '') + '</td>';
+      html += '<td class="' + (vsGoal >= 0 ? 'positive' : 'negative') + '">' + (grossTY && monthGoal ? fmtCurrency(vsGoal) : '') + '</td>';
       html += '<td class="currency" style="color:var(--gray-400);">' + (grossLY ? fmtCurrency(grossLY) : '') + '</td>';
       html += '<td class="' + (diff >= 0 ? 'positive' : 'negative') + '">' + (grossTY && grossLY ? fmtCurrency(diff) : '') + '</td>';
       html += '<td class="currency">' + (fd.arm ? fmtCurrency(fd.arm) : '') + '</td>';
       html += '<td>' + esc(String(fd.leg || '')) + '</td>';
       html += '<td class="currency">' + (fd.ltv ? fmtCurrency(fd.ltv) : '') + '</td>';
       html += '</tr>';
+
+      // Quarterly subtotal after Mar, Jun, Sep, Dec
+      if ((m + 1) % 3 === 0) {
+        const qi = Math.floor(m / 3);
+        const qLabels = ['Q1','Q2','Q3','Q4'];
+        const qDiff = qTY - qLY;
+        const qVsGoal = qTY - qGoal;
+        if (qTY > 0 || qLY > 0 || qGoal > 0) {
+          html += '<tr class="quarter-row">';
+          html += '<td style="text-align:left;font-weight:700;">' + qLabels[qi] + ' Total</td>';
+          html += '<td class="currency" style="font-weight:600;color:var(--gray-500);">' + (qGoal ? fmtCurrency(qGoal) : '') + '</td>';
+          html += '<td class="currency" style="font-weight:700;">' + (qTY ? fmtCurrency(qTY) : '') + '</td>';
+          html += '<td class="' + (qVsGoal >= 0 ? 'positive' : 'negative') + '" style="font-weight:600;">' + (qTY && qGoal ? fmtCurrency(qVsGoal) : '') + '</td>';
+          html += '<td class="currency" style="color:var(--gray-400);font-weight:600;">' + (qLY ? fmtCurrency(qLY) : '') + '</td>';
+          html += '<td class="' + (qDiff >= 0 ? 'positive' : 'negative') + '" style="font-weight:600;">' + (qTY && qLY ? fmtCurrency(qDiff) : '') + '</td>';
+          html += '<td></td><td></td><td></td></tr>';
+        }
+        qTY = 0; qLY = 0; qGoal = 0;
+      }
     }
 
     // YTD row
     const ytdDiff = ytdTY - ytdLY;
+    const ytdVsGoal = ytdTY - ytdGoal;
     html += '<tr class="year-row">';
     html += '<td style="text-align:left;">YTD</td>';
+    html += '<td class="currency" style="font-weight:600;color:var(--gray-500);">' + (ytdGoal ? fmtCurrency(ytdGoal) : '') + '</td>';
     html += '<td class="currency">' + fmtCurrency(ytdTY) + '</td>';
+    html += '<td class="' + (ytdVsGoal >= 0 ? 'positive' : 'negative') + '">' + (ytdGoal ? fmtCurrency(ytdVsGoal) : '') + '</td>';
     html += '<td class="currency" style="color:var(--gray-400);">' + fmtCurrency(ytdLY) + '</td>';
     html += '<td class="' + (ytdDiff >= 0 ? 'positive' : 'negative') + '">' + fmtCurrency(ytdDiff) + '</td>';
     html += '<td></td><td></td><td></td></tr>';
@@ -1414,7 +1465,7 @@ function renderRocksPage() {
   const statuses = ['not-started','in-progress','on-track','complete','off-track'];
   const statusLabels = { 'not-started':'Not Started', 'in-progress':'In Progress', 'on-track':'On Track', 'complete':'Complete', 'off-track':'Off Track' };
 
-  let html = '<div class="section"><div class="section-header"><h2>Company Rocks  â  Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
+  let html = '<div class="section"><div class="section-header"><h2>Company Rocks  —  Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
 
   if (company.length) {
     company.forEach((r, i) => {
@@ -1434,7 +1485,7 @@ function renderRocksPage() {
   Object.keys(individual).forEach(personKey => {
     const personRocks = individual[personKey] || [];
     const label = personKey === 'mrsMoh' ? 'Mrs. Moh' : personKey === 'mrMoh' ? 'Mr. Moh' : personKey;
-    html += '<div class="section"><div class="section-header"><h2>Individual Rocks  â  ' + esc(label) + '</h2></div>';
+    html += '<div class="section"><div class="section-header"><h2>Individual Rocks  —  ' + esc(label) + '</h2></div>';
     personRocks.forEach((r, i) => {
       html += '<div class="rock-item">' +
         '<div class="rock-num">' + (i + 1) + '</div>' +
@@ -1449,31 +1500,90 @@ function renderRocksPage() {
   return html;
 }
 
-/*  -  -  Events Page  -  -  */
+/*  -  -  Events Page (Calendar View)  -  -  */
 function renderEventsPage() {
   const events = state.events || [];
-  const locGroups = {};
-  events.forEach(e => {
-    if (!locGroups[e.location]) locGroups[e.location] = [];
-    locGroups[e.location].push(e);
-  });
-
-  let html = '';
-  Object.keys(locGroups).forEach(loc => {
-    html += '<div class="section"><div class="section-header"><h2>' + esc(loc) + '</h2><div class="badge">' + locGroups[loc].length + ' events</div></div>';
-    locGroups[loc].forEach(e => {
-      html += '<div class="event-row">' +
-        '<div class="event-date">' + esc(e.date) + '</div>' +
-        '<div class="event-name">' + esc(e.event) + '</div>' +
-        (e.link ? '<a class="event-link" href="' + esc(e.link) + '" target="_blank">Book &rarr;</a>' : '<span class="event-loc" style="color:var(--gray-300)">No link</span>') +
-        '</div>';
-    });
-    html += '</div>';
-  });
-
   if (!events.length) {
-    html = '<div class="section"><div style="padding:40px;text-align:center;color:var(--gray-400);">No events configured yet</div></div>';
+    return '<div class="section"><div style="padding:40px;text-align:center;color:var(--gray-400);">No events configured yet</div></div>';
   }
+
+  const monthGroups = {};
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const monthLabels = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  events.forEach(e => {
+    const d = new Date(e.date);
+    if (isNaN(d.getTime())) return;
+    const key = d.getFullYear() + '-' + String(d.getMonth()).padStart(2,'0');
+    if (!monthGroups[key]) monthGroups[key] = [];
+    monthGroups[key].push({ ...e, _d: d, _day: d.getDate(), _dow: d.getDay() });
+  });
+
+  const sortedKeys = Object.keys(monthGroups).sort();
+  const now = new Date();
+  const todayStr = now.getFullYear() + '-' + String(now.getMonth()).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+
+  let html = '<div class="page-header"><h2 style="margin:0;font-size:1.6rem;color:var(--primary)">Events Calendar</h2>';
+  html += '<p style="margin:4px 0 0;color:var(--gray-500);font-size:0.85rem">' + events.length + ' upcoming events</p></div>';
+
+  sortedKeys.forEach(key => {
+    const evts = monthGroups[key].sort((a,b) => a._d - b._d);
+    const yr = parseInt(key.split('-')[0]);
+    const mo = parseInt(key.split('-')[1]);
+    const monthLabel = monthLabels[mo] + ' ' + yr;
+    const daysInMonth = new Date(yr, mo + 1, 0).getDate();
+    const firstDow = new Date(yr, mo, 1).getDay();
+
+    // Build lookup: day -> events
+    const dayEvts = {};
+    evts.forEach(e => {
+      if (!dayEvts[e._day]) dayEvts[e._day] = [];
+      dayEvts[e._day].push(e);
+    });
+
+    html += '<div class="section" style="margin-bottom:24px;">';
+    html += '<div class="section-header"><h2>' + monthLabel + '</h2><div class="badge">' + evts.length + ' events</div></div>';
+    // Calendar grid
+    html += '<div class="cal-grid">';
+    // Day headers
+    dayNames.forEach(d => { html += '<div class="cal-hdr">' + d + '</div>'; });
+    // Empty cells for offset
+    for (let i = 0; i < firstDow; i++) { html += '<div class="cal-cell cal-empty"></div>'; }
+    // Day cells
+    for (let d = 1; d <= daysInMonth; d++) {
+      const cellDate = yr + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      const isToday = cellDate === todayStr;
+      const hasEvt = dayEvts[d];
+      const isPast = new Date(yr, mo, d) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let cls = 'cal-cell';
+      if (isToday) cls += ' cal-today';
+      if (hasEvt) cls += ' cal-has-event';
+      if (isPast && !isToday) cls += ' cal-past';
+
+      html += '<div class="' + cls + '">';
+      html += '<div class="cal-day">' + d + '</div>';
+      if (hasEvt) {
+        hasEvt.forEach(e => {
+          html += '<div class="cal-evt" title="' + esc(e.event) + '">' + esc(e.event) + '</div>';
+        });
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // Events list under calendar for this month
+    html += '<div class="cal-list">';
+    evts.forEach(e => {
+      const dd = e._d;
+      const dateStr = dayNames[dd.getDay()] + ', ' + monthLabels[dd.getMonth()] + ' ' + dd.getDate();
+      const isPast = dd < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      html += '<div class="cal-list-item' + (isPast ? ' cal-list-past' : '') + '">';
+      html += '<div class="cal-list-date">' + dateStr + '</div>';
+      html += '<div class="cal-list-name">' + esc(e.event) + '</div>';
+      if (e.location) html += '<a class="cal-list-link" href="' + esc(e.location) + '" target="_blank">Details \u2192</a>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
 
   return html;
 }
