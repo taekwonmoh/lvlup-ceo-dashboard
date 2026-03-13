@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>LVLUP / Go Ninja CEO Dashboard</title>
+<title>LVLUP / Go Ninja HQ Dashboard</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <style>
@@ -43,7 +43,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 /* Header */
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-.header h1 { font-size: 22px; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
+.header h1 { font-size: 20px; font-weight: 700; color: var(--primary); letter-spacing: -0.5px; display: flex; align-items: center; gap: 6px; }
 .header h1 .accent { color: var(--accent); }
 .nav-tabs { display: flex; gap: 4px; background: var(--card); border-radius: 10px; padding: 3px; box-shadow: var(--shadow); }
 .nav-tab { padding: 8px 16px; border-radius: 8px; border: none; background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--gray-500); white-space: nowrap; transition: all 0.15s; }
@@ -869,7 +869,7 @@ function renderHeader() {
       { id: 'monthlyGoals', label: 'Monthly Goals' },
     ];
   return '<div class="header">' +
-    '<h1><span style="color:#4169E1">LVLUP</span> / <span class="accent">Go Ninja</span> CEO Dashboard</h1>' +
+    '<h1><svg viewBox="0 0 110 30" height="26"><text x="0" y="24" font-family="Arial Black,sans-serif" font-weight="900" font-size="26" fill="#1a1a2e" letter-spacing="-1">LVL</text><text x="55" y="24" font-family="Arial Black,sans-serif" font-weight="900" font-size="26" fill="#4169E1" letter-spacing="-1">UP</text><path d="M67 3L70.5-1 74 3" stroke="#4169E1" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="color:#555;font-weight:300">/</span><svg viewBox="0 0 120 30" height="26"><text x="0" y="22" font-family="Impact,sans-serif" font-weight="900" font-size="16" fill="#e94560">GO</text><text x="26" y="25" font-family="Impact,sans-serif" font-weight="900" font-size="28" fill="#e94560" letter-spacing="0.5">NINJA</text></svg><span>HQ Dashboard</span></h1>' +
     '<div class="nav-tabs">' +
     sections.map(s => '<button class="nav-tab ' + (state.activeSection === s.id ? 'active' : '') + '" onclick="setSection(\'' + s.id + '\')">' + s.label + '</button>').join('') +
     '</div></div>';
