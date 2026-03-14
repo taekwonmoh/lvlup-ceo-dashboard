@@ -304,16 +304,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .home-empty{text-align:center;color:var(--gray-400);font-size:13px;padding:20px}
 
     /* --- KPI Summary Cards --- */
-    .kpi-summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:16px 0 24px; }
-    .kpi-summary-card { background:var(--card); border-radius:12px; padding:16px 18px; display:flex; align-items:center; gap:14px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid var(--gray-100); transition:box-shadow 0.2s,transform 0.15s; }
-    .kpi-summary-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.1); transform:translateY(-1px); }
-    .kpi-summary-icon { width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0; }
     .kpi-summary-info { min-width:0; }
-    .kpi-summary-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--gray-500); font-weight:600; margin-bottom:2px; }
-    .kpi-summary-value { font-size:1.5rem; font-weight:700; color:var(--primary); line-height:1.2; }
-    .kpi-summary-sub { font-size:0.75rem; color:var(--gray-400); margin-top:2px; }
-    @media(max-width:900px) { .kpi-summary-grid { grid-template-columns:repeat(2,1fr); } }
-    @media(max-width:500px) { .kpi-summary-grid { grid-template-columns:1fr; } }
 
     /* --- KPI Detail Cards (per-location) --- */
     .kpi-detail-card { background:var(--card); border-radius:12px; margin:12px 0; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid var(--gray-100); overflow:hidden; }
@@ -1161,73 +1152,8 @@ function renderKPIsPage() {
       const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       const monthKeys=['january','february','march','april','may','june','july','august','september','october','november','december'];
       const now = new Date();
-      const curLabel = monthNames[now.getMonth()];
       const curMonthIdx = now.getMonth();
-      const prevMonth = curMonthIdx > 0 ? curMonthIdx - 1 : 11;
-      let html = '';
-
-      html += '<div class="page-header"><h2 style="margin:0;font-size:1.6rem;color:var(--primary)">KPI Metrics</h2>';
-      html += '<p style="margin:4px 0 0;color:var(--gray-500);font-size:0.85rem">Member acquisition, retention & growth tracking</p></div>';
-
-      let totalLeads=0,totalIntros=0,totalNew=0,totalLost=0,totalUpgrades=0,totalGR=0,totalMemAll=0,prevMemAll=0;
-      LOCATIONS.forEach(function(loc) {
-        var memData = state.membership[loc.id] || {};
-        var cur = memData[monthKeys[curMonthIdx]] || {};
-        totalLeads += parseFloat(cur.leads)||0;
-        totalIntros += parseFloat(cur.intros)||0;
-        totalNew += parseFloat(cur.newMem)||0;
-        totalLost += parseFloat(cur.lost)||0;
-        totalUpgrades += parseFloat(cur.upgrades)||0;
-        totalGR += parseFloat(cur.googleReviews)||0;
-      });
-
-      LOCATIONS.forEach(function(loc) {
-        var memData = state.membership[loc.id] || {};
-        var curD = memData[monthKeys[curMonthIdx]] || {};
-        var prevD = memData[monthKeys[prevMonth]] || {};
-        totalMemAll += parseFloat((state.kpis[loc.id]||{}).totalMembers)||0;
-        prevMemAll += parseFloat(prevD.total)||0;
-      });
-
-      var netGrowth = totalNew - totalLost;
-      var memDelta = totalMemAll - prevMemAll;
-      var attrPct = totalMemAll > 0 ? ((totalLost/totalMemAll)*100).toFixed(1) : 0;
-      var convPct = totalLeads > 0 ? ((totalNew/totalLeads)*100).toFixed(0) : 0;
-
-      function delta(val,inv) {
-        if(!val) return '<span style="color:var(--gray-400)">--</span>';
-        var up = inv ? val < 0 : val > 0;
-        var c = up ? 'var(--green)' : 'var(--red)';
-        var arrow = up ? '\u25B2' : '\u25BC';
-        return '<span style="color:'+c+'">'+arrow+' '+Math.abs(val)+'</span>';
-      }
-
-      html += '<div class="kpi-summary-grid">';
-      html += '<div class="kpi-summary-card"><div class="kpi-summary-icon" style="background:var(--blue-light);color:var(--blue)">\u{1F465}</div>';
-      html += '<div class="kpi-summary-label">Total Members</div><div class="kpi-summary-value">'+totalMemAll+'</div>';
-      html += '<div class="kpi-summary-sub">'+delta(memDelta)+' vs prev month</div></div>';
-      html += '<div class="kpi-summary-card"><div class="kpi-summary-icon" style="background:var(--green-light);color:var(--green)">\u{1F4C8}</div>';
-      html += '<div class="kpi-summary-label">Net Growth</div><div class="kpi-summary-value">'+netGrowth+'</div>';
-      html += '<div class="kpi-summary-sub">'+totalNew+' new - '+totalLost+' lost</div></div>';
-      html += '<div class="kpi-summary-card"><div class="kpi-summary-icon" style="background:var(--accent-light);color:var(--accent)">\u{2B50}</div>';
-      html += '<div class="kpi-summary-label">New Members</div><div class="kpi-summary-value">'+totalNew+'</div>';
-      html += '<div class="kpi-summary-sub">'+curLabel+' total</div></div>';
-      html += '<div class="kpi-summary-card"><div class="kpi-summary-icon" style="background:var(--red-light);color:var(--red)">\u{26A0}</div>';
-      html += '<div class="kpi-summary-label">Attrition</div><div class="kpi-summary-value">'+attrPct+'%</div>';
-      html += '<div class="kpi-summary-sub">'+totalLost+' members lost</div></div>';
-      html += '<div class="kpi-summary-card"><div class="kpi-summary-icon" style="background:var(--orange-light);color:var(--orange)">\u{1F50D}</div>';
-      html += '<div class="kpi-summary-label">Leads</div><div class="kpi-summary-value">'+totalLeads+'</div>';
-      html += '<div class="kpi-summary-sub">'+curLabel+' pipeline</div></div>';
-      html += '<div class="kpi-summary-card"><div class="kpi-summary-icon" style="background:#f0e6ff;color:#7c3aed">\u{1F91D}</div>';
-      html += '<div class="kpi-summary-label">Intros</div><div class="kpi-summary-value">'+totalIntros+'</div>';
-      html += '<div class="kpi-summary-sub">'+curLabel+' total</div></div>';
-      html += '<div class="kpi-summary-card"><div class="kpi-summary-icon" style="background:var(--green-light);color:var(--green)">\u{1F3AF}</div>';
-      html += '<div class="kpi-summary-label">Conversion</div><div class="kpi-summary-value">'+convPct+'%</div>';
-      html += '<div class="kpi-summary-sub">Leads to members</div></div>';
-      html += '<div class="kpi-summary-card"><div class="kpi-summary-icon" style="background:var(--blue-light);color:var(--blue)">\u{1F680}</div>';
-      html += '<div class="kpi-summary-label">Upgrades</div><div class="kpi-summary-value">'+totalUpgrades+'</div>';
-      html += '<div class="kpi-summary-sub">'+curLabel+' total</div></div>';
-      html += '</div>';
+let html = '';
 
       html += '<div class="kpi-charts-section" style="margin-top:24px"><h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--primary)">Trend Charts</h3>';
       html += '<div class="kpi-charts-grid">';
