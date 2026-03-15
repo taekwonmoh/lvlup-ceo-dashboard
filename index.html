@@ -160,11 +160,30 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 /* Goal Tracker */
 .goal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; padding: 20px; }
-.goal-month { background: var(--gray-50); border-radius: 10px; padding: 14px; text-align: center; }
+.goal-month { background: var(--gray-50); border-radius: 10px; padding: 14px; text-align: center; position: relative; }
 .goal-month .month-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray-500); margin-bottom: 6px; }
 .goal-month input { width: 100%; border: 1px solid var(--gray-200); border-radius: 8px; padding: 6px; font-size: 14px; font-weight: 600; text-align: center; font-family: inherit; }
 .goal-month input:focus { outline: none; border-color: var(--accent); }
 .goal-month.has-value { background: var(--green-light); }
+.goal-month.is-current { border: 2px solid var(--blue); }
+.goal-month.is-current .month-label { color: var(--blue); font-weight: 700; }
+.goal-month .goal-cumulative { font-size: 10px; color: var(--gray-400); margin-top: 4px; }
+.goal-hero { display: flex; gap: 20px; padding: 24px; align-items: center; flex-wrap: wrap; }
+.goal-hero-main { flex: 1; min-width: 280px; }
+.goal-hero-title { font-size: 1.1rem; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
+.goal-hero-sub { font-size: 13px; color: var(--gray-500); margin-bottom: 12px; }
+.goal-hero-amount { font-size: 2.2rem; font-weight: 800; color: var(--primary); line-height: 1; }
+.goal-hero-target { font-size: 13px; color: var(--gray-500); margin-top: 4px; }
+.goal-progress-wrap { width: 100%; height: 20px; background: var(--gray-100); border-radius: 10px; overflow: hidden; margin-top: 12px; position: relative; }
+.goal-progress-fill { height: 100%; border-radius: 10px; transition: width 0.5s ease; background: linear-gradient(90deg, #4169E1, #16a34a); }
+.goal-progress-label { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 700; color: var(--primary); }
+.goal-hero-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+.goal-stat { background: var(--card); border: 1px solid var(--gray-100); border-radius: 10px; padding: 14px 18px; text-align: center; min-width: 110px; }
+.goal-stat-num { font-size: 1.3rem; font-weight: 800; color: var(--primary); }
+.goal-stat-label { font-size: 11px; color: var(--gray-500); margin-top: 2px; }
+.goal-target-input { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.goal-target-input label { font-size: 12px; font-weight: 600; color: var(--gray-500); }
+.goal-target-input input { border: 1px solid var(--gray-200); border-radius: 8px; padding: 6px 10px; font-size: 14px; font-weight: 600; width: 140px; font-family: inherit; }
 
 /* Financials Table */
 .fin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -1730,23 +1749,71 @@ function renderEventsPage() {
 /*  -  -  Goals Page  -  -  */
 function renderGoalsPage() {
   const goals = state.goals || {};
+  const target = parseFloat(goals._target) || 50000;
+  const now = new Date();
+  const currentMonthIdx = now.getMonth();
+  const currentMonthShort = MONTHS_SHORT[currentMonthIdx];
+
+  // Calculate totals and cumulative
   let total = 0;
-  MONTHS_SHORT.forEach(m => { total += parseFloat(goals[m]) || 0; });
-
-  let html = '<div class="section"><div class="section-header"><h2>2026 Goal Tracker</h2><div class="badge">Total: ' + fmtCurrency(total) + '</div></div>' +
-    '<div class="goal-grid">';
-
+  const cumulative = [];
   MONTHS_SHORT.forEach((m, i) => {
-    const val = goals[m] || '';
-    const hasVal = val !== '' && parseFloat(val) > 0;
-    html += '<div class="goal-month ' + (hasVal ? 'has-value' : '') + '">' +
-      '<div class="month-label">' + m + '</div>' +
-      '<input value="' + esc(String(val)) + '" placeholder="$0.00" onchange="updateGoal(' + i + ',this.value)" />' +
-      '</div>';
+    const val = parseFloat(goals[m]) || 0;
+    total += val;
+    cumulative[i] = total;
   });
 
+  const pct = target > 0 ? Math.min(Math.round(total / target * 100), 100) : 0;
+  const remaining = Math.max(target - total, 0);
+  const monthsLeft = 12 - currentMonthIdx;
+  const neededPerMonth = monthsLeft > 0 ? remaining / monthsLeft : 0;
+
+  let html = '<div class="section">';
+
+  // Hero section
+  html += '<div class="goal-hero">';
+  html += '<div class="goal-hero-main">';
+  html += '<div class="goal-hero-title">2026 Team Vacation Fund</div>';
+  html += '<div class="goal-hero-sub">Beat the goal and the team earns a vacation!</div>';
+  html += '<div class="goal-hero-amount">' + fmtCurrency(total) + '</div>';
+  html += '<div class="goal-hero-target">of ' + fmtCurrency(target) + ' goal</div>';
+  html += '<div class="goal-progress-wrap"><div class="goal-progress-fill" style="width:' + pct + '%"></div><span class="goal-progress-label">' + pct + '%</span></div>';
+  html += '<div class="goal-target-input"><label>Vacation Goal:</label><input value="' + target + '" placeholder="50000" onchange="updateGoalTarget(this.value)" /></div>';
+  html += '</div>';
+
+  // Stats
+  html += '<div class="goal-hero-stats">';
+  html += '<div class="goal-stat"><div class="goal-stat-num">' + fmtCurrency(remaining) + '</div><div class="goal-stat-label">Remaining</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num">' + fmtCurrency(neededPerMonth) + '</div><div class="goal-stat-label">Needed / Month</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num">' + monthsLeft + '</div><div class="goal-stat-label">Months Left</div></div>';
+  html += '</div>';
+  html += '</div>';
+
+  // Monthly grid
+  html += '<div class="goal-grid">';
+  MONTHS_SHORT.forEach((m, i) => {
+    const raw = parseFloat(goals[m]) || 0;
+    const val = raw ? raw.toFixed(2) : '';
+    const hasVal = raw > 0;
+    const isCurrent = i === currentMonthIdx;
+    let cls = 'goal-month';
+    if (hasVal) cls += ' has-value';
+    if (isCurrent) cls += ' is-current';
+    html += '<div class="' + cls + '">';
+    html += '<div class="month-label">' + m + (isCurrent ? ' (current)' : '') + '</div>';
+    html += '<input value="' + esc(String(val)) + '" placeholder="$0.00" onchange="updateGoal(' + i + ',this.value)" />';
+    if (cumulative[i] > 0) {
+      html += '<div class="goal-cumulative">Running: ' + fmtCurrency(cumulative[i]) + '</div>';
+    }
+    html += '</div>';
+  });
   html += '</div></div>';
+
   return html;
+}
+
+function updateGoalTarget(val) {
+  fbDebounce('goals/2026/_target', parseFloat(val) || 0);
 }
 
 /*  -  -  Connection Status  -  -  */
