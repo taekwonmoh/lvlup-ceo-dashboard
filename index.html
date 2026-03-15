@@ -1469,7 +1469,8 @@ function renderFinancialsPage() {
       html += '<td class="pct-cell ' + totalCls + '">' + esc(String(md.total || '')) + '</td>';
       html += '<td>' + esc(String(md.newMem || '')) + '</td>';
       html += '<td>' + esc(String(md.lost || '')) + '</td>';
-      html += '<td class="pct-cell ' + attrCls + '">' + esc(String(md.attrition || '')) + '</td>';
+      const attrDisplay = md.attrition ? (parseFloat(md.attrition) * 100).toFixed(1) + '%' : '';
+      html += '<td class="pct-cell ' + attrCls + '">' + esc(attrDisplay) + '</td>';
       html += '<td>' + esc(String(md.goal || '')) + '</td>';
       html += '</tr>';
     }
