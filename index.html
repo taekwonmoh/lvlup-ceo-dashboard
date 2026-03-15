@@ -364,6 +364,51 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .l10-date-display{font-size:15px;font-weight:700;color:var(--primary)}
 .l10-print-btn{padding:6px 14px;border-radius:8px;border:1px solid var(--gray-200);background:var(--card);cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-600)}
 .l10-print-btn:hover{background:var(--blue-light);border-color:var(--blue);color:var(--blue)}
+
+/* Watch List */
+.wl-filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.wl-filter-btn{padding:6px 14px;border-radius:8px;border:1px solid var(--gray-200);background:var(--card);cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-600);transition:all .15s}
+.wl-filter-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.wl-filter-btn:not(.active):hover{background:var(--gray-100)}
+.wl-count{font-size:12px;color:var(--gray-400);font-weight:600;margin-left:auto}
+.wl-card{background:var(--card);border-radius:12px;box-shadow:var(--shadow);margin-bottom:12px;border-left:4px solid var(--gray-300);overflow:hidden;transition:all .15s}
+.wl-card.warning{border-left-color:var(--orange)}
+.wl-card.critical{border-left-color:var(--red)}
+.wl-card-body{display:flex;align-items:center;padding:14px 20px;gap:16px}
+.wl-level{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.wl-level.warning{background:var(--orange-light);color:var(--orange)}
+.wl-level.critical{background:var(--red-light);color:var(--red)}
+.wl-info{flex:1;min-width:0}
+.wl-name{font-size:14px;font-weight:700;color:var(--primary)}
+.wl-meta{font-size:12px;color:var(--gray-400);margin-top:2px;display:flex;gap:12px;flex-wrap:wrap}
+.wl-guardian{font-size:12px;color:var(--gray-500);margin-top:2px}
+.wl-loc-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:6px;background:var(--gray-100);color:var(--gray-600);flex-shrink:0}
+.wl-actions{display:flex;gap:6px;flex-shrink:0}
+.wl-action-btn{padding:5px 12px;border-radius:6px;border:1px solid var(--gray-200);background:var(--card);cursor:pointer;font-size:11px;font-weight:600;transition:all .15s}
+.wl-action-btn:hover{background:var(--gray-100)}
+.wl-action-btn.contacted{background:var(--blue-light);color:var(--blue);border-color:var(--blue)}
+.wl-action-btn.resolved{background:var(--green-light);color:var(--green);border-color:var(--green)}
+.wl-note{padding:0 20px 12px 64px}
+.wl-note textarea{width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;resize:vertical;min-height:32px}
+.wl-note textarea:focus{outline:none;border-color:var(--accent)}
+.wl-empty{text-align:center;padding:60px 20px;color:var(--gray-400)}
+.wl-empty .wl-empty-icon{font-size:48px;margin-bottom:12px}
+.wl-empty p{font-size:14px}
+.wl-add-section{background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
+.wl-add-section h3{font-size:14px;font-weight:700;margin-bottom:12px}
+.wl-add-form{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.wl-add-form input,.wl-add-form select{border:1px solid var(--gray-200);border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit}
+.wl-add-form input:focus,.wl-add-form select:focus{outline:none;border-color:var(--accent)}
+.wl-add-form input{flex:1;min-width:150px}
+.wl-add-form .wl-add-submit{padding:8px 20px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:600}
+.wl-add-form .wl-add-submit:hover{opacity:.9}
+.wl-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.wl-stat-card{background:var(--card);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);text-align:center}
+.wl-stat-num{font-size:28px;font-weight:800}
+.wl-stat-num.warning-text{color:var(--orange)}
+.wl-stat-num.critical-text{color:var(--red)}
+.wl-stat-num.resolved-text{color:var(--green)}
+.wl-stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-top:2px}
     </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
@@ -400,7 +445,9 @@ let state = {
   kpis: {},
   cycles: {},
   l10: {},
-  l10WeekOffset: 0
+  l10WeekOffset: 0,
+  watchlist: {},
+  wlFilter: 'active'
 };
 
 let debounceTimers = {};
@@ -812,6 +859,11 @@ function listenAll() {
   const l10Ref = fbRef('l10');
   l10Ref.on('value', snap => { state.l10 = snap.val() || {}; render(); });
   activeListeners.push({ ref: l10Ref, event: 'value' });
+
+  // Watch list
+  const wlRef = fbRef('watchlist');
+  wlRef.on('value', snap => { state.watchlist = snap.val() || {}; render(); });
+  activeListeners.push({ ref: wlRef, event: 'value' });
 }
 
 /*  -  -  Navigation  -  -  */
@@ -907,7 +959,8 @@ function render() {
      s === 'goals' ? renderGoalsPage() :
           s === 'tasks' ? renderTasksPage() :
           s === 'monthlyGoals' ? renderMonthlyGoalsPage() :
-          s === 'l10' ? renderL10Page() : '');
+          s === 'l10' ? renderL10Page() :
+          s === 'watchlist' ? renderWatchListPage() : '');
     if(s === 'performance') initKPICharts();
 }
 
@@ -922,6 +975,7 @@ function renderHeader() {
         { id: 'tasks', label: 'Tasks' },
       { id: 'monthlyGoals', label: 'Monthly Goals' },
       { id: 'l10', label: 'L10 Meeting' },
+      { id: 'watchlist', label: 'Watch List' },
     ];
   return '<div class="header">' +
     '<h1><svg viewBox="0 0 110 30" height="26"><text x="0" y="24" font-family="Arial Black,sans-serif" font-weight="900" font-size="26" fill="#1a1a2e" letter-spacing="-1">LVL</text><text x="55" y="24" font-family="Arial Black,sans-serif" font-weight="900" font-size="26" fill="#4169E1" letter-spacing="-1">UP</text><path d="M67 3L70.5-1 74 3" stroke="#4169E1" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="color:#555;font-weight:300">/</span><svg viewBox="0 0 120 30" height="26"><text x="0" y="22" font-family="Impact,sans-serif" font-weight="900" font-size="16" fill="#e94560">GO</text><text x="26" y="25" font-family="Impact,sans-serif" font-weight="900" font-size="28" fill="#e94560" letter-spacing="0.5">NINJA</text></svg><span>HQ Dashboard</span></h1>' +
@@ -1810,6 +1864,120 @@ function renderMonthlyGoalsPage(){
     }
     if(field.type==='textarea'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><textarea class="goals-input" data-field-id="'+field.id+'" style="min-height:60px;resize:vertical;font-family:inherit;padding:8px" placeholder="Enter details..." onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea></div>';}if(field.type==='text'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>';}return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
   }
+/*  -  -  Watch List Page  -  -  */
+function setWlFilter(f) { state.wlFilter = f; render(); }
+
+function updateWlStatus(key, status) { fbSet('watchlist/' + key + '/status', status); }
+
+function updateWlNote(key, note) { fbDebounce('watchlist/' + key + '/notes', note); }
+
+function removeWlEntry(key) { fbSet('watchlist/' + key, null); }
+
+function addWlEntry() {
+  const name = document.getElementById('wlAddName').value.trim();
+  const loc = document.getElementById('wlAddLoc').value;
+  const level = document.getElementById('wlAddLevel').value;
+  if (!name) return;
+  const key = loc + '_manual_' + Date.now();
+  fbSet('watchlist/' + key, {
+    memberId: 'manual_' + Date.now(),
+    name: name,
+    location: loc,
+    level: level,
+    flaggedAt: new Date().toISOString(),
+    status: 'active',
+    manual: true
+  });
+  document.getElementById('wlAddName').value = '';
+}
+
+function getLocShort(locId) {
+  const loc = LOCATIONS.find(l => l.id === locId);
+  return loc ? loc.short : locId;
+}
+
+function renderWatchListPage() {
+  const entries = Object.entries(state.watchlist).map(([k, v]) => ({ key: k, ...v })).filter(e => e && e.name);
+  const filter = state.wlFilter;
+
+  // Stats
+  const active = entries.filter(e => e.status === 'active');
+  const contacted = entries.filter(e => e.status === 'contacted');
+  const resolved = entries.filter(e => e.status === 'resolved');
+  const warnings = active.filter(e => e.level === 'warning').length;
+  const criticals = active.filter(e => e.level === 'critical').length;
+
+  let html = '';
+
+  // Stats cards
+  html += '<div class="wl-stats">';
+  html += '<div class="wl-stat-card"><div class="wl-stat-num warning-text">' + warnings + '</div><div class="wl-stat-label">7-Day Absent</div></div>';
+  html += '<div class="wl-stat-card"><div class="wl-stat-num critical-text">' + criticals + '</div><div class="wl-stat-label">14-Day Absent</div></div>';
+  html += '<div class="wl-stat-card"><div class="wl-stat-num" style="color:var(--blue)">' + contacted.length + '</div><div class="wl-stat-label">Contacted</div></div>';
+  html += '<div class="wl-stat-card"><div class="wl-stat-num resolved-text">' + resolved.length + '</div><div class="wl-stat-label">Resolved</div></div>';
+  html += '</div>';
+
+  // Filters
+  html += '<div class="wl-filters">';
+  ['active', 'contacted', 'resolved', 'all'].forEach(f => {
+    const label = f === 'active' ? 'Active (' + active.length + ')' : f === 'contacted' ? 'Contacted (' + contacted.length + ')' : f === 'resolved' ? 'Resolved (' + resolved.length + ')' : 'All (' + entries.length + ')';
+    html += '<button class="wl-filter-btn ' + (filter === f ? 'active' : '') + '" onclick="setWlFilter(\'' + f + '\')">' + label + '</button>';
+  });
+  html += '</div>';
+
+  // Manual add form
+  html += '<div class="wl-add-section"><h3>Manually Add Student</h3><div class="wl-add-form">';
+  html += '<input id="wlAddName" placeholder="Student name..." />';
+  html += '<select id="wlAddLoc">';
+  LOCATIONS.forEach(l => { html += '<option value="' + l.id + '">' + l.short + '</option>'; });
+  html += '</select>';
+  html += '<select id="wlAddLevel"><option value="warning">7-Day (Yellow)</option><option value="critical">14-Day (Red)</option></select>';
+  html += '<button class="wl-add-submit" onclick="addWlEntry()">+ Add</button>';
+  html += '</div></div>';
+
+  // Filtered entries
+  let filtered = filter === 'all' ? entries : entries.filter(e => (filter === 'active' ? e.status === 'active' || !e.status : e.status === filter));
+  // Sort: critical first, then warning, then by date
+  filtered.sort((a, b) => {
+    if (a.level === 'critical' && b.level !== 'critical') return -1;
+    if (b.level === 'critical' && a.level !== 'critical') return 1;
+    return (b.flaggedAt || '').localeCompare(a.flaggedAt || '');
+  });
+
+  if (filtered.length === 0) {
+    html += '<div class="wl-empty"><div class="wl-empty-icon">\u2705</div><p>' + (entries.length === 0 ? 'No students on the watch list yet.<br>They\'ll appear here automatically from GymDesk when absent 7+ days.' : 'No students in this filter.') + '</p></div>';
+  } else {
+    filtered.forEach(e => {
+      const lvl = e.level || 'warning';
+      const icon = lvl === 'critical' ? '\u26a0' : '\u23f0';
+      const daysAgo = Math.floor((Date.now() - new Date(e.flaggedAt).getTime()) / 86400000);
+      const dateStr = new Date(e.flaggedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      html += '<div class="wl-card ' + lvl + '">';
+      html += '<div class="wl-card-body">';
+      html += '<div class="wl-level ' + lvl + '">' + icon + '</div>';
+      html += '<div class="wl-info"><div class="wl-name">' + esc(e.name) + '</div>';
+      if (e.guardian) html += '<div class="wl-guardian">Guardian: ' + esc(e.guardian) + '</div>';
+      html += '<div class="wl-meta">';
+      if (e.email) html += '<span>' + esc(e.email) + '</span>';
+      if (e.phone) html += '<span>' + esc(e.phone) + '</span>';
+      html += '<span>Flagged ' + dateStr + ' (' + daysAgo + 'd ago)</span>';
+      html += '</div></div>';
+      html += '<span class="wl-loc-badge">' + esc(getLocShort(e.location)) + '</span>';
+      html += '<div class="wl-actions">';
+      html += '<button class="wl-action-btn ' + (e.status === 'contacted' ? 'contacted' : '') + '" onclick="updateWlStatus(\'' + e.key + '\',\'contacted\')">Contacted</button>';
+      html += '<button class="wl-action-btn ' + (e.status === 'resolved' ? 'resolved' : '') + '" onclick="updateWlStatus(\'' + e.key + '\',\'resolved\')">Resolved</button>';
+      html += '<button class="wl-action-btn" onclick="if(confirm(\'Remove this student?\'))removeWlEntry(\'' + e.key + '\')" style="color:var(--red)">\u00d7</button>';
+      html += '</div></div>';
+      // Notes
+      html += '<div class="wl-note"><textarea placeholder="Add notes..." onchange="updateWlNote(\'' + e.key + '\',this.value)">' + esc(e.notes || '') + '</textarea></div>';
+      html += '</div>';
+    });
+  }
+
+  return html;
+}
+
 /*  -  -  L10 Meeting Page  -  -  */
 function getL10WeekKey(offset) {
   const now = new Date();
