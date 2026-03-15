@@ -1944,36 +1944,47 @@ function renderWatchListPage() {
     return (b.flaggedAt || '').localeCompare(a.flaggedAt || '');
   });
 
-  if (filtered.length === 0) {
-    html += '<div class="wl-empty"><div class="wl-empty-icon">\u2705</div><p>' + (entries.length === 0 ? 'No students on the watch list yet.<br>They\'ll appear here automatically from GymDesk when absent 7+ days.' : 'No students in this filter.') + '</p></div>';
-  } else {
-    filtered.forEach(e => {
-      const lvl = e.level || 'warning';
-      const icon = lvl === 'critical' ? '\u26a0' : '\u23f0';
-      const daysAgo = Math.floor((Date.now() - new Date(e.flaggedAt).getTime()) / 86400000);
-      const dateStr = new Date(e.flaggedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Group by location — always show all 3 LVLUP locations
+  const lvlupLocs = [
+    { id: 'waunakee', name: 'LVLUP Waunakee', color: '#1a1a2e' },
+    { id: 'eastmad', name: 'LVLUP East Madison', color: '#0f3460' },
+    { id: 'verona', name: 'LVLUP Verona', color: '#16537e' }
+  ];
 
-      html += '<div class="wl-card ' + lvl + '">';
-      html += '<div class="wl-card-body">';
-      html += '<div class="wl-level ' + lvl + '">' + icon + '</div>';
-      html += '<div class="wl-info"><div class="wl-name">' + esc(e.name) + '</div>';
-      if (e.guardian) html += '<div class="wl-guardian">Guardian: ' + esc(e.guardian) + '</div>';
-      html += '<div class="wl-meta">';
-      if (e.email) html += '<span>' + esc(e.email) + '</span>';
-      if (e.phone) html += '<span>' + esc(e.phone) + '</span>';
-      html += '<span>Flagged ' + dateStr + ' (' + daysAgo + 'd ago)</span>';
-      html += '</div></div>';
-      html += '<span class="wl-loc-badge">' + esc(getLocShort(e.location)) + '</span>';
-      html += '<div class="wl-actions">';
-      html += '<button class="wl-action-btn ' + (e.status === 'contacted' ? 'contacted' : '') + '" onclick="updateWlStatus(\'' + e.key + '\',\'contacted\')">Contacted</button>';
-      html += '<button class="wl-action-btn ' + (e.status === 'resolved' ? 'resolved' : '') + '" onclick="updateWlStatus(\'' + e.key + '\',\'resolved\')">Resolved</button>';
-      html += '<button class="wl-action-btn" onclick="if(confirm(\'Remove this student?\'))removeWlEntry(\'' + e.key + '\')" style="color:var(--red)">\u00d7</button>';
-      html += '</div></div>';
-      // Notes
-      html += '<div class="wl-note"><textarea placeholder="Add notes..." onchange="updateWlNote(\'' + e.key + '\',this.value)">' + esc(e.notes || '') + '</textarea></div>';
-      html += '</div>';
-    });
-  }
+  lvlupLocs.forEach(loc => {
+    const locEntries = filtered.filter(e => e.location === loc.id);
+    html += '<div class="section" style="margin-bottom:20px"><div class="section-header" style="border-left:4px solid ' + loc.color + '"><h2>' + loc.name + '</h2><div class="badge">' + locEntries.length + ' student' + (locEntries.length !== 1 ? 's' : '') + '</div></div>';
+
+    if (locEntries.length === 0) {
+      html += '<div style="padding:24px 20px;text-align:center;color:var(--gray-400);font-size:13px">No students on watch list for this location</div>';
+    } else {
+      locEntries.forEach(e => {
+        const lvl = e.level || 'warning';
+        const icon = lvl === 'critical' ? '\u26a0' : '\u23f0';
+        const daysAgo = Math.floor((Date.now() - new Date(e.flaggedAt).getTime()) / 86400000);
+        const dateStr = new Date(e.flaggedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        html += '<div class="wl-card ' + lvl + '" style="margin:8px 12px;border-radius:10px">';
+        html += '<div class="wl-card-body">';
+        html += '<div class="wl-level ' + lvl + '">' + icon + '</div>';
+        html += '<div class="wl-info"><div class="wl-name">' + esc(e.name) + '</div>';
+        if (e.guardian) html += '<div class="wl-guardian">Guardian: ' + esc(e.guardian) + '</div>';
+        html += '<div class="wl-meta">';
+        if (e.email) html += '<span>' + esc(e.email) + '</span>';
+        if (e.phone) html += '<span>' + esc(e.phone) + '</span>';
+        html += '<span>Flagged ' + dateStr + ' (' + daysAgo + 'd ago)</span>';
+        html += '</div></div>';
+        html += '<div class="wl-actions">';
+        html += '<button class="wl-action-btn ' + (e.status === 'contacted' ? 'contacted' : '') + '" onclick="updateWlStatus(\'' + e.key + '\',\'contacted\')">Contacted</button>';
+        html += '<button class="wl-action-btn ' + (e.status === 'resolved' ? 'resolved' : '') + '" onclick="updateWlStatus(\'' + e.key + '\',\'resolved\')">Resolved</button>';
+        html += '<button class="wl-action-btn" onclick="if(confirm(\'Remove this student?\'))removeWlEntry(\'' + e.key + '\')" style="color:var(--red)">\u00d7</button>';
+        html += '</div></div>';
+        html += '<div class="wl-note"><textarea placeholder="Add notes..." onchange="updateWlNote(\'' + e.key + '\',this.value)">' + esc(e.notes || '') + '</textarea></div>';
+        html += '</div>';
+      });
+    }
+    html += '</div>';
+  });
 
   return html;
 }
