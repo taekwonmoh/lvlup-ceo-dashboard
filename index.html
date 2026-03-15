@@ -1461,7 +1461,12 @@ function renderFinancialsPage() {
       })();
       html += '<tr>';
       html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
-      html += '<td>' + esc(String(md.total || '')) + '</td>';
+      const totalCls = (() => {
+        const t = parseFloat(md.total), g = parseFloat(md.goal);
+        if (isNaN(t) || !t || isNaN(g) || !g) return '';
+        return t >= g ? 'pct-green' : 'pct-red';
+      })();
+      html += '<td class="pct-cell ' + totalCls + '">' + esc(String(md.total || '')) + '</td>';
       html += '<td>' + esc(String(md.newMem || '')) + '</td>';
       html += '<td>' + esc(String(md.lost || '')) + '</td>';
       html += '<td class="pct-cell ' + attrCls + '">' + esc(String(md.attrition || '')) + '</td>';
