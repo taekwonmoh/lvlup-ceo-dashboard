@@ -1205,12 +1205,23 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
       const metricsForPerson = person.metrics ? allMetrics.filter(m => person.metrics.includes(m.id)) : allMetrics;
       metricsForPerson.forEach(metric => {
         const rawVal = weekData[loc.id] && weekData[loc.id][person.id] ? weekData[loc.id][person.id][metric.id] : undefined;
-        const val = rawVal !== undefined && rawVal !== null && rawVal !== '' ? (metric.pct ? (parseFloat(rawVal) * 100).toFixed(1) + '%' : rawVal) : 0;
+        const numVal = parseFloat(rawVal) || 0;
         const rawGoal = goalsData[loc.id] && goalsData[loc.id][person.id] && goalsData[loc.id][person.id][metric.id];
-        const goalVal = rawGoal !== undefined && rawGoal !== null ? (metric.pct ? (rawGoal * 100).toFixed(1) + '%' : rawGoal) : '';
+        const goalVal = rawGoal !== undefined && rawGoal !== null ? (metric.pct ? (parseFloat(rawGoal) * 100).toFixed(1) + '%' : rawGoal) : '';
+        const displayVal = metric.pct ? (numVal * 100).toFixed(1) + '%' : numVal;
+        // Color logic: attrition is "lower is better", everything else is "higher is better"
+        let valColor = '';
+        if (rawGoal !== undefined && rawGoal !== null && rawVal !== undefined && rawVal !== null && rawVal !== '') {
+          const goalNum = parseFloat(rawGoal) || 0;
+          if (metric.id === 'attrition') {
+            valColor = numVal <= goalNum ? 'color:#10b981' : 'color:#ef4444';
+          } else {
+            valColor = numVal >= goalNum ? 'color:#10b981' : 'color:#ef4444';
+          }
+        }
         tableHtml += '<tr><td>' + person.name + '</td><td>' + metric.label + '</td>' +
           '<td>' + goalVal + '</td>' +
-          '<td><input value="' + esc(String(rawVal !== undefined && rawVal !== null && rawVal !== '' ? rawVal : 0)) + '" onchange="updateScorecard(\'' + loc.id + '\',\'' + person.id + '\',\'' + metric.id + '\',0,this.value)" /></td></tr>';
+          '<td style="' + valColor + ';font-weight:600"><input style="' + valColor + ';font-weight:600" value="' + esc(String(rawVal !== undefined && rawVal !== null && rawVal !== '' ? rawVal : 0)) + '" onchange="updateScorecard(\'' + loc.id + '\',\'' + person.id + '\',\'' + metric.id + '\',0,this.value)" /></td></tr>';
       });
     });
   });
