@@ -1017,7 +1017,7 @@ function renderHeader() {
       { id: 'watchlist', label: 'Watch List' },
     ];
   return '<div class="header">' +
-    '<h1><svg viewBox="0 0 110 30" height="26"><text x="0" y="24" font-family="Arial Black,sans-serif" font-weight="900" font-size="26" fill="#1a1a2e" letter-spacing="-1">LVL</text><text x="55" y="24" font-family="Arial Black,sans-serif" font-weight="900" font-size="26" fill="#4169E1" letter-spacing="-1">UP</text><path d="M67 3L70.5-1 74 3" stroke="#4169E1" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="color:#555;font-weight:300">/</span><svg viewBox="0 0 120 30" height="26"><text x="0" y="22" font-family="Impact,sans-serif" font-weight="900" font-size="16" fill="#e94560">GO</text><text x="26" y="25" font-family="Impact,sans-serif" font-weight="900" font-size="28" fill="#e94560" letter-spacing="0.5">NINJA</text></svg><span>HQ Dashboard</span></h1>' +
+    '<h1><span style="font-family:Arial Black,sans-serif;font-weight:900;color:#4169E1;letter-spacing:-1px;font-size:1.4rem">LVLUP</span> <span style="color:#999;font-weight:300">/</span> <span style="font-family:Arial Black,sans-serif;font-weight:900;color:#e94560;letter-spacing:-0.5px;font-size:1.4rem">Go Ninja</span> <span>HQ Dashboard</span></h1>' +
     '<div class="nav-tabs">' +
     sections.map(s => '<button class="nav-tab ' + (state.activeSection === s.id ? 'active' : '') + '" onclick="setSection(\'' + s.id + '\')">' + s.label + '</button>').join('') +
     '</div></div>';
