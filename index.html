@@ -1329,13 +1329,15 @@ function initKPICharts(){
   metrics.forEach(m=>{
     const canvas=document.getElementById(m.id);
     if(!canvas)return;
+    const isAttrition = m.field === 'attrition';
     const datasets=LOCATIONS.map((loc,li)=>{
       const memData=state.membership[loc.id]||{};
-      const data=labels.map((lbl,i)=>{const md=memData[monthFull[i]]||{};return md[m.field]||0;});
+      const data=labels.map((lbl,i)=>{const md=memData[monthFull[i]]||{};const v=md[m.field]||0;return isAttrition?+(v*100).toFixed(1):v;});
       return{label:loc.short,data,backgroundColor:colors[li%colors.length],borderRadius:4};
     });
+    const chartOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:8,font:{size:11}}},tooltip:{callbacks:isAttrition?{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toFixed(1)+'%';}}:{}}},scales:{y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.06)'},ticks:isAttrition?{callback:function(v){return v+'%';}}:{}},x:{grid:{display:false}}}};
     if(canvas._chart)canvas._chart.destroy();
-    canvas._chart=new Chart(canvas,{type:'bar',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:8,font:{size:11}}}},scales:{y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.06)'}},x:{grid:{display:false}}}}});
+    canvas._chart=new Chart(canvas,{type:'bar',data:{labels,datasets},options:chartOpts});
   });
 }
 
