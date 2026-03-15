@@ -324,8 +324,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .home-event-date{background:var(--accent-light);color:var(--accent);font-weight:700;font-size:11px;padding:8px 10px;border-radius:8px;min-width:52px;text-align:center;line-height:1.3}
 .home-event-date .evt-month{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;display:block}
 .home-event-date .evt-day{font-size:18px;display:block}
+.home-event-item.loc-waunakee .home-event-date{background:rgba(124,58,237,0.12);color:#7c3aed}
+.home-event-item.loc-eastmad .home-event-date{background:rgba(22,163,74,0.12);color:#16a34a}
+.home-event-item.loc-verona .home-event-date{background:rgba(234,88,12,0.12);color:#ea580c}
+.home-event-item.loc-waunakee{border-left:3px solid #7c3aed;padding-left:10px}
+.home-event-item.loc-eastmad{border-left:3px solid #16a34a;padding-left:10px}
+.home-event-item.loc-verona{border-left:3px solid #ea580c;padding-left:10px}
 .home-event-name{font-size:13px;font-weight:600;flex:1}
-.home-event-loc{font-size:11px;color:var(--gray-400)}
+.home-event-loc{font-size:11px;color:var(--gray-400);font-weight:600}
+.home-event-link{font-size:11px;color:var(--blue);text-decoration:none;font-weight:600}
+.home-event-link:hover{text-decoration:underline}
 .home-empty{text-align:center;color:var(--gray-400);font-size:13px;padding:20px}
 
     /* --- KPI Summary Cards --- */
@@ -1162,10 +1170,13 @@ function renderHomePage() {
     upcoming.forEach(e => {
       const d = new Date(e.date + 'T00:00:00');
       const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      html += '<div class="home-event-item">';
+      const locCls = e.loc ? ' loc-' + e.loc : '';
+      const locLabel = e.loc === 'waunakee' ? 'Waunakee' : e.loc === 'eastmad' ? 'E. Madison' : e.loc === 'verona' ? 'Verona' : '';
+      html += '<div class="home-event-item' + locCls + '">';
       html += '<div class="home-event-date"><span class="evt-month">' + monthNames[d.getMonth()] + '</span><span class="evt-day">' + d.getDate() + '</span></div>';
-      html += '<div class="home-event-name">' + esc(e.name || e.title || '') + '</div>';
-      html += '<div class="home-event-loc">' + esc(e.location || e.loc || '') + '</div>';
+      html += '<div class="home-event-name">' + esc(e.event || e.name || e.title || '') + '</div>';
+      if (locLabel) html += '<div class="home-event-loc">' + locLabel + '</div>';
+      if (e.link) html += '<a class="home-event-link" href="' + esc(e.link) + '" target="_blank">GymDesk \u2192</a>';
       html += '</div>';
     });
   }
