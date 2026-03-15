@@ -1457,7 +1457,7 @@ function renderFinancialsPage() {
       const attrCls = (() => {
         const n = parseFloat(String(md.attrition || '').replace('%',''));
         if (isNaN(n) || n === 0) return '';
-        return n <= 1 ? 'pct-green' : n <= 2 ? 'pct-orange' : 'pct-red';
+        return n <= 0.03 ? 'pct-green' : 'pct-red';
       })();
       html += '<tr>';
       html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
