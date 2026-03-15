@@ -330,6 +330,40 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     .kpi-input { border:1px solid transparent; background:transparent; padding:3px 6px; border-radius:4px; width:60px; font-size:0.82rem; text-align:right; transition:border-color 0.2s,background 0.2s; }
     .kpi-input:hover { border-color:var(--gray-200); background:var(--gray-50); }
     .kpi-input:focus { border-color:var(--blue); background:#fff; outline:none; box-shadow:0 0 0 2px var(--blue-light); }
+/* L10 Meeting */
+.l10-week-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;background:var(--card);border-radius:10px;padding:3px;box-shadow:var(--shadow)}
+.l10-week-tab{padding:8px 14px;border-radius:8px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-500);transition:all .15s;white-space:nowrap}
+.l10-week-tab.active{background:var(--primary);color:#fff}
+.l10-week-tab:not(.active):hover{background:var(--gray-100)}
+.l10-week-tab.future{opacity:.5}
+.l10-section{background:var(--card);border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.l10-section-header{padding:14px 20px;border-bottom:1px solid var(--gray-100);display:flex;justify-content:space-between;align-items:center}
+.l10-section-header h3{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.l10-section-header .l10-num{width:24px;height:24px;border-radius:6px;background:var(--blue-light);color:var(--blue);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.l10-section-header .l10-duration{font-size:11px;color:var(--gray-400);font-weight:600}
+.l10-table{width:100%;border-collapse:collapse;font-size:13px}
+.l10-table th{background:var(--gray-50);padding:8px 12px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--gray-500);border-bottom:2px solid var(--gray-200)}
+.l10-table td{padding:8px 12px;border-bottom:1px solid var(--gray-100);vertical-align:top}
+.l10-table tr:hover{background:var(--gray-50)}
+.l10-table input,.l10-table select{border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:6px;font-size:13px;font-family:inherit;width:100%}
+.l10-table input:hover,.l10-table select:hover{border-color:var(--gray-300);background:var(--gray-50)}
+.l10-table input:focus,.l10-table select:focus{outline:none;border-color:var(--accent);background:#fff}
+.l10-table .who-col{width:140px}
+.l10-table .status-col{width:110px}
+.l10-table .priority-col{width:80px}
+.l10-table .del-col{width:36px;text-align:center}
+.l10-del-btn{background:none;border:none;color:var(--gray-300);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:4px;transition:all .15s}
+.l10-del-btn:hover{color:var(--red);background:var(--red-light)}
+.l10-add-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;margin:12px 20px;border-radius:8px;border:1px dashed var(--gray-300);background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-500);transition:all .15s}
+.l10-add-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-light)}
+.l10-status-done{color:var(--green);font-weight:600}
+.l10-status-notdone{color:var(--red);font-weight:600}
+.l10-conclude-list{padding:16px 20px;font-size:13px;color:var(--gray-600);line-height:1.8}
+.l10-conclude-list li{margin-bottom:4px}
+.l10-header-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+.l10-date-display{font-size:15px;font-weight:700;color:var(--primary)}
+.l10-print-btn{padding:6px 14px;border-radius:8px;border:1px solid var(--gray-200);background:var(--card);cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-600)}
+.l10-print-btn:hover{background:var(--blue-light);border-color:var(--blue);color:var(--blue)}
     </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
@@ -364,7 +398,9 @@ let state = {
   financials: { waunakee: {}, eastmad: {}, verona: {} },
   membership: { waunakee: {}, eastmad: {}, verona: {} },
   kpis: {},
-  cycles: {}
+  cycles: {},
+  l10: {},
+  l10WeekOffset: 0
 };
 
 let debounceTimers = {};
@@ -771,6 +807,11 @@ function listenAll() {
   const cyclesRef = fbRef('cycles');
   cyclesRef.on('value', snap => { state.cycles = snap.val() || {}; render(); });
   activeListeners.push({ ref: cyclesRef, event: 'value' });
+
+  // L10 meetings
+  const l10Ref = fbRef('l10');
+  l10Ref.on('value', snap => { state.l10 = snap.val() || {}; render(); });
+  activeListeners.push({ ref: l10Ref, event: 'value' });
 }
 
 /*  -  -  Navigation  -  -  */
@@ -865,7 +906,8 @@ function render() {
      s === 'events' ? renderEventsPage() :
      s === 'goals' ? renderGoalsPage() :
           s === 'tasks' ? renderTasksPage() :
-          s === 'monthlyGoals' ? renderMonthlyGoalsPage() : '');
+          s === 'monthlyGoals' ? renderMonthlyGoalsPage() :
+          s === 'l10' ? renderL10Page() : '');
     if(s === 'performance') initKPICharts();
 }
 
@@ -879,6 +921,7 @@ function renderHeader() {
     { id: 'goals', label: 'Goal Tracker' },
         { id: 'tasks', label: 'Tasks' },
       { id: 'monthlyGoals', label: 'Monthly Goals' },
+      { id: 'l10', label: 'L10 Meeting' },
     ];
   return '<div class="header">' +
     '<h1><svg viewBox="0 0 110 30" height="26"><text x="0" y="24" font-family="Arial Black,sans-serif" font-weight="900" font-size="26" fill="#1a1a2e" letter-spacing="-1">LVL</text><text x="55" y="24" font-family="Arial Black,sans-serif" font-weight="900" font-size="26" fill="#4169E1" letter-spacing="-1">UP</text><path d="M67 3L70.5-1 74 3" stroke="#4169E1" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="color:#555;font-weight:300">/</span><svg viewBox="0 0 120 30" height="26"><text x="0" y="22" font-family="Impact,sans-serif" font-weight="900" font-size="16" fill="#e94560">GO</text><text x="26" y="25" font-family="Impact,sans-serif" font-weight="900" font-size="28" fill="#e94560" letter-spacing="0.5">NINJA</text></svg><span>HQ Dashboard</span></h1>' +
@@ -1153,7 +1196,7 @@ function renderKPIsPage() {
       const monthKeys=['january','february','march','april','may','june','july','august','september','october','november','december'];
       const now = new Date();
       const curMonthIdx = now.getMonth();
-let html = '';
+      let html = '';
 
       html += '<div class="kpi-charts-section" style="margin-top:24px"><h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--primary)">Trend Charts</h3>';
       html += '<div class="kpi-charts-grid">';
@@ -1433,6 +1476,7 @@ function renderEventsPage() {
     return '<div class="section"><div style="padding:40px;text-align:center;color:var(--gray-400);">No events configured yet</div></div>';
   }
 
+  // Group events by month
   const monthGroups = {};
   const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const monthLabels = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -1468,6 +1512,7 @@ function renderEventsPage() {
 
     html += '<div class="section" style="margin-bottom:24px;">';
     html += '<div class="section-header"><h2>' + monthLabel + '</h2><div class="badge">' + evts.length + ' events</div></div>';
+
     // Calendar grid
     html += '<div class="cal-grid">';
     // Day headers
@@ -1765,6 +1810,156 @@ function renderMonthlyGoalsPage(){
     }
     if(field.type==='textarea'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><textarea class="goals-input" data-field-id="'+field.id+'" style="min-height:60px;resize:vertical;font-family:inherit;padding:8px" placeholder="Enter details..." onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea></div>';}if(field.type==='text'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>';}return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
   }
+/*  -  -  L10 Meeting Page  -  -  */
+function getL10WeekKey(offset) {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1) + (offset * 7);
+  const mon = new Date(new Date(now).setDate(diff));
+  return mon.getFullYear() + '-' + String(mon.getMonth()+1).padStart(2,'0') + '-' + String(mon.getDate()).padStart(2,'0');
+}
+
+function getL10WeekLabel(offset) {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1) + (offset * 7);
+  const mon = new Date(new Date(now).setDate(diff));
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[mon.getMonth()] + ' ' + mon.getDate();
+}
+
+function setL10Week(offset) { state.l10WeekOffset = offset; render(); }
+
+function getL10Data(weekKey) { return state.l10[weekKey] || {}; }
+
+function updateL10Field(weekKey, section, index, field, value) {
+  fbDebounce('l10/' + weekKey + '/' + section + '/' + index + '/' + field, value);
+}
+
+function addL10Row(weekKey, section) {
+  const data = getL10Data(weekKey);
+  const arr = data[section] || [];
+  const newIdx = arr.length;
+  fbSet('l10/' + weekKey + '/' + section + '/' + newIdx, section === 'todos' ? { who: '', task: '', status: '' } : section === 'issues' ? { priority: '', issue: '' } : { text: '' });
+}
+
+function removeL10Row(weekKey, section, index) {
+  const data = getL10Data(weekKey);
+  const arr = Array.isArray(data[section]) ? [...data[section]] : [];
+  arr.splice(index, 1);
+  fbSet('l10/' + weekKey + '/' + section, arr.length ? arr : null);
+}
+
+function updateL10Note(weekKey, field, value) {
+  fbDebounce('l10/' + weekKey + '/' + field, value);
+}
+
+function copyL10FromPrevious(weekKey) {
+  const prevKey = getL10WeekKey(state.l10WeekOffset - 1);
+  const prevData = getL10Data(prevKey);
+  if (!prevData || (!prevData.todos && !prevData.issues)) { alert('No previous week data to copy.'); return; }
+  const newData = {};
+  if (prevData.todos) {
+    newData.todos = prevData.todos.map(t => ({ who: t.who || '', task: t.task || '', status: '' }));
+  }
+  if (prevData.issues) {
+    newData.issues = prevData.issues.filter(i => i && i.issue).map(i => ({ priority: i.priority || '', issue: i.issue }));
+  }
+  fbSet('l10/' + weekKey, newData);
+}
+
+function renderL10Page() {
+  const currentOffset = state.l10WeekOffset;
+  const weekKey = getL10WeekKey(currentOffset);
+  const data = getL10Data(weekKey);
+
+  // Generate week tabs: 8 past + current + 2 future
+  let tabsHtml = '<div class="l10-week-tabs">';
+  for (let i = -8; i <= 2; i++) {
+    const label = getL10WeekLabel(i);
+    const cls = i === currentOffset ? 'active' : (i > 0 ? 'future' : '');
+    tabsHtml += '<button class="l10-week-tab ' + cls + '" onclick="setL10Week(' + i + ')">' + label + '</button>';
+  }
+  tabsHtml += '</div>';
+
+  // Meeting date display
+  const meetDate = new Date(weekKey + 'T00:00:00');
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dateStr = dayNames[meetDate.getDay()] + ', ' + monthNames[meetDate.getMonth()] + ' ' + meetDate.getDate() + ', ' + meetDate.getFullYear();
+
+  let html = tabsHtml;
+  html += '<div class="l10-header-bar">';
+  html += '<div class="l10-date-display">LVLUP Weekly Agenda \u2014 ' + dateStr + '</div>';
+  const hasData = data && (data.todos || data.issues || data.headlines || data.segue);
+  if (!hasData) {
+    html += '<button class="l10-print-btn" onclick="copyL10FromPrevious(\'' + weekKey + '\')">Copy from Previous Week</button>';
+  }
+  html += '</div>';
+
+  // 1. Segue (5 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">1</span>Segue</h3><span class="l10-duration">5 min</span></div>';
+  html += '<div style="padding:12px 20px;font-size:13px;color:var(--gray-500)">Personal &amp; Business Bests</div>';
+  html += '<div style="padding:0 20px 16px"><textarea style="width:100%;min-height:60px;border:1px solid var(--gray-200);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;resize:vertical" placeholder="Share personal and business wins..." onchange="updateL10Note(\'' + weekKey + '\',\'segue\',this.value)">' + esc(data.segue || '') + '</textarea></div></div>';
+
+  // 2. Scorecard Review (5 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">2</span>Scorecard Review</h3><span class="l10-duration">5 min</span></div>';
+  html += '<div style="padding:12px 20px;font-size:13px;color:var(--gray-500)">Review weekly scorecard numbers. <a href="#" onclick="event.preventDefault();setSection(\'scorecard\')" style="color:var(--blue);font-weight:600">Go to Scorecard \u2192</a></div></div>';
+
+  // 3. Rock Review (5 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">3</span>Rock Review</h3><span class="l10-duration">5 min</span></div>';
+  html += '<div style="padding:12px 20px;font-size:13px;color:var(--gray-500)">On Track / Off Track. <a href="#" onclick="event.preventDefault();setSection(\'rocks\')" style="color:var(--blue);font-weight:600">Go to Rocks \u2192</a></div></div>';
+
+  // 4. Customer / Employee Headlines (5 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">4</span>Customer / Employee Headlines</h3><span class="l10-duration">5 min</span></div>';
+  const headlines = Array.isArray(data.headlines) ? data.headlines : [];
+  html += '<table class="l10-table"><thead><tr><th>Good / Bad</th><th>Headline</th><th class="del-col"></th></tr></thead><tbody>';
+  headlines.forEach((h, i) => {
+    if (!h) return;
+    html += '<tr><td style="width:100px"><select onchange="updateL10Field(\'' + weekKey + '\',\'headlines\',' + i + ',\'type\',this.value)"><option value="">--</option><option value="good"' + (h.type === 'good' ? ' selected' : '') + '>Good</option><option value="bad"' + (h.type === 'bad' ? ' selected' : '') + '>Bad</option></select></td>';
+    html += '<td><input value="' + esc(h.text || '') + '" placeholder="Headline..." onchange="updateL10Field(\'' + weekKey + '\',\'headlines\',' + i + ',\'text\',this.value)" /></td>';
+    html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'headlines\',' + i + ')">\u00d7</button></td></tr>';
+  });
+  html += '</tbody></table>';
+  html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'headlines\')">+ Add Headline</button></div>';
+
+  // 5. To-Do List (5 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">5</span>To-Do List</h3><span class="l10-duration">5 min</span></div>';
+  const todos = Array.isArray(data.todos) ? data.todos : [];
+  html += '<table class="l10-table"><thead><tr><th class="who-col">Who</th><th>To-Do</th><th class="status-col">Done / Not Done</th><th class="del-col"></th></tr></thead><tbody>';
+  todos.forEach((t, i) => {
+    if (!t) return;
+    const statusCls = t.status === 'done' ? 'l10-status-done' : t.status === 'notdone' ? 'l10-status-notdone' : '';
+    html += '<tr><td class="who-col"><input value="' + esc(t.who || '') + '" placeholder="Name..." onchange="updateL10Field(\'' + weekKey + '\',\'todos\',' + i + ',\'who\',this.value)" /></td>';
+    html += '<td><input value="' + esc(t.task || '') + '" placeholder="Task description..." onchange="updateL10Field(\'' + weekKey + '\',\'todos\',' + i + ',\'task\',this.value)" /></td>';
+    html += '<td class="status-col"><select class="' + statusCls + '" onchange="updateL10Field(\'' + weekKey + '\',\'todos\',' + i + ',\'status\',this.value)"><option value="">--</option><option value="done"' + (t.status === 'done' ? ' selected' : '') + '>Done</option><option value="notdone"' + (t.status === 'notdone' ? ' selected' : '') + '>Not Done</option></select></td>';
+    html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'todos\',' + i + ')">\u00d7</button></td></tr>';
+  });
+  html += '</tbody></table>';
+  html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'todos\')">+ Add To-Do</button></div>';
+
+  // 6. Issues List (IDS - 60 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">6</span>Issues List</h3><span class="l10-duration">60 min</span></div>';
+  html += '<div style="padding:8px 20px 0;font-size:12px;color:var(--gray-400);font-weight:600">IDS: Identify, Discuss, Solve</div>';
+  const issues = Array.isArray(data.issues) ? data.issues : [];
+  html += '<table class="l10-table"><thead><tr><th class="priority-col">Priority</th><th>Issue</th><th class="del-col"></th></tr></thead><tbody>';
+  issues.forEach((is, i) => {
+    if (!is) return;
+    html += '<tr><td class="priority-col"><input value="' + esc(is.priority || '') + '" placeholder="#" style="width:50px;text-align:center" onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'priority\',this.value)" /></td>';
+    html += '<td><input value="' + esc(is.issue || '') + '" placeholder="Issue description..." onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'issue\',this.value)" /></td>';
+    html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'issues\',' + i + ')">\u00d7</button></td></tr>';
+  });
+  html += '</tbody></table>';
+  html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'issues\')">+ Add Issue</button></div>';
+
+  // 7. Conclude (5 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">7</span>Conclude</h3><span class="l10-duration">5 min</span></div>';
+  html += '<ul class="l10-conclude-list"><li><strong>Recap To-Do List</strong> \u2014 Review all action items assigned today</li><li><strong>Cascading Messages</strong> \u2014 Communicate out to other team members or community</li></ul>';
+  html += '<div style="padding:0 20px 16px"><textarea style="width:100%;min-height:50px;border:1px solid var(--gray-200);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;resize:vertical" placeholder="Cascading messages and notes..." onchange="updateL10Note(\'' + weekKey + '\',\'conclude\',this.value)">' + esc(data.conclude || '') + '</textarea></div></div>';
+
+  return html;
+}
+
   async function init() {
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
   seedIfEmpty();
