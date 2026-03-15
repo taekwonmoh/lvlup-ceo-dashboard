@@ -1929,7 +1929,7 @@ function renderWatchListPage() {
   html += '<div class="wl-add-section"><h3>Manually Add Student</h3><div class="wl-add-form">';
   html += '<input id="wlAddName" placeholder="Student name..." />';
   html += '<select id="wlAddLoc">';
-  LOCATIONS.forEach(l => { html += '<option value="' + l.id + '">' + l.short + '</option>'; });
+  LOCATIONS.filter(l => !l.id.startsWith('goninja')).forEach(l => { html += '<option value="' + l.id + '">' + l.short + '</option>'; });
   html += '</select>';
   html += '<select id="wlAddLevel"><option value="warning">7-Day (Yellow)</option><option value="critical">14-Day (Red)</option></select>';
   html += '<button class="wl-add-submit" onclick="addWlEntry()">+ Add</button>';
