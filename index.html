@@ -483,9 +483,9 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
 const SCORECARD_PEOPLE = {
-  waunakee: [{ id: 'goad', name: 'Mr. Goad' }, { id: 'msk', name: 'Ms. K' }],
-  eastmad: [{ id: 'bein', name: 'Mrs. Bein' }, { id: 'msk_em', name: 'Ms. K' }],
-  verona: [{ id: 'mrz', name: 'Mr. Z' }, { id: 'msk_v', name: 'Ms. K' }],
+  waunakee: [{ id: 'goad', name: 'Mr. Goad', metrics: ['attrition','newMembers','leads','leadToTrial'] }, { id: 'msk', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
+  eastmad: [{ id: 'bein', name: 'Mrs. Bein', metrics: ['attrition','newMembers','leads','leadToTrial'] }, { id: 'msk_em', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
+  verona: [{ id: 'mrz', name: 'Mr. Z', metrics: ['attrition','newMembers','leads','leadToTrial'] }, { id: 'msk_v', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
   goninjaW: [{ id: 'smith', name: 'Ms. Smith' }],
   goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
 };
@@ -1201,8 +1201,9 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
     tableHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
     const people = SCORECARD_PEOPLE[loc.id] || [];
     people.forEach(person => {
-      const metricsForLoc = (loc.id === 'goninjaW' || loc.id === 'goninjaV') ? GONINJA_METRICS : WEEKLY_METRICS;
-      metricsForLoc.forEach(metric => {
+      const allMetrics = (loc.id === 'goninjaW' || loc.id === 'goninjaV') ? GONINJA_METRICS : WEEKLY_METRICS;
+      const metricsForPerson = person.metrics ? allMetrics.filter(m => person.metrics.includes(m.id)) : allMetrics;
+      metricsForPerson.forEach(metric => {
         const rawVal = weekData[loc.id] && weekData[loc.id][person.id] ? weekData[loc.id][person.id][metric.id] : undefined;
         const val = rawVal !== undefined && rawVal !== null && rawVal !== '' ? (metric.pct ? (parseFloat(rawVal) * 100).toFixed(1) + '%' : rawVal) : 0;
         const rawGoal = goalsData[loc.id] && goalsData[loc.id][person.id] && goalsData[loc.id][person.id][metric.id];
