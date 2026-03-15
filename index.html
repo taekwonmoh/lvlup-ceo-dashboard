@@ -1752,21 +1752,29 @@ function renderGoalsPage() {
   const target = parseFloat(goals._target) || 50000;
   const now = new Date();
   const currentMonthIdx = now.getMonth();
-  const currentMonthShort = MONTHS_SHORT[currentMonthIdx];
 
-  // Calculate totals and cumulative
-  let total = 0;
-  const cumulative = [];
+  // Each month's value is the CUMULATIVE amount ahead of yearly revenue goal
+  // Find the latest month with data — that's the current position
+  let currentAhead = 0;
+  let latestMonthIdx = -1;
   MONTHS_SHORT.forEach((m, i) => {
-    const val = parseFloat(goals[m]) || 0;
-    total += val;
-    cumulative[i] = total;
+    const val = parseFloat(goals[m]);
+    if (!isNaN(val) && val !== 0) { currentAhead = val; latestMonthIdx = i; }
   });
 
-  const pct = target > 0 ? Math.min(Math.round(total / target * 100), 100) : 0;
-  const remaining = Math.max(target - total, 0);
+  // Month-over-month change
+  let prevAhead = 0;
+  if (latestMonthIdx > 0) {
+    for (let i = latestMonthIdx - 1; i >= 0; i--) {
+      const v = parseFloat(goals[MONTHS_SHORT[i]]);
+      if (!isNaN(v) && v !== 0) { prevAhead = v; break; }
+    }
+  }
+  const monthChange = currentAhead - prevAhead;
+
+  const pct = target > 0 ? Math.min(Math.round(Math.max(currentAhead, 0) / target * 100), 100) : 0;
+  const remaining = Math.max(target - currentAhead, 0);
   const monthsLeft = 12 - currentMonthIdx;
-  const neededPerMonth = monthsLeft > 0 ? remaining / monthsLeft : 0;
 
   let html = '<div class="section">';
 
@@ -1774,36 +1782,39 @@ function renderGoalsPage() {
   html += '<div class="goal-hero">';
   html += '<div class="goal-hero-main">';
   html += '<div class="goal-hero-title">2026 Team Vacation Fund</div>';
-  html += '<div class="goal-hero-sub">Beat the goal and the team earns a vacation!</div>';
-  html += '<div class="goal-hero-amount">' + fmtCurrency(total) + '</div>';
-  html += '<div class="goal-hero-target">of ' + fmtCurrency(target) + ' goal</div>';
+  html += '<div class="goal-hero-sub">Cumulative amount ahead of yearly revenue goal. Beat the target and the team earns a vacation!</div>';
+  html += '<div class="goal-hero-amount" style="color:' + (currentAhead >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (currentAhead >= 0 ? '+' : '') + fmtCurrency(currentAhead) + ' ahead</div>';
+  html += '<div class="goal-hero-target">of ' + fmtCurrency(target) + ' vacation target</div>';
   html += '<div class="goal-progress-wrap"><div class="goal-progress-fill" style="width:' + pct + '%"></div><span class="goal-progress-label">' + pct + '%</span></div>';
-  html += '<div class="goal-target-input"><label>Vacation Goal:</label><input value="' + target + '" placeholder="50000" onchange="updateGoalTarget(this.value)" /></div>';
+  html += '<div class="goal-target-input"><label>Vacation Target:</label><input value="' + target + '" placeholder="50000" onchange="updateGoalTarget(this.value)" /></div>';
   html += '</div>';
 
   // Stats
   html += '<div class="goal-hero-stats">';
-  html += '<div class="goal-stat"><div class="goal-stat-num">' + fmtCurrency(remaining) + '</div><div class="goal-stat-label">Remaining</div></div>';
-  html += '<div class="goal-stat"><div class="goal-stat-num">' + fmtCurrency(neededPerMonth) + '</div><div class="goal-stat-label">Needed / Month</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (monthChange >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (monthChange >= 0 ? '+' : '') + fmtCurrency(monthChange) + '</div><div class="goal-stat-label">vs Last Month</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num">' + fmtCurrency(remaining) + '</div><div class="goal-stat-label">Still Needed</div></div>';
   html += '<div class="goal-stat"><div class="goal-stat-num">' + monthsLeft + '</div><div class="goal-stat-label">Months Left</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num">' + pct + '%</div><div class="goal-stat-label">Progress</div></div>';
   html += '</div>';
   html += '</div>';
 
   // Monthly grid
+  html += '<div style="padding:4px 20px 0;font-size:12px;color:var(--gray-500);font-weight:600">Monthly Cumulative (amount ahead of revenue goal)</div>';
   html += '<div class="goal-grid">';
   MONTHS_SHORT.forEach((m, i) => {
-    const raw = parseFloat(goals[m]) || 0;
-    const val = raw ? raw.toFixed(2) : '';
-    const hasVal = raw > 0;
+    const raw = parseFloat(goals[m]);
+    const hasVal = !isNaN(raw) && raw !== 0;
+    const val = hasVal ? raw.toFixed(2) : '';
     const isCurrent = i === currentMonthIdx;
     let cls = 'goal-month';
     if (hasVal) cls += ' has-value';
     if (isCurrent) cls += ' is-current';
     html += '<div class="' + cls + '">';
-    html += '<div class="month-label">' + m + (isCurrent ? ' (current)' : '') + '</div>';
+    html += '<div class="month-label">' + m + (isCurrent ? ' (now)' : '') + '</div>';
     html += '<input value="' + esc(String(val)) + '" placeholder="$0.00" onchange="updateGoal(' + i + ',this.value)" />';
-    if (cumulative[i] > 0) {
-      html += '<div class="goal-cumulative">Running: ' + fmtCurrency(cumulative[i]) + '</div>';
+    if (hasVal) {
+      const color = raw >= 0 ? 'var(--green)' : 'var(--red)';
+      html += '<div class="goal-cumulative" style="color:' + color + '">' + (raw >= 0 ? 'Ahead' : 'Behind') + '</div>';
     }
     html += '</div>';
   });
