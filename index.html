@@ -151,6 +151,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cal-legend { display: flex; gap: 16px; padding: 8px 0; margin-bottom: 8px; flex-wrap: wrap; }
 .cal-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--gray-600); }
 .cal-legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+.cal-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
+.cal-nav-btn { background: var(--card); border: 1px solid var(--gray-200); border-radius: 8px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; color: var(--primary); display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
+.cal-nav-btn:hover { background: var(--accent-light); }
+.cal-nav-label { font-size: 1.2rem; font-weight: 700; color: var(--primary); min-width: 180px; text-align: center; }
+.cal-nav-today { font-size: 12px; font-weight: 600; color: var(--blue); cursor: pointer; background: none; border: 1px solid var(--blue); border-radius: 6px; padding: 4px 12px; }
+.cal-nav-today:hover { background: var(--blue); color: #fff; }
 
 /* Goal Tracker */
 .goal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; padding: 20px; }
@@ -1600,30 +1606,38 @@ function deleteEvent(key) {
   if (confirm('Delete this event?')) fbRef('events/' + key).remove();
 }
 
+function calNavMonth(offset) {
+  state.calMonth = (state.calMonth || new Date().getMonth()) + offset;
+  state.calYear = state.calYear || new Date().getFullYear();
+  while (state.calMonth > 11) { state.calMonth -= 12; state.calYear++; }
+  while (state.calMonth < 0) { state.calMonth += 12; state.calYear--; }
+  render();
+}
+function calGoToday() { state.calMonth = new Date().getMonth(); state.calYear = new Date().getFullYear(); render(); }
+
 function renderEventsPage() {
   const events = state.events || [];
-
-  // Group events by month
-  const monthGroups = {};
   const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const monthLabels = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const parsed = [];
-  events.forEach(e => {
-    const d = new Date(e.date + 'T00:00:00');
-    if (isNaN(d.getTime())) return;
-    const key = d.getFullYear() + '-' + String(d.getMonth()).padStart(2,'0');
-    if (!monthGroups[key]) monthGroups[key] = [];
-    const entry = { ...e, _d: d, _day: d.getDate(), _dow: d.getDay() };
-    monthGroups[key].push(entry);
-    parsed.push(entry);
-  });
-
-  const sortedKeys = Object.keys(monthGroups).sort();
   const now = new Date();
   const todayStr = now.getFullYear() + '-' + String(now.getMonth()).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
 
-  let html = '<div class="page-header"><h2 style="margin:0;font-size:1.6rem;color:var(--primary)">Events Calendar</h2>';
-  html += '<p style="margin:4px 0 0;color:var(--gray-500);font-size:0.85rem">' + parsed.length + ' events</p></div>';
+  // Current viewing month
+  if (state.calMonth === undefined) { state.calMonth = now.getMonth(); state.calYear = now.getFullYear(); }
+  const yr = state.calYear;
+  const mo = state.calMonth;
+
+  // Parse all events
+  const allParsed = [];
+  events.forEach(e => {
+    const d = new Date(e.date + 'T00:00:00');
+    if (!isNaN(d.getTime())) allParsed.push({ ...e, _d: d, _day: d.getDate(), _dow: d.getDay() });
+  });
+
+  // Filter to current month
+  const monthEvts = allParsed.filter(e => e._d.getFullYear() === yr && e._d.getMonth() === mo).sort((a,b) => a._d - b._d);
+
+  let html = '';
 
   // Legend
   html += '<div class="cal-legend">';
@@ -1642,62 +1656,58 @@ function renderEventsPage() {
   html += '<button class="evt-add-btn" onclick="addEvent()">+ Add Event</button>';
   html += '</div>';
 
-  if (!sortedKeys.length) {
-    html += '<div class="section"><div style="padding:40px;text-align:center;color:var(--gray-400);">No events yet. Add one above!</div></div>';
-    return html;
+  // Month navigation
+  html += '<div class="cal-nav">';
+  html += '<button class="cal-nav-btn" onclick="calNavMonth(-1)">\u2039</button>';
+  html += '<div class="cal-nav-label">' + monthLabels[mo] + ' ' + yr + '</div>';
+  html += '<button class="cal-nav-btn" onclick="calNavMonth(1)">\u203A</button>';
+  if (mo !== now.getMonth() || yr !== now.getFullYear()) {
+    html += '<button class="cal-nav-today" onclick="calGoToday()">Today</button>';
   }
+  html += '</div>';
 
-  sortedKeys.forEach(key => {
-    const evts = monthGroups[key].sort((a,b) => a._d - b._d);
-    const yr = parseInt(key.split('-')[0]);
-    const mo = parseInt(key.split('-')[1]);
-    const monthLabel = monthLabels[mo] + ' ' + yr;
-    const daysInMonth = new Date(yr, mo + 1, 0).getDate();
-    const firstDow = new Date(yr, mo, 1).getDay();
+  // Calendar grid
+  const daysInMonth = new Date(yr, mo + 1, 0).getDate();
+  const firstDow = new Date(yr, mo, 1).getDay();
+  const dayEvts = {};
+  monthEvts.forEach(e => {
+    if (!dayEvts[e._day]) dayEvts[e._day] = [];
+    dayEvts[e._day].push(e);
+  });
 
-    // Build lookup: day -> events
-    const dayEvts = {};
-    evts.forEach(e => {
-      if (!dayEvts[e._day]) dayEvts[e._day] = [];
-      dayEvts[e._day].push(e);
-    });
+  html += '<div class="section" style="margin-bottom:24px;">';
+  html += '<div class="cal-grid">';
+  dayNames.forEach(d => { html += '<div class="cal-hdr">' + d + '</div>'; });
+  for (let i = 0; i < firstDow; i++) { html += '<div class="cal-cell cal-empty"></div>'; }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cellDate = yr + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const isToday = cellDate === todayStr;
+    const hasEvt = dayEvts[d];
+    const isPast = new Date(yr, mo, d) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let cls = 'cal-cell';
+    if (isToday) cls += ' cal-today';
+    if (hasEvt) {
+      cls += ' cal-has-event';
+      const firstLoc = hasEvt.find(e => e.loc);
+      if (firstLoc) cls += ' ' + getEvtLocClass(firstLoc.loc);
+    }
+    if (isPast && !isToday) cls += ' cal-past';
 
-    html += '<div class="section" style="margin-bottom:24px;">';
-    html += '<div class="section-header"><h2>' + monthLabel + '</h2><div class="badge">' + evts.length + ' events</div></div>';
-
-    // Calendar grid
-    html += '<div class="cal-grid">';
-    dayNames.forEach(d => { html += '<div class="cal-hdr">' + d + '</div>'; });
-    for (let i = 0; i < firstDow; i++) { html += '<div class="cal-cell cal-empty"></div>'; }
-    for (let d = 1; d <= daysInMonth; d++) {
-      const cellDate = yr + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0');
-      const isToday = cellDate === todayStr;
-      const hasEvt = dayEvts[d];
-      const isPast = new Date(yr, mo, d) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      let cls = 'cal-cell';
-      if (isToday) cls += ' cal-today';
-      if (hasEvt) {
-        cls += ' cal-has-event';
-        // Use first event's location for cell border color
-        const firstLoc = hasEvt.find(e => e.loc);
-        if (firstLoc) cls += ' ' + getEvtLocClass(firstLoc.loc);
-      }
-      if (isPast && !isToday) cls += ' cal-past';
-
-      html += '<div class="' + cls + '">';
-      html += '<div class="cal-day">' + d + '</div>';
-      if (hasEvt) {
-        hasEvt.forEach(e => {
-          html += '<div class="cal-evt ' + getEvtLocClass(e.loc) + '" title="' + esc(e.event) + (e.loc ? ' (' + getEvtLocLabel(e.loc) + ')' : '') + '">' + esc(e.event) + '</div>';
-        });
-      }
-      html += '</div>';
+    html += '<div class="' + cls + '">';
+    html += '<div class="cal-day">' + d + '</div>';
+    if (hasEvt) {
+      hasEvt.forEach(e => {
+        html += '<div class="cal-evt ' + getEvtLocClass(e.loc) + '" title="' + esc(e.event) + (e.loc ? ' (' + getEvtLocLabel(e.loc) + ')' : '') + '">' + esc(e.event) + '</div>';
+      });
     }
     html += '</div>';
+  }
+  html += '</div>';
 
-    // Events list
+  // Events list for this month
+  if (monthEvts.length > 0) {
     html += '<div class="cal-list">';
-    evts.forEach(e => {
+    monthEvts.forEach(e => {
       const dd = e._d;
       const dateStr = dayNames[dd.getDay()] + ', ' + monthLabels[dd.getMonth()] + ' ' + dd.getDate();
       const isPast = dd < new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1708,9 +1718,12 @@ function renderEventsPage() {
       html += '<button class="evt-delete-btn" onclick="deleteEvent(\'' + esc(e._key || '') + '\')">\u00d7</button>';
       html += '</div>';
     });
-    html += '</div></div>';
-  });
+    html += '</div>';
+  } else {
+    html += '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">No events this month</div>';
+  }
 
+  html += '</div>';
   return html;
 }
 
