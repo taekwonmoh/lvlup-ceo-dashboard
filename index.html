@@ -126,6 +126,31 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cal-list-name { font-size: 14px; font-weight: 600; flex: 1; color: var(--primary); }
 .cal-list-link { font-size: 12px; color: var(--blue); text-decoration: none; font-weight: 600; flex-shrink: 0; }
 .cal-list-link:hover { text-decoration: underline; }
+.cal-evt.loc-waunakee { background: #7c3aed; }
+.cal-evt.loc-eastmad { background: #16a34a; }
+.cal-evt.loc-verona { background: #ea580c; }
+.cal-list-item.loc-waunakee { border-left-color: #7c3aed; }
+.cal-list-item.loc-eastmad { border-left-color: #16a34a; }
+.cal-list-item.loc-verona { border-left-color: #ea580c; }
+.cal-list-item.loc-waunakee .cal-list-date { color: #7c3aed; }
+.cal-list-item.loc-eastmad .cal-list-date { color: #16a34a; }
+.cal-list-item.loc-verona .cal-list-date { color: #ea580c; }
+.cal-has-event.loc-waunakee { border-color: #7c3aed; }
+.cal-has-event.loc-eastmad { border-color: #16a34a; }
+.cal-has-event.loc-verona { border-color: #ea580c; }
+.evt-add-form { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px; background: var(--card); border-radius: 10px; margin-bottom: 16px; align-items: flex-end; }
+.evt-add-form input, .evt-add-form select { padding: 8px 12px; border: 1px solid var(--gray-200); border-radius: 8px; font-size: 13px; background: var(--body); color: var(--primary); }
+.evt-add-form input[type="text"] { flex: 1; min-width: 160px; }
+.evt-add-form input[type="date"] { min-width: 140px; }
+.evt-add-form input[type="url"] { flex: 1; min-width: 200px; }
+.evt-add-form select { min-width: 130px; }
+.evt-add-btn { padding: 8px 16px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; }
+.evt-add-btn:hover { opacity: 0.9; }
+.evt-delete-btn { font-size: 11px; color: var(--red); cursor: pointer; background: none; border: none; font-weight: 700; padding: 2px 6px; margin-left: 8px; }
+.evt-delete-btn:hover { background: rgba(239,68,68,0.1); border-radius: 4px; }
+.cal-legend { display: flex; gap: 16px; padding: 8px 0; margin-bottom: 8px; flex-wrap: wrap; }
+.cal-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--gray-600); }
+.cal-legend-dot { width: 12px; height: 12px; border-radius: 3px; }
 
 /* Goal Tracker */
 .goal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; padding: 20px; }
@@ -826,7 +851,7 @@ function listenAll() {
 
   // Events
   const eventsRef = fbRef('events');
-  eventsRef.on('value', snap => { state.events = snap.val() || []; render(); });
+  eventsRef.on('value', snap => { const raw = snap.val() || {}; state.events = Array.isArray(raw) ? raw : Object.entries(raw).map(([k,v])=>({_key:k,...v})); render(); });
   activeListeners.push({ ref: eventsRef, event: 'value' });
 
   // Goals
@@ -1544,22 +1569,42 @@ function renderRocksPage() {
 }
 
 /*  -  -  Events Page (Calendar View)  -  -  */
+function getEvtLocClass(loc) { return loc ? 'loc-' + loc : ''; }
+function getEvtLocLabel(loc) { return loc === 'waunakee' ? 'Waunakee' : loc === 'eastmad' ? 'E. Madison' : loc === 'verona' ? 'Verona' : 'All'; }
+
+function addEvent() {
+  const name = document.getElementById('evtName').value.trim();
+  const date = document.getElementById('evtDate').value;
+  const loc = document.getElementById('evtLoc').value;
+  const link = document.getElementById('evtLink').value.trim();
+  if (!name || !date) return alert('Event name and date are required.');
+  const key = 'evt_' + Date.now();
+  fbRef('events/' + key).set({ event: name, date: date, loc: loc, link: link });
+  document.getElementById('evtName').value = '';
+  document.getElementById('evtDate').value = '';
+  document.getElementById('evtLink').value = '';
+}
+
+function deleteEvent(key) {
+  if (confirm('Delete this event?')) fbRef('events/' + key).remove();
+}
+
 function renderEventsPage() {
   const events = state.events || [];
-  if (!events.length) {
-    return '<div class="section"><div style="padding:40px;text-align:center;color:var(--gray-400);">No events configured yet</div></div>';
-  }
 
   // Group events by month
   const monthGroups = {};
   const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const monthLabels = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const parsed = [];
   events.forEach(e => {
-    const d = new Date(e.date);
+    const d = new Date(e.date + 'T00:00:00');
     if (isNaN(d.getTime())) return;
     const key = d.getFullYear() + '-' + String(d.getMonth()).padStart(2,'0');
     if (!monthGroups[key]) monthGroups[key] = [];
-    monthGroups[key].push({ ...e, _d: d, _day: d.getDate(), _dow: d.getDay() });
+    const entry = { ...e, _d: d, _day: d.getDate(), _dow: d.getDay() };
+    monthGroups[key].push(entry);
+    parsed.push(entry);
   });
 
   const sortedKeys = Object.keys(monthGroups).sort();
@@ -1567,7 +1612,29 @@ function renderEventsPage() {
   const todayStr = now.getFullYear() + '-' + String(now.getMonth()).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
 
   let html = '<div class="page-header"><h2 style="margin:0;font-size:1.6rem;color:var(--primary)">Events Calendar</h2>';
-  html += '<p style="margin:4px 0 0;color:var(--gray-500);font-size:0.85rem">' + events.length + ' upcoming events</p></div>';
+  html += '<p style="margin:4px 0 0;color:var(--gray-500);font-size:0.85rem">' + parsed.length + ' events</p></div>';
+
+  // Legend
+  html += '<div class="cal-legend">';
+  html += '<div class="cal-legend-item"><div class="cal-legend-dot" style="background:#7c3aed"></div>Waunakee</div>';
+  html += '<div class="cal-legend-item"><div class="cal-legend-dot" style="background:#16a34a"></div>East Madison</div>';
+  html += '<div class="cal-legend-item"><div class="cal-legend-dot" style="background:#ea580c"></div>Verona</div>';
+  html += '<div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--accent)"></div>All / Other</div>';
+  html += '</div>';
+
+  // Add event form
+  html += '<div class="evt-add-form">';
+  html += '<input type="text" id="evtName" placeholder="Event name..." />';
+  html += '<input type="date" id="evtDate" />';
+  html += '<select id="evtLoc"><option value="">All Locations</option><option value="waunakee">Waunakee</option><option value="eastmad">East Madison</option><option value="verona">Verona</option></select>';
+  html += '<input type="url" id="evtLink" placeholder="GymDesk link (optional)" />';
+  html += '<button class="evt-add-btn" onclick="addEvent()">+ Add Event</button>';
+  html += '</div>';
+
+  if (!sortedKeys.length) {
+    html += '<div class="section"><div style="padding:40px;text-align:center;color:var(--gray-400);">No events yet. Add one above!</div></div>';
+    return html;
+  }
 
   sortedKeys.forEach(key => {
     const evts = monthGroups[key].sort((a,b) => a._d - b._d);
@@ -1589,11 +1656,8 @@ function renderEventsPage() {
 
     // Calendar grid
     html += '<div class="cal-grid">';
-    // Day headers
     dayNames.forEach(d => { html += '<div class="cal-hdr">' + d + '</div>'; });
-    // Empty cells for offset
     for (let i = 0; i < firstDow; i++) { html += '<div class="cal-cell cal-empty"></div>'; }
-    // Day cells
     for (let d = 1; d <= daysInMonth; d++) {
       const cellDate = yr + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0');
       const isToday = cellDate === todayStr;
@@ -1601,30 +1665,36 @@ function renderEventsPage() {
       const isPast = new Date(yr, mo, d) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
       let cls = 'cal-cell';
       if (isToday) cls += ' cal-today';
-      if (hasEvt) cls += ' cal-has-event';
+      if (hasEvt) {
+        cls += ' cal-has-event';
+        // Use first event's location for cell border color
+        const firstLoc = hasEvt.find(e => e.loc);
+        if (firstLoc) cls += ' ' + getEvtLocClass(firstLoc.loc);
+      }
       if (isPast && !isToday) cls += ' cal-past';
 
       html += '<div class="' + cls + '">';
       html += '<div class="cal-day">' + d + '</div>';
       if (hasEvt) {
         hasEvt.forEach(e => {
-          html += '<div class="cal-evt" title="' + esc(e.event) + '">' + esc(e.event) + '</div>';
+          html += '<div class="cal-evt ' + getEvtLocClass(e.loc) + '" title="' + esc(e.event) + (e.loc ? ' (' + getEvtLocLabel(e.loc) + ')' : '') + '">' + esc(e.event) + '</div>';
         });
       }
       html += '</div>';
     }
     html += '</div>';
 
-    // Events list under calendar for this month
+    // Events list
     html += '<div class="cal-list">';
     evts.forEach(e => {
       const dd = e._d;
       const dateStr = dayNames[dd.getDay()] + ', ' + monthLabels[dd.getMonth()] + ' ' + dd.getDate();
       const isPast = dd < new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      html += '<div class="cal-list-item' + (isPast ? ' cal-list-past' : '') + '">';
+      html += '<div class="cal-list-item ' + getEvtLocClass(e.loc) + (isPast ? ' cal-list-past' : '') + '">';
       html += '<div class="cal-list-date">' + dateStr + '</div>';
-      html += '<div class="cal-list-name">' + esc(e.event) + '</div>';
-      if (e.location) html += '<a class="cal-list-link" href="' + esc(e.location) + '" target="_blank">Details \u2192</a>';
+      html += '<div class="cal-list-name">' + esc(e.event) + (e.loc ? ' <span style="font-size:11px;font-weight:400;color:var(--gray-500)">(' + getEvtLocLabel(e.loc) + ')</span>' : '') + '</div>';
+      if (e.link) html += '<a class="cal-list-link" href="' + esc(e.link) + '" target="_blank">GymDesk \u2192</a>';
+      html += '<button class="evt-delete-btn" onclick="deleteEvent(\'' + esc(e._key || '') + '\')">\u00d7</button>';
       html += '</div>';
     });
     html += '</div></div>';
