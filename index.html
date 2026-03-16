@@ -1307,9 +1307,18 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
         const goal = metric.id === 'grossRevenue' ? fmtCurrency(loc.revenueGoal) :
           (metric.id === 'totalMembers' && ['waunakee','eastmad','verona'].includes(loc.id)) ?
           (state.membership[loc.id] && state.membership[loc.id][curMonthKey] && state.membership[loc.id][curMonthKey].goal || '') : '';
+      // Color: green if meeting/exceeding goal, red if under
+      let mValColor = '';
+      const numGoal = metric.id === 'grossRevenue' ? loc.revenueGoal :
+        (metric.id === 'totalMembers' && ['waunakee','eastmad','verona'].includes(loc.id)) ?
+        parseFloat(state.membership[loc.id] && state.membership[loc.id][curMonthKey] && state.membership[loc.id][curMonthKey].goal) || 0 : 0;
+      const numCur = parseFloat(val) || 0;
+      if (numGoal > 0 && val !== '') {
+        mValColor = numCur >= numGoal ? 'color:#10b981' : 'color:#ef4444';
+      }
       monthlyHtml += '<tr><td>' + loc.short + '</td><td>' + metric.label + '</td>' +
         '<td>' + goal + '</td>' +
-        '<td><input value="' + (metric.currency && val !== '' ? fmtCurrency(parseFloat(val) || 0) : esc(String(val))) + '" onchange="updateMonthly(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td></tr>';
+        '<td style="' + mValColor + ';font-weight:600"><input style="' + mValColor + ';font-weight:600" value="' + (metric.currency && val !== '' ? fmtCurrency(parseFloat(val) || 0) : esc(String(val))) + '" onchange="updateMonthly(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td></tr>';
     });
   });
 
