@@ -796,8 +796,9 @@ function getWeekLabel(offset) {
   const day = now.getDay();
   const diff = now.getDate() - day + (day === 0 ? -6 : 1) + (offset * 7);
   const mon = new Date(new Date().setDate(diff));
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
   const fmt = d => (d.getMonth()+1) + '/' + d.getDate();
-  return fmt(mon);
+  return fmt(mon) + ' \u2013 ' + fmt(sun);
 }
 
 function getMonthKey() {
@@ -1252,7 +1253,7 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
   let tableHtml = '<div class="section">' +
     '<div class="section-header"><h2>Weekly Scorecard</h2>' +
     '<div class="week-nav"><button onclick="changeWeek(-1)">&larr;</button>' +
-    '<span class="week-label">' + weekLabel + ' (' + weekKey + ')</span>' +
+    '<span class="week-label">' + weekLabel + '</span>' +
     '<button onclick="changeWeek(1)">&rarr;</button></div></div>' +
     '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
     '<th>Who</th><th>Measurable</th><th>Goal</th><th>This Week</th>' +
