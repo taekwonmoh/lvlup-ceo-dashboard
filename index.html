@@ -526,6 +526,7 @@ const WEEKLY_METRICS = [
   { id: 'trials', label: 'Trials' },
   { id: 'leads', label: 'Leads' },
   { id: 'leadToTrial', label: 'Lead to Trial %', pct: true },
+  { id: 'upgrades', label: 'Upgrades' },
 ];
 const GONINJA_METRICS = [
   { id: 'summerCampWeeks', label: 'Summer Camp Weeks' },
@@ -541,9 +542,9 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
 const SCORECARD_PEOPLE = {
-  waunakee: [{ id: 'goad', name: 'Mr. Goad', metrics: ['attrition','newMembers','leads'] }, { id: 'msk', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
-  eastmad: [{ id: 'bein', name: 'Mrs. Bein', metrics: ['attrition','newMembers','leads'] }, { id: 'msk_em', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
-  verona: [{ id: 'mrz', name: 'Mr. Z', metrics: ['attrition','newMembers','leads'] }, { id: 'msk_v', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
+  waunakee: [{ id: 'goad', name: 'Mr. Goad', metrics: ['attrition','newMembers','leads','upgrades'] }, { id: 'msk', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
+  eastmad: [{ id: 'bein', name: 'Mrs. Bein', metrics: ['attrition','newMembers','leads','upgrades'] }, { id: 'msk_em', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
+  verona: [{ id: 'mrz', name: 'Mr. Z', metrics: ['attrition','newMembers','leads','upgrades'] }, { id: 'msk_v', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
   goninjaW: [{ id: 'smith', name: 'Ms. Smith' }],
   goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
 };
@@ -1631,14 +1632,17 @@ function renderGrowthInitiatives() {
   const sv = ini.schoolVisits || {};
   const now = new Date();
   const curMonthKey = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  const currentMonth = now.getMonth(); // 0-indexed
+  const currentMonth = now.getMonth();
   const referralDrives = parseInt(ini.referralDrives) || 0;
   const buddyDays = parseInt(ini.buddyDays) || 0;
   const gt = ini.goldenTicket || {};
   const gtWau = parseInt(gt.waunakee) || 0;
   const gtVer = parseInt(gt.verona) || 0;
+  const invitational = parseInt(ini.invitational) || 0;
+  const combatClinic = ini.combatClinic || {};
+  const ccHeld = parseInt(combatClinic.held) || 0;
+  const ccUpgrades = parseInt(combatClinic.upgrades) || 0;
 
-  // School visits: current month + YTD
   const svThisMonth = parseInt(sv[curMonthKey]) || 0;
   let svYTD = 0;
   Object.keys(sv).forEach(k => { if (k.startsWith(String(now.getFullYear()))) svYTD += parseInt(sv[k]) || 0; });
@@ -1659,14 +1663,19 @@ function renderGrowthInitiatives() {
       '<button onclick="updateInitiative(\'' + fbPath + '\',' + (val + 1) + ')" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">+</button></div>';
   }
 
+  function ownerBadge(name) {
+    return '<div style="display:inline-block;background:var(--gray-800);color:var(--gray-300);font-size:11px;padding:2px 8px;border-radius:10px;margin-bottom:8px">Lead: ' + name + '</div>';
+  }
+
   let html = '<div class="section"><div class="section-header"><h2>Growth Initiatives  —  2026</h2></div>';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;padding:16px">';
 
-  // 1. Rack Cards
+  // 1. Rack Cards — Bryan
   const rcWau = parseInt(rc.waunakee) || 0, rcEm = parseInt(rc.eastmad) || 0, rcVer = parseInt(rc.verona) || 0;
   const rcTotal = rcWau + rcEm + rcVer;
   html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
   html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Rack Card Program</div>';
+  html += ownerBadge('Bryan');
   html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">20+ surrounding businesses per location</div>';
   html += progressBar(rcTotal, 60, 'Total across all locations');
   html += counterInput('rackCards/waunakee', rcWau, 'WAU');
@@ -1674,9 +1683,10 @@ function renderGrowthInitiatives() {
   html += counterInput('rackCards/verona', rcVer, 'VER');
   html += '</div>';
 
-  // 2. Referral Drives
+  // 2. Referral Drives — Ms. K
   html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
   html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Referral Drive System</div>';
+  html += ownerBadge('Ms. K');
   html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Established and executed 2x per year</div>';
   html += progressBar(referralDrives, 2, 'Drives completed');
   html += counterInput('referralDrives', referralDrives, 'Done');
@@ -1691,9 +1701,10 @@ function renderGrowthInitiatives() {
   html += counterInput('schoolVisits/' + curMonthKey, svThisMonth, MONTHS_SHORT[currentMonth]);
   html += '</div>';
 
-  // 4. Bring a Buddy Days
+  // 4. Bring a Buddy Days — Nikki
   html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
   html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Bring a Buddy Day</div>';
+  html += ownerBadge('Nikki');
   html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Execute 5x across the year</div>';
   html += progressBar(buddyDays, 5, 'Events held');
   html += counterInput('buddyDays', buddyDays, 'Done');
@@ -1707,6 +1718,26 @@ function renderGrowthInitiatives() {
   html += progressBar(gtVer, 20, 'Verona Go Ninja');
   html += counterInput('goldenTicket/waunakee', gtWau, 'WAU');
   html += counterInput('goldenTicket/verona', gtVer, 'VER');
+  html += '</div>';
+
+  // 6. LVLUP Invitational — Mrs. Moh
+  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">LVLUP Invitational</div>';
+  html += ownerBadge('Mrs. Moh');
+  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">900 competitor goal</div>';
+  html += progressBar(invitational, 900, 'Competitors registered');
+  html += counterInput('invitational', invitational, 'Total');
+  html += '</div>';
+
+  // 7. Intro to Combat Weapons Clinic — Joey
+  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Intro to Combat Weapons Clinic</div>';
+  html += ownerBadge('Joey');
+  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Drive athlete development upgrades</div>';
+  html += progressBar(ccHeld, 4, 'Clinics held');
+  html += progressBar(ccUpgrades, 0, 'Upgrades generated');
+  html += counterInput('combatClinic/held', ccHeld, 'Clinics');
+  html += counterInput('combatClinic/upgrades', ccUpgrades, 'Upgrades');
   html += '</div>';
 
   html += '</div></div>';
