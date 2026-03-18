@@ -952,6 +952,57 @@ function updateMonthly(locId, metricId, val) {
 function updateRockStatus(type, idx, val) {
   fbSet('rocks/' + type + '/' + idx + '/status', val);
 }
+function addCompanyRock() {
+  const text = document.getElementById('newRockText').value.trim();
+  const owner = document.getElementById('newRockOwner').value.trim();
+  if (!text) return alert('Enter a rock description.');
+  const rocks = (state.rocks && state.rocks.company) || [];
+  rocks.push({ text, owner: owner || '', status: 'not-started' });
+  fbRef('rocks/company').set(rocks);
+  document.getElementById('newRockText').value = '';
+  document.getElementById('newRockOwner').value = '';
+}
+function editRock(type, idx) {
+  const rocks = type === 'company' ? ((state.rocks && state.rocks.company) || []) : ((state.rocks && state.rocks.individual && state.rocks.individual[type]) || []);
+  const r = rocks[idx];
+  if (!r) return;
+  const newText = prompt('Edit rock:', r.text);
+  if (newText === null) return;
+  if (newText.trim() === '') return;
+  const path = type === 'company' ? 'rocks/company/' + idx + '/text' : 'rocks/individual/' + type + '/' + idx + '/text';
+  fbSet(path, newText.trim());
+}
+function editRockOwner(type, idx) {
+  const rocks = type === 'company' ? ((state.rocks && state.rocks.company) || []) : ((state.rocks && state.rocks.individual && state.rocks.individual[type]) || []);
+  const r = rocks[idx];
+  if (!r) return;
+  const newOwner = prompt('Edit owner:', r.owner || '');
+  if (newOwner === null) return;
+  const path = type === 'company' ? 'rocks/company/' + idx + '/owner' : 'rocks/individual/' + type + '/' + idx + '/owner';
+  fbSet(path, newOwner.trim());
+}
+function deleteRock(type, idx) {
+  if (!confirm('Delete this rock?')) return;
+  if (type === 'company') {
+    const rocks = ((state.rocks && state.rocks.company) || []).slice();
+    rocks.splice(idx, 1);
+    fbRef('rocks/company').set(rocks.length ? rocks : null);
+  } else {
+    const rocks = ((state.rocks && state.rocks.individual && state.rocks.individual[type]) || []).slice();
+    rocks.splice(idx, 1);
+    fbRef('rocks/individual/' + type).set(rocks.length ? rocks : null);
+  }
+}
+function addIndividualRock() {
+  const person = document.getElementById('newIndRockPerson').value.trim();
+  const text = document.getElementById('newIndRockText').value.trim();
+  if (!person || !text) return alert('Enter both a person name and rock description.');
+  const key = person.replace(/[^a-zA-Z0-9]/g, '');
+  const rocks = (state.rocks && state.rocks.individual && state.rocks.individual[key]) || [];
+  rocks.push({ text, owner: person, status: 'not-started' });
+  fbRef('rocks/individual/' + key).set(rocks);
+  document.getElementById('newIndRockText').value = '';
+}
 
 function updateGoal(monthIdx, val) {
   fbDebounce('goals/2026/' + MONTHS_SHORT[monthIdx], val);
@@ -1588,37 +1639,57 @@ function renderRocksPage() {
   const statuses = ['not-started','in-progress','on-track','complete','off-track'];
   const statusLabels = { 'not-started':'Not Started', 'in-progress':'In Progress', 'on-track':'On Track', 'complete':'Complete', 'off-track':'Off Track' };
 
-  let html = '<div class="section"><div class="section-header"><h2>Company Rocks  —  Q1 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
+  const qtr = Math.floor(new Date().getMonth() / 3) + 1;
+  let html = '<div class="section"><div class="section-header"><h2>Company Rocks  —  Q' + qtr + ' 2026</h2><div class="badge">' + company.length + ' rocks</div></div>';
 
   if (company.length) {
     company.forEach((r, i) => {
       html += '<div class="rock-item">' +
         '<div class="rock-num">' + (i + 1) + '</div>' +
-        '<div class="rock-content"><div class="rock-text">' + esc(r.text) + '</div><div class="rock-owner">' + esc(r.owner) + '</div></div>' +
+        '<div class="rock-content"><div class="rock-text" ondblclick="editRock(\'company\',' + i + ')" title="Double-click to edit">' + esc(r.text) + '</div>' +
+        '<div class="rock-owner" ondblclick="editRockOwner(\'company\',' + i + ')" title="Double-click to edit owner">' + (r.owner ? esc(r.owner) : '<span style="color:var(--gray-500);font-style:italic">No owner</span>') + '</div></div>' +
         '<div class="rock-status"><select onchange="updateRockStatus(\'company\',' + i + ',this.value)">' +
         statuses.map(s => '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + statusLabels[s] + '</option>').join('') +
-        '</select></div></div>';
-    }) 
+        '</select></div>' +
+        '<button onclick="deleteRock(\'company\',' + i + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px 8px" title="Delete">&times;</button>' +
+        '</div>';
+    })
   } else {
-    html += '<div style="padding:20px;color:var(--gray-400);text-align:center;">No company rocks yet</div>';
+    html += '<div style="padding:20px;color:var(--gray-400);text-align:center;">No company rocks yet. Add one below.</div>';
   }
+  // Add company rock form
+  html += '<div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--gray-800)">';
+  html += '<input id="newRockText" placeholder="New rock description..." style="flex:2;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
+  html += '<input id="newRockOwner" placeholder="Owner..." style="flex:1;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
+  html += '<button onclick="addCompanyRock()" style="padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">+ Add Rock</button>';
+  html += '</div>';
   html += '</div>';
 
   // Individual rocks
   Object.keys(individual).forEach(personKey => {
     const personRocks = individual[personKey] || [];
-    const label = personKey === 'mrsMoh' ? 'Mrs. Moh' : personKey === 'mrMoh' ? 'Mr. Moh' : personKey;
-    html += '<div class="section"><div class="section-header"><h2>Individual Rocks  —  ' + esc(label) + '</h2></div>';
+    const label = personKey === 'mrsMoh' ? 'Mrs. Moh' : personKey === 'mrMoh' ? 'Mr. Moh' : (personRocks[0] && personRocks[0].owner) || personKey;
+    html += '<div class="section"><div class="section-header"><h2>Individual Rocks  —  ' + esc(label) + '</h2><div class="badge">' + personRocks.length + '</div></div>';
     personRocks.forEach((r, i) => {
       html += '<div class="rock-item">' +
         '<div class="rock-num">' + (i + 1) + '</div>' +
-        '<div class="rock-content"><div class="rock-text">' + esc(r.text) + '</div></div>' +
+        '<div class="rock-content"><div class="rock-text" ondblclick="editRock(\'' + personKey + '\',' + i + ')" title="Double-click to edit">' + esc(r.text) + '</div></div>' +
         '<div class="rock-status"><select onchange="updateRockStatus(\'individual/' + personKey + '\',' + i + ',this.value)">' +
         statuses.map(s => '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + statusLabels[s] + '</option>').join('') +
-        '</select></div></div>';
+        '</select></div>' +
+        '<button onclick="deleteRock(\'' + personKey + '\',' + i + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px 8px" title="Delete">&times;</button>' +
+        '</div>';
     });
     html += '</div>';
   });
+
+  // Add individual rock form
+  html += '<div class="section"><div class="section-header"><h2>Add Individual Rock</h2></div>';
+  html += '<div style="display:flex;gap:8px;padding:12px 16px">';
+  html += '<input id="newIndRockPerson" placeholder="Person name..." style="flex:1;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
+  html += '<input id="newIndRockText" placeholder="Rock description..." style="flex:2;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
+  html += '<button onclick="addIndividualRock()" style="padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">+ Add</button>';
+  html += '</div></div>';
 
   // Growth Initiatives
   html += renderGrowthInitiatives();
