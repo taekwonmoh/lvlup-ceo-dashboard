@@ -996,12 +996,19 @@ function deleteRock(type, idx) {
 function addIndividualRock() {
   const person = document.getElementById('newIndRockPerson').value.trim();
   const text = document.getElementById('newIndRockText').value.trim();
+  const due = document.getElementById('newIndRockDue') ? document.getElementById('newIndRockDue').value : '';
   if (!person || !text) return alert('Enter both a person name and rock description.');
   const key = person.replace(/[^a-zA-Z0-9]/g, '');
   const rocks = (state.rocks && state.rocks.individual && state.rocks.individual[key]) || [];
-  rocks.push({ text, owner: person, status: 'not-started' });
+  const entry = { text, owner: person, status: 'not-started' };
+  if (due) entry.dueDate = due;
+  rocks.push(entry);
   fbRef('rocks/individual/' + key).set(rocks);
   document.getElementById('newIndRockText').value = '';
+  if (document.getElementById('newIndRockDue')) document.getElementById('newIndRockDue').value = '';
+}
+function updateIndRockDueDate(personKey, idx, val) {
+  fbSet('rocks/individual/' + personKey + '/' + idx + '/dueDate', val || null);
 }
 
 function updateGoal(monthIdx, val) {
@@ -1665,29 +1672,40 @@ function renderRocksPage() {
   html += '</div>';
   html += '</div>';
 
-  // Individual rocks
+  // Individual rocks — flatten all into one table
+  let allIndRocks = [];
   Object.keys(individual).forEach(personKey => {
     const personRocks = individual[personKey] || [];
     const label = personKey === 'mrsMoh' ? 'Mrs. Moh' : personKey === 'mrMoh' ? 'Mr. Moh' : (personRocks[0] && personRocks[0].owner) || personKey;
-    html += '<div class="section"><div class="section-header"><h2>Individual Rocks  —  ' + esc(label) + '</h2><div class="badge">' + personRocks.length + '</div></div>';
-    personRocks.forEach((r, i) => {
-      html += '<div class="rock-item">' +
-        '<div class="rock-num">' + (i + 1) + '</div>' +
-        '<div class="rock-content"><div class="rock-text" ondblclick="editRock(\'' + personKey + '\',' + i + ')" title="Double-click to edit">' + esc(r.text) + '</div></div>' +
-        '<div class="rock-status"><select onchange="updateRockStatus(\'individual/' + personKey + '\',' + i + ',this.value)">' +
-        statuses.map(s => '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + statusLabels[s] + '</option>').join('') +
-        '</select></div>' +
-        '<button onclick="deleteRock(\'' + personKey + '\',' + i + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px 8px" title="Delete">&times;</button>' +
-        '</div>';
-    });
-    html += '</div>';
+    personRocks.forEach((r, i) => { allIndRocks.push({ ...r, _key: personKey, _idx: i, _label: label }); });
   });
 
+  html += '<div class="section"><div class="section-header"><h2>Individual Rocks  —  Q' + qtr + ' 2026</h2><div class="badge">' + allIndRocks.length + '</div></div>';
+  if (allIndRocks.length) {
+    html += '<div style="overflow-x:auto"><table class="fin-table" style="width:100%"><thead><tr>';
+    html += '<th style="width:30px">#</th><th style="text-align:left">ROCK</th><th style="width:120px">OWNER</th><th style="width:120px">DUE DATE</th><th style="width:140px">STATUS</th><th style="width:36px"></th>';
+    html += '</tr></thead><tbody>';
+    allIndRocks.forEach((r, idx) => {
+      html += '<tr>';
+      html += '<td style="text-align:center;color:var(--gray-500)">' + (idx + 1) + '</td>';
+      html += '<td style="text-align:left" ondblclick="editRock(\'' + r._key + '\',' + r._idx + ')" title="Double-click to edit">' + esc(r.text) + '</td>';
+      html += '<td style="text-align:center;font-weight:500">' + esc(r._label) + '</td>';
+      html += '<td style="text-align:center"><input type="date" value="' + esc(r.dueDate || '') + '" onchange="updateIndRockDueDate(\'' + r._key + '\',' + r._idx + ',this.value)" style="background:var(--gray-900);border:1px solid var(--gray-700);border-radius:6px;color:var(--gray-200);padding:4px 6px;font-size:12px;width:110px" /></td>';
+      html += '<td><select onchange="updateRockStatus(\'individual/' + r._key + '\',' + r._idx + ',this.value)" style="width:100%">' +
+        statuses.map(s => '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + statusLabels[s] + '</option>').join('') +
+        '</select></td>';
+      html += '<td><button onclick="deleteRock(\'' + r._key + '\',' + r._idx + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px" title="Delete">&times;</button></td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  } else {
+    html += '<div style="padding:20px;color:var(--gray-400);text-align:center;">No individual rocks yet. Add one below.</div>';
+  }
   // Add individual rock form
-  html += '<div class="section"><div class="section-header"><h2>Add Individual Rock</h2></div>';
-  html += '<div style="display:flex;gap:8px;padding:12px 16px">';
-  html += '<input id="newIndRockPerson" placeholder="Person name..." style="flex:1;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
+  html += '<div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--gray-800)">';
+  html += '<input id="newIndRockPerson" placeholder="Owner name..." style="flex:1;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
   html += '<input id="newIndRockText" placeholder="Rock description..." style="flex:2;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
+  html += '<input id="newIndRockDue" type="date" style="padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
   html += '<button onclick="addIndividualRock()" style="padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">+ Add</button>';
   html += '</div></div>';
 
