@@ -571,6 +571,8 @@ const LVLUP_WEEKLY_REC = [
   {id:'lifelinks',text:'Review LifeLinks and award belt clips'},
   {id:'social_photo',text:'Post Canva-edited photo on social media'},
   {id:'social_video',text:'Send video for social media to MM and Jam on Slack (she will edit and post)'},
+  {id:'rack_cards',text:'Rack card check: restock at businesses & add new locations (goal: 20+ per location)'},
+  {id:'school_visit',text:'Schedule or complete school visit (goal: 3/month)'},
 ];
 const GONINJA_WEEKLY_REC = [
   {id:'newsletter',text:'Send Go Ninja newsletter (by Tuesday)'},
@@ -585,6 +587,8 @@ const LVLUP_CYCLE = {
     {id:'w1s2',cat:'Student Mgmt',text:'Run baseline Red/Yellow/Green report'},
     {id:'w1s3',cat:'Student Mgmt',text:'Outreach to non-testers from last cycle'},
     {id:'w1s4',cat:'Student Mgmt',text:'Send black belt testing requirements'},
+    {id:'w1g1',cat:'Growth Initiatives',text:'Rack card audit: verify all 20+ businesses still have cards stocked'},
+    {id:'w1g2',cat:'Growth Initiatives',text:'Plan Bring a Buddy Day for this cycle'},
     {id:'w1c1',cat:'Cleaning',text:'Deep clean mats & equipment'},
     {id:'w1r1',cat:'Reporting',text:'LVLUP Dashboard updated'},
   ]},
@@ -608,6 +612,8 @@ const LVLUP_CYCLE = {
     {id:'w3s1',cat:'Student Mgmt',text:'Update stoplight report'},
     {id:'w3s2',cat:'Student Mgmt',text:'Run student MIA report in MyStudio'},
     {id:'w3s3',cat:'Student Mgmt',text:'ID at-risk students & schedule free booster lessons'},
+    {id:'w3g1',cat:'Growth Initiatives',text:'Golden Ticket push: promote Go Ninja summer camps to current students'},
+    {id:'w3g2',cat:'Growth Initiatives',text:'Schedule next school visit (goal: 3/month)'},
     {id:'w3c1',cat:'Cleaning',text:'Deep clean lobby & pro shop'},
   ]},
   4:{name:'Mid-Cycle Calibration',tasks:[
@@ -625,6 +631,8 @@ const LVLUP_CYCLE = {
     {id:'w5s1',cat:'Student Mgmt',text:'Update stoplight report'},
     {id:'w5s2',cat:'Student Mgmt',text:'Attendance follow-up'},
     {id:'w5s3',cat:'Student Mgmt',text:'Extra outreach to yellow students'},
+    {id:'w5g1',cat:'Growth Initiatives',text:'Referral drive check: plan or execute next referral drive (goal: 2/year)'},
+    {id:'w5g2',cat:'Growth Initiatives',text:'Add 2+ new rack card businesses per location'},
     {id:'w5c1',cat:'Cleaning',text:'Digital cleaning (clean up email inbox, etc.)'},
   ]},
   6:{name:'Prep Intensifies (Target 70%)',tasks:[
@@ -1611,7 +1619,102 @@ function renderRocksPage() {
     html += '</div>';
   });
 
+  // Growth Initiatives
+  html += renderGrowthInitiatives();
+
   return html;
+}
+
+function renderGrowthInitiatives() {
+  const ini = (state.rocks && state.rocks.initiatives) || {};
+  const rc = ini.rackCards || {};
+  const sv = ini.schoolVisits || {};
+  const now = new Date();
+  const curMonthKey = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const currentMonth = now.getMonth(); // 0-indexed
+  const referralDrives = parseInt(ini.referralDrives) || 0;
+  const buddyDays = parseInt(ini.buddyDays) || 0;
+  const gt = ini.goldenTicket || {};
+  const gtWau = parseInt(gt.waunakee) || 0;
+  const gtVer = parseInt(gt.verona) || 0;
+
+  // School visits: current month + YTD
+  const svThisMonth = parseInt(sv[curMonthKey]) || 0;
+  let svYTD = 0;
+  Object.keys(sv).forEach(k => { if (k.startsWith(String(now.getFullYear()))) svYTD += parseInt(sv[k]) || 0; });
+  const svMonthsElapsed = currentMonth + 1;
+  const svExpected = svMonthsElapsed * 3;
+
+  function progressBar(current, target, label) {
+    const pct = target > 0 ? Math.min(Math.round(current / target * 100), 100) : 0;
+    const color = current >= target ? 'var(--green)' : (pct >= 50 ? '#f59e0b' : 'var(--red)');
+    return '<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>' + label + '</span><span style="font-weight:600;color:' + color + '">' + current + ' / ' + target + '</span></div>' +
+      '<div style="height:8px;background:var(--gray-800);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:4px;transition:width .3s"></div></div></div>';
+  }
+
+  function counterInput(fbPath, val, label) {
+    return '<div style="display:flex;align-items:center;gap:6px;margin-top:4px"><span style="font-size:12px;color:var(--gray-400);min-width:60px">' + label + ':</span>' +
+      '<button onclick="updateInitiative(\'' + fbPath + '\',' + Math.max(0, val - 1) + ')" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">-</button>' +
+      '<span style="font-weight:600;min-width:28px;text-align:center">' + val + '</span>' +
+      '<button onclick="updateInitiative(\'' + fbPath + '\',' + (val + 1) + ')" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">+</button></div>';
+  }
+
+  let html = '<div class="section"><div class="section-header"><h2>Growth Initiatives  —  2026</h2></div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;padding:16px">';
+
+  // 1. Rack Cards
+  const rcWau = parseInt(rc.waunakee) || 0, rcEm = parseInt(rc.eastmad) || 0, rcVer = parseInt(rc.verona) || 0;
+  const rcTotal = rcWau + rcEm + rcVer;
+  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Rack Card Program</div>';
+  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">20+ surrounding businesses per location</div>';
+  html += progressBar(rcTotal, 60, 'Total across all locations');
+  html += counterInput('rackCards/waunakee', rcWau, 'WAU');
+  html += counterInput('rackCards/eastmad', rcEm, 'E.MAD');
+  html += counterInput('rackCards/verona', rcVer, 'VER');
+  html += '</div>';
+
+  // 2. Referral Drives
+  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Referral Drive System</div>';
+  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Established and executed 2x per year</div>';
+  html += progressBar(referralDrives, 2, 'Drives completed');
+  html += counterInput('referralDrives', referralDrives, 'Done');
+  html += '</div>';
+
+  // 3. School Visits
+  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">School Visit Program</div>';
+  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Target: 3 visits per month</div>';
+  html += progressBar(svThisMonth, 3, MONTHS_SHORT[currentMonth] + ' visits');
+  html += progressBar(svYTD, svExpected, 'YTD (expected ' + svExpected + ')');
+  html += counterInput('schoolVisits/' + curMonthKey, svThisMonth, MONTHS_SHORT[currentMonth]);
+  html += '</div>';
+
+  // 4. Bring a Buddy Days
+  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Bring a Buddy Day</div>';
+  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Execute 5x across the year</div>';
+  html += progressBar(buddyDays, 5, 'Events held');
+  html += counterInput('buddyDays', buddyDays, 'Done');
+  html += '</div>';
+
+  // 5. Golden Ticket Program
+  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Golden Ticket Program</div>';
+  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Go Ninja summer camp sign-ups</div>';
+  html += progressBar(gtWau, 55, 'Waunakee Go Ninja');
+  html += progressBar(gtVer, 20, 'Verona Go Ninja');
+  html += counterInput('goldenTicket/waunakee', gtWau, 'WAU');
+  html += counterInput('goldenTicket/verona', gtVer, 'VER');
+  html += '</div>';
+
+  html += '</div></div>';
+  return html;
+}
+
+function updateInitiative(path, val) {
+  fbRef('rocks/initiatives/' + path).set(val);
 }
 
 /*  -  -  Events Page (Calendar View)  -  -  */
