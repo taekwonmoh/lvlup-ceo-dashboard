@@ -1291,7 +1291,8 @@ function formatTestDate(dateStr) {
 /*  -  -  Scorecard Page  -  -  */
 function renderScorecardPage() {
   const monthKey = getMonthKey();
-  const monthData = state.scorecard.monthly || {};
+  const allMonthly = state.scorecard.monthly || {};
+  const monthData = allMonthly[monthKey] || {};
 
   // KPI cards from monthly data
   let kpiHtml = '<div class="kpi-grid">';
