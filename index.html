@@ -1377,14 +1377,25 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
     '<th>Who</th><th>Measurable</th><th>March Goal</th><th>Current</th>' +
     '</tr></thead><tbody>';
 
+  const curMonthKey = MONTHS[new Date().getMonth()].toLowerCase();
   LOCATIONS.forEach(loc => {
     monthlyHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
     MONTHLY_METRICS.forEach(metric => {
       if (metric.id === 'totalMembers' && (loc.id === 'goninjaW' || loc.id === 'goninjaV')) return;
-      const rawMVal = monthData[loc.id] && monthData[loc.id][metric.id === 'grossRevenue' ? 'revenue' : metric.id];
-      const val = rawMVal !== undefined && rawMVal !== null && rawMVal !== '' ? rawMVal : '';
-      const curMonthKey = MONTHS[new Date().getMonth()].toLowerCase();
-        const goal = metric.id === 'grossRevenue' ? fmtCurrency(loc.revenueGoal) :
+      // Auto-pull current values from canonical data sources
+      let val = '';
+      if (metric.id === 'totalMembers' && ['waunakee','eastmad','verona'].includes(loc.id)) {
+        const memData = state.membership[loc.id] && state.membership[loc.id][curMonthKey];
+        val = memData && memData.total ? memData.total : (monthData[loc.id] && monthData[loc.id].totalMembers) || '';
+      } else if (metric.id === 'grossRevenue') {
+        const finData = state.financials[loc.id] && state.financials[loc.id]['2026'] && state.financials[loc.id]['2026'][curMonthKey];
+        const finRev = finData && finData.grossTY ? finData.grossTY : '';
+        val = finRev || (monthData[loc.id] && monthData[loc.id].revenue) || '';
+      } else {
+        const rawMVal = monthData[loc.id] && monthData[loc.id][metric.id];
+        val = rawMVal !== undefined && rawMVal !== null && rawMVal !== '' ? rawMVal : '';
+      }
+      const goal = metric.id === 'grossRevenue' ? fmtCurrency(loc.revenueGoal) :
           (metric.id === 'totalMembers' && ['waunakee','eastmad','verona'].includes(loc.id)) ?
           (state.membership[loc.id] && state.membership[loc.id][curMonthKey] && state.membership[loc.id][curMonthKey].goal || '') : '';
       // Color: green if meeting/exceeding goal, red if under
