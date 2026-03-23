@@ -2207,8 +2207,14 @@ function renderTasksPage(){
   const dateObj=new Date(dateKey+'T12:00:00');
   const dateLabel=dateObj.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric',year:'numeric'});
   let html='<div class="loc-selector">';
-  LOCATIONS.forEach(l=>{
-    const cls=l.id===loc?(isGoNinja(l.id)?'active':'active lvlup'):'';
+  const taskLocs=[
+    {id:'waunakee',short:'WAU',gn:false},
+    {id:'eastmad',short:'E.MAD',gn:false},
+    {id:'verona',short:'VER',gn:false},
+    {id:'goninjaW',short:'Go Ninja',gn:true}
+  ];
+  taskLocs.forEach(l=>{
+    const cls=l.id===loc?(l.gn?'active':'active lvlup'):'';
     html+='<button class="loc-btn '+cls+'" onclick="setTasksLoc(\''+l.id+'\')">'+l.short+'</button>';
   });
   html+='</div><div class="date-nav">';
