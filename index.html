@@ -1729,27 +1729,7 @@ function renderRocksPage() {
 }
 
 function renderGrowthInitiatives() {
-  const ini = (state.rocks && state.rocks.initiatives) || {};
-  const rc = ini.rackCards || {};
-  const sv = ini.schoolVisits || {};
-  const now = new Date();
-  const curMonthKey = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  const currentMonth = now.getMonth();
-  const referralDrives = parseInt(ini.referralDrives) || 0;
-  const buddyDays = parseInt(ini.buddyDays) || 0;
-  const gt = ini.goldenTicket || {};
-  const gtWau = parseInt(gt.waunakee) || 0;
-  const gtVer = parseInt(gt.verona) || 0;
-  const invitational = parseInt(ini.invitational) || 0;
-  const combatClinic = ini.combatClinic || {};
-  const ccHeld = parseInt(combatClinic.held) || 0;
-  const ccUpgrades = parseInt(combatClinic.upgrades) || 0;
-
-  const svThisMonth = parseInt(sv[curMonthKey]) || 0;
-  let svYTD = 0;
-  Object.keys(sv).forEach(k => { if (k.startsWith(String(now.getFullYear()))) svYTD += parseInt(sv[k]) || 0; });
-  const svMonthsElapsed = currentMonth + 1;
-  const svExpected = svMonthsElapsed * 3;
+  const items = (state.rocks && state.rocks.growthItems) || [];
 
   function progressBar(current, target, label) {
     const pct = target > 0 ? Math.min(Math.round(current / target * 100), 100) : 0;
@@ -1758,92 +1738,108 @@ function renderGrowthInitiatives() {
       '<div style="height:8px;background:var(--gray-800);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:4px;transition:width .3s"></div></div></div>';
   }
 
-  function counterInput(fbPath, val, label) {
-    return '<div style="display:flex;align-items:center;gap:6px;margin-top:4px"><span style="font-size:12px;color:var(--gray-400);min-width:60px">' + label + ':</span>' +
-      '<button onclick="updateInitiative(\'' + fbPath + '\',' + Math.max(0, val - 1) + ')" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">-</button>' +
+  function counterBtn(idx, field, val) {
+    return '<div style="display:flex;align-items:center;gap:6px;margin-top:4px"><span style="font-size:12px;color:var(--gray-400);min-width:60px">' + field + ':</span>' +
+      '<button onclick="updateGrowthCounter(' + idx + ',\'' + field + '\',' + Math.max(0, val - 1) + ')" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">-</button>' +
       '<span style="font-weight:600;min-width:28px;text-align:center">' + val + '</span>' +
-      '<button onclick="updateInitiative(\'' + fbPath + '\',' + (val + 1) + ')" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">+</button></div>';
+      '<button onclick="updateGrowthCounter(' + idx + ',\'' + field + '\',' + (val + 1) + ')" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">+</button></div>';
   }
 
-  function ownerBadge(name) {
-    return '<div style="display:inline-block;background:var(--gray-800);color:var(--gray-300);font-size:11px;padding:2px 8px;border-radius:10px;margin-bottom:8px">Lead: ' + name + '</div>';
-  }
-
-  let html = '<div class="section"><div class="section-header"><h2>Growth Initiatives  —  2026</h2></div>';
+  let html = '<div class="section"><div class="section-header"><h2>Growth Initiatives  —  2026</h2><div class="badge">' + items.length + '</div></div>';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;padding:16px">';
 
-  // 1. Rack Cards — Bryan
-  const rcWau = parseInt(rc.waunakee) || 0, rcEm = parseInt(rc.eastmad) || 0, rcVer = parseInt(rc.verona) || 0;
-  const rcTotal = rcWau + rcEm + rcVer;
-  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
-  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Rack Card Program</div>';
-  html += ownerBadge('Bryan');
-  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">20+ surrounding businesses per location</div>';
-  html += progressBar(rcTotal, 60, 'Total across all locations');
-  html += counterInput('rackCards/waunakee', rcWau, 'WAU');
-  html += counterInput('rackCards/eastmad', rcEm, 'E.MAD');
-  html += counterInput('rackCards/verona', rcVer, 'VER');
+  if (Array.isArray(items)) {
+    items.forEach((item, idx) => {
+      if (!item || !item.name) return;
+      const current = parseInt(item.current) || 0;
+      const target = parseInt(item.target) || 0;
+      html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px;position:relative">';
+      // Delete button
+      html += '<button onclick="if(confirm(\'Delete this initiative?\'))deleteGrowthItem(' + idx + ')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;opacity:0.6" title="Delete">&times;</button>';
+      // Name (editable)
+      html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px;cursor:pointer" ondblclick="editGrowthField(' + idx + ',\'name\',this)" title="Double-click to edit">' + esc(item.name) + '</div>';
+      // Owner (editable)
+      html += '<div style="display:inline-block;background:var(--gray-800);color:var(--gray-300);font-size:11px;padding:2px 8px;border-radius:10px;margin-bottom:8px;cursor:pointer" ondblclick="editGrowthField(' + idx + ',\'owner\',this)" title="Double-click to edit">Lead: ' + esc(item.owner || 'Unassigned') + '</div>';
+      // Description (editable)
+      html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px;cursor:pointer" ondblclick="editGrowthField(' + idx + ',\'description\',this)" title="Double-click to edit">' + esc(item.description || '') + '</div>';
+      // Progress bar
+      if (target > 0) html += progressBar(current, target, 'Progress');
+      // Counter
+      html += counterBtn(idx, 'Current', current);
+      // Target edit
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-top:4px"><span style="font-size:12px;color:var(--gray-400);min-width:60px">Target:</span>' +
+        '<input value="' + target + '" onchange="updateGrowthField(' + idx + ',\'target\',parseInt(this.value)||0)" style="width:70px;padding:4px 8px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-200);font-size:13px;text-align:center" /></div>';
+      // Sub-counters if any
+      const subs = item.subCounters || {};
+      Object.keys(subs).forEach(sk => {
+        html += counterBtn(idx, sk, parseInt(subs[sk]) || 0);
+      });
+      // Add sub-counter button
+      html += '<button onclick="addGrowthSubCounter(' + idx + ')" style="margin-top:8px;font-size:11px;background:none;border:1px dashed var(--gray-700);color:var(--gray-500);padding:4px 10px;border-radius:6px;cursor:pointer">+ Add sub-counter</button>';
+      html += '</div>';
+    });
+  }
+
   html += '</div>';
 
-  // 2. Referral Drives — Ms. K
-  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
-  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Referral Drive System</div>';
-  html += ownerBadge('Ms. K');
-  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Established and executed 2x per year</div>';
-  html += progressBar(referralDrives, 2, 'Drives completed');
-  html += counterInput('referralDrives', referralDrives, 'Done');
+  // Add new initiative form
+  html += '<div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--gray-800);flex-wrap:wrap">';
+  html += '<input id="newGrowthName" placeholder="Initiative name..." style="flex:2;min-width:180px;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
+  html += '<input id="newGrowthOwner" placeholder="Owner..." style="flex:1;min-width:100px;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
+  html += '<input id="newGrowthDesc" placeholder="Description..." style="flex:2;min-width:180px;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
+  html += '<input id="newGrowthTarget" type="number" placeholder="Target" style="width:80px;padding:8px 12px;border:1px solid var(--gray-700);border-radius:8px;background:var(--gray-900);color:var(--gray-100);font-size:13px" />';
+  html += '<button onclick="addGrowthItem()" style="padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">+ Add</button>';
   html += '</div>';
 
-  // 3. School Visits
-  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
-  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">School Visit Program</div>';
-  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Target: 3 visits per month</div>';
-  html += progressBar(svThisMonth, 3, MONTHS_SHORT[currentMonth] + ' visits');
-  html += progressBar(svYTD, svExpected, 'YTD (expected ' + svExpected + ')');
-  html += counterInput('schoolVisits/' + curMonthKey, svThisMonth, MONTHS_SHORT[currentMonth]);
   html += '</div>';
-
-  // 4. Bring a Buddy Days — Nikki
-  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
-  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Bring a Buddy Day</div>';
-  html += ownerBadge('Nikki');
-  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Execute 5x across the year</div>';
-  html += progressBar(buddyDays, 5, 'Events held');
-  html += counterInput('buddyDays', buddyDays, 'Done');
-  html += '</div>';
-
-  // 5. Golden Ticket Program
-  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
-  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Golden Ticket Program</div>';
-  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Go Ninja summer camp sign-ups</div>';
-  html += progressBar(gtWau, 55, 'Waunakee Go Ninja');
-  html += progressBar(gtVer, 20, 'Verona Go Ninja');
-  html += counterInput('goldenTicket/waunakee', gtWau, 'WAU');
-  html += counterInput('goldenTicket/verona', gtVer, 'VER');
-  html += '</div>';
-
-  // 6. LVLUP Invitational — Mrs. Moh
-  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
-  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">LVLUP Invitational</div>';
-  html += ownerBadge('Mrs. Moh');
-  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">900 competitor goal</div>';
-  html += progressBar(invitational, 900, 'Competitors registered');
-  html += counterInput('invitational', invitational, 'Total');
-  html += '</div>';
-
-  // 7. Intro to Combat Weapons Clinic — Bryan
-  html += '<div style="background:var(--gray-900);border:1px solid var(--gray-800);border-radius:12px;padding:16px">';
-  html += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">Intro to Combat Weapons Clinic</div>';
-  html += ownerBadge('Bryan');
-  html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Drive athlete development upgrades</div>';
-  html += progressBar(ccHeld, 4, 'Clinics held');
-  html += progressBar(ccUpgrades, 0, 'Upgrades generated');
-  html += counterInput('combatClinic/held', ccHeld, 'Clinics');
-  html += counterInput('combatClinic/upgrades', ccUpgrades, 'Upgrades');
-  html += '</div>';
-
-  html += '</div></div>';
   return html;
+}
+
+function addGrowthItem() {
+  const name = document.getElementById('newGrowthName').value.trim();
+  const owner = document.getElementById('newGrowthOwner').value.trim();
+  const desc = document.getElementById('newGrowthDesc').value.trim();
+  const target = parseInt(document.getElementById('newGrowthTarget').value) || 0;
+  if (!name) return alert('Enter an initiative name.');
+  const items = (state.rocks && state.rocks.growthItems) || [];
+  items.push({ name, owner, description: desc, target, current: 0 });
+  fbRef('rocks/growthItems').set(items);
+  document.getElementById('newGrowthName').value = '';
+  document.getElementById('newGrowthOwner').value = '';
+  document.getElementById('newGrowthDesc').value = '';
+  document.getElementById('newGrowthTarget').value = '';
+}
+function deleteGrowthItem(idx) {
+  const items = (state.rocks && state.rocks.growthItems) || [];
+  items.splice(idx, 1);
+  fbRef('rocks/growthItems').set(items.length ? items : null);
+}
+function updateGrowthField(idx, field, val) {
+  fbRef('rocks/growthItems/' + idx + '/' + field).set(val);
+}
+function updateGrowthCounter(idx, field, val) {
+  if (field === 'Current') {
+    fbRef('rocks/growthItems/' + idx + '/current').set(val);
+  } else {
+    fbRef('rocks/growthItems/' + idx + '/subCounters/' + field).set(val);
+  }
+}
+function editGrowthField(idx, field, el) {
+  const current = (state.rocks.growthItems[idx] || {})[field] || '';
+  const input = document.createElement('input');
+  input.value = current;
+  input.style.cssText = 'width:100%;padding:4px 8px;border:1px solid var(--blue);border-radius:6px;background:var(--gray-800);color:var(--gray-100);font-size:inherit';
+  const finish = () => { updateGrowthField(idx, field, input.value.trim()); };
+  input.onblur = finish;
+  input.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); finish(); } };
+  el.textContent = '';
+  el.appendChild(input);
+  input.focus();
+}
+function addGrowthSubCounter(idx) {
+  const label = prompt('Sub-counter label (e.g., WAU, VER):');
+  if (!label) return;
+  fbRef('rocks/growthItems/' + idx + '/subCounters/' + label.trim()).set(0);
 }
 
 function updateInitiative(path, val) {
