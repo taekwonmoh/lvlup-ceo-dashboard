@@ -518,7 +518,11 @@ let state = {
   l10: {},
   l10WeekOffset: 0,
   watchlist: {},
-  wlFilter: 'active'
+  wlFilter: 'active',
+  devCourse: {},
+  devActiveModule: null,
+  devQuizAnswers: {},
+  devQuizSubmitted: false
 };
 
 let debounceTimers = {};
@@ -946,6 +950,11 @@ function listenAll() {
   const wlRef = fbRef('watchlist');
   wlRef.on('value', snap => { state.watchlist = snap.val() || {}; render(); });
   activeListeners.push({ ref: wlRef, event: 'value' });
+
+  // Development course
+  const devRef = fbRef('development');
+  devRef.on('value', snap => { state.devCourse = snap.val() || {}; render(); });
+  activeListeners.push({ ref: devRef, event: 'value' });
 }
 
 /*  -  -  Navigation  -  -  */
@@ -1100,7 +1109,8 @@ function render() {
           s === 'tasks' ? renderTasksPage() :
           s === 'monthlyGoals' ? renderMonthlyGoalsPage() :
           s === 'l10' ? renderL10Page() :
-          s === 'watchlist' ? renderWatchListPage() : '');
+          s === 'watchlist' ? renderWatchListPage() :
+          s === 'development' ? renderDevelopmentPage() : '');
     if(s === 'performance') initKPICharts();
 }
 
@@ -1116,6 +1126,7 @@ function renderHeader() {
       { id: 'monthlyGoals', label: 'Monthly Goals' },
       { id: 'l10', label: 'L10 Meeting' },
       { id: 'watchlist', label: 'Watch List' },
+      { id: 'development', label: 'Development' },
     ];
   return '<div class="header">' +
     '<h1><span style="font-family:Arial Black,sans-serif;font-weight:900;color:#4169E1;letter-spacing:-1px;font-size:1.4rem">LVLUP</span> <span style="color:#999;font-weight:300">/</span> <span style="font-family:Arial Black,sans-serif;font-weight:900;color:#e94560;letter-spacing:-0.5px;font-size:1.4rem">Go Ninja</span> <span>HQ Dashboard</span></h1>' +
@@ -2588,6 +2599,277 @@ function renderL10Page() {
   html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">7</span>Conclude</h3><span class="l10-duration">5 min</span></div>';
   html += '<ul class="l10-conclude-list"><li><strong>Recap To-Do List</strong> \u2014 Review all action items assigned today</li><li><strong>Cascading Messages</strong> \u2014 Communicate out to other team members or community</li></ul>';
   html += '<div style="padding:0 20px 16px"><textarea style="width:100%;min-height:50px;border:1px solid var(--gray-200);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;resize:vertical" placeholder="Cascading messages and notes..." onchange="updateL10Note(\'' + weekKey + '\',\'conclude\',this.value)">' + esc(data.conclude || '') + '</textarea></div></div>';
+
+  return html;
+}
+
+/*  -  -  Development Course  -  -  */
+const DEV_MODULES = [
+  { id: 'brain', title: "How Kids' Brains Work", icon: '🧠', desc: 'Developmental stages from ages 3-12 and what they mean for your teaching.',
+    content: [
+      { h: 'Why This Matters', p: 'Every student who walks onto your mat is at a different stage of brain development. Understanding these stages is the difference between an instruction that clicks and one that frustrates. When you teach a 4-year-old the same way you teach a 10-year-old, you are working against their biology.' },
+      { h: 'Ages 3-4 (Mini Tigers)', p: 'The prefrontal cortex, which handles planning, impulse control, and following multi-step instructions, is barely online at this age. Attention span averages 8-12 minutes. These students learn primarily through imitation, repetition, and play. They cannot process verbal corrections well. Instead, show them. Use single-step instructions: "Watch me. Now you try." Celebrate effort loudly. Expect wiggles, silliness, and emotional swings — that is neurologically normal.' },
+      { h: 'Ages 5-7 (Tigers)', p: 'Working memory is developing. Students can now hold 2-3 step instructions. They are beginning to understand rules and fairness, but still think concretely — abstract concepts like "respect" need to be tied to specific actions ("we bow to show respect"). This age group thrives on routine and predictability. They can start to self-correct when given clear, specific feedback. Peer awareness is growing, so partner activities become powerful learning tools.' },
+      { h: 'Ages 8-12 (Taekwondo)', p: 'This is a golden window for skill acquisition. The brain is rapidly building neural pathways through myelination — skills practiced now become deeply wired. Students can handle complex sequences, understand strategy, and begin to self-assess. They crave mastery and competence. Challenge them appropriately. This age group can also begin to experience performance anxiety and social comparison, so how you handle mistakes matters enormously.' },
+      { h: 'On the Mat Tip', p: 'Structure your class timing around attention spans. Mini Tigers: activities change every 3-5 minutes. Tigers: 5-8 minutes per activity. Taekwondo: 8-15 minutes. When you see fidgeting or glazed eyes, it is not misbehavior — it is biology telling you to switch gears.' }
+    ],
+    quiz: [
+      { q: 'What is the average attention span of a 3-4 year old Mini Tiger student?', opts: ['3-5 minutes', '8-12 minutes', '15-20 minutes', '25-30 minutes'], ans: 1, why: 'Mini Tigers average 8-12 minutes of focused attention. Plan activity switches within this window.' },
+      { q: 'Which part of the brain handles impulse control and is still developing in young children?', opts: ['Cerebellum', 'Amygdala', 'Prefrontal cortex', 'Hippocampus'], ans: 2, why: 'The prefrontal cortex manages planning, impulse control, and multi-step processing. It does not fully mature until the mid-20s.' },
+      { q: 'Why is ages 8-12 considered a golden window for skill acquisition?', opts: ['Children are more obedient at this age', 'Rapid myelination builds deep neural pathways for practiced skills', 'They have longer class times', 'Parents are more involved'], ans: 1, why: 'Myelination during this period means skills practiced repeatedly become deeply wired into the nervous system.' },
+      { q: 'A 5-year-old Tiger student is not following your 4-step combination. What is most likely happening?', opts: ['They are not paying attention', 'Their working memory can only hold 2-3 steps at this age', 'They need more discipline', 'They are not talented enough'], ans: 1, why: 'Working memory at ages 5-7 handles 2-3 steps. Break complex sequences into smaller chunks.' }
+    ]
+  },
+  { id: 'motivation', title: 'Motivation Science', icon: '🔥', desc: 'Intrinsic vs extrinsic motivation, growth mindset, and why belts work.',
+    content: [
+      { h: 'Two Types of Motivation', p: 'Extrinsic motivation comes from external rewards: belt stripes, trophies, stickers. Intrinsic motivation comes from within: the satisfaction of mastering a kick, the pride of not giving up. Both are useful, but research consistently shows that intrinsic motivation produces longer-lasting engagement. Your job is to use extrinsic rewards as a bridge to build intrinsic drive.' },
+      { h: 'The Belt System as Motivation', p: 'Belts work because they provide visible progress markers. But there is a trap: if students only train "to get the next belt," they quit after black belt or during long gaps between tests. Frame belts as recognition of growth, not the goal itself. Say "You earned this because you kept showing up and improving" rather than "Great job getting your yellow belt."' },
+      { h: 'Growth Mindset on the Mat', p: 'Stanford researcher Carol Dweck identified two mindsets. Fixed mindset: "I am bad at this." Growth mindset: "I am not good at this yet." One word changes everything. When a student fails a technique, never say "That is wrong." Say "You are getting closer. Try adjusting your chamber." Praise effort, strategy, and persistence — not talent. "You worked so hard on that form" beats "You are so talented" every time.' },
+      { h: 'When Rewards Backfire', p: 'Over-rewarding can actually decrease intrinsic motivation. This is called the overjustification effect. If you give a sticker for every single thing, the sticker becomes the reason to try. Then when stickers stop, effort stops. Reserve tangible rewards for genuine milestones. Use verbal acknowledgment, high-fives, and specific praise as your daily currency.' },
+      { h: 'On the Mat Tip', p: 'Create a "Struggle of the Week" culture. Pick something hard. Celebrate the students who attempt it most, not just those who get it right. When students see that struggle is valued, they stop being afraid of failure — and that is when real growth happens.' }
+    ],
+    quiz: [
+      { q: 'What is the most effective long-term motivator for students?', opts: ['Stickers and prizes every class', 'Intrinsic motivation from mastery and personal growth', 'Fear of disappointing their parents', 'Competition with other students'], ans: 1, why: 'Research shows intrinsic motivation (mastery, personal growth) produces the most durable engagement over time.' },
+      { q: 'What is the "overjustification effect"?', opts: ['Students become over-confident', 'External rewards decrease internal motivation when overused', 'Students justify skipping class', 'Instructors over-explain techniques'], ans: 1, why: 'When external rewards are given too frequently, students begin performing for the reward rather than for personal satisfaction, reducing intrinsic motivation.' },
+      { q: 'Which phrase best demonstrates growth mindset coaching?', opts: ['"You are a natural at this!"', '"That was wrong, try again"', '"You are getting closer — try adjusting your chamber"', '"Watch how the other students do it"'], ans: 2, why: 'Growth mindset coaching acknowledges progress, provides specific guidance, and implies improvement is possible.' },
+      { q: 'How should belt promotions be framed to build lasting motivation?', opts: ['"You passed the test, congratulations"', '"You earned this because you kept showing up and improving"', '"You are better than the lower belts now"', '"Your parents will be proud"'], ans: 1, why: 'Framing belts as recognition of effort and growth builds intrinsic motivation rather than making the belt itself the goal.' }
+    ]
+  },
+  { id: 'communication', title: 'Communication by Age', icon: '🗣️', desc: 'How to deliver instructions that actually land with each age group.',
+    content: [
+      { h: 'The Communication Gap', p: 'The number one frustration instructors report is "they are not listening." Usually, the issue is not listening — it is comprehension. Your job is to match your communication style to the developmental level standing in front of you. The same instruction delivered three different ways reaches three different age groups.' },
+      { h: 'Mini Tigers (Ages 3-4): Show, Do Not Tell', p: 'Use maximum 5 words per instruction. "Hands up. Kick. Good." Demonstrate everything — they learn by watching, not hearing. Get on their physical level (kneel down). Use exaggerated facial expressions and enthusiasm. Repeat the same activity multiple times — repetition is comfort, not boredom, at this age. Use their name constantly. "Sarah, watch me. Sarah, your turn."' },
+      { h: 'Tigers (Ages 5-7): Structured Choices', p: 'Use 2-step instructions maximum. "First do this, then do that." Give choices to build ownership: "Do you want to practice your kick or your punch first?" Use visual and verbal together — demonstrate while you explain. Check for understanding: "Show me what I just said." Begin introducing martial arts terminology paired with plain language: "Front stance — that is your strong stance."' },
+      { h: 'Taekwondo (Ages 8-12): Why Matters', p: 'This age group wants to understand purpose. "Chamber your knee because it generates more power" is better than "Chamber your knee because I said so." They can handle correction if it is respectful and specific. Use questioning: "What do you think would happen if you pivoted your hip more?" Peer teaching is powerful — have them explain techniques to younger students.' },
+      { h: 'On the Mat Tip', p: 'The 3-second rule: after giving an instruction, wait 3 full seconds before repeating or adding more. Most instructors talk too much. Silence gives processing time. Count "one-one-thousand, two-one-thousand, three-one-thousand" in your head. You will be amazed how often students respond when given that space.' }
+    ],
+    quiz: [
+      { q: 'What is the maximum number of words you should use per instruction for Mini Tigers?', opts: ['About 5 words', 'About 10 words', 'About 15 words', 'As many as needed to be clear'], ans: 0, why: 'Mini Tigers process very short instructions best. "Hands up. Kick. Good." is more effective than a long explanation.' },
+      { q: 'Why should you explain "why" to 8-12 year old students?', opts: ['Because they will not listen otherwise', 'This age group wants to understand purpose, which deepens learning', 'To fill class time', 'Because their parents expect it'], ans: 1, why: 'Older students are developing abstract reasoning and engage more deeply when they understand the purpose behind a technique.' },
+      { q: 'What is the 3-second rule?', opts: ['Students must respond in 3 seconds or get pushups', 'Wait 3 seconds after an instruction before repeating it', 'Repeat every instruction 3 times', 'Give students 3 seconds to line up'], ans: 1, why: 'Waiting 3 seconds gives students processing time. Most instructors repeat too quickly, which actually reduces comprehension.' },
+      { q: 'A 6-year-old Tiger is not performing the combination correctly. Best approach?', opts: ['Explain the technique in detail verbally', 'Demonstrate it while giving a 2-step instruction', 'Have them watch a senior student', 'Tell them to practice at home'], ans: 1, why: 'Tigers learn best with combined visual demonstration and short verbal instructions (2 steps max).' }
+    ]
+  },
+  { id: 'emotions', title: 'Managing Big Emotions', icon: '💪', desc: 'Handling meltdowns, anxiety, belt test nerves, and sparring fear.',
+    content: [
+      { h: 'Emotions Are Not Misbehavior', p: 'When a 4-year-old cries during class, a 7-year-old freezes during sparring, or a 10-year-old melts down after failing a technique, these are not discipline problems. They are nervous system responses. The amygdala — the brain\'s alarm system — has hijacked the thinking brain. In this state, the student literally cannot process instructions, corrections, or reasoning. Your first job is to help them regulate, not educate.' },
+      { h: 'The Co-Regulation Approach', p: 'Young children cannot regulate their own emotions yet. They need your calm to find their calm. This is called co-regulation. Lower your voice (do not raise it). Get on their physical level. Use short, calm phrases: "I see you. You are safe. Take a breath with me." Do not say "stop crying" or "you are fine" — these dismiss their experience and delay regulation. A regulated child is ready to learn in 2-3 minutes. A shamed child may not return to class.' },
+      { h: 'Belt Test Anxiety', p: 'Testing anxiety is one of the top reasons students quit before testing or leave after failing. Normalize nervousness: "Every black belt you see was nervous at their first test. That feeling means you care." Prepare students with mock testing conditions. Give them a specific physical anchor: "When you feel nervous, take three breaths and feel your feet on the floor." After the test, always acknowledge their courage regardless of outcome: "You stood up and showed what you have been working on. That takes guts."' },
+      { h: 'Sparring Fear', p: 'Fear of getting hit is primal and valid. Never shame it. Build exposure gradually: shadow sparring, light touch drills, controlled contact with trusted partners. Give students an out that saves face: "Tap your chest if you need a break" rather than forcing them to say they are scared. Pair anxious students with empathetic partners, not your hardest hitters. Every positive sparring experience builds courage. One bad experience can undo months of progress.' },
+      { h: 'On the Mat Tip', p: 'Create a "reset spot" — a specific place on or near the mat where a student can go to take a break without leaving class. It is not a punishment; it is a tool. Teach it proactively: "If you ever feel overwhelmed, go stand on the blue star, take 5 breaths, and come back when you are ready." This gives students agency over their emotions and prevents full meltdowns.' }
+    ],
+    quiz: [
+      { q: 'When a young student is crying during class, what has happened neurologically?', opts: ['They are seeking attention', 'The amygdala has hijacked the thinking brain, preventing rational processing', 'They are not tough enough for martial arts', 'They did not get enough sleep'], ans: 1, why: 'The amygdala triggers a fight-flight-freeze response that literally prevents the prefrontal cortex from processing instructions or reasoning.' },
+      { q: 'What is co-regulation?', opts: ['Two students practicing together', 'Using your own calm presence to help a child regulate their emotions', 'Enforcing class rules consistently', 'Having parents intervene during class'], ans: 1, why: 'Children develop emotional regulation by borrowing from a calm adult. Your regulated state helps them find theirs.' },
+      { q: 'A student is terrified of sparring. Best approach?', opts: ['Pair them with a strong fighter so they toughen up', 'Remove them from sparring class', 'Build exposure gradually with shadow sparring, light touch drills, and trusted partners', 'Tell them there is nothing to be afraid of'], ans: 2, why: 'Gradual exposure with safety builds courage. One overwhelming experience can undo months of progress.' },
+      { q: 'What is the purpose of a "reset spot" in class?', opts: ['Punishment for misbehavior', 'A place where students can self-regulate without leaving class', 'Where students go when they are late', 'A spot for stretching'], ans: 1, why: 'A reset spot gives students agency over their emotions and prevents full meltdowns by providing a proactive coping tool.' }
+    ]
+  },
+  { id: 'coaching', title: 'The Coaching Edge', icon: '⭐', desc: 'Positive reinforcement, corrective feedback, and building confident students.',
+    content: [
+      { h: 'The 5:1 Ratio', p: 'Research by John Gottman and others shows that healthy relationships thrive at a 5:1 ratio of positive to negative interactions. Apply this to coaching: for every correction, give five acknowledgments. This does not mean giving empty praise. It means actively looking for what students are doing right. "Great chamber on that kick. I see your hands are up. Nice loud kiai." Then: "Now let us work on pivoting that back foot." The correction lands because it is surrounded by safety.' },
+      { h: 'Specific Praise vs Generic Praise', p: '"Good job" is the most overused and least effective praise in coaching. It tells the student nothing about what they did well or why it mattered. Switch to specific praise: "Your back kick had perfect balance today" or "I noticed you helped a white belt during free time — that is black belt leadership." Specific praise tells the student what to repeat and shows that you are actually watching them, not just saying words.' },
+      { h: 'The Feedback Sandwich', p: 'When delivering corrections, use the sandwich method: positive observation, specific correction, encouraging close. "Your form sequence is getting smoother every week. On your front stance, drive your front knee forward another two inches — it will give you much more stability. Keep up that practice, it is showing." This structure keeps the student open to correction because they do not feel attacked.' },
+      { h: 'Correcting Without Crushing', p: 'Never correct a student in front of the class in a way that highlights their failure. Walk over, get close, lower your voice, give the adjustment. Public praise, private correction. If you must address the whole class, make it general: "Everyone check your chamber height" rather than "Tyler, your chamber is too low." Also, never compare students to each other: "Why can she do it and you cannot?" is devastating and teaches nothing.' },
+      { h: 'On the Mat Tip', p: 'Start each class by specifically acknowledging one thing you noticed a student improve on since last class. "Marcus, your side kicks have gotten so much sharper." This shows students that their effort is seen between classes, not just during them. Keep a mental or written note of one thing per student to watch for. This single habit will transform your retention.' }
+    ],
+    quiz: [
+      { q: 'What is the recommended ratio of positive to corrective interactions?', opts: ['1:1', '2:1', '5:1', '10:1'], ans: 2, why: 'Research shows a 5:1 ratio of positive to corrective interactions creates an environment where corrections are received openly.' },
+      { q: 'Why is "good job" ineffective as praise?', opts: ['It is too informal for martial arts', 'It does not tell the student what they did well or what to repeat', 'It is overused and students do not hear it anymore', 'It should be replaced with a high-five'], ans: 1, why: 'Specific praise tells the student exactly what behavior to repeat and shows you are genuinely paying attention.' },
+      { q: 'A student\'s front stance needs correction. Best approach?', opts: ['Call it out in front of the class as a teaching moment', 'Walk over, lower your voice, give the specific adjustment privately', 'Ignore it and hope they self-correct', 'Compare them to a student doing it correctly'], ans: 1, why: 'Public praise, private correction. Walking over and quietly adjusting maintains the student\'s dignity and keeps them open to feedback.' },
+      { q: 'What is the feedback sandwich?', opts: ['Positive — correction — positive', 'Correction — praise — correction', 'Instruction — demonstration — practice', 'Warmup — drill — cooldown'], ans: 0, why: 'The sandwich method wraps correction between genuine positive observations, keeping the student open and motivated.' }
+    ]
+  },
+  { id: 'neurodiverse', title: 'Neurodiverse Students', icon: '🌈', desc: 'Practical strategies for ADHD, autism spectrum, and sensory differences.',
+    content: [
+      { h: 'Neurodiversity Is Common', p: 'Approximately 1 in 5 children has some form of neurodevelopmental difference. In a class of 15, that is likely 3 students. ADHD, autism spectrum, sensory processing differences, and learning disabilities are not rare — they are part of your regular teaching reality. You do not need to be a therapist. You need practical mat-side strategies that help these students thrive. The good news: strategies that help neurodiverse students usually help all students.' },
+      { h: 'ADHD on the Mat', p: 'ADHD is not a lack of attention — it is difficulty regulating attention. These students may hyperfocus on something they love and struggle to switch tasks. Strategies: keep instructions short and action-oriented. Use countdowns for transitions: "In 5 seconds we switch. 5, 4, 3, 2, 1, switch." Build in movement between instruction segments — do not make them stand still and listen for 5 minutes. Give them a leadership role (line leader, demo partner) to channel their energy. Avoid punishment-based approaches; they usually backfire with ADHD.' },
+      { h: 'Autism Spectrum', p: 'Students on the spectrum often need predictability, clear expectations, and processing time. Post a visual schedule of class structure where they can see it. Warn before transitions: "In 2 minutes we will switch to sparring drills." Be literal — sarcasm and idioms can be confusing. Sensory issues are real: some students cannot tolerate being touched, loud noises, or certain textures. Ask parents what works. Allow modifications like lighter contact or a quieter position in line. Never force eye contact — it can be physically uncomfortable for some students on the spectrum.' },
+      { h: 'Sensory Processing', p: 'Some students are sensory seekers (they crash into things, love loud noise, seek deep pressure) and some are sensory avoiders (overwhelmed by noise, light touch, crowded spaces). For seekers: give them heavy work — pushups, pad holding, strong stances. For avoiders: position them at the end of the line, give advance warning before loud kiais, allow them to wear compression clothing under their dobok. A quick parent conversation about sensory preferences can prevent months of struggle.' },
+      { h: 'On the Mat Tip', p: 'Create a "first-then" board or verbal routine for students who struggle with transitions. "First we do forms, then we do sparring." This simple structure reduces anxiety because the student knows what comes next. Pair it with a consistent class structure that rarely changes. Predictability is calming for all students, and essential for many neurodiverse learners.' }
+    ],
+    quiz: [
+      { q: 'Approximately what fraction of children have some neurodevelopmental difference?', opts: ['1 in 50', '1 in 20', '1 in 5', '1 in 3'], ans: 2, why: 'About 1 in 5 children has ADHD, autism spectrum, sensory processing differences, or learning disabilities.' },
+      { q: 'A student with ADHD cannot stay still during instruction. Best strategy?', opts: ['Give them pushups as consequence', 'Keep instructions short and build movement between segments', 'Remove them from class', 'Seat them at the back of the room'], ans: 1, why: 'Short instructions with movement breaks works with ADHD neurology rather than against it. Punishment typically backfires.' },
+      { q: 'Why should you avoid forcing eye contact with a student on the autism spectrum?', opts: ['It is not culturally appropriate', 'It can be physically uncomfortable or even painful for some students on the spectrum', 'They need to watch their feet', 'It is not important in martial arts'], ans: 1, why: 'For some individuals on the autism spectrum, forced eye contact causes genuine physical discomfort and increases anxiety.' },
+      { q: 'What is a "sensory seeker" student likely to benefit from?', opts: ['Quiet meditation exercises', 'Heavy work activities like pushups, pad holding, and strong stances', 'Sitting on the sideline to calm down', 'Verbal instructions only'], ans: 1, why: 'Sensory seekers crave deep pressure and physical input. Heavy work activities channel this need productively.' }
+    ]
+  },
+  { id: 'parents', title: 'Parent Communication', icon: '🤝', desc: 'Building parent confidence and handling concerns professionally.',
+    content: [
+      { h: 'Parents Are Your Partners', p: 'Parents enroll their children in martial arts for many reasons: discipline, confidence, fitness, self-defense, social skills. Your job is to make the invisible visible. Parents cannot see neural pathway development. They can see their child\'s confidence grow if you point it out. Every parent interaction is a retention conversation. A parent who feels informed and valued does not leave. A parent who feels ignored or confused starts looking at other activities.' },
+      { h: 'The 30-Second Post-Class Update', p: 'The most powerful retention tool costs nothing and takes 30 seconds. At pickup, find one specific thing to tell a parent about their child: "Aiden tried a spin hook kick for the first time today and did not give up even when he fell. That kind of persistence is going to serve him his whole life." You just gave that parent a story to tell at dinner, evidence that their money is well spent, and a reason to come back tomorrow. Do this for 2-3 different parents per class, rotating through your roster.' },
+      { h: 'Handling Concerns', p: 'When a parent has a concern, follow this framework. First, listen completely — do not interrupt or get defensive. Second, validate: "I understand your concern. Thank you for bringing this to me." Third, explain your approach: "Here is what we are working on and why." Fourth, propose next steps: "Let me try this adjustment and let us check in next week." Never dismiss a parent concern, even if it seems minor. To them, it is not minor. If it is beyond your scope, involve your head instructor or Mr./Mrs. Moh.' },
+      { h: 'Progress Transparency', p: 'Parents should never be surprised by a testing result — pass or fail. Communicate proactively about where their child stands. Use phrases like "On track for testing," "Needs a few more weeks," or "Ready and strong." If a student is struggling, frame it developmentally: "This is normal for her age group. Here is what we are doing to help and what you can do at home." Give parents homework: "Have her practice her form 3 times this week — she almost has it" turns parents into training partners.' },
+      { h: 'On the Mat Tip', p: 'Keep a rotation list by the door or on your phone. Each class, plan to connect with 2-3 parents. After 2-3 weeks, you will have touched every family. This proactive communication prevents 90% of parent complaints because issues are addressed before they fester. It also makes testing discussions much easier because parents already feel in the loop.' }
+    ],
+    quiz: [
+      { q: 'What is the most powerful retention tool described in this module?', opts: ['Discounted membership fees', 'The 30-second specific post-class parent update', 'Monthly newsletters', 'Social media posts about students'], ans: 1, why: 'A specific, personal 30-second update gives parents evidence that their investment is worthwhile and creates emotional connection to your program.' },
+      { q: 'A parent is upset that their child was not promoted at testing. First step?', opts: ['Explain the testing criteria immediately', 'Listen completely without interrupting or getting defensive', 'Tell them their child was not ready', 'Offer a free retest'], ans: 1, why: 'The first step is always to listen completely. Parents need to feel heard before they can hear your explanation.' },
+      { q: 'Should parents ever be surprised by a testing result?', opts: ['Yes, surprises build excitement', 'No, communicate proactively about readiness before testing', 'Only if they pass', 'It depends on the student'], ans: 1, why: 'Proactive communication about testing readiness prevents negative surprises and builds parent trust in your program.' },
+      { q: 'How should you frame a struggling student to their parents?', opts: ['"Your child is behind the others"', '"She needs more discipline at home"', '"This is normal for her age group. Here is what we are doing to help"', '"Maybe try a different activity"'], ans: 2, why: 'Developmental framing normalizes the struggle, shows your expertise, and positions you as a partner working with the parent.' }
+    ]
+  }
+];
+
+function devSetModule(idx) { state.devActiveModule = idx; state.devQuizAnswers = {}; state.devQuizSubmitted = false; render(); }
+function devBackToMenu() { state.devActiveModule = null; render(); }
+function devSelectAnswer(qIdx, aIdx) { if (state.devQuizSubmitted) return; state.devQuizAnswers[qIdx] = aIdx; render(); }
+function devSubmitQuiz() {
+  const mod = DEV_MODULES[state.devActiveModule];
+  if (!mod) return;
+  const totalQ = mod.quiz.length;
+  const answered = Object.keys(state.devQuizAnswers).length;
+  if (answered < totalQ) return alert('Please answer all questions before submitting.');
+  state.devQuizSubmitted = true;
+  let correct = 0;
+  mod.quiz.forEach((q, i) => { if (state.devQuizAnswers[i] === q.ans) correct++; });
+  const score = Math.round(correct / totalQ * 100);
+  const passed = score >= 80;
+  fbSet('development/modules/' + mod.id, { score, passed, completedAt: new Date().toISOString() });
+  render();
+}
+function devRetryQuiz() { state.devQuizAnswers = {}; state.devQuizSubmitted = false; render(); }
+function devGenerateCert() {
+  const name = prompt('Enter your full name for the certificate:');
+  if (!name) return;
+  fbSet('development/certificate', { name, date: new Date().toISOString() });
+  render();
+}
+
+function renderDevelopmentPage() {
+  const progress = (state.devCourse && state.devCourse.modules) || {};
+  const cert = state.devCourse && state.devCourse.certificate;
+  const passedCount = DEV_MODULES.filter(m => progress[m.id] && progress[m.id].passed).length;
+  const allPassed = passedCount === DEV_MODULES.length;
+
+  // Module detail view
+  if (state.devActiveModule !== null) {
+    const mod = DEV_MODULES[state.devActiveModule];
+    const modProgress = progress[mod.id] || {};
+    let html = '<div class="section">';
+    html += '<div style="padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--gray-800)">';
+    html += '<button onclick="devBackToMenu()" style="background:none;border:1px solid var(--gray-700);border-radius:8px;color:var(--gray-300);cursor:pointer;padding:6px 14px;font-size:13px">&larr; Back</button>';
+    html += '<span style="font-size:28px">' + mod.icon + '</span>';
+    html += '<div><div style="font-size:18px;font-weight:700">Module ' + (state.devActiveModule + 1) + ': ' + esc(mod.title) + '</div>';
+    html += '<div style="font-size:12px;color:var(--gray-500)">' + esc(mod.desc) + '</div></div>';
+    if (modProgress.passed) html += '<span style="margin-left:auto;background:#10b981;color:white;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">Passed ' + modProgress.score + '%</span>';
+    html += '</div>';
+
+    // Content sections
+    mod.content.forEach(c => {
+      html += '<div style="padding:20px 24px;border-bottom:1px solid var(--gray-800)">';
+      html += '<h3 style="margin:0 0 8px;font-size:15px;font-weight:700;color:var(--gray-100)">' + esc(c.h) + '</h3>';
+      html += '<p style="margin:0;font-size:14px;line-height:1.7;color:var(--gray-300)">' + esc(c.p) + '</p>';
+      html += '</div>';
+    });
+
+    // Quiz section
+    html += '<div style="padding:20px 24px;background:var(--gray-900);border-top:2px solid var(--blue)">';
+    html += '<h3 style="margin:0 0 16px;font-size:16px;font-weight:700;color:var(--gray-100)">📝 Knowledge Check — Score 80% or higher to pass</h3>';
+
+    mod.quiz.forEach((q, qi) => {
+      const selected = state.devQuizAnswers[qi];
+      const submitted = state.devQuizSubmitted;
+      const isCorrect = submitted && selected === q.ans;
+      const isWrong = submitted && selected !== undefined && selected !== q.ans;
+      html += '<div style="margin-bottom:20px;padding:16px;background:var(--gray-800);border-radius:10px;border-left:3px solid ' + (submitted ? (isCorrect ? '#10b981' : '#ef4444') : 'var(--blue)') + '">';
+      html += '<div style="font-weight:600;margin-bottom:10px;font-size:14px;color:var(--gray-100)">' + (qi + 1) + '. ' + esc(q.q) + '</div>';
+      q.opts.forEach((opt, oi) => {
+        const isSel = selected === oi;
+        const isAns = submitted && oi === q.ans;
+        let bg = 'var(--gray-900)'; let border = 'var(--gray-700)'; let col = 'var(--gray-300)';
+        if (isSel && !submitted) { bg = 'rgba(59,130,246,0.15)'; border = 'var(--blue)'; col = 'var(--gray-100)'; }
+        if (submitted && isAns) { bg = 'rgba(16,185,129,0.15)'; border = '#10b981'; col = '#10b981'; }
+        if (submitted && isSel && !isAns) { bg = 'rgba(239,68,68,0.15)'; border = '#ef4444'; col = '#ef4444'; }
+        html += '<div onclick="devSelectAnswer(' + qi + ',' + oi + ')" style="padding:10px 14px;margin:6px 0;border-radius:8px;border:1px solid ' + border + ';background:' + bg + ';color:' + col + ';cursor:' + (submitted ? 'default' : 'pointer') + ';font-size:13px;transition:all 0.15s">';
+        html += (isSel ? '● ' : '○ ') + esc(opt);
+        html += '</div>';
+      });
+      if (submitted) {
+        html += '<div style="margin-top:8px;padding:8px 12px;border-radius:6px;font-size:12px;background:rgba(255,255,255,0.03);color:var(--gray-400)">' + (isCorrect ? '✅ ' : '❌ ') + esc(q.why) + '</div>';
+      }
+      html += '</div>';
+    });
+
+    if (!state.devQuizSubmitted) {
+      html += '<button onclick="devSubmitQuiz()" style="padding:10px 24px;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">Submit Answers</button>';
+    } else {
+      const correct = mod.quiz.filter((q, i) => state.devQuizAnswers[i] === q.ans).length;
+      const score = Math.round(correct / mod.quiz.length * 100);
+      const passed = score >= 80;
+      html += '<div style="padding:16px;border-radius:10px;background:' + (passed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)') + ';border:1px solid ' + (passed ? '#10b981' : '#ef4444') + ';text-align:center">';
+      html += '<div style="font-size:28px;font-weight:800;color:' + (passed ? '#10b981' : '#ef4444') + '">' + score + '%</div>';
+      html += '<div style="font-size:14px;color:var(--gray-300);margin:4px 0">' + correct + '/' + mod.quiz.length + ' correct</div>';
+      html += passed ? '<div style="font-size:13px;color:#10b981;font-weight:600">✅ Module passed!</div>' : '<div style="margin-top:8px"><button onclick="devRetryQuiz()" style="padding:8px 20px;background:#ef4444;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">Retry Quiz</button></div>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  // Landing page
+  let html = '';
+
+  // Hero
+  html += '<div class="section" style="text-align:center;padding:32px 24px">';
+  html += '<div style="font-size:40px;margin-bottom:8px">🥋</div>';
+  html += '<h2 style="margin:0 0 4px;font-size:22px;font-weight:800;color:var(--gray-100)">Instructor Development Program</h2>';
+  html += '<div style="font-size:14px;color:var(--gray-400);margin-bottom:20px">Child Development & Coaching Excellence for LVLUP and Go Ninja Instructors</div>';
+  html += '<div style="display:flex;justify-content:center;gap:24px;margin-bottom:16px">';
+  html += '<div><span style="font-size:28px;font-weight:800;color:var(--blue)">' + passedCount + '</span><span style="font-size:28px;color:var(--gray-600)">/' + DEV_MODULES.length + '</span><div style="font-size:11px;color:var(--gray-500)">Modules Passed</div></div>';
+  const avgScore = DEV_MODULES.reduce((sum, m) => sum + ((progress[m.id] && progress[m.id].score) || 0), 0) / Math.max(DEV_MODULES.filter(m => progress[m.id] && progress[m.id].score).length, 1);
+  html += '<div><span style="font-size:28px;font-weight:800;color:var(--blue)">' + (passedCount > 0 ? Math.round(avgScore) + '%' : '--') + '</span><div style="font-size:11px;color:var(--gray-500)">Avg Score</div></div>';
+  html += '</div>';
+  // Progress bar
+  const pct = Math.round(passedCount / DEV_MODULES.length * 100);
+  html += '<div style="max-width:400px;margin:0 auto;background:var(--gray-800);border-radius:10px;height:12px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:linear-gradient(90deg,var(--blue),#10b981);border-radius:10px;transition:width 0.3s"></div></div>';
+  html += '<div style="font-size:12px;color:var(--gray-500);margin-top:6px">' + pct + '% complete</div>';
+  html += '</div>';
+
+  // Module cards
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;padding:0 0 20px">';
+  DEV_MODULES.forEach((mod, i) => {
+    const mp = progress[mod.id] || {};
+    const passed = mp.passed;
+    const attempted = mp.score !== undefined;
+    const borderColor = passed ? '#10b981' : 'var(--gray-800)';
+    html += '<div onclick="devSetModule(' + i + ')" style="background:var(--gray-900);border:1px solid ' + borderColor + ';border-radius:12px;padding:20px;cursor:pointer;transition:all 0.15s;position:relative" onmouseover="this.style.borderColor=\'var(--blue)\'" onmouseout="this.style.borderColor=\'' + borderColor + '\'">';
+    if (passed) html += '<div style="position:absolute;top:12px;right:12px;background:#10b981;color:white;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">PASSED ' + mp.score + '%</div>';
+    html += '<div style="font-size:28px;margin-bottom:8px">' + mod.icon + '</div>';
+    html += '<div style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Module ' + (i + 1) + '</div>';
+    html += '<div style="font-size:15px;font-weight:700;color:var(--gray-100);margin-bottom:6px">' + esc(mod.title) + '</div>';
+    html += '<div style="font-size:12px;color:var(--gray-400);line-height:1.5">' + esc(mod.desc) + '</div>';
+    if (attempted && !passed) html += '<div style="margin-top:8px;font-size:11px;color:#ef4444;font-weight:600">Score: ' + mp.score + '% — Retry needed</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Certificate section
+  html += '<div class="section" style="text-align:center;padding:24px">';
+  if (allPassed) {
+    if (cert) {
+      html += '<div style="border:3px double var(--blue);border-radius:16px;padding:40px 32px;max-width:600px;margin:0 auto;background:linear-gradient(135deg,rgba(65,105,225,0.05),rgba(16,185,129,0.05))">';
+      html += '<div style="font-size:48px;margin-bottom:12px">🏆</div>';
+      html += '<div style="font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:3px;margin-bottom:8px">Certificate of Completion</div>';
+      html += '<div style="font-size:22px;font-weight:800;color:var(--gray-100);margin-bottom:4px">' + esc(cert.name) + '</div>';
+      html += '<div style="font-size:14px;color:var(--gray-400);margin-bottom:16px">LVLUP / Go Ninja Certified Instructor</div>';
+      html += '<div style="font-size:13px;color:var(--gray-400)">Instructor Development Program — Child Development & Coaching Excellence</div>';
+      html += '<div style="font-size:12px;color:var(--gray-500);margin-top:8px">Completed: ' + new Date(cert.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) + '</div>';
+      html += '<div style="margin-top:20px"><button onclick="window.print()" style="padding:8px 20px;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px">🖨️ Print Certificate</button></div>';
+      html += '</div>';
+    } else {
+      html += '<div style="font-size:36px;margin-bottom:8px">🎉</div>';
+      html += '<div style="font-size:16px;font-weight:700;color:var(--gray-100);margin-bottom:8px">All Modules Complete!</div>';
+      html += '<div style="font-size:13px;color:var(--gray-400);margin-bottom:16px">Generate your certificate of completion.</div>';
+      html += '<button onclick="devGenerateCert()" style="padding:10px 24px;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🏆 Generate Certificate</button>';
+    }
+  } else {
+    html += '<div style="font-size:28px;margin-bottom:8px;opacity:0.4">🏆</div>';
+    html += '<div style="font-size:14px;color:var(--gray-500)">Complete all ' + DEV_MODULES.length + ' modules to earn your Certified Instructor certificate</div>';
+    html += '<div style="font-size:12px;color:var(--gray-600);margin-top:4px">' + (DEV_MODULES.length - passedCount) + ' module' + (DEV_MODULES.length - passedCount !== 1 ? 's' : '') + ' remaining</div>';
+  }
+  html += '</div>';
 
   return html;
 }
