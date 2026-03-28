@@ -1764,10 +1764,11 @@ function renderGrowthInitiatives() {
   }
 
   function counterBtn(idx, field, val) {
+    var inputId = 'gc_' + idx + '_' + field.replace(/\s/g,'_');
     return '<div style="display:flex;align-items:center;gap:6px;margin-top:4px"><span style="font-size:12px;color:var(--gray-400);min-width:60px">' + field + ':</span>' +
-      '<button onclick="updateGrowthCounter(' + idx + ',\'' + field + '\',' + Math.max(0, val - 1) + ')" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">-</button>' +
-      '<span style="font-weight:600;min-width:28px;text-align:center">' + val + '</span>' +
-      '<button onclick="updateGrowthCounter(' + idx + ',\'' + field + '\',' + (val + 1) + ')" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">+</button></div>';
+      '<button onclick="var v=Math.max(0,(parseInt(document.getElementById(\'' + inputId + '\').value)||0)-1);updateGrowthCounter(' + idx + ',\'' + field + '\',v)" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">-</button>' +
+      '<input id="' + inputId + '" value="' + val + '" onchange="updateGrowthCounter(' + idx + ',\'' + field + '\',parseInt(this.value)||0)" style="width:50px;padding:4px 8px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-200);font-size:13px;font-weight:600;text-align:center" />' +
+      '<button onclick="var v=(parseInt(document.getElementById(\'' + inputId + '\').value)||0)+1;updateGrowthCounter(' + idx + ',\'' + field + '\',v)" style="width:28px;height:28px;border:1px solid var(--gray-700);border-radius:6px;background:var(--gray-800);color:var(--gray-300);cursor:pointer;font-size:16px">+</button></div>';
   }
 
   let html = '<div class="section"><div class="section-header"><h2>Growth Initiatives  —  2026</h2><div class="badge">' + items.length + '</div></div>';
