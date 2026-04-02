@@ -119,6 +119,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cal-has-event { border-color: var(--accent); }
 .cal-past { opacity: 0.5; }
 .cal-evt { font-size: 10px; font-weight: 600; color: #fff; background: var(--accent); border-radius: 4px; padding: 2px 5px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-evt.cal-evt-cont { opacity: 0.55; border-radius: 0; margin-top: 0; font-size: 0; padding: 4px 5px; }
+.cal-evt.cal-evt-start { border-radius: 4px 0 0 4px; }
+.cal-evt.cal-evt-end { border-radius: 0 4px 4px 0; }
 .cal-list { display: flex; flex-direction: column; gap: 8px; }
 .cal-list-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--card); border-radius: 10px; border-left: 4px solid var(--accent); }
 .cal-list-past { opacity: 0.5; border-left-color: var(--gray-300); }
@@ -1883,12 +1886,15 @@ function addEvent() {
   const date = document.getElementById('evtDate').value;
   const loc = document.getElementById('evtLoc').value;
   const type = document.getElementById('evtType').value;
+  const endDate = document.getElementById('evtEndDate').value;
   const link = document.getElementById('evtLink').value.trim();
   const hidden = document.getElementById('evtHidden').checked;
   if (!name || !date) return alert('Event name and date are required.');
+  if (endDate && endDate < date) return alert('End date must be on or after the start date.');
   const editingKey = document.getElementById('evtAddBtn').dataset.editingKey;
   const key = editingKey || ('evt_' + Date.now());
   const payload = { event: name, date: date, loc: loc, type: type, link: link };
+  if (endDate && endDate !== date) payload.endDate = endDate;
   if (hidden) payload.hiddenFromStudents = true;
   fbRef('events/' + key).set(payload);
   cancelEditEvent();
@@ -1899,6 +1905,7 @@ function editEvent(key) {
   if (!e) return;
   document.getElementById('evtName').value = e.event || '';
   document.getElementById('evtDate').value = e.date || '';
+  document.getElementById('evtEndDate').value = e.endDate || '';
   document.getElementById('evtLoc').value = e.loc || '';
   document.getElementById('evtType').value = e.type || 'special';
   document.getElementById('evtLink').value = e.link || '';
@@ -1915,6 +1922,7 @@ function editEvent(key) {
 function cancelEditEvent() {
   document.getElementById('evtName').value = '';
   document.getElementById('evtDate').value = '';
+  document.getElementById('evtEndDate').value = '';
   document.getElementById('evtLink').value = '';
   document.getElementById('evtHidden').checked = false;
   const btn = document.getElementById('evtAddBtn');
@@ -1960,7 +1968,12 @@ function renderEventsPage() {
   });
 
   // Filter to current month
-  const monthEvts = allParsed.filter(e => e._d.getFullYear() === yr && e._d.getMonth() === mo).sort((a,b) => a._d - b._d);
+  const monthStart = new Date(yr, mo, 1);
+  const monthEnd = new Date(yr, mo + 1, 0);
+  const monthEvts = allParsed.filter(e => {
+    const evtEnd = e.endDate ? new Date(e.endDate + 'T00:00:00') : e._d;
+    return e._d <= monthEnd && evtEnd >= monthStart;
+  }).sort((a,b) => a._d - b._d);
 
   let html = '';
 
@@ -1975,7 +1988,8 @@ function renderEventsPage() {
   // Add event form
   html += '<div class="evt-add-form">';
   html += '<input type="text" id="evtName" placeholder="Event name..." />';
-  html += '<input type="date" id="evtDate" />';
+  html += '<input type="date" id="evtDate" title="Start date" />';
+  html += '<input type="date" id="evtEndDate" title="End date (optional — leave blank for single-day)" />';
   html += '<select id="evtLoc"><option value="">All Locations</option><option value="waunakee">LVLUP Waunakee</option><option value="eastmad">LVLUP E.Mad</option><option value="verona">LVLUP Verona</option><option value="goninjaW">Go Ninja Waunakee</option><option value="goninjaV">Go Ninja Verona</option></select>';
   html += '<select id="evtType"><option value="testing">Belt Test</option><option value="tournament">Tournament</option><option value="seminar">Seminar</option><option value="special">Special Event</option></select>';
   html += '<input type="url" id="evtLink" placeholder="GymDesk link (optional)" />';
@@ -1999,8 +2013,13 @@ function renderEventsPage() {
   const firstDow = new Date(yr, mo, 1).getDay();
   const dayEvts = {};
   monthEvts.forEach(e => {
-    if (!dayEvts[e._day]) dayEvts[e._day] = [];
-    dayEvts[e._day].push(e);
+    const evtEnd = e.endDate ? new Date(e.endDate + 'T00:00:00') : e._d;
+    const startDay = (e._d.getFullYear() === yr && e._d.getMonth() === mo) ? e._day : 1;
+    const endDay = (evtEnd.getFullYear() === yr && evtEnd.getMonth() === mo) ? evtEnd.getDate() : daysInMonth;
+    for (let d = startDay; d <= endDay; d++) {
+      if (!dayEvts[d]) dayEvts[d] = [];
+      dayEvts[d].push({ ...e, _isCont: d > startDay, _isSpanEnd: d === endDay && !!e.endDate && e.endDate !== e.date });
+    }
   });
 
   html += '<div class="section" style="margin-bottom:24px;">';
@@ -2025,7 +2044,8 @@ function renderEventsPage() {
     html += '<div class="cal-day">' + d + '</div>';
     if (hasEvt) {
       hasEvt.forEach(e => {
-        html += '<div class="cal-evt ' + getEvtLocClass(e.loc) + '" title="' + esc(e.event) + (e.loc ? ' (' + getEvtLocLabel(e.loc) + ')' : '') + '">' + esc(e.event) + '</div>';
+        const contCls = e._isCont ? (e._isSpanEnd ? ' cal-evt-end' : ' cal-evt-cont') : (e.endDate && e.endDate !== e.date ? ' cal-evt-start' : '');
+        html += '<div class="cal-evt ' + getEvtLocClass(e.loc) + contCls + '" title="' + esc(e.event) + (e.loc ? ' (' + getEvtLocLabel(e.loc) + ')' : '') + '">' + (e._isCont ? '' : esc(e.event)) + '</div>';
       });
     }
     html += '</div>';
@@ -2033,12 +2053,18 @@ function renderEventsPage() {
   html += '</div>';
 
   // Events list for this month
-  if (monthEvts.length > 0) {
+  // List: show each event once (dedupe multi-day expansions)
+  const listEvts = monthEvts.filter((e, i, arr) => arr.findIndex(x => (x._key || x.date+x.event) === (e._key || e.date+e.event)) === i);
+  if (listEvts.length > 0) {
     html += '<div class="cal-list">';
-    monthEvts.forEach(e => {
+    listEvts.forEach(e => {
       const dd = e._d;
-      const dateStr = dayNames[dd.getDay()] + ', ' + monthLabels[dd.getMonth()] + ' ' + dd.getDate();
-      const isPast = dd < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let dateStr = dayNames[dd.getDay()] + ', ' + monthLabels[dd.getMonth()] + ' ' + dd.getDate();
+      if (e.endDate && e.endDate !== e.date) {
+        const ed = new Date(e.endDate + 'T00:00:00');
+        dateStr += ' – ' + dayNames[ed.getDay()] + ', ' + monthLabels[ed.getMonth()] + ' ' + ed.getDate();
+      }
+      const isPast = (e.endDate ? new Date(e.endDate + 'T00:00:00') : dd) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
       html += '<div class="cal-list-item ' + getEvtLocClass(e.loc) + (isPast ? ' cal-list-past' : '') + '">';
       html += '<div class="cal-list-date">' + dateStr + '</div>';
       html += '<div class="cal-list-name">' + esc(e.event) + (e.loc ? ' <span style="font-size:11px;font-weight:400;color:var(--gray-500)">(' + getEvtLocLabel(e.loc) + ')</span>' : '') + '</div>';
@@ -2049,7 +2075,7 @@ function renderEventsPage() {
       html += '</div>';
       html += '</div>';
     });
-    html += '</div>';
+    html += '</div>'; // cal-list
   } else {
     html += '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">No events this month</div>';
   }
