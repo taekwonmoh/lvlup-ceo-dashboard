@@ -1880,13 +1880,18 @@ function addEvent() {
   const name = document.getElementById('evtName').value.trim();
   const date = document.getElementById('evtDate').value;
   const loc = document.getElementById('evtLoc').value;
+  const type = document.getElementById('evtType').value;
   const link = document.getElementById('evtLink').value.trim();
+  const hidden = document.getElementById('evtHidden').checked;
   if (!name || !date) return alert('Event name and date are required.');
   const key = 'evt_' + Date.now();
-  fbRef('events/' + key).set({ event: name, date: date, loc: loc, link: link });
+  const payload = { event: name, date: date, loc: loc, type: type, link: link };
+  if (hidden) payload.hiddenFromStudents = true;
+  fbRef('events/' + key).set(payload);
   document.getElementById('evtName').value = '';
   document.getElementById('evtDate').value = '';
   document.getElementById('evtLink').value = '';
+  document.getElementById('evtHidden').checked = false;
 }
 
 function deleteEvent(key) {
@@ -1939,7 +1944,9 @@ function renderEventsPage() {
   html += '<input type="text" id="evtName" placeholder="Event name..." />';
   html += '<input type="date" id="evtDate" />';
   html += '<select id="evtLoc"><option value="">All Locations</option><option value="waunakee">LVLUP Waunakee</option><option value="eastmad">LVLUP E.Mad</option><option value="verona">LVLUP Verona</option><option value="goninjaW">Go Ninja Waunakee</option><option value="goninjaV">Go Ninja Verona</option></select>';
+  html += '<select id="evtType"><option value="testing">Belt Test</option><option value="tournament">Tournament</option><option value="seminar">Seminar</option><option value="special">Special Event</option></select>';
   html += '<input type="url" id="evtLink" placeholder="GymDesk link (optional)" />';
+  html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-400);white-space:nowrap;cursor:pointer"><input type="checkbox" id="evtHidden" style="cursor:pointer"> Hide from students</label>';
   html += '<button class="evt-add-btn" onclick="addEvent()">+ Add Event</button>';
   html += '</div>';
 
