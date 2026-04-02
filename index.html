@@ -159,8 +159,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .evt-add-form select { min-width: 130px; }
 .evt-add-btn { padding: 8px 16px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; }
 .evt-add-btn:hover { opacity: 0.9; }
-.evt-delete-btn { font-size: 11px; color: var(--red); cursor: pointer; background: none; border: none; font-weight: 700; padding: 2px 6px; margin-left: 8px; }
+.evt-delete-btn { font-size: 11px; color: var(--red); cursor: pointer; background: none; border: none; font-weight: 700; padding: 2px 6px; }
 .evt-delete-btn:hover { background: rgba(239,68,68,0.1); border-radius: 4px; }
+.evt-edit-btn { font-size: 13px; cursor: pointer; background: none; border: none; padding: 2px 6px; opacity: 0.5; }
+.evt-edit-btn:hover { opacity: 1; background: var(--gray-100); border-radius: 4px; }
 .cal-legend { display: flex; gap: 16px; padding: 8px 0; margin-bottom: 8px; flex-wrap: wrap; }
 .cal-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--gray-600); }
 .cal-legend-dot { width: 12px; height: 12px; border-radius: 3px; }
@@ -1884,18 +1886,49 @@ function addEvent() {
   const link = document.getElementById('evtLink').value.trim();
   const hidden = document.getElementById('evtHidden').checked;
   if (!name || !date) return alert('Event name and date are required.');
-  const key = 'evt_' + Date.now();
+  const editingKey = document.getElementById('evtAddBtn').dataset.editingKey;
+  const key = editingKey || ('evt_' + Date.now());
   const payload = { event: name, date: date, loc: loc, type: type, link: link };
   if (hidden) payload.hiddenFromStudents = true;
   fbRef('events/' + key).set(payload);
+  cancelEditEvent();
+}
+
+function editEvent(key) {
+  const e = (state.events || []).find(ev => ev._key === key);
+  if (!e) return;
+  document.getElementById('evtName').value = e.event || '';
+  document.getElementById('evtDate').value = e.date || '';
+  document.getElementById('evtLoc').value = e.loc || '';
+  document.getElementById('evtType').value = e.type || 'special';
+  document.getElementById('evtLink').value = e.link || '';
+  document.getElementById('evtHidden').checked = !!e.hiddenFromStudents;
+  const btn = document.getElementById('evtAddBtn');
+  btn.textContent = 'Save Changes';
+  btn.style.background = 'var(--accent)';
+  btn.dataset.editingKey = key;
+  document.getElementById('evtCancelBtn').style.display = 'inline-flex';
+  document.getElementById('evtName').focus();
+  document.getElementById('evtName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelEditEvent() {
   document.getElementById('evtName').value = '';
   document.getElementById('evtDate').value = '';
   document.getElementById('evtLink').value = '';
   document.getElementById('evtHidden').checked = false;
+  const btn = document.getElementById('evtAddBtn');
+  btn.textContent = '+ Add Event';
+  btn.style.background = '';
+  btn.dataset.editingKey = '';
+  document.getElementById('evtCancelBtn').style.display = 'none';
 }
 
 function deleteEvent(key) {
-  if (confirm('Delete this event?')) fbRef('events/' + key).remove();
+  if (confirm('Delete this event?')) {
+    fbRef('events/' + key).remove();
+    if (document.getElementById('evtAddBtn').dataset.editingKey === key) cancelEditEvent();
+  }
 }
 
 function calNavMonth(offset) {
@@ -1947,7 +1980,8 @@ function renderEventsPage() {
   html += '<select id="evtType"><option value="testing">Belt Test</option><option value="tournament">Tournament</option><option value="seminar">Seminar</option><option value="special">Special Event</option></select>';
   html += '<input type="url" id="evtLink" placeholder="GymDesk link (optional)" />';
   html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-400);white-space:nowrap;cursor:pointer"><input type="checkbox" id="evtHidden" style="cursor:pointer"> Hide from students</label>';
-  html += '<button class="evt-add-btn" onclick="addEvent()">+ Add Event</button>';
+  html += '<button id="evtAddBtn" class="evt-add-btn" onclick="addEvent()">+ Add Event</button>';
+  html += '<button id="evtCancelBtn" onclick="cancelEditEvent()" style="display:none;padding:8px 14px;border:1px solid var(--gray-300);border-radius:8px;background:var(--card);color:var(--gray-500);font-size:12px;font-weight:600;cursor:pointer;">Cancel</button>';
   html += '</div>';
 
   // Month navigation
@@ -2009,7 +2043,10 @@ function renderEventsPage() {
       html += '<div class="cal-list-date">' + dateStr + '</div>';
       html += '<div class="cal-list-name">' + esc(e.event) + (e.loc ? ' <span style="font-size:11px;font-weight:400;color:var(--gray-500)">(' + getEvtLocLabel(e.loc) + ')</span>' : '') + '</div>';
       if (e.link) html += '<a class="cal-list-link" href="' + esc(e.link) + '" target="_blank">GymDesk \u2192</a>';
+      html += '<div style="display:flex;gap:6px;margin-left:auto;">';
+      html += '<button class="evt-edit-btn" onclick="editEvent(\'' + esc(e._key || '') + '\')" title="Edit">✏️</button>';
       html += '<button class="evt-delete-btn" onclick="deleteEvent(\'' + esc(e._key || '') + '\')">\u00d7</button>';
+      html += '</div>';
       html += '</div>';
     });
     html += '</div>';
