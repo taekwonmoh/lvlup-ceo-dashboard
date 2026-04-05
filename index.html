@@ -379,6 +379,34 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .home-event-link:hover{text-decoration:underline}
 .home-empty{text-align:center;color:var(--gray-400);font-size:13px;padding:20px}
 
+/* --- Core Values --- */
+.cv-strip { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:20px; }
+@media(max-width:900px){ .cv-strip { grid-template-columns:repeat(3,1fr); } }
+@media(max-width:560px){ .cv-strip { grid-template-columns:1fr 1fr; } }
+.cv-card { background:var(--card); border:1px solid var(--gray-100); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:6px; }
+.cv-icon { font-size:20px; }
+.cv-name { font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:var(--accent); }
+.cv-desc { font-size:11px; color:var(--gray-500); line-height:1.5; }
+/* Quiz */
+.cv-quiz-wrap { background:var(--card); border:1px solid var(--gray-100); border-radius:12px; padding:20px; margin-bottom:20px; }
+.cv-quiz-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.cv-quiz-title { font-size:13px; font-weight:700; color:var(--primary); }
+.cv-quiz-progress { font-size:11px; color:var(--gray-400); font-weight:600; }
+.cv-quiz-def { font-size:14px; color:var(--primary); line-height:1.6; margin-bottom:18px; font-style:italic; text-align:center; padding:0 8px; }
+.cv-quiz-choices { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+@media(max-width:700px){ .cv-quiz-choices { grid-template-columns:1fr 1fr; } }
+.cv-choice-btn { padding:10px 6px; border-radius:8px; border:2px solid var(--gray-200); background:var(--card); font-size:11px; font-weight:800; letter-spacing:0.5px; text-transform:uppercase; cursor:pointer; color:var(--primary); transition:all .15s; }
+.cv-choice-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+.cv-choice-btn.correct { border-color:#16a34a; background:rgba(22,163,74,0.1); color:#16a34a; }
+.cv-choice-btn.wrong { border-color:#ef4444; background:rgba(239,68,68,0.1); color:#ef4444; }
+.cv-choice-btn.reveal { border-color:#16a34a; background:rgba(22,163,74,0.1); color:#16a34a; }
+.cv-quiz-feedback { text-align:center; font-size:13px; font-weight:700; margin-top:14px; min-height:20px; }
+.cv-quiz-next { margin-top:14px; display:flex; justify-content:center; }
+.cv-quiz-next button { padding:8px 24px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; }
+.cv-quiz-complete { text-align:center; padding:10px 0; }
+.cv-quiz-score { font-size:28px; font-weight:800; color:var(--accent); }
+.cv-quiz-score-label { font-size:12px; color:var(--gray-400); margin-top:4px; margin-bottom:14px; }
+
     /* --- KPI Summary Cards --- */
     .kpi-summary-info { min-width:0; }
 
@@ -493,6 +521,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <div class="app" id="app"><p style="text-align:center;padding:80px;color:var(--gray-400);">Loading dashboard...</p></div>
 
 <script>
+/*  -  -  Core Values  -  -  */
+const CORE_VALUES = [
+  { name:'RELENTLESS', icon:'🔥', desc:'The refusal to stop. Whether it\'s your passion or your work ethic, you are an unstoppable force moving toward the goal.' },
+  { name:'DISCIPLINED', icon:'🛡️', desc:'The mastery of self. You do what needs to be done, own your actions, and maintain the highest standard of conduct.' },
+  { name:'HONORABLE',  icon:'⭐', desc:'The warrior\'s code. You treat the mats, your teammates, and your opponents with a baseline of high-level respect and integrity.' },
+  { name:'EVOLVABLE',  icon:'📈', desc:'The white-belt mindset. You are never finished — always seeking the next level through feedback and constant learning.' },
+  { name:'MAGNETIC',   icon:'✨', desc:'The power of your presence. You bring energy that attracts others, lifts the room, and drives the culture forward.' },
+];
+
 /*  -  -  Firebase Config (same project as VA dashboard)  -  -  */
 const firebaseConfig = {
   apiKey: "AIzaSyDABx4H7EpCRABaD9h3lGTD3hBp2QFfhQg",
@@ -1212,6 +1249,58 @@ function renderHomePage() {
 
   let html = '';
 
+  // Core Values strip
+  html += '<div class="cv-strip">';
+  CORE_VALUES.forEach(v => {
+    html += '<div class="cv-card">';
+    html += '<div class="cv-icon">' + v.icon + '</div>';
+    html += '<div class="cv-name">' + v.name + '</div>';
+    html += '<div class="cv-desc">' + v.desc + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Core Values quiz
+  const quiz = state._cvQuiz;
+  html += '<div class="cv-quiz-wrap">';
+  if (!quiz || quiz.complete === undefined) {
+    html += '<div style="display:flex;justify-content:space-between;align-items:center">';
+    html += '<div style="font-size:13px;font-weight:700;color:var(--primary)">🧠 Core Values Quiz</div>';
+    html += '<button onclick="startCVQuiz()" style="padding:7px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Test Yourself</button>';
+    html += '</div>';
+  } else if (quiz.complete) {
+    html += '<div class="cv-quiz-complete">';
+    html += '<div class="cv-quiz-score">' + quiz.score + ' / 5</div>';
+    html += '<div class="cv-quiz-score-label">' + (quiz.score === 5 ? '🏆 Perfect! You know them cold.' : quiz.score >= 3 ? '💪 Nice work — keep reviewing.' : '📚 Keep studying — you\'ll get there.') + '</div>';
+    html += '<button onclick="startCVQuiz()" style="padding:7px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Try Again</button>';
+    html += '</div>';
+  } else {
+    const q = quiz.order[quiz.current];
+    const answered = quiz.answered;
+    html += '<div class="cv-quiz-header">';
+    html += '<div class="cv-quiz-title">🧠 Which core value is this?</div>';
+    html += '<div class="cv-quiz-progress">Question ' + (quiz.current + 1) + ' of 5</div>';
+    html += '</div>';
+    html += '<div class="cv-quiz-def">' + esc(CORE_VALUES[q].desc) + '</div>';
+    html += '<div class="cv-quiz-choices">';
+    CORE_VALUES.forEach((v, i) => {
+      let cls = '';
+      if (answered !== null && answered !== undefined) {
+        if (i === q) cls = ' reveal';
+        else if (i === answered) cls = ' wrong';
+      }
+      const disabled = (answered !== null && answered !== undefined) ? 'disabled' : '';
+      html += '<button class="cv-choice-btn' + cls + '" ' + disabled + ' onclick="answerCVQuiz(' + i + ')">' + v.name + '</button>';
+    });
+    html += '</div>';
+    if (answered !== null && answered !== undefined) {
+      const correct = answered === q;
+      html += '<div class="cv-quiz-feedback" style="color:' + (correct ? '#16a34a' : '#ef4444') + '">' + (correct ? '✓ Correct!' : '✗ Not quite — the answer is ' + CORE_VALUES[q].name + '.') + '</div>';
+      html += '<div class="cv-quiz-next"><button onclick="nextCVQuiz()">Next →</button></div>';
+    }
+  }
+  html += '</div>';
+
   // Motivational quote
   html += '<div class="home-motivation">';
   html += '<div class="quote-mark">\u201C</div>';
@@ -1309,6 +1398,27 @@ function renderHomePage() {
   html += '</div>'; // close home-grid
 
   return html;
+}
+
+function startCVQuiz() {
+  const order = [0,1,2,3,4].sort(() => Math.random() - 0.5);
+  state._cvQuiz = { order, current: 0, score: 0, answered: null, complete: false };
+  render();
+}
+function answerCVQuiz(choice) {
+  const quiz = state._cvQuiz;
+  if (!quiz || quiz.answered !== null) return;
+  quiz.answered = choice;
+  if (choice === quiz.order[quiz.current]) quiz.score++;
+  render();
+}
+function nextCVQuiz() {
+  const quiz = state._cvQuiz;
+  if (!quiz) return;
+  quiz.answered = null;
+  quiz.current++;
+  if (quiz.current >= 5) quiz.complete = true;
+  render();
 }
 
 function formatTestDate(dateStr) {
