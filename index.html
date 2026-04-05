@@ -1249,8 +1249,9 @@ function renderHomePage() {
 
   let html = '';
 
-  // Core Values strip
-  html += '<div class="cv-strip">';
+  // Core Values strip — hidden while quiz is active
+  const quizActive = state._cvQuiz && !state._cvQuiz.complete && state._cvQuiz.current >= 0;
+  html += '<div class="cv-strip"' + (quizActive ? ' style="display:none"' : '') + '>';
   CORE_VALUES.forEach(v => {
     html += '<div class="cv-card">';
     html += '<div class="cv-icon">' + v.icon + '</div>';
