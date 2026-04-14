@@ -1442,7 +1442,9 @@ function renderScorecardPage() {
     const locData = monthData[loc.id] || {};
 if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
     const rev = parseFloat(locData.revenue) || 0;
-    const goal = loc.revenueGoal;
+    const curMonthName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][new Date().getMonth()];
+    const monthlyGoal = parseFloat(((state.financials || {})[loc.id] || {})[curMonthName]?.goal) || 0;
+    const goal = monthlyGoal || loc.revenueGoal;
     const pct = goal ? Math.round(rev / goal * 100) : 0;
     const cls = pct >= 80 ? 'green' : pct >= 50 ? 'orange' : 'red';
     kpiHtml += '<div class="kpi-card ' + cls + '">' +
