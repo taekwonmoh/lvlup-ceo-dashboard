@@ -1085,6 +1085,11 @@ function updateFinancial(locId, month, field, val) {
   fbDebounce('financials/' + locId + '/2026/' + month + '/' + field, val);
 }
 
+function updateFinancialGoal(locId, monthShort, val) {
+  const num = parseFloat(String(val).replace(/[$,]/g, '')) || null;
+  fbDebounce('financials/' + locId + '/2026/' + monthShort + '/goal', num);
+}
+
 function updateMembership(locId, month, field, val) {
   fbDebounce('membership/' + locId + '/2026/' + month + '/' + field, val);
 }
@@ -1692,11 +1697,13 @@ function renderFinancialsPage() {
     let qTY = 0, qLY = 0, qGoal = 0;
     for (let m = 0; m < 12; m++) {
       const mk = monthNames[m];
+      const mkShort = monthLabels[m];
       const fd = finData[mk] || {};
+      const fdShort = finData[mkShort] || {};
       let grossTY = parseFloat(fd.grossTY) || 0;
       if(grossTY===0 && m===currentMonthIdx){grossTY=parseFloat((state.kpis[loc.id]||{}).revenue)||0;}
       const grossLY = parseFloat(fd.grossLY) || 0;
-      const monthGoal = parseFloat(fd.goal) || 0;
+      const monthGoal = parseFloat(fdShort.goal) || parseFloat(fd.goal) || 0;
       ytdTY += grossTY; ytdLY += grossLY; ytdGoal += monthGoal;
       qTY += grossTY; qLY += grossLY; qGoal += monthGoal;
       const diff = grossTY - grossLY;
@@ -1710,7 +1717,7 @@ function renderFinancialsPage() {
 
       html += '<tr>';
       html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
-      html += '<td class="currency" style="color:var(--gray-500);">' + (monthGoal ? fmtCurrency(monthGoal) : '') + '</td>';
+      html += '<td class="currency" style="padding:2px 4px;"><input style="width:90px;border:1px solid var(--gray-200);border-radius:6px;padding:3px 6px;font-size:12px;text-align:right;font-family:inherit;background:var(--gray-50)" value="' + (monthGoal ? monthGoal : '') + '" placeholder="—" onchange="updateFinancialGoal(\'' + loc.id + '\',\'' + mkShort + '\',this.value)" /></td>';
       html += '<td class="currency">' + (grossTY ? fmtCurrency(grossTY) : '') + '</td>';
       html += '<td class="' + (vsGoal >= 0 ? 'positive' : 'negative') + '">' + (grossTY && monthGoal ? fmtCurrency(vsGoal) : '') + '</td>';
       html += '<td class="currency" style="color:var(--gray-400);">' + (grossLY ? fmtCurrency(grossLY) : '') + '</td>';
@@ -3096,9 +3103,30 @@ function renderDevelopmentPage() {
   async function init() {
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
   seedIfEmpty();
+  seedEMadGoals();
   listenAll();
     listenTasks();
     listenGoals();
+}
+
+function seedEMadGoals() {
+  const EMAD_GOALS = {
+    Jan: 18000, Feb: 18480, Mar: 18920,
+    Apr: 19140, May: 19580, Jun: 20020,
+    Jul: 17000, Aug: 17000, Sep: 21120,
+    Oct: 21340, Nov: 35000, Dec: 24400,
+  };
+  const ref = fbRef('financials/eastmad/2026');
+  ref.once('value', snap => {
+    const data = snap.val() || {};
+    const updates = {};
+    Object.entries(EMAD_GOALS).forEach(([mon, goal]) => {
+      if (!data[mon] || !data[mon].goal) {
+        updates[mon + '/goal'] = goal;
+      }
+    });
+    if (Object.keys(updates).length) ref.update(updates);
+  });
 }
 
 init();
