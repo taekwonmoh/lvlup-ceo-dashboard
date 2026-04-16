@@ -1710,40 +1710,44 @@ function renderFinancialsPage() {
     const finLoc = state.financials[loc.id] || {};
     html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' \u2014 2026 Revenue</h2></div>';
     html += '<div style="overflow-x:auto"><table class="fin-table"><thead><tr>';
-    html += '<th style="text-align:left">Month</th><th>Goal</th><th>Revenue</th><th>vs Goal</th><th>Members</th><th>ARM</th>';
+    html += '<th style="text-align:left">Month</th><th>Goal</th><th>Gross TY</th><th>vs Goal</th><th>Gross LY</th><th>TY vs LY</th><th>Members</th><th>ARM</th>';
     html += '</tr></thead><tbody>';
 
-    let ytdRev = 0, ytdGoal = 0;
-    let qRev = 0, qGoal = 0;
+    let ytdTY = 0, ytdLY = 0, ytdGoal = 0;
+    let qTY = 0, qLY = 0, qGoal = 0;
 
     for (let m = 0; m < 12; m++) {
       const mk      = MONTH_KEYS[m];
       const mkFull  = MONTH_FULL[m];
       const mkShort = MONTH_SHORT[m];
       const kd      = (state.kpisAll[mk] || {})[loc.id] || {};
-      const rev     = m === curIdx
+      const grossTY = m === curIdx
         ? (parseFloat((state.kpis[loc.id] || {}).revenue) || parseFloat(kd.revenue) || 0)
         : parseFloat(kd.revenue) || 0;
-      const members = parseFloat(kd.totalMembers) || 0;
-      const arm     = (rev && members) ? rev / members : 0;
-      const goalData  = finLoc[mkFull] || finLoc[mkShort] || {};
-      const monthGoal = parseFloat(goalData.goal) || 0;
-      const vsGoal    = rev - monthGoal;
+      const fd        = finLoc[mkFull] || finLoc[mkShort] || {};
+      const grossLY   = parseFloat(fd.grossLY) || 0;
+      const members   = parseFloat(kd.totalMembers) || 0;
+      const arm       = (grossTY && members) ? grossTY / members : 0;
+      const monthGoal = parseFloat(fd.goal) || 0;
+      const vsGoal    = grossTY - monthGoal;
+      const tyVsLy    = grossTY - grossLY;
 
-      // Skip empty future months with no goal set
-      if (m > curIdx && !rev && !monthGoal) {
-        if ((m + 1) % 3 === 0) { qRev = 0; qGoal = 0; }
+      // Skip empty future months with no goal or LY data
+      if (m > curIdx && !grossTY && !grossLY && !monthGoal) {
+        if ((m + 1) % 3 === 0) { qTY = 0; qLY = 0; qGoal = 0; }
         continue;
       }
 
-      ytdRev  += rev;  ytdGoal  += monthGoal;
-      qRev    += rev;  qGoal    += monthGoal;
+      ytdTY += grossTY; ytdLY += grossLY; ytdGoal += monthGoal;
+      qTY   += grossTY; qLY   += grossLY; qGoal   += monthGoal;
 
       html += '<tr' + (m === curIdx ? ' class="kpi-current-row"' : '') + '>';
       html += '<td style="text-align:left;font-weight:500">' + mkShort + (m === curIdx ? ' ●' : '') + '</td>';
       html += '<td style="padding:2px 4px"><input style="width:90px;border:1px solid var(--gray-200);border-radius:6px;padding:3px 6px;font-size:12px;text-align:right;font-family:inherit;background:var(--gray-50)" value="' + (monthGoal || '') + '" placeholder="—" onchange="updateFinancialGoal(\'' + loc.id + '\',\'' + mkShort + '\',this.value)"></td>';
-      html += '<td class="currency">' + (rev ? fmtCurrency(rev) : '') + '</td>';
-      html += '<td class="' + (vsGoal >= 0 ? 'positive' : 'negative') + '">' + (rev && monthGoal ? fmtCurrency(vsGoal) : '') + '</td>';
+      html += '<td class="currency">' + (grossTY ? fmtCurrency(grossTY) : '') + '</td>';
+      html += '<td class="' + (vsGoal >= 0 ? 'positive' : 'negative') + '">' + (grossTY && monthGoal ? fmtCurrency(vsGoal) : '') + '</td>';
+      html += '<td class="currency" style="color:var(--gray-400)">' + (grossLY ? fmtCurrency(grossLY) : '') + '</td>';
+      html += '<td class="' + (tyVsLy >= 0 ? 'positive' : 'negative') + '">' + (grossTY && grossLY ? fmtCurrency(tyVsLy) : '') + '</td>';
       html += '<td style="text-align:center;color:var(--gray-500)">' + (members || '') + '</td>';
       html += '<td class="currency" style="color:var(--gray-500)">' + (arm ? fmtCurrency(arm) : '') + '</td>';
       html += '</tr>';
@@ -1751,25 +1755,30 @@ function renderFinancialsPage() {
       // Quarterly subtotal after Mar, Jun, Sep, Dec
       if ((m + 1) % 3 === 0) {
         const qi = Math.floor(m / 3);
-        const qVsGoal = qRev - qGoal;
-        if (qRev > 0 || qGoal > 0) {
+        if (qTY > 0 || qLY > 0 || qGoal > 0) {
+          const qVsGoal = qTY - qGoal, qDiff = qTY - qLY;
           html += '<tr class="quarter-row">';
           html += '<td style="text-align:left;font-weight:700">Q' + (qi + 1) + ' Total</td>';
           html += '<td class="currency" style="font-weight:600;color:var(--gray-500)">' + (qGoal ? fmtCurrency(qGoal) : '') + '</td>';
-          html += '<td class="currency" style="font-weight:700">' + fmtCurrency(qRev) + '</td>';
-          html += '<td class="' + (qVsGoal >= 0 ? 'positive' : 'negative') + '" style="font-weight:600">' + (qRev && qGoal ? fmtCurrency(qVsGoal) : '') + '</td>';
+          html += '<td class="currency" style="font-weight:700">' + fmtCurrency(qTY) + '</td>';
+          html += '<td class="' + (qVsGoal >= 0 ? 'positive' : 'negative') + '" style="font-weight:600">' + (qTY && qGoal ? fmtCurrency(qVsGoal) : '') + '</td>';
+          html += '<td class="currency" style="color:var(--gray-400);font-weight:600">' + (qLY ? fmtCurrency(qLY) : '') + '</td>';
+          html += '<td class="' + (qDiff >= 0 ? 'positive' : 'negative') + '" style="font-weight:600">' + (qTY && qLY ? fmtCurrency(qDiff) : '') + '</td>';
           html += '<td colspan="2"></td></tr>';
         }
-        qRev = 0; qGoal = 0;
+        qTY = 0; qLY = 0; qGoal = 0;
       }
     }
 
     // YTD totals row
+    const ytdVsGoal = ytdTY - ytdGoal, ytdDiff = ytdTY - ytdLY;
     html += '<tr class="year-row">';
     html += '<td style="text-align:left">YTD</td>';
     html += '<td class="currency" style="font-weight:600;color:var(--gray-500)">' + (ytdGoal ? fmtCurrency(ytdGoal) : '') + '</td>';
-    html += '<td class="currency">' + fmtCurrency(ytdRev) + '</td>';
-    html += '<td class="' + ((ytdRev - ytdGoal) >= 0 ? 'positive' : 'negative') + '">' + (ytdGoal ? fmtCurrency(ytdRev - ytdGoal) : '') + '</td>';
+    html += '<td class="currency">' + fmtCurrency(ytdTY) + '</td>';
+    html += '<td class="' + (ytdVsGoal >= 0 ? 'positive' : 'negative') + '">' + (ytdGoal ? fmtCurrency(ytdVsGoal) : '') + '</td>';
+    html += '<td class="currency" style="color:var(--gray-400)">' + fmtCurrency(ytdLY) + '</td>';
+    html += '<td class="' + (ytdDiff >= 0 ? 'positive' : 'negative') + '">' + (ytdLY ? fmtCurrency(ytdDiff) : '') + '</td>';
     html += '<td colspan="2"></td></tr>';
     html += '</tbody></table></div></div>';
   });
