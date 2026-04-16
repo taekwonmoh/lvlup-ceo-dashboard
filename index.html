@@ -1096,7 +1096,11 @@ function updateFinancial(locId, month, field, val) {
 
 function updateFinancialGoal(locId, monthShort, val) {
   const num = parseFloat(String(val).replace(/[$,]/g, '')) || null;
-  fbDebounce('financials/' + locId + '/2026/' + monthShort + '/goal', num);
+  // Normalize to full lowercase key (e.g. 'Apr' → 'april') to match existing data format
+  const MONTH_FULL = {Jan:'january',Feb:'february',Mar:'march',Apr:'april',May:'may',Jun:'june',
+                      Jul:'july',Aug:'august',Sep:'september',Oct:'october',Nov:'november',Dec:'december'};
+  const key = MONTH_FULL[monthShort] || monthShort.toLowerCase();
+  fbDebounce('financials/' + locId + '/2026/' + key + '/goal', num);
 }
 
 function updateMembership(locId, month, field, val) {
@@ -1447,8 +1451,8 @@ function formatTestDate(dateStr) {
 /*  -  -  Scorecard Page  -  -  */
 function renderScorecardPage() {
   const monthKey = getMonthKey();
-  const allMonthly = state.scorecard.monthly || {};
-  const monthData = allMonthly[monthKey] || {};
+  // state.scorecard.monthly is already the current month's data (keyed by locId, not month)
+  const monthData = state.scorecard.monthly || {};
 
   // KPI cards from monthly data
   let kpiHtml = '<div class="kpi-grid">';
@@ -1456,8 +1460,11 @@ function renderScorecardPage() {
     const locData = monthData[loc.id] || {};
 if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
     const rev = parseFloat(locData.revenue) || 0;
-    const curMonthName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][new Date().getMonth()];
-    const monthlyGoal = parseFloat(((state.financials || {})[loc.id] || {})[curMonthName]?.goal) || 0;
+    const curMonthIdx = new Date().getMonth();
+    const curMonthShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][curMonthIdx];
+    const curMonthFull  = ['january','february','march','april','may','june','july','august','september','october','november','december'][curMonthIdx];
+    const finLoc = (state.financials || {})[loc.id] || {};
+    const monthlyGoal = parseFloat((finLoc[curMonthShort] || finLoc[curMonthFull] || {}).goal) || 0;
     const goal = monthlyGoal || loc.revenueGoal;
     const pct = goal ? Math.round(rev / goal * 100) : 0;
     const cls = pct >= 80 ? 'green' : pct >= 50 ? 'orange' : 'red';
@@ -3211,11 +3218,12 @@ function renderDevelopmentPage() {
 }
 
 function seedEMadGoals() {
+  // Use full lowercase keys to match the existing format across all locations
   const EMAD_GOALS = {
-    Jan: 18000, Feb: 18480, Mar: 18920,
-    Apr: 19140, May: 19580, Jun: 20020,
-    Jul: 17000, Aug: 17000, Sep: 21120,
-    Oct: 21340, Nov: 35000, Dec: 24400,
+    january: 18000, february: 18480, march: 18920,
+    april: 19140, may: 19580, june: 20020,
+    july: 17000, august: 17000, september: 21120,
+    october: 21340, november: 35000, december: 24400,
   };
   const ref = fbRef('financials/eastmad/2026');
   ref.once('value', snap => {
@@ -3225,6 +3233,10 @@ function seedEMadGoals() {
       if (!data[mon] || !data[mon].goal) {
         updates[mon + '/goal'] = goal;
       }
+    });
+    // Clean up any short-key duplicates from a previous seed
+    ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].forEach(k => {
+      if (data[k] && Object.keys(data[k]).length === 1 && data[k].goal) updates[k] = null;
     });
     if (Object.keys(updates).length) ref.update(updates);
   });
