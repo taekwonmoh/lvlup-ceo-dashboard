@@ -1529,10 +1529,14 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
         let goalDisplay = '';
         if (rawGoal !== undefined && rawGoal !== null) {
           if (metric.id === 'attrition' && goalNum < 1) {
-            // Goal stored as monthly rate → convert to expected weekly head-count
+            // Goal stored as monthly rate → show rate + equivalent student count
+            const rateGoal = goalNum; // e.g. 0.0067
             const totalMem = parseFloat((state.kpis[loc.id] || {}).totalMembers) || 0;
-            goalNum = totalMem > 0 ? +(goalNum * totalMem).toFixed(1) : goalNum;
-            goalDisplay = goalNum + ' /wk';
+            const monthlyCount = totalMem > 0 ? +(rateGoal * totalMem).toFixed(1) : 0;
+            // For weekly comparison: threshold = monthly count ÷ 4 weeks
+            goalNum = monthlyCount > 0 ? +(monthlyCount / 4).toFixed(2) : rateGoal;
+            goalDisplay = (rateGoal * 100).toFixed(1) + '%'
+              + (monthlyCount > 0 ? ' (≤' + Math.ceil(monthlyCount) + ' students/mo)' : '');
           } else if (metric.pct) {
             goalDisplay = (goalNum * 100).toFixed(1) + '%';
           } else {
