@@ -2138,6 +2138,8 @@ async function addEvent() {
   if (hidden) payload.hiddenFromStudents = true;
   if (featured) payload.featured = true;
   if (photoUrl) payload.photo = photoUrl;
+  const desc = document.getElementById('evtDesc') ? document.getElementById('evtDesc').value.trim() : '';
+  if (desc) payload.description = desc;
 
   fbRef('events/' + key).set(payload);
   cancelEditEvent();
@@ -2154,6 +2156,7 @@ function editEvent(key) {
   document.getElementById('evtLink').value = e.link || '';
   document.getElementById('evtHidden').checked = !!e.hiddenFromStudents;
   document.getElementById('evtFeatured').checked = !!e.featured;
+  if (document.getElementById('evtDesc')) document.getElementById('evtDesc').value = e.description || '';
 
   // Photo
   clearEvtPhoto();
@@ -2178,6 +2181,7 @@ function cancelEditEvent() {
   document.getElementById('evtLink').value = '';
   document.getElementById('evtHidden').checked = false;
   document.getElementById('evtFeatured').checked = false;
+  if (document.getElementById('evtDesc')) document.getElementById('evtDesc').value = '';
   const btn = document.getElementById('evtAddBtn');
   btn.textContent = '+ Add Event';
   btn.style.background = '';
@@ -2250,6 +2254,7 @@ function renderEventsPage() {
   html += '<select id="evtLoc"><option value="">All Locations</option><option value="waunakee">LVLUP Waunakee</option><option value="eastmad">LVLUP E.Mad</option><option value="verona">LVLUP Verona</option><option value="goninjaW">Go Ninja Waunakee</option><option value="goninjaV">Go Ninja Verona</option></select>';
   html += '<select id="evtType"><option value="testing">Belt Test</option><option value="tournament">Tournament</option><option value="seminar">Seminar</option><option value="camp">Summer Camp</option><option value="special">Special Event</option></select>';
   html += '<input type="url" id="evtLink" placeholder="GymDesk link (optional)" />';
+  html += '<textarea id="evtDesc" placeholder="Description (optional) — shows on the member site..." style="width:100%;border:1px solid var(--gray-200);border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit;resize:vertical;min-height:64px;color:var(--gray-700);background:var(--card)"></textarea>';
   html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-400);white-space:nowrap;cursor:pointer"><input type="checkbox" id="evtHidden" style="cursor:pointer"> Hide from students</label>';
   html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-400);white-space:nowrap;cursor:pointer"><input type="checkbox" id="evtFeatured" style="cursor:pointer;accent-color:var(--accent);"> 📌 Featured</label>';
   html += '<input type="file" id="evtPhotoFile" accept="image/*" style="display:none" onchange="onEvtPhotoSelected()">';
@@ -2329,7 +2334,10 @@ function renderEventsPage() {
       const isPast = (e.endDate ? new Date(e.endDate + 'T00:00:00') : dd) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
       html += '<div class="cal-list-item ' + getEvtLocClass(e.loc) + (isPast ? ' cal-list-past' : '') + '">';
       html += '<div class="cal-list-date">' + dateStr + '</div>';
-      html += '<div class="cal-list-name">' + esc(e.event) + (e.loc ? ' <span style="font-size:11px;font-weight:400;color:var(--gray-500)">(' + getEvtLocLabel(e.loc) + ')</span>' : '') + '</div>';
+      html += '<div class="cal-list-name" style="display:flex;flex-direction:column;gap:2px;">';
+      html += '<span>' + esc(e.event) + (e.loc ? ' <span style="font-size:11px;font-weight:400;color:var(--gray-500)">(' + getEvtLocLabel(e.loc) + ')</span>' : '') + '</span>';
+      if (e.description) html += '<span style="font-size:12px;font-weight:400;color:var(--gray-500);line-height:1.5">' + esc(e.description) + '</span>';
+      html += '</div>';
       if (e.link) html += '<a class="cal-list-link" href="' + esc(e.link) + '" target="_blank">GymDesk \u2192</a>';
       html += '<div style="display:flex;gap:6px;margin-left:auto;">';
       html += '<button class="evt-edit-btn" onclick="editEvent(\'' + esc(e._key || '') + '\')" title="Edit">✏️</button>';
