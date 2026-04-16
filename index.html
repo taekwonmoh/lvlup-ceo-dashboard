@@ -7,6 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛩️</text></svg>" />
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <style>
 :root { 
   --bg: #f0f2f5;
@@ -160,6 +161,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .evt-add-form input[type="date"] { min-width: 140px; }
 .evt-add-form input[type="url"] { flex: 1; min-width: 200px; }
 .evt-add-form select { min-width: 130px; }
+.evt-photo-btn { display:inline-flex; align-items:center; gap:5px; padding:8px 12px; border:1px dashed var(--gray-300); border-radius:8px; background:var(--body); color:var(--gray-500); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:border-color .15s,color .15s; }
+.evt-photo-btn:hover,.evt-photo-btn.has-photo { border-color:var(--accent); color:var(--accent); border-style:solid; }
+.evt-photo-preview { display:none; width:100%; margin-top:4px; border-radius:8px; overflow:hidden; position:relative; height:110px; background:var(--gray-100); }
+.evt-photo-preview img { width:100%; height:100%; object-fit:cover; }
+.evt-photo-preview-remove { position:absolute; top:6px; right:6px; background:rgba(0,0,0,.55); color:#fff; border:none; border-radius:100px; font-size:11px; font-weight:700; padding:3px 8px; cursor:pointer; }
+.evt-upload-bar { display:none; width:100%; height:3px; background:var(--gray-200); border-radius:2px; margin-top:4px; overflow:hidden; }
+.evt-upload-bar-fill { height:100%; background:var(--accent); border-radius:2px; width:0%; transition:width .2s; }
 .evt-add-btn { padding: 8px 16px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; }
 .evt-add-btn:hover { opacity: 0.9; }
 .evt-delete-btn { font-size: 11px; color: var(--red); cursor: pointer; background: none; border: none; font-weight: 700; padding: 2px 6px; }
@@ -530,19 +538,20 @@ const CORE_VALUES = [
   { name:'MAGNETIC',   icon:'✨', desc:'The power of your presence. You bring energy that attracts others, lifts the room, and drives the culture forward.' },
 ];
 
-/*  -  -  Firebase Config (same project as VA dashboard)  -  -  */
+/*  -  -  Firebase Config  -  -  */
 const firebaseConfig = {
-  apiKey: "AIzaSyDABx4H7EpCRABaD9h3lGTD3hBp2QFfhQg",
-  authDomain: "va-dashboard-bf7ca.firebaseapp.com",
-  databaseURL: "https://va-dashboard-bf7ca-default-rtdb.firebaseio.com",
-  projectId: "va-dashboard-bf7ca",
-  storageBucket: "va-dashboard-bf7ca.firebasestorage.app",
-  messagingSenderId: "427134566708",
-  appId: "1:427134566708:web:1b88d86e9b2fd1505f2561"
+  apiKey: "AIzaSyAExV-Gva6QuVocM8Hq70VU7Le10piB8p4",
+  authDomain: "lvlup-members-app.firebaseapp.com",
+  databaseURL: "https://lvlup-members-app-default-rtdb.firebaseio.com",
+  projectId: "lvlup-members-app",
+  storageBucket: "lvlup-members-app.firebasestorage.app",
+  messagingSenderId: "440131514498",
+  appId: "1:440131514498:web:46165370923bc74994849b"
 };
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+const storage = firebase.storage();
 const CEO = 'ceo'; // root path in Firebase
 
 /*  -  -  State  -  -  */
@@ -2001,7 +2010,48 @@ function updateInitiative(path, val) {
 function getEvtLocClass(loc) { return loc ? 'loc-' + loc : ''; }
 function getEvtLocLabel(loc) { return loc === 'waunakee' ? 'LVLUP Waunakee' : loc === 'eastmad' ? 'LVLUP E.Mad' : loc === 'verona' ? 'LVLUP Verona' : loc === 'goninjaW' ? 'GN Waunakee' : loc === 'goninjaV' ? 'GN Verona' : 'All'; }
 
-function addEvent() {
+// ── Photo upload state ──
+let _evtPendingFile = null;
+let _evtPendingObjectUrl = null;
+let _evtExistingPhotoUrl = null;
+
+function onEvtPhotoSelected() {
+  const file = document.getElementById('evtPhotoFile').files[0];
+  if (!file) return;
+  _evtPendingFile = file;
+  _evtExistingPhotoUrl = null;
+  if (_evtPendingObjectUrl) URL.revokeObjectURL(_evtPendingObjectUrl);
+  _evtPendingObjectUrl = URL.createObjectURL(file);
+  showEvtPhotoPreview(_evtPendingObjectUrl);
+}
+
+function showEvtPhotoPreview(url) {
+  const preview = document.getElementById('evtPhotoPreview');
+  const btn = document.getElementById('evtPhotoBtn');
+  if (!preview || !btn) return;
+  preview.style.display = 'block';
+  // Clear old img
+  preview.querySelectorAll('img').forEach(el => el.remove());
+  const img = document.createElement('img');
+  img.src = url;
+  preview.insertBefore(img, preview.firstChild);
+  btn.classList.add('has-photo');
+  btn.textContent = '📷 Change photo';
+}
+
+function clearEvtPhoto() {
+  _evtPendingFile = null;
+  _evtExistingPhotoUrl = null;
+  if (_evtPendingObjectUrl) { URL.revokeObjectURL(_evtPendingObjectUrl); _evtPendingObjectUrl = null; }
+  const file = document.getElementById('evtPhotoFile');
+  const preview = document.getElementById('evtPhotoPreview');
+  const btn = document.getElementById('evtPhotoBtn');
+  if (file) file.value = '';
+  if (preview) { preview.style.display = 'none'; preview.querySelectorAll('img').forEach(el => el.remove()); }
+  if (btn) { btn.classList.remove('has-photo'); btn.textContent = '📷 Add photo'; }
+}
+
+async function addEvent() {
   const name = document.getElementById('evtName').value.trim();
   const date = document.getElementById('evtDate').value;
   const loc = document.getElementById('evtLoc').value;
@@ -2009,13 +2059,47 @@ function addEvent() {
   const endDate = document.getElementById('evtEndDate').value;
   const link = document.getElementById('evtLink').value.trim();
   const hidden = document.getElementById('evtHidden').checked;
+  const featured = document.getElementById('evtFeatured').checked;
   if (!name || !date) return alert('Event name and date are required.');
   if (endDate && endDate < date) return alert('End date must be on or after the start date.');
+
   const editingKey = document.getElementById('evtAddBtn').dataset.editingKey;
   const key = editingKey || ('evt_' + Date.now());
+
+  // Handle photo upload
+  let photoUrl = _evtExistingPhotoUrl || null;
+  if (_evtPendingFile) {
+    const bar = document.getElementById('evtUploadBar');
+    const fill = document.getElementById('evtUploadBarFill');
+    const addBtn = document.getElementById('evtAddBtn');
+    if (bar) bar.style.display = 'block';
+    if (addBtn) { addBtn.disabled = true; addBtn.textContent = 'Uploading…'; }
+    try {
+      const ext = (_evtPendingFile.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = 'events/' + Date.now() + '-' + Math.random().toString(36).slice(2,8) + '.' + ext;
+      const uploadTask = storage.ref(path).put(_evtPendingFile);
+      photoUrl = await new Promise((resolve, reject) => {
+        uploadTask.on('state_changed',
+          snap => { if (fill) fill.style.width = (snap.bytesTransferred / snap.totalBytes * 100) + '%'; },
+          reject,
+          () => uploadTask.snapshot.ref.getDownloadURL().then(resolve).catch(reject)
+        );
+      });
+    } catch(err) {
+      alert('Photo upload failed: ' + err.message);
+      if (bar) bar.style.display = 'none';
+      if (addBtn) { addBtn.disabled = false; addBtn.textContent = editingKey ? 'Save Changes' : '+ Add Event'; }
+      return;
+    }
+    if (bar) bar.style.display = 'none';
+  }
+
   const payload = { event: name, date: date, loc: loc, type: type, link: link };
   if (endDate && endDate !== date) payload.endDate = endDate;
   if (hidden) payload.hiddenFromStudents = true;
+  if (featured) payload.featured = true;
+  if (photoUrl) payload.photo = photoUrl;
+
   fbRef('events/' + key).set(payload);
   cancelEditEvent();
 }
@@ -2030,6 +2114,15 @@ function editEvent(key) {
   document.getElementById('evtType').value = e.type || 'special';
   document.getElementById('evtLink').value = e.link || '';
   document.getElementById('evtHidden').checked = !!e.hiddenFromStudents;
+  document.getElementById('evtFeatured').checked = !!e.featured;
+
+  // Photo
+  clearEvtPhoto();
+  if (e.photo) {
+    _evtExistingPhotoUrl = e.photo;
+    showEvtPhotoPreview(e.photo);
+  }
+
   const btn = document.getElementById('evtAddBtn');
   btn.textContent = 'Save Changes';
   btn.style.background = 'var(--accent)';
@@ -2045,11 +2138,14 @@ function cancelEditEvent() {
   document.getElementById('evtEndDate').value = '';
   document.getElementById('evtLink').value = '';
   document.getElementById('evtHidden').checked = false;
+  document.getElementById('evtFeatured').checked = false;
   const btn = document.getElementById('evtAddBtn');
   btn.textContent = '+ Add Event';
   btn.style.background = '';
+  btn.disabled = false;
   btn.dataset.editingKey = '';
   document.getElementById('evtCancelBtn').style.display = 'none';
+  clearEvtPhoto();
 }
 
 function deleteEvent(key) {
@@ -2116,8 +2212,13 @@ function renderEventsPage() {
   html += '<select id="evtType"><option value="testing">Belt Test</option><option value="tournament">Tournament</option><option value="seminar">Seminar</option><option value="camp">Summer Camp</option><option value="special">Special Event</option></select>';
   html += '<input type="url" id="evtLink" placeholder="GymDesk link (optional)" />';
   html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-400);white-space:nowrap;cursor:pointer"><input type="checkbox" id="evtHidden" style="cursor:pointer"> Hide from students</label>';
+  html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-400);white-space:nowrap;cursor:pointer"><input type="checkbox" id="evtFeatured" style="cursor:pointer;accent-color:var(--accent);"> 📌 Featured</label>';
+  html += '<input type="file" id="evtPhotoFile" accept="image/*" style="display:none" onchange="onEvtPhotoSelected()">';
+  html += '<button type="button" id="evtPhotoBtn" class="evt-photo-btn" onclick="document.getElementById(\'evtPhotoFile\').click()">📷 Add photo</button>';
   html += '<button id="evtAddBtn" class="evt-add-btn" onclick="addEvent()">+ Add Event</button>';
   html += '<button id="evtCancelBtn" onclick="cancelEditEvent()" style="display:none;padding:8px 14px;border:1px solid var(--gray-300);border-radius:8px;background:var(--card);color:var(--gray-500);font-size:12px;font-weight:600;cursor:pointer;">Cancel</button>';
+  html += '<div class="evt-upload-bar" id="evtUploadBar"><div class="evt-upload-bar-fill" id="evtUploadBarFill"></div></div>';
+  html += '<div class="evt-photo-preview" id="evtPhotoPreview"><button class="evt-photo-preview-remove" onclick="clearEvtPhoto()">✕ Remove</button></div>';
   html += '</div>';
 
   // Month navigation
