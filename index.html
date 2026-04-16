@@ -1501,28 +1501,81 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
   LOCATIONS.forEach(loc => {
     tableHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
     const people = SCORECARD_PEOPLE[loc.id] || [];
+    const locWeek = (weekData[loc.id] || {});
+    // Gather all entered values for this location+week (used for auto-calcs)
+    const locVals = {};
+    people.forEach(p => { Object.assign(locVals, locWeek[p.id] || {}); });
+
     people.forEach(person => {
       const allMetrics = (loc.id === 'goninjaW' || loc.id === 'goninjaV') ? GONINJA_METRICS : WEEKLY_METRICS;
       const metricsForPerson = person.metrics ? allMetrics.filter(m => person.metrics.includes(m.id)) : allMetrics;
       metricsForPerson.forEach(metric => {
-        const rawVal = weekData[loc.id] && weekData[loc.id][person.id] ? weekData[loc.id][person.id][metric.id] : undefined;
-        const numVal = parseFloat(rawVal) || 0;
-        const rawGoal = goalsData[loc.id] && goalsData[loc.id][person.id] && goalsData[loc.id][person.id][metric.id];
-        const goalVal = rawGoal !== undefined && rawGoal !== null ? (metric.pct ? (parseFloat(rawGoal) * 100).toFixed(1) + '%' : rawGoal) : '';
-        const displayVal = metric.pct ? (numVal * 100).toFixed(1) + '%' : numVal;
-        // Color logic: attrition is "lower is better", everything else is "higher is better"
-        let valColor = '';
-        if (rawGoal !== undefined && rawGoal !== null && rawVal !== undefined && rawVal !== null && rawVal !== '') {
-          const goalNum = parseFloat(rawGoal) || 0;
-          if (metric.id === 'attrition') {
-            valColor = numVal <= goalNum ? 'color:#10b981' : 'color:#ef4444';
+        const personWeek = locWeek[person.id] || {};
+        let rawVal = personWeek[metric.id];
+
+        // Auto-calculate Lead to Trial % from leads + trials already entered
+        if (metric.id === 'leadToTrial') {
+          const leads  = parseFloat(locVals.leads)  || 0;
+          const trials = parseFloat(locVals.trials) || 0;
+          rawVal = leads > 0 ? trials / leads : (rawVal !== undefined ? rawVal : 0);
+        }
+
+        const numVal  = parseFloat(rawVal) || 0;
+        const rawGoal = (goalsData[loc.id] || {})[person.id]?.[metric.id];
+
+        // Attrition: stored as a head-count but goal may be stored as a monthly rate (<0.1).
+        // Convert rate goal → weekly count using live total members for a fair comparison.
+        let goalNum = parseFloat(rawGoal) || 0;
+        let goalDisplay = '';
+        if (rawGoal !== undefined && rawGoal !== null) {
+          if (metric.id === 'attrition' && goalNum < 1) {
+            // Goal stored as monthly rate → convert to expected weekly head-count
+            const totalMem = parseFloat((state.kpis[loc.id] || {}).totalMembers) || 0;
+            goalNum = totalMem > 0 ? +(goalNum * totalMem).toFixed(1) : goalNum;
+            goalDisplay = goalNum + ' /wk';
+          } else if (metric.pct) {
+            goalDisplay = (goalNum * 100).toFixed(1) + '%';
           } else {
-            valColor = numVal >= goalNum ? 'color:#10b981' : 'color:#ef4444';
+            goalDisplay = String(rawGoal);
           }
         }
-        tableHtml += '<tr><td>' + person.name + '</td><td>' + metric.label + '</td>' +
-          '<td>' + goalVal + '</td>' +
-          '<td style="' + valColor + ';font-weight:600"><input style="' + valColor + ';font-weight:600" value="' + esc(String(rawVal !== undefined && rawVal !== null && rawVal !== '' ? rawVal : 0)) + '" onchange="updateScorecard(\'' + loc.id + '\',\'' + person.id + '\',\'' + metric.id + '\',0,this.value)" /></td></tr>';
+
+        // Display value
+        let displayVal, inputVal;
+        if (metric.id === 'leadToTrial') {
+          displayVal = numVal > 0 ? (numVal * 100).toFixed(0) + '%' : '0%';
+          inputVal   = null; // read-only — auto-calculated
+        } else if (metric.pct) {
+          displayVal = (numVal * 100).toFixed(1) + '%';
+          inputVal   = rawVal !== undefined && rawVal !== '' ? rawVal : 0;
+        } else {
+          displayVal = numVal;
+          inputVal   = rawVal !== undefined && rawVal !== '' ? rawVal : 0;
+        }
+
+        // Color: attrition lower-is-better; everything else higher-is-better
+        let valColor = '';
+        if (rawGoal !== undefined && rawGoal !== null) {
+          if (metric.id === 'attrition') {
+            valColor = numVal <= goalNum ? 'color:#10b981' : 'color:#ef4444';
+          } else if (metric.id === 'leadToTrial') {
+            valColor = numVal >= goalNum ? 'color:#10b981' : (numVal > 0 ? 'color:#ef4444' : '');
+          } else {
+            valColor = numVal >= goalNum ? 'color:#10b981' : (numVal > 0 ? 'color:#ef4444' : '');
+          }
+        }
+
+        const cellStyle = valColor + ';font-weight:600';
+        if (inputVal === null) {
+          // Auto-calculated — read-only display
+          tableHtml += '<tr><td>' + person.name + '</td><td>' + metric.label + '</td>' +
+            '<td>' + goalDisplay + '</td>' +
+            '<td style="' + cellStyle + '">' + displayVal + '</td></tr>';
+        } else {
+          tableHtml += '<tr><td>' + person.name + '</td><td>' + metric.label + '</td>' +
+            '<td>' + goalDisplay + '</td>' +
+            '<td style="' + cellStyle + '"><input style="' + cellStyle + ';background:transparent;border:none;width:60px;text-align:center" value="' + esc(String(inputVal)) + '" onchange="updateScorecard(\'' + loc.id + '\',\'' + person.id + '\',\'' + metric.id + '\',0,this.value)" /></td></tr>';
+        }
       });
     });
   });
@@ -1530,45 +1583,46 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
   tableHtml += '</tbody></table></div></div>';
 
   // Monthly revenue/members table
+  const curMonthFull2 = ['january','february','march','april','may','june','july','august','september','october','november','december'][new Date().getMonth()];
+  const curMonthShort2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][new Date().getMonth()];
+
   let monthlyHtml = '<div class="section">' +
     '<div class="section-header"><h2>Monthly Totals &mdash; ' + getCurrentMonth() + '</h2><div class="badge">MTD</div></div>' +
     '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
-    '<th>Who</th><th>Measurable</th><th>March Goal</th><th>Current</th>' +
+    '<th>Who</th><th>Measurable</th><th>' + getCurrentMonth() + ' Goal</th><th>Current</th>' +
     '</tr></thead><tbody>';
 
-  const curMonthKey = MONTHS[new Date().getMonth()].toLowerCase();
   LOCATIONS.forEach(loc => {
     monthlyHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
     MONTHLY_METRICS.forEach(metric => {
       if (metric.id === 'totalMembers' && (loc.id === 'goninjaW' || loc.id === 'goninjaV')) return;
-      // Auto-pull current values from canonical data sources
-      let val = '';
-      if (metric.id === 'totalMembers' && ['waunakee','eastmad','verona'].includes(loc.id)) {
-        const memData = state.membership[loc.id] && state.membership[loc.id][curMonthKey];
-        val = memData && memData.total ? memData.total : (monthData[loc.id] && monthData[loc.id].totalMembers) || '';
-      } else if (metric.id === 'grossRevenue') {
-        const finData = state.financials[loc.id] && state.financials[loc.id]['2026'] && state.financials[loc.id]['2026'][curMonthKey];
-        const finRev = finData && finData.grossTY ? finData.grossTY : '';
-        val = finRev || (monthData[loc.id] && monthData[loc.id].revenue) || '';
-      } else {
-        const rawMVal = monthData[loc.id] && monthData[loc.id][metric.id];
-        val = rawMVal !== undefined && rawMVal !== null && rawMVal !== '' ? rawMVal : '';
+      let val = '', goal = '', numGoal = 0;
+
+      if (metric.id === 'grossRevenue') {
+        // Live revenue from kpis (Gymdesk)
+        val = parseFloat((state.kpis[loc.id] || {}).revenue) || '';
+        // Monthly goal from financials
+        const finLoc = state.financials[loc.id] || {};
+        numGoal = parseFloat((finLoc[curMonthFull2] || finLoc[curMonthShort2] || {}).goal) || loc.revenueGoal;
+        goal = fmtCurrency(numGoal);
+      } else if (metric.id === 'totalMembers') {
+        // Live member count from kpis, fall back to membership data
+        val = parseFloat((state.kpis[loc.id] || {}).totalMembers) ||
+              parseFloat((state.membership[loc.id] || {})[curMonthFull2]?.total) || '';
+        const memGoal = parseFloat((state.membership[loc.id] || {})[curMonthFull2]?.goal) || 0;
+        numGoal = memGoal;
+        goal = memGoal || '';
       }
-      const goal = metric.id === 'grossRevenue' ? fmtCurrency(loc.revenueGoal) :
-          (metric.id === 'totalMembers' && ['waunakee','eastmad','verona'].includes(loc.id)) ?
-          (state.membership[loc.id] && state.membership[loc.id][curMonthKey] && state.membership[loc.id][curMonthKey].goal || '') : '';
-      // Color: green if meeting/exceeding goal, red if under
-      let mValColor = '';
-      const numGoal = metric.id === 'grossRevenue' ? loc.revenueGoal :
-        (metric.id === 'totalMembers' && ['waunakee','eastmad','verona'].includes(loc.id)) ?
-        parseFloat(state.membership[loc.id] && state.membership[loc.id][curMonthKey] && state.membership[loc.id][curMonthKey].goal) || 0 : 0;
+
       const numCur = parseFloat(val) || 0;
+      let mValColor = '';
       if (numGoal > 0 && val !== '') {
         mValColor = numCur >= numGoal ? 'color:#10b981' : 'color:#ef4444';
       }
+      const displayVal = metric.currency && val !== '' ? fmtCurrency(numCur) : esc(String(val));
       monthlyHtml += '<tr><td>' + loc.short + '</td><td>' + metric.label + '</td>' +
         '<td>' + goal + '</td>' +
-        '<td style="' + mValColor + ';font-weight:600"><input style="' + mValColor + ';font-weight:600" value="' + (metric.currency && val !== '' ? fmtCurrency(parseFloat(val) || 0) : esc(String(val))) + '" onchange="updateMonthly(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td></tr>';
+        '<td style="' + mValColor + ';font-weight:600">' + displayVal + '</td></tr>';
     });
   });
 
