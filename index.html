@@ -918,6 +918,7 @@ function revPctClass(val, goal) {
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function linkify(s) { return esc(s).replace(/(https?:\/\/[^\s<>"]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline">$1</a>'); }
 
 /*  -  -  Firebase Helpers  -  -  */
 function fbRef(path) { return db.ref(CEO + '/' + path); }
@@ -2336,7 +2337,7 @@ function renderEventsPage() {
       html += '<div class="cal-list-date">' + dateStr + '</div>';
       html += '<div class="cal-list-name" style="display:flex;flex-direction:column;gap:2px;">';
       html += '<span>' + esc(e.event) + (e.loc ? ' <span style="font-size:11px;font-weight:400;color:var(--gray-500)">(' + getEvtLocLabel(e.loc) + ')</span>' : '') + '</span>';
-      if (e.description) html += '<span style="font-size:12px;font-weight:400;color:var(--gray-500);line-height:1.5">' + esc(e.description) + '</span>';
+      if (e.description) html += '<span style="font-size:12px;font-weight:400;color:var(--gray-500);line-height:1.5">' + linkify(e.description) + '</span>';
       html += '</div>';
       if (e.link) html += '<a class="cal-list-link" href="' + esc(e.link) + '" target="_blank">GymDesk \u2192</a>';
       html += '<div style="display:flex;gap:6px;margin-left:auto;">';
