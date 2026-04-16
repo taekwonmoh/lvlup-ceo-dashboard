@@ -565,6 +565,7 @@ let state = {
   financials: { waunakee: {}, eastmad: {}, verona: {} },
   membership: { waunakee: {}, eastmad: {}, verona: {} },
   kpis: {},
+  kpisAll: {},
   cycles: {},
   l10: {},
   l10WeekOffset: 0,
@@ -986,6 +987,11 @@ function listenAll() {
   // KPIs (all locations, current month)
   const kpiRef = fbRef('kpis/2026/' + getMonthKey());
   kpiRef.on('value', snap => { state.kpis = snap.val() || {}; render(); });
+  activeListeners.push({ ref: kpiRef, event: 'value' });
+
+  // KPIs all months (for revenue table)
+  const kpiAllRef = fbRef('kpis/2026');
+  kpiAllRef.on('value', snap => { state.kpisAll = snap.val() || {}; render(); });
   activeListeners.push({ ref: kpiRef, event: 'value' });
 
   // Cycles data (mat chat, life skills, test dates)
@@ -1668,144 +1674,103 @@ function initKPICharts(){
   });
 }
 
-/*  -  -  Financials Page (All 3 LVLUP Locations)  -  -  */
+/*  -  -  Financials Page — live KPI data from Gymdesk  -  -  */
 function renderFinancialsPage() {
-  const LVLUP_LOCS = LOCATIONS.filter(l => ['waunakee','eastmad','verona'].includes(l.id));
-  const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
-  const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const currentMonthIdx = new Date().getMonth();
+  const MONTH_KEYS  = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12'];
+  const MONTH_FULL  = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const curIdx = new Date().getMonth();
 
-  // Revenue summary cards
+  // Summary KPI cards — all 5 locations, current month
   let html = '<div class="kpi-grid">';
-  LVLUP_LOCS.forEach(loc => {
-    const finData = state.financials[loc.id] || {};
-    // Sum YTD revenue
+  LOCATIONS.forEach(loc => {
+    const curRev = parseFloat((state.kpis[loc.id] || {}).revenue) || 0;
+    const finLoc  = state.financials[loc.id] || {};
+    const monthGoal = parseFloat((finLoc[MONTH_FULL[curIdx]] || finLoc[MONTH_SHORT[curIdx]] || {}).goal) || 0;
+    const goal = monthGoal || loc.revenueGoal;
+    // YTD sum from kpisAll
     let ytd = 0;
-    for (let m = 0; m <= currentMonthIdx; m++) {
-      ytd += parseFloat((finData[monthNames[m]] || {}).grossTY) || 0;
+    for (let m = 0; m <= curIdx; m++) {
+      const d = (state.kpisAll[MONTH_KEYS[m]] || {})[loc.id] || {};
+      ytd += m === curIdx ? curRev : (parseFloat(d.revenue) || 0);
     }
-    const goal = loc.revenueGoal;
-    const curMonth = finData[monthNames[currentMonthIdx]] || {};
-    const curRev = parseFloat(curMonth.grossTY) || parseFloat((state.kpis[loc.id]||{}).revenue) || 0;
     const pct = goal ? Math.round(curRev / goal * 100) : 0;
     const cls = pct >= 80 ? 'green' : pct >= 50 ? 'orange' : 'red';
     html += '<div class="kpi-card ' + cls + '">' +
       '<div class="kpi-label">' + loc.short + ' Revenue MTD</div>' +
       '<div class="kpi-value currency">' + fmtCurrency(curRev) + '</div>' +
-      '<div class="kpi-sub">Goal: ' + fmtCurrency(goal) + ' (' + pct + '%) | YTD: ' + fmtCurrency(ytd) + '</div>' +
+      '<div class="kpi-sub">Goal: ' + fmtCurrency(goal) + ' (' + pct + '%) &nbsp;|&nbsp; YTD: ' + fmtCurrency(ytd) + '</div>' +
       '<div class="kpi-bar"><div class="kpi-fill ' + cls + '" style="width:' + Math.min(pct, 100) + '%"></div></div>' +
       '</div>';
   });
   html += '</div>';
 
-  // Per-location financial tables
-  LVLUP_LOCS.forEach(loc => {
-    const finData = state.financials[loc.id] || {};
-    const memData = state.membership[loc.id] || {};
-
-    // Financial table with Goal column and quarterly subtotals
-    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' \u2014 2026 Financials</h2></div>';
-    html += '<div style="overflow-x:auto;"><table class="fin-table"><thead><tr>';
-    html += '<th style="text-align:left;">Month</th><th>Goal</th><th>Gross TY</th><th>vs Goal</th><th>Gross LY</th><th>TY vs LY</th><th>ARM</th><th>LEG</th><th>LTV</th>';
+  // Per-location revenue table (live data from Gymdesk via kpisAll)
+  LOCATIONS.forEach(loc => {
+    const finLoc = state.financials[loc.id] || {};
+    html += '<div class="section"><div class="section-header"><h2>' + loc.name + ' \u2014 2026 Revenue</h2></div>';
+    html += '<div style="overflow-x:auto"><table class="fin-table"><thead><tr>';
+    html += '<th style="text-align:left">Month</th><th>Goal</th><th>Revenue</th><th>vs Goal</th><th>Members</th><th>ARM</th>';
     html += '</tr></thead><tbody>';
 
-    let ytdTY = 0, ytdLY = 0, ytdGoal = 0;
-    let qTY = 0, qLY = 0, qGoal = 0;
-    for (let m = 0; m < 12; m++) {
-      const mk = monthNames[m];
-      const mkShort = monthLabels[m];
-      const fd = finData[mk] || {};
-      const fdShort = finData[mkShort] || {};
-      let grossTY = parseFloat(fd.grossTY) || 0;
-      if(grossTY===0 && m===currentMonthIdx){grossTY=parseFloat((state.kpis[loc.id]||{}).revenue)||0;}
-      const grossLY = parseFloat(fd.grossLY) || 0;
-      const monthGoal = parseFloat(fdShort.goal) || parseFloat(fd.goal) || 0;
-      ytdTY += grossTY; ytdLY += grossLY; ytdGoal += monthGoal;
-      qTY += grossTY; qLY += grossLY; qGoal += monthGoal;
-      const diff = grossTY - grossLY;
-      const vsGoal = grossTY - monthGoal;
-      const isFuture = m > currentMonthIdx && !grossTY;
+    let ytdRev = 0, ytdGoal = 0;
+    let qRev = 0, qGoal = 0;
 
-      if (isFuture && !grossLY && !monthGoal) {
-        if ((m + 1) % 3 === 0) { qTY = 0; qLY = 0; qGoal = 0; }
+    for (let m = 0; m < 12; m++) {
+      const mk      = MONTH_KEYS[m];
+      const mkFull  = MONTH_FULL[m];
+      const mkShort = MONTH_SHORT[m];
+      const kd      = (state.kpisAll[mk] || {})[loc.id] || {};
+      const rev     = m === curIdx
+        ? (parseFloat((state.kpis[loc.id] || {}).revenue) || parseFloat(kd.revenue) || 0)
+        : parseFloat(kd.revenue) || 0;
+      const members = parseFloat(kd.totalMembers) || 0;
+      const arm     = (rev && members) ? rev / members : 0;
+      const goalData  = finLoc[mkFull] || finLoc[mkShort] || {};
+      const monthGoal = parseFloat(goalData.goal) || 0;
+      const vsGoal    = rev - monthGoal;
+
+      // Skip empty future months with no goal set
+      if (m > curIdx && !rev && !monthGoal) {
+        if ((m + 1) % 3 === 0) { qRev = 0; qGoal = 0; }
         continue;
       }
 
-      html += '<tr>';
-      html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
-      html += '<td class="currency" style="padding:2px 4px;"><input style="width:90px;border:1px solid var(--gray-200);border-radius:6px;padding:3px 6px;font-size:12px;text-align:right;font-family:inherit;background:var(--gray-50)" value="' + (monthGoal ? monthGoal : '') + '" placeholder="—" onchange="updateFinancialGoal(\'' + loc.id + '\',\'' + mkShort + '\',this.value)" /></td>';
-      html += '<td class="currency">' + (grossTY ? fmtCurrency(grossTY) : '') + '</td>';
-      html += '<td class="' + (vsGoal >= 0 ? 'positive' : 'negative') + '">' + (grossTY && monthGoal ? fmtCurrency(vsGoal) : '') + '</td>';
-      html += '<td class="currency" style="color:var(--gray-400);">' + (grossLY ? fmtCurrency(grossLY) : '') + '</td>';
-      html += '<td class="' + (diff >= 0 ? 'positive' : 'negative') + '">' + (grossTY && grossLY ? fmtCurrency(diff) : '') + '</td>';
-      html += '<td class="currency">' + (fd.arm ? fmtCurrency(fd.arm) : '') + '</td>';
-      html += '<td>' + esc(String(fd.leg || '')) + '</td>';
-      html += '<td class="currency">' + (fd.ltv ? fmtCurrency(fd.ltv) : '') + '</td>';
+      ytdRev  += rev;  ytdGoal  += monthGoal;
+      qRev    += rev;  qGoal    += monthGoal;
+
+      html += '<tr' + (m === curIdx ? ' class="kpi-current-row"' : '') + '>';
+      html += '<td style="text-align:left;font-weight:500">' + mkShort + (m === curIdx ? ' ●' : '') + '</td>';
+      html += '<td style="padding:2px 4px"><input style="width:90px;border:1px solid var(--gray-200);border-radius:6px;padding:3px 6px;font-size:12px;text-align:right;font-family:inherit;background:var(--gray-50)" value="' + (monthGoal || '') + '" placeholder="—" onchange="updateFinancialGoal(\'' + loc.id + '\',\'' + mkShort + '\',this.value)"></td>';
+      html += '<td class="currency">' + (rev ? fmtCurrency(rev) : '') + '</td>';
+      html += '<td class="' + (vsGoal >= 0 ? 'positive' : 'negative') + '">' + (rev && monthGoal ? fmtCurrency(vsGoal) : '') + '</td>';
+      html += '<td style="text-align:center;color:var(--gray-500)">' + (members || '') + '</td>';
+      html += '<td class="currency" style="color:var(--gray-500)">' + (arm ? fmtCurrency(arm) : '') + '</td>';
       html += '</tr>';
 
       // Quarterly subtotal after Mar, Jun, Sep, Dec
       if ((m + 1) % 3 === 0) {
         const qi = Math.floor(m / 3);
-        const qLabels = ['Q1','Q2','Q3','Q4'];
-        const qDiff = qTY - qLY;
-        const qVsGoal = qTY - qGoal;
-        if (qTY > 0 || qLY > 0 || qGoal > 0) {
+        const qVsGoal = qRev - qGoal;
+        if (qRev > 0 || qGoal > 0) {
           html += '<tr class="quarter-row">';
-          html += '<td style="text-align:left;font-weight:700;">' + qLabels[qi] + ' Total</td>';
-          html += '<td class="currency" style="font-weight:600;color:var(--gray-500);">' + (qGoal ? fmtCurrency(qGoal) : '') + '</td>';
-          html += '<td class="currency" style="font-weight:700;">' + (qTY ? fmtCurrency(qTY) : '') + '</td>';
-          html += '<td class="' + (qVsGoal >= 0 ? 'positive' : 'negative') + '" style="font-weight:600;">' + (qTY && qGoal ? fmtCurrency(qVsGoal) : '') + '</td>';
-          html += '<td class="currency" style="color:var(--gray-400);font-weight:600;">' + (qLY ? fmtCurrency(qLY) : '') + '</td>';
-          html += '<td class="' + (qDiff >= 0 ? 'positive' : 'negative') + '" style="font-weight:600;">' + (qTY && qLY ? fmtCurrency(qDiff) : '') + '</td>';
-          html += '<td></td><td></td><td></td></tr>';
+          html += '<td style="text-align:left;font-weight:700">Q' + (qi + 1) + ' Total</td>';
+          html += '<td class="currency" style="font-weight:600;color:var(--gray-500)">' + (qGoal ? fmtCurrency(qGoal) : '') + '</td>';
+          html += '<td class="currency" style="font-weight:700">' + fmtCurrency(qRev) + '</td>';
+          html += '<td class="' + (qVsGoal >= 0 ? 'positive' : 'negative') + '" style="font-weight:600">' + (qRev && qGoal ? fmtCurrency(qVsGoal) : '') + '</td>';
+          html += '<td colspan="2"></td></tr>';
         }
-        qTY = 0; qLY = 0; qGoal = 0;
+        qRev = 0; qGoal = 0;
       }
     }
 
-    // YTD row
-    const ytdDiff = ytdTY - ytdLY;
-    const ytdVsGoal = ytdTY - ytdGoal;
+    // YTD totals row
     html += '<tr class="year-row">';
-    html += '<td style="text-align:left;">YTD</td>';
-    html += '<td class="currency" style="font-weight:600;color:var(--gray-500);">' + (ytdGoal ? fmtCurrency(ytdGoal) : '') + '</td>';
-    html += '<td class="currency">' + fmtCurrency(ytdTY) + '</td>';
-    html += '<td class="' + (ytdVsGoal >= 0 ? 'positive' : 'negative') + '">' + (ytdGoal ? fmtCurrency(ytdVsGoal) : '') + '</td>';
-    html += '<td class="currency" style="color:var(--gray-400);">' + fmtCurrency(ytdLY) + '</td>';
-    html += '<td class="' + (ytdDiff >= 0 ? 'positive' : 'negative') + '">' + fmtCurrency(ytdDiff) + '</td>';
-    html += '<td></td><td></td><td></td></tr>';
-    html += '</tbody></table></div>';
-
-    // Membership table
-    html += '<div style="margin-top:2px;"><table class="mem-table"><thead><tr>';
-    html += '<th style="text-align:left;">Month</th><th>Total Members</th><th>New</th><th>Lost</th><th>Attrition</th><th>Goal</th>';
-    html += '</tr></thead><tbody>';
-
-    for (let m = 0; m < 12; m++) {
-      const mk = monthNames[m];
-      const md = memData[mk] || {};
-      if (!md.total && m > currentMonthIdx && !md.goal) continue;
-      const attrCls = (() => {
-        const n = parseFloat(String(md.attrition || '').replace('%',''));
-        if (isNaN(n) || n === 0) return '';
-        return n <= 0.03 ? 'pct-green' : 'pct-red';
-      })();
-      html += '<tr>';
-      html += '<td style="text-align:left;font-weight:500;">' + monthLabels[m] + '</td>';
-      const totalCls = (() => {
-        const t = parseFloat(md.total), g = parseFloat(md.goal);
-        if (isNaN(t) || !t || isNaN(g) || !g) return '';
-        return t >= g ? 'pct-green' : 'pct-red';
-      })();
-      html += '<td class="pct-cell ' + totalCls + '">' + esc(String(md.total || '')) + '</td>';
-      html += '<td>' + esc(String(md.newMem || '')) + '</td>';
-      html += '<td>' + esc(String(md.lost || '')) + '</td>';
-      const attrDisplay = md.attrition ? (parseFloat(md.attrition) * 100).toFixed(1) + '%' : '';
-      html += '<td class="pct-cell ' + attrCls + '">' + esc(attrDisplay) + '</td>';
-      html += '<td>' + esc(String(md.goal || '')) + '</td>';
-      html += '</tr>';
-    }
-
+    html += '<td style="text-align:left">YTD</td>';
+    html += '<td class="currency" style="font-weight:600;color:var(--gray-500)">' + (ytdGoal ? fmtCurrency(ytdGoal) : '') + '</td>';
+    html += '<td class="currency">' + fmtCurrency(ytdRev) + '</td>';
+    html += '<td class="' + ((ytdRev - ytdGoal) >= 0 ? 'positive' : 'negative') + '">' + (ytdGoal ? fmtCurrency(ytdRev - ytdGoal) : '') + '</td>';
+    html += '<td colspan="2"></td></tr>';
     html += '</tbody></table></div></div>';
   });
 
