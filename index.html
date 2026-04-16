@@ -1721,10 +1721,10 @@ function renderFinancialsPage() {
       const mkFull  = MONTH_FULL[m];
       const mkShort = MONTH_SHORT[m];
       const kd      = (state.kpisAll[mk] || {})[loc.id] || {};
-      const grossTY = m === curIdx
-        ? (parseFloat((state.kpis[loc.id] || {}).revenue) || parseFloat(kd.revenue) || 0)
-        : parseFloat(kd.revenue) || 0;
       const fd        = finLoc[mkFull] || finLoc[mkShort] || {};
+      const grossTY = m === curIdx
+        ? (parseFloat((state.kpis[loc.id] || {}).revenue) || parseFloat(kd.revenue) || parseFloat(fd.grossTY) || 0)
+        : (parseFloat(kd.revenue) || parseFloat(fd.grossTY) || 0);
       const grossLY   = parseFloat(fd.grossLY) || 0;
       const members   = parseFloat(kd.totalMembers) || 0;
       const arm       = (grossTY && members) ? grossTY / members : 0;
