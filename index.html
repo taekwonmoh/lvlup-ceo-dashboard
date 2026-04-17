@@ -575,7 +575,7 @@ let state = {
   devActiveModule: null,
   devQuizAnswers: {},
   devQuizSubmitted: false,
-  feedback: { roster: {}, tracking: {}, monthOffset: 0, locationFilter: 'all' }
+  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'all', showInactive: false }
 };
 
 let debounceTimers = {};
@@ -1020,6 +1020,11 @@ function listenAll() {
   const fbRosterRef = db.ref('feedbackRoster');
   fbRosterRef.on('value', snap => { state.feedback.roster = snap.val() || {}; render(); });
   activeListeners.push({ ref: fbRosterRef, event: 'value' });
+
+  // Feedback roster metadata (last sync dates per location)
+  const fbRosterMetaRef = db.ref('feedbackRosterMeta');
+  fbRosterMetaRef.on('value', snap => { state.feedback.rosterMeta = snap.val() || {}; render(); });
+  activeListeners.push({ ref: fbRosterMetaRef, event: 'value' });
 
   // Feedback tracking (monthly interactions) — re-listen when month changes
   listenFeedbackTracking();
@@ -3310,11 +3315,13 @@ function seedEMadGoals() {
    STUDENT FEEDBACK TRACKER
 ───────────────────────────────────────── */
 
-function getFeedbackMonthKey() {
+function getFeedbackMonthKey(offset) {
   const d = new Date();
-  d.setMonth(d.getMonth() + state.feedback.monthOffset);
+  d.setMonth(d.getMonth() + (offset !== undefined ? offset : state.feedback.monthOffset));
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
+
+function getCurrentMonthKey() { return getFeedbackMonthKey(0); }
 
 function getFeedbackMonthLabel() {
   const d = new Date();
@@ -3332,76 +3339,183 @@ function feedbackSetLocationFilter(loc) {
   render();
 }
 
+function feedbackToggleInactive() {
+  state.feedback.showInactive = !state.feedback.showInactive;
+  render();
+}
+
 function feedbackToggle(studentKey, field) {
   const mk = getFeedbackMonthKey();
   const current = (state.feedback.tracking[studentKey] || {})[field];
   db.ref('feedbackTracking/' + mk + '/' + studentKey + '/' + field).set(!current);
 }
 
+function feedbackMarkInactive(studentKey) {
+  db.ref('feedbackRoster/' + studentKey + '/active').set(false);
+  db.ref('feedbackRoster/' + studentKey + '/inactiveSince').set(getCurrentMonthKey());
+}
+
+function feedbackMarkActive(studentKey) {
+  db.ref('feedbackRoster/' + studentKey + '/active').set(true);
+  db.ref('feedbackRoster/' + studentKey + '/inactiveSince').remove();
+}
+
 function feedbackDeleteStudent(studentKey) {
-  if (!confirm('Remove this student from the roster?')) return;
+  if (!confirm('Permanently remove this student? Their interaction history will be kept but the student will no longer appear in any view.')) return;
   db.ref('feedbackRoster/' + studentKey).remove();
 }
 
-function feedbackOpenImport() {
-  // Build a modal overlay
-  const existing = document.getElementById('fbImportModal');
+/* ── Smart roster sync ── */
+function feedbackOpenSync(preselectedLoc) {
+  const existing = document.getElementById('fbSyncModal');
   if (existing) existing.remove();
 
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
   const locOptions = ['waunakee','eastmad','verona'].map(l =>
-    '<option value="' + l + '">' + {waunakee:'Waunakee', eastmad:'East Madison', verona:'Verona'}[l] + '</option>'
+    '<option value="' + l + '"' + (preselectedLoc === l ? ' selected' : '') + '>' + LOC_LABELS[l] + '</option>'
   ).join('');
 
   const modal = document.createElement('div');
-  modal.id = 'fbImportModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.id = 'fbSyncModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;';
   modal.innerHTML = `
-    <div style="background:#fff;border-radius:14px;padding:28px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.18);">
-      <h3 style="margin:0 0 6px;font-size:16px;font-weight:700;color:#1a1a2e;">Import Students</h3>
-      <p style="margin:0 0 16px;font-size:13px;color:#666;">
-        Paste one student per line, or use CSV format: <code style="background:#f4f4f4;padding:1px 5px;border-radius:4px;">Name, Location</code><br>
-        Location values: <strong>waunakee</strong>, <strong>eastmad</strong>, <strong>verona</strong>
+    <div style="background:#fff;border-radius:14px;padding:28px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.2);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <h3 style="margin:0;font-size:16px;font-weight:800;color:#1a1a2e;">🔄 Sync Student Roster</h3>
+        <button onclick="document.getElementById('fbSyncModal').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa;padding:0 4px;">✕</button>
+      </div>
+      <p style="margin:0 0 16px;font-size:13px;color:#666;line-height:1.6;">
+        Paste the current active member list for one location. New students will be added, missing students will be marked inactive, and all historical interaction data is preserved.
       </p>
+
       <div style="margin-bottom:12px;">
-        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Default Location (for rows without one)</label>
-        <select id="fbImportLoc" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">
+        <label style="font-size:12px;font-weight:700;color:#555;display:block;margin-bottom:5px;">LOCATION</label>
+        <select id="fbSyncLoc" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-weight:600;" onchange="feedbackSyncPreview()">
           ${locOptions}
         </select>
       </div>
-      <textarea id="fbImportText" placeholder="John Doe, waunakee&#10;Jane Smith, verona&#10;Alex Lee" style="width:100%;height:200px;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
-      <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">
-        <button onclick="document.getElementById('fbImportModal').remove()" style="padding:8px 18px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">Cancel</button>
-        <button onclick="feedbackImportConfirm()" style="padding:8px 18px;border:none;border-radius:8px;background:#4169E1;color:#fff;cursor:pointer;font-size:13px;font-weight:600;">Import Students</button>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;font-weight:700;color:#555;display:block;margin-bottom:5px;">PASTE MEMBER LIST <span style="font-weight:400;color:#aaa;">(one name per line)</span></label>
+        <textarea id="fbSyncText" placeholder="John Doe&#10;Jane Smith&#10;Alex Lee" style="width:100%;height:180px;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.6;" oninput="feedbackSyncPreview()"></textarea>
+      </div>
+
+      <div id="fbSyncPreview" style="margin-bottom:16px;"></div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="document.getElementById('fbSyncModal').remove()" style="padding:9px 20px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#555;">Cancel</button>
+        <button id="fbSyncConfirmBtn" onclick="feedbackSyncConfirm()" disabled style="padding:9px 20px;border:none;border-radius:8px;background:#4169E1;color:#fff;cursor:pointer;font-size:13px;font-weight:700;opacity:0.5;">Sync Roster</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
 }
 
-function feedbackImportConfirm() {
-  const raw = document.getElementById('fbImportText').value.trim();
-  const defaultLoc = document.getElementById('fbImportLoc').value;
-  if (!raw) return;
+function feedbackSyncPreview() {
+  const raw = (document.getElementById('fbSyncText') || {}).value || '';
+  const loc = (document.getElementById('fbSyncLoc') || {}).value;
+  const previewEl = document.getElementById('fbSyncPreview');
+  const confirmBtn = document.getElementById('fbSyncConfirmBtn');
+  if (!previewEl || !confirmBtn) return;
 
-  const locMap = { waunakee: 'waunakee', eastmad: 'eastmad', 'east madison': 'eastmad', 'east mad': 'eastmad', verona: 'verona' };
+  const names = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!names.length) {
+    previewEl.innerHTML = '';
+    confirmBtn.disabled = true;
+    confirmBtn.style.opacity = '0.5';
+    return;
+  }
 
-  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const normalizedNew = new Set(names.map(n => n.toLowerCase()));
+  const existing = Object.entries(state.feedback.roster)
+    .filter(([, v]) => v.location === loc)
+    .map(([k, v]) => ({ key: k, ...v }));
+
+  const existingActive   = existing.filter(s => s.active !== false);
+  const existingInactive = existing.filter(s => s.active === false);
+
+  const toAdd        = names.filter(n => !existingActive.find(s => s.name.toLowerCase() === n.toLowerCase()) && !existingInactive.find(s => s.name.toLowerCase() === n.toLowerCase()));
+  const toReactivate = existingInactive.filter(s => normalizedNew.has(s.name.toLowerCase()));
+  const toDeactivate = existingActive.filter(s => !normalizedNew.has(s.name.toLowerCase()));
+  const unchanged    = existingActive.filter(s => normalizedNew.has(s.name.toLowerCase()));
+
+  let html = '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;font-size:13px;">';
+  html += '<div style="font-weight:700;color:#1a1a2e;margin-bottom:10px;">Preview</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+
+  const stat = (count, label, color, icon) =>
+    '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#fff;border-radius:8px;border:1px solid #e8eaf0;">' +
+    '<span style="font-size:16px;">' + icon + '</span>' +
+    '<div><div style="font-size:16px;font-weight:800;color:' + color + ';">' + count + '</div><div style="font-size:11px;color:#888;font-weight:600;">' + label + '</div></div></div>';
+
+  html += stat(unchanged.length, 'No change', '#94a3b8', '✅');
+  html += stat(toAdd.length, 'New students', '#22c55e', '➕');
+  html += stat(toReactivate.length, 'Reactivated', '#3b82f6', '🔄');
+  html += stat(toDeactivate.length, 'Mark inactive', '#f59e0b', '⏸');
+  html += '</div>';
+
+  if (toDeactivate.length) {
+    html += '<div style="margin-top:10px;padding:8px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;">';
+    html += '<strong>Will be marked inactive:</strong> ' + toDeactivate.map(s => s.name).join(', ');
+    html += '</div>';
+  }
+
+  html += '</div>';
+  previewEl.innerHTML = html;
+  confirmBtn.disabled = false;
+  confirmBtn.style.opacity = '1';
+}
+
+function feedbackSyncConfirm() {
+  const raw = document.getElementById('fbSyncText').value;
+  const loc = document.getElementById('fbSyncLoc').value;
+  const names = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!names.length) return;
+
+  const normalizedNew = new Set(names.map(n => n.toLowerCase()));
+  const existing = Object.entries(state.feedback.roster)
+    .filter(([, v]) => v.location === loc)
+    .map(([k, v]) => ({ key: k, ...v }));
+
+  const existingActive   = existing.filter(s => s.active !== false);
+  const existingInactive = existing.filter(s => s.active === false);
+  const allExistingNames = new Set(existing.map(s => s.name.toLowerCase()));
+
   const updates = {};
-  lines.forEach(line => {
-    const parts = line.split(',').map(p => p.trim());
-    const name = parts[0];
-    if (!name) return;
-    const locRaw = (parts[1] || '').toLowerCase();
-    const location = locMap[locRaw] || defaultLoc;
-    const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-    updates[key] = { name, location };
+  const mk = getCurrentMonthKey();
+
+  // Mark missing active students as inactive
+  existingActive.forEach(s => {
+    if (!normalizedNew.has(s.name.toLowerCase())) {
+      updates['feedbackRoster/' + s.key + '/active'] = false;
+      updates['feedbackRoster/' + s.key + '/inactiveSince'] = mk;
+    }
   });
 
-  if (!Object.keys(updates).length) return;
-  db.ref('feedbackRoster').update(updates, err => {
+  // Reactivate students returning from inactive
+  existingInactive.forEach(s => {
+    if (normalizedNew.has(s.name.toLowerCase())) {
+      updates['feedbackRoster/' + s.key + '/active'] = true;
+      updates['feedbackRoster/' + s.key + '/inactiveSince'] = null;
+    }
+  });
+
+  // Add brand-new students
+  names.forEach(name => {
+    if (!allExistingNames.has(name.toLowerCase())) {
+      const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      updates['feedbackRoster/' + key] = { name, location: loc, active: true, addedDate: mk };
+    }
+  });
+
+  // Record sync timestamp for this location
+  updates['feedbackRosterMeta/' + loc + '/lastSyncedMonth'] = mk;
+  updates['feedbackRosterMeta/' + loc + '/lastSyncedAt'] = Date.now();
+
+  db.ref().update(updates, err => {
     if (!err) {
-      document.getElementById('fbImportModal').remove();
+      document.getElementById('fbSyncModal').remove();
     } else {
-      alert('Error saving: ' + err.message);
+      alert('Error syncing: ' + err.message);
     }
   });
 }
@@ -3411,108 +3525,145 @@ function feedbackAddStudent() {
   const locEl  = document.getElementById('fbNewLoc');
   const name   = nameEl.value.trim();
   if (!name) { nameEl.focus(); return; }
+  const mk = getCurrentMonthKey();
   const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-  db.ref('feedbackRoster/' + key).set({ name, location: locEl.value });
+  db.ref('feedbackRoster/' + key).set({ name, location: locEl.value, active: true, addedDate: mk });
   nameEl.value = '';
 }
 
 function renderFeedbackPage() {
-  const { roster, tracking, locationFilter } = state.feedback;
-  const monthLabel = getFeedbackMonthLabel();
+  const { roster, tracking, rosterMeta, locationFilter, showInactive } = state.feedback;
+  const monthLabel   = getFeedbackMonthLabel();
+  const currentMonth = getCurrentMonthKey();
+  const isCurrentMonth = getFeedbackMonthKey() === currentMonth;
+
   const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
   const INTERACTIONS = [
-    { field: 'postcard',    icon: '📬', label: 'Postcard' },
-    { field: 'video',       icon: '🎥', label: 'Video' },
-    { field: 'phoneCall',   icon: '📞', label: 'Call' },
-    { field: 'conference',  icon: '🤝', label: 'Conf.' },
+    { field: 'postcard',   icon: '📬', label: 'Postcard' },
+    { field: 'video',      icon: '🎥', label: 'Video' },
+    { field: 'phoneCall',  icon: '📞', label: 'Call' },
+    { field: 'conference', icon: '🤝', label: 'Conf.' },
   ];
 
-  // Filter roster
+  // ── Staleness banners (only for current month view) ──
+  let stalenessHTML = '';
+  if (isCurrentMonth) {
+    ['waunakee', 'eastmad', 'verona'].forEach(loc => {
+      const meta = rosterMeta[loc] || {};
+      const synced = meta.lastSyncedMonth === currentMonth;
+      if (!synced) {
+        stalenessHTML +=
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:10px;">' +
+          '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<span style="font-size:18px;">📋</span>' +
+          '<div><div style="font-size:13px;font-weight:700;color:#92400e;">' + LOC_LABELS[loc] + ' roster not synced for ' + monthLabel + '</div>' +
+          '<div style="font-size:12px;color:#b45309;">' + (meta.lastSyncedMonth ? 'Last synced: ' + meta.lastSyncedMonth : 'Never synced') + '</div></div>' +
+          '</div>' +
+          '<button onclick="feedbackOpenSync(\'' + loc + '\')" style="white-space:nowrap;padding:7px 14px;background:#f59e0b;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Sync Now →</button>' +
+          '</div>';
+      }
+    });
+  }
+
+  // ── Build student list ──
   const allStudents = Object.entries(roster).map(([k, v]) => ({ key: k, ...v }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  const filtered = locationFilter === 'all' ? allStudents : allStudents.filter(s => s.location === locationFilter);
+  const byFilter = locationFilter === 'all' ? allStudents : allStudents.filter(s => s.location === locationFilter);
+  const activeStudents   = byFilter.filter(s => s.active !== false);
+  const inactiveStudents = byFilter.filter(s => s.active === false);
+  const displayed = showInactive ? byFilter : activeStudents;
 
-  // Stats
-  const total = filtered.length;
+  // ── Stats (active only) ──
+  const total = activeStudents.length;
   const counts = {};
-  INTERACTIONS.forEach(i => {
-    counts[i.field] = filtered.filter(s => (tracking[s.key] || {})[i.field]).length;
-  });
-  const contacted = filtered.filter(s => {
-    const t = tracking[s.key] || {};
-    return INTERACTIONS.some(i => t[i.field]);
-  }).length;
+  INTERACTIONS.forEach(i => { counts[i.field] = activeStudents.filter(s => (tracking[s.key] || {})[i.field]).length; });
+  const contacted = activeStudents.filter(s => { const t = tracking[s.key] || {}; return INTERACTIONS.some(i => t[i.field]); }).length;
 
-  // Filter pill style helper
+  // ── Helpers ──
   const pill = (id, label) => {
     const active = locationFilter === id;
-    return '<button onclick="feedbackSetLocationFilter(\'' + id + '\')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s;background:' + (active ? '#4169E1' : '#f1f3f9') + ';color:' + (active ? '#fff' : '#555') + ';">' + label + '</button>';
+    return '<button onclick="feedbackSetLocationFilter(\'' + id + '\')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:' + (active ? '#4169E1' : '#f1f3f9') + ';color:' + (active ? '#fff' : '#555') + ';">' + label + '</button>';
   };
 
-  // Checkbox helper
-  const chk = (studentKey, field, checked) =>
+  const chk = (studentKey, field, checked, disabled) =>
     '<td style="text-align:center;padding:10px 4px;">' +
-    '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="feedbackToggle(\'' + studentKey + '\',\'' + field + '\')" style="width:17px;height:17px;cursor:pointer;accent-color:#4169E1;">' +
+    '<input type="checkbox" ' + (checked ? 'checked' : '') + (disabled ? ' disabled' : '') + ' onchange="feedbackToggle(\'' + studentKey + '\',\'' + field + '\')" style="width:17px;height:17px;cursor:' + (disabled ? 'default' : 'pointer') + ';accent-color:#4169E1;opacity:' + (disabled ? '0.3' : '1') + ';">' +
     '</td>';
 
-  // Build rows
+  // ── Rows ──
   let rows = '';
-  if (filtered.length === 0) {
-    rows = '<tr><td colspan="7" style="text-align:center;padding:32px;color:#999;font-size:13px;">No students yet — import a roster to get started.</td></tr>';
+  if (!displayed.length) {
+    rows = '<tr><td colspan="7" style="text-align:center;padding:36px;color:#999;font-size:13px;">' +
+      (Object.keys(roster).length === 0 ? 'No students yet — sync a roster to get started.' : 'No students to display.') +
+      '</td></tr>';
   } else {
-    // Group by location
     const byLoc = { waunakee: [], eastmad: [], verona: [], '': [] };
-    filtered.forEach(s => (byLoc[s.location] || byLoc['']).push(s));
+    displayed.forEach(s => (byLoc[s.location] || byLoc['']).push(s));
 
     ['waunakee', 'eastmad', 'verona', ''].forEach(loc => {
       const group = byLoc[loc];
       if (!group || !group.length) return;
       if (locationFilter === 'all') {
-        rows += '<tr><td colspan="7" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' + (LOC_LABELS[loc] || 'Unknown') + ' — ' + group.length + ' students</td></tr>';
+        const activeCount = group.filter(s => s.active !== false).length;
+        rows += '<tr><td colspan="7" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' +
+          (LOC_LABELS[loc] || 'Unknown') + ' — ' + activeCount + ' active' +
+          (showInactive && group.length > activeCount ? ' · ' + (group.length - activeCount) + ' inactive' : '') +
+          '</td></tr>';
       }
       group.forEach(s => {
         const t = tracking[s.key] || {};
+        const isInactive = s.active === false;
         const anyContact = INTERACTIONS.some(i => t[i.field]);
-        rows += '<tr style="background:' + (anyContact ? '#f9fff9' : '#fff') + ';">' +
-          '<td style="padding:10px 12px;font-size:13px;font-weight:500;color:#1a1a2e;">' + s.name + '</td>' +
-          (locationFilter === 'all' ? '<td style="padding:10px 12px;font-size:12px;color:#666;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
-          INTERACTIONS.map(i => chk(s.key, i.field, !!t[i.field])).join('') +
-          '<td style="padding:10px 6px;text-align:center;"><button onclick="feedbackDeleteStudent(\'' + s.key + '\')" title="Remove" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 6px;border-radius:4px;" onmouseover="this.style.color=\'#e74c3c\'" onmouseout="this.style.color=\'#ccc\'">✕</button></td>' +
+        const rowBg = isInactive ? '#fafafa' : (anyContact ? '#f9fff9' : '#fff');
+        const nameStyle = isInactive ? 'color:#bbb;text-decoration:line-through;' : 'color:#1a1a2e;font-weight:500;';
+        rows += '<tr style="background:' + rowBg + ';">' +
+          '<td style="padding:10px 12px;font-size:13px;' + nameStyle + '">' + s.name +
+            (isInactive ? ' <span style="font-size:10px;color:#bbb;font-weight:400;">inactive</span>' : '') +
+          '</td>' +
+          (locationFilter === 'all' ? '<td style="padding:10px 12px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
+          INTERACTIONS.map(i => chk(s.key, i.field, !!t[i.field], isInactive)).join('') +
+          '<td style="padding:10px 6px;text-align:center;white-space:nowrap;">' +
+            (isInactive
+              ? '<button onclick="feedbackMarkActive(\'' + s.key + '\')" title="Reactivate" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:13px;padding:2px 5px;border-radius:4px;font-weight:700;" onmouseover="this.style.color=\'#22c55e\'" onmouseout="this.style.color=\'#ccc\'">↩</button>'
+              : '<button onclick="feedbackMarkInactive(\'' + s.key + '\')" title="Mark inactive" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 5px;border-radius:4px;" onmouseover="this.style.color=\'#f59e0b\'" onmouseout="this.style.color=\'#ccc\'">⏸</button>') +
+            '<button onclick="feedbackDeleteStudent(\'' + s.key + '\')" title="Delete student" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 5px;border-radius:4px;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#ccc\'">🗑</button>' +
+          '</td>' +
           '</tr>';
       });
     });
   }
 
-  const colCount = locationFilter === 'all' ? 7 : 6;
-
-  return '<div class="page" style="max-width:900px;">' +
+  return '<div class="page" style="max-width:920px;">' +
 
     // ── Header ──
-    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">' +
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">' +
       '<div>' +
         '<h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">Student Feedback Tracker</h2>' +
-        '<p style="margin:0;font-size:13px;color:#888;">Track monthly outreach: postcards, video shoutouts, calls, and in-person conferences.</p>' +
+        '<p style="margin:0;font-size:13px;color:#888;">Track monthly outreach: postcards, video shoutouts, calls & conferences.</p>' +
       '</div>' +
-      '<button onclick="feedbackOpenImport()" style="padding:9px 18px;background:#4169E1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">+ Import Students</button>' +
+      '<button onclick="feedbackOpenSync()" style="padding:9px 18px;background:#4169E1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">🔄 Sync Roster</button>' +
     '</div>' +
 
-    // ── Month navigator ──
-    '<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">' +
-      '<div style="display:flex;align-items:center;gap:8px;background:#f1f3f9;border-radius:10px;padding:4px;">' +
-        '<button onclick="feedbackChangeMonth(-1)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 10px;border-radius:7px;color:#4169E1;font-weight:700;" title="Previous month">‹</button>' +
+    // ── Staleness banners ──
+    stalenessHTML +
+
+    // ── Month navigator + location filters ──
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">' +
+      '<div style="display:flex;align-items:center;gap:6px;background:#f1f3f9;border-radius:10px;padding:3px;">' +
+        '<button onclick="feedbackChangeMonth(-1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 10px;border-radius:7px;color:#4169E1;font-weight:700;">‹</button>' +
         '<span style="font-size:14px;font-weight:700;color:#1a1a2e;min-width:140px;text-align:center;">' + monthLabel + '</span>' +
-        '<button onclick="feedbackChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 10px;border-radius:7px;color:#4169E1;font-weight:700;" title="Next month">›</button>' +
+        '<button onclick="feedbackChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 10px;border-radius:7px;color:#4169E1;font-weight:700;">›</button>' +
       '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-        pill('all', 'All') + pill('waunakee', 'Waunakee') + pill('eastmad', 'East Madison') + pill('verona', 'Verona') +
+        pill('all','All') + pill('waunakee','Waunakee') + pill('eastmad','East Madison') + pill('verona','Verona') +
       '</div>' +
     '</div>' +
 
     // ── Stats ──
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:20px;">' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:18px;">' +
       '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:12px 14px;text-align:center;">' +
         '<div style="font-size:20px;font-weight:800;color:#1a1a2e;">' + total + '</div>' +
-        '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Students</div>' +
+        '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Active</div>' +
       '</div>' +
       '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:12px 14px;text-align:center;">' +
         '<div style="font-size:20px;font-weight:800;color:' + (contacted > 0 ? '#22c55e' : '#ccc') + ';">' + contacted + '</div>' +
@@ -3520,39 +3671,40 @@ function renderFeedbackPage() {
       '</div>' +
       INTERACTIONS.map(i =>
         '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:12px 14px;text-align:center;">' +
-          '<div style="font-size:18px;margin-bottom:2px;">' + i.icon + '</div>' +
+          '<div style="font-size:16px;margin-bottom:2px;">' + i.icon + '</div>' +
           '<div style="font-size:18px;font-weight:800;color:' + (counts[i.field] > 0 ? '#4169E1' : '#ccc') + ';">' + counts[i.field] + '</div>' +
           '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">' + i.label + '</div>' +
         '</div>'
       ).join('') +
     '</div>' +
 
-    // ── Quick-add row ──
-    '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">' +
-      '<input id="fbNewName" placeholder="Student name" style="flex:1;min-width:160px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" onkeydown="if(event.key===\'Enter\')feedbackAddStudent()">' +
+    // ── Quick-add + inactive toggle ──
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">' +
+      '<input id="fbNewName" placeholder="Add student manually…" style="flex:1;min-width:150px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" onkeydown="if(event.key===\'Enter\')feedbackAddStudent()">' +
       '<select id="fbNewLoc" style="padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">' +
         '<option value="waunakee">Waunakee</option><option value="eastmad">East Madison</option><option value="verona">Verona</option>' +
       '</select>' +
-      '<button onclick="feedbackAddStudent()" style="padding:8px 16px;background:#f1f3f9;border:1px solid #ddd;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#4169E1;">+ Add</button>' +
+      '<button onclick="feedbackAddStudent()" style="padding:8px 14px;background:#f1f3f9;border:1px solid #ddd;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#4169E1;">+ Add</button>' +
+      (inactiveStudents.length > 0 ?
+        '<button onclick="feedbackToggleInactive()" style="padding:8px 14px;background:' + (showInactive ? '#fde68a' : '#f1f3f9') + ';border:1px solid #ddd;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;color:#555;margin-left:auto;">' +
+        (showInactive ? '👁 Hide inactive' : '👁 Show ' + inactiveStudents.length + ' inactive') + '</button>'
+      : '') +
     '</div>' +
 
     // ── Table ──
     '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">' +
       '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
-        '<thead>' +
-          '<tr style="background:#f5f7ff;">' +
-            '<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Name</th>' +
-            (locationFilter === 'all' ? '<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Location</th>' : '') +
-            INTERACTIONS.map(i => '<th style="padding:10px 4px;text-align:center;font-size:18px;" title="' + i.label + '">' + i.icon + '</th>').join('') +
-            '<th style="width:36px;"></th>' +
-          '</tr>' +
-        '</thead>' +
+        '<thead><tr style="background:#f5f7ff;">' +
+          '<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Name</th>' +
+          (locationFilter === 'all' ? '<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Location</th>' : '') +
+          INTERACTIONS.map(i => '<th style="padding:10px 6px;text-align:center;font-size:17px;" title="' + i.label + '">' + i.icon + '</th>').join('') +
+          '<th style="width:40px;"></th>' +
+        '</tr></thead>' +
         '<tbody>' + rows + '</tbody>' +
       '</table>' +
     '</div>' +
 
-    // ── Footer note ──
-    '<p style="font-size:12px;color:#aaa;margin-top:12px;text-align:center;">Checks save automatically. Roster is shared across months; interactions are tracked per month.</p>' +
+    '<p style="font-size:12px;color:#aaa;margin-top:12px;text-align:center;">Interactions save automatically · Roster persists across months · Historical data is never deleted on sync</p>' +
 
   '</div>';
 }
