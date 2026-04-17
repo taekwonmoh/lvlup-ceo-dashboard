@@ -524,6 +524,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 <div class="conn-status offline" id="connStatus">Connecting...</div>
@@ -3410,7 +3411,7 @@ function feedbackOpenSync(preselectedLoc) {
         </select>
       </div>
 
-      <input type="file" id="fbSyncFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="feedbackHandleFile(this.files[0])">
+      <input type="file" id="fbSyncFileInput" accept=".xlsx,.xls,.csv,.pdf" style="display:none" onchange="feedbackHandleFile(this.files[0])">
 
       <div id="fbSyncDropZone"
         onclick="document.getElementById('fbSyncFileInput').click()"
@@ -3419,8 +3420,8 @@ function feedbackOpenSync(preselectedLoc) {
         ondrop="event.preventDefault();this.style.borderColor='#c7d2fe';this.style.background='#f5f7ff';feedbackHandleFile(event.dataTransfer.files[0])"
         style="border:2px dashed #c7d2fe;border-radius:10px;background:#f5f7ff;padding:20px;text-align:center;cursor:pointer;margin-bottom:12px;transition:all 0.15s;">
         <div style="font-size:28px;margin-bottom:6px;">📊</div>
-        <div style="font-size:13px;font-weight:700;color:#4169E1;margin-bottom:2px;">Drop Excel or CSV file here</div>
-        <div style="font-size:12px;color:#94a3b8;">or click to browse · .xlsx, .xls, .csv</div>
+        <div style="font-size:13px;font-weight:700;color:#4169E1;margin-bottom:2px;">Drop file here</div>
+        <div style="font-size:12px;color:#94a3b8;">or click to browse · .pdf, .xlsx, .xls, .csv</div>
         <div id="fbSyncFileName" style="margin-top:8px;font-size:12px;font-weight:600;color:#22c55e;display:none;"></div>
       </div>
 
@@ -3447,41 +3448,111 @@ function feedbackOpenSync(preselectedLoc) {
 function feedbackHandleFile(file) {
   if (!file) return;
   const nameEl = document.getElementById('fbSyncFileName');
-  if (nameEl) { nameEl.textContent = '✓ ' + file.name; nameEl.style.display = 'block'; }
+  if (nameEl) { nameEl.textContent = '⏳ Reading ' + file.name + '…'; nameEl.style.display = 'block'; nameEl.style.color = '#94a3b8'; }
+
+  const ext = file.name.toLowerCase().split('.').pop();
+
+  if (ext === 'pdf') {
+    feedbackParsePDF(file);
+    return;
+  }
 
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
       let names = [];
-
-      if (file.name.toLowerCase().endsWith('.csv')) {
-        // Parse CSV directly
-        const text = e.target.result;
-        names = feedbackExtractNamesFromRows(text.split('\n').map(r => r.split(',')));
+      if (ext === 'csv') {
+        names = feedbackExtractNamesFromRows(e.target.result.split('\n').map(r => r.split(',')));
       } else {
-        // Parse Excel
-        const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, { type: 'array' });
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-        names = feedbackExtractNamesFromRows(rows);
+        names = feedbackExtractNamesFromRows(XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }));
       }
-
-      const textarea = document.getElementById('fbSyncText');
-      if (textarea) {
-        textarea.value = names.join('\n');
-        feedbackSyncPreview();
-      }
+      feedbackPopulateFromNames(names, file.name);
     } catch(err) {
       alert('Could not read file: ' + err.message);
     }
   };
+  ext === 'csv' ? reader.readAsText(file) : reader.readAsArrayBuffer(file);
+}
 
-  if (file.name.toLowerCase().endsWith('.csv')) {
-    reader.readAsText(file);
-  } else {
-    reader.readAsArrayBuffer(file);
+function feedbackParsePDF(file) {
+  if (typeof pdfjsLib === 'undefined') { alert('PDF library not loaded yet — try again in a moment.'); return; }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise.then(function(pdf) {
+      const pageJobs = [];
+      for (let p = 1; p <= pdf.numPages; p++) {
+        pageJobs.push(pdf.getPage(p).then(page => page.getTextContent()));
+      }
+      return Promise.all(pageJobs);
+    }).then(function(pages) {
+      // Collect all text items across every page
+      // PDF.js returns items with {str, transform} where transform[4]=x, transform[5]=y
+      // Group items by approximate y-position (same line), then within each line
+      // take the leftmost item — that's the name column in GymDesk's layout.
+      const allItems = [];
+      pages.forEach(tc => tc.items.forEach(item => {
+        if (item.str && item.str.trim()) allItems.push({ str: item.str.trim(), x: item.transform[4], y: item.transform[5] });
+      }));
+
+      // Sort top-to-bottom, left-to-right
+      allItems.sort((a, b) => b.y - a.y || a.x - b.x);
+
+      // Group into lines (items within ~4pt of same y)
+      const lines = [];
+      let currentLine = null;
+      allItems.forEach(item => {
+        if (!currentLine || Math.abs(item.y - currentLine.y) > 4) {
+          currentLine = { y: item.y, items: [] };
+          lines.push(currentLine);
+        }
+        currentLine.items.push(item);
+      });
+
+      // The name column is always the leftmost non-header item.
+      // Find the minimum x across all lines (ignoring page numbers / tiny x values).
+      const xValues = lines.flatMap(l => l.items.map(i => i.x)).filter(x => x > 20);
+      const minX = Math.min(...xValues);
+
+      // For each line, pick the item closest to the left edge (within 60pt of minX)
+      // — that's the first column. Then filter through looksLikeName.
+      const seen = new Set();
+      const names = [];
+      lines.forEach(line => {
+        const leftmost = line.items.filter(i => i.x < minX + 80).map(i => i.str);
+        // Concatenate adjacent left-column fragments that together form a name
+        const candidate = leftmost.join(' ').trim();
+        if (looksLikeName(candidate) && !seen.has(candidate.toLowerCase())) {
+          seen.add(candidate.toLowerCase());
+          names.push(candidate);
+        } else {
+          // Try each fragment individually (handles multi-word cells split across items)
+          leftmost.forEach(frag => {
+            if (looksLikeName(frag) && !seen.has(frag.toLowerCase())) {
+              seen.add(frag.toLowerCase());
+              names.push(frag);
+            }
+          });
+        }
+      });
+
+      feedbackPopulateFromNames(names, file.name);
+    }).catch(err => alert('Could not read PDF: ' + err.message));
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function feedbackPopulateFromNames(names, filename) {
+  const nameEl = document.getElementById('fbSyncFileName');
+  if (nameEl) {
+    nameEl.textContent = '✓ ' + filename + ' — ' + names.length + ' students found';
+    nameEl.style.color = '#22c55e';
   }
+  const textarea = document.getElementById('fbSyncText');
+  if (textarea) { textarea.value = names.join('\n'); feedbackSyncPreview(); }
 }
 
 function feedbackExtractNamesFromRows(rows) {
