@@ -3487,7 +3487,6 @@ function feedbackHandleFile(file) {
 function feedbackExtractNamesFromRows(rows) {
   if (!rows || !rows.length) return [];
 
-  // Normalize a cell value
   const norm = v => String(v || '').trim();
 
   // Check if first row looks like a header
@@ -3506,15 +3505,66 @@ function feedbackExtractNamesFromRows(rows) {
 
   const dataRows = hasHeader ? rows.slice(1) : rows;
 
-  return dataRows
-    .map(row => {
-      if (nameColIdx >= 0) return norm(row[nameColIdx]);
-      if (firstColIdx >= 0 && lastColIdx >= 0) return (norm(row[firstColIdx]) + ' ' + norm(row[lastColIdx])).trim();
-      if (firstColIdx >= 0) return norm(row[firstColIdx]);
-      // Fall back to first non-empty column
-      return norm(row[0]);
-    })
-    .filter(n => n && n.length > 1);
+  const candidates = dataRows.map(row => {
+    if (nameColIdx >= 0) return norm(row[nameColIdx]);
+    if (firstColIdx >= 0 && lastColIdx >= 0) return (norm(row[firstColIdx]) + ' ' + norm(row[lastColIdx])).trim();
+    if (firstColIdx >= 0) return norm(row[firstColIdx]);
+    return norm(row[0]);
+  });
+
+  return candidates.filter(looksLikeName);
+}
+
+function looksLikeName(str) {
+  if (!str) return false;
+
+  // Strip surrounding quotes and whitespace
+  str = str.replace(/^["'\s]+|["'\s]+$/g, '').trim();
+  if (!str || str.length < 3 || str.length > 45) return false;
+
+  const lower = str.toLowerCase();
+
+  // Reject dates (MM/DD/YYYY or MM-DD-YYYY)
+  if (/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(str)) return false;
+
+  // Reject phone numbers (7+ consecutive digits)
+  if (/\d{7,}/.test(str)) return false;
+
+  // Reject anything with brackets, parentheses, or curly braces
+  if (/[\[\]{}\(\)]/.test(str)) return false;
+
+  // Reject belt/program descriptions (contain " - " or " / ")
+  if (str.includes(' - ') || str.includes(' / ')) return false;
+
+  // Reject strings starting with a digit
+  if (/^\d/.test(str)) return false;
+
+  // Reject sentence punctuation (notes, messages)
+  if (/[.!?,;:@#]/.test(str)) return false;
+
+  // Reject time references
+  if (/\b(AM|PM|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/.test(str)) return false;
+
+  // Reject known non-name lead sources and status words
+  const skipPrefixes = [
+    'active ', 'tiger ', 'legacy', 'level ',
+    'white -','yellow -','orange -','green -','blue -','purple -',
+    'red -','black -','camo -','red / black',
+    '1st ','2nd ','3rd ','4th ','5th ','6th ','7th ','8th ','9th ',
+    'we\'d love','please','thanks','after ','and we ','but after',
+    'or we ','jan ','feb ','mar ','apr ','jun ','jul ','aug ','sep ',
+    'oct ','nov ','dec ',
+  ];
+  if (skipPrefixes.some(p => lower.startsWith(p))) return false;
+
+  // Reject single words (need at least first + last name)
+  const words = str.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 4) return false;
+
+  // Each word must look like a name component:
+  // letters, apostrophes, hyphens; optionally wrapped in quotes (nicknames)
+  const validWord = w => /^"?[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'\-]*"?$/.test(w);
+  return words.every(validWord);
 }
 
 function feedbackSyncPreview() {
