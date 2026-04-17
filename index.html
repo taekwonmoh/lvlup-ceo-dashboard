@@ -3356,7 +3356,9 @@ function feedbackSetStatus(studentKey, status) {
 }
 
 function feedbackUpdateNote(studentKey, value) {
-  fbDebounce('feedbackRoster/' + studentKey + '/notes', value || null);
+  const path = 'feedbackRoster/' + studentKey + '/notes';
+  clearTimeout(debounceTimers[path]);
+  debounceTimers[path] = setTimeout(() => db.ref(path).set(value || null), 500);
 }
 
 function feedbackOpenNoteModal(studentKey) {
