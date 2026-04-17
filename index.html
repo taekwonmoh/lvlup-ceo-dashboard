@@ -3350,6 +3350,12 @@ function feedbackToggle(studentKey, field) {
   db.ref('feedbackTracking/' + mk + '/' + studentKey + '/' + field).set(!current);
 }
 
+function feedbackSetStatus(studentKey, status) {
+  // Clicking the active status clears it (toggle off)
+  const current = (state.feedback.roster[studentKey] || {}).status;
+  db.ref('feedbackRoster/' + studentKey + '/status').set(current === status ? null : status);
+}
+
 function feedbackMarkInactive(studentKey) {
   db.ref('feedbackRoster/' + studentKey + '/active').set(false);
   db.ref('feedbackRoster/' + studentKey + '/inactiveSince').set(getCurrentMonthKey());
@@ -3578,6 +3584,11 @@ function renderFeedbackPage() {
   const counts = {};
   INTERACTIONS.forEach(i => { counts[i.field] = activeStudents.filter(s => (tracking[s.key] || {})[i.field]).length; });
   const contacted = activeStudents.filter(s => { const t = tracking[s.key] || {}; return INTERACTIONS.some(i => t[i.field]); }).length;
+  const statusCounts = {
+    red:    activeStudents.filter(s => s.status === 'red').length,
+    yellow: activeStudents.filter(s => s.status === 'yellow').length,
+    green:  activeStudents.filter(s => s.status === 'green').length,
+  };
 
   // ── Helpers ──
   const pill = (id, label) => {
@@ -3590,37 +3601,66 @@ function renderFeedbackPage() {
     '<input type="checkbox" ' + (checked ? 'checked' : '') + (disabled ? ' disabled' : '') + ' onchange="feedbackToggle(\'' + studentKey + '\',\'' + field + '\')" style="width:17px;height:17px;cursor:' + (disabled ? 'default' : 'pointer') + ';accent-color:#4169E1;opacity:' + (disabled ? '0.3' : '1') + ';">' +
     '</td>';
 
+  const STATUS_ORDER = { red: 0, yellow: 1, '': 2, null: 2, undefined: 2, green: 3 };
+  const statusDot = (studentKey, currentStatus, disabled) => {
+    const dots = [
+      { val: 'red',    color: '#ef4444', label: 'At risk / quitting' },
+      { val: 'yellow', color: '#f59e0b', label: 'Unsure / watch' },
+      { val: 'green',  color: '#22c55e', label: 'Highly engaged' },
+    ];
+    return '<td style="text-align:center;padding:8px 6px;white-space:nowrap;">' +
+      dots.map(d => {
+        const active = currentStatus === d.val;
+        return '<button onclick="' + (disabled ? '' : 'feedbackSetStatus(\'' + studentKey + '\',\'' + d.val + '\')') + '" title="' + d.label + '" style="width:14px;height:14px;border-radius:50%;border:2px solid ' + d.color + ';background:' + (active ? d.color : 'transparent') + ';cursor:' + (disabled ? 'default' : 'pointer') + ';margin:0 2px;padding:0;display:inline-block;vertical-align:middle;opacity:' + (disabled ? '0.25' : '1') + ';transition:background 0.15s;"></button>';
+      }).join('') +
+    '</td>';
+  };
+
   // ── Rows ──
   let rows = '';
   if (!displayed.length) {
-    rows = '<tr><td colspan="7" style="text-align:center;padding:36px;color:#999;font-size:13px;">' +
+    rows = '<tr><td colspan="8" style="text-align:center;padding:36px;color:#999;font-size:13px;">' +
       (Object.keys(roster).length === 0 ? 'No students yet — sync a roster to get started.' : 'No students to display.') +
       '</td></tr>';
   } else {
     const byLoc = { waunakee: [], eastmad: [], verona: [], '': [] };
     displayed.forEach(s => (byLoc[s.location] || byLoc['']).push(s));
 
+    const sortByStatus = (a, b) => {
+      const ao = STATUS_ORDER[a.status] !== undefined ? STATUS_ORDER[a.status] : 2;
+      const bo = STATUS_ORDER[b.status] !== undefined ? STATUS_ORDER[b.status] : 2;
+      return ao !== bo ? ao - bo : a.name.localeCompare(b.name);
+    };
+
     ['waunakee', 'eastmad', 'verona', ''].forEach(loc => {
       const group = byLoc[loc];
       if (!group || !group.length) return;
+      group.sort(sortByStatus);
       if (locationFilter === 'all') {
         const activeCount = group.filter(s => s.active !== false).length;
-        rows += '<tr><td colspan="7" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' +
+        const redCount    = group.filter(s => s.active !== false && s.status === 'red').length;
+        rows += '<tr><td colspan="8" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' +
           (LOC_LABELS[loc] || 'Unknown') + ' — ' + activeCount + ' active' +
+          (redCount ? ' · <span style="color:#ef4444;">⚠ ' + redCount + ' at risk</span>' : '') +
           (showInactive && group.length > activeCount ? ' · ' + (group.length - activeCount) + ' inactive' : '') +
           '</td></tr>';
       }
       group.forEach(s => {
         const t = tracking[s.key] || {};
         const isInactive = s.active === false;
-        const anyContact = INTERACTIONS.some(i => t[i.field]);
-        const rowBg = isInactive ? '#fafafa' : (anyContact ? '#f9fff9' : '#fff');
+        const status = s.status || null;
+        const rowBg = isInactive ? '#fafafa'
+          : status === 'red'    ? '#fff5f5'
+          : status === 'yellow' ? '#fffbeb'
+          : status === 'green'  ? '#f0fdf4'
+          : '#fff';
         const nameStyle = isInactive ? 'color:#bbb;text-decoration:line-through;' : 'color:#1a1a2e;font-weight:500;';
         rows += '<tr style="background:' + rowBg + ';">' +
-          '<td style="padding:10px 12px;font-size:13px;' + nameStyle + '">' + s.name +
+          statusDot(s.key, status, isInactive) +
+          '<td style="padding:10px 10px;font-size:13px;' + nameStyle + '">' + s.name +
             (isInactive ? ' <span style="font-size:10px;color:#bbb;font-weight:400;">inactive</span>' : '') +
           '</td>' +
-          (locationFilter === 'all' ? '<td style="padding:10px 12px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
+          (locationFilter === 'all' ? '<td style="padding:10px 10px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
           INTERACTIONS.map(i => chk(s.key, i.field, !!t[i.field], isInactive)).join('') +
           '<td style="padding:10px 6px;text-align:center;white-space:nowrap;">' +
             (isInactive
@@ -3660,7 +3700,7 @@ function renderFeedbackPage() {
     '</div>' +
 
     // ── Stats ──
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:18px;">' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:18px;">' +
       '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:12px 14px;text-align:center;">' +
         '<div style="font-size:20px;font-weight:800;color:#1a1a2e;">' + total + '</div>' +
         '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Active</div>' +
@@ -3669,9 +3709,21 @@ function renderFeedbackPage() {
         '<div style="font-size:20px;font-weight:800;color:' + (contacted > 0 ? '#22c55e' : '#ccc') + ';">' + contacted + '</div>' +
         '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Contacted</div>' +
       '</div>' +
+      '<div style="background:' + (statusCounts.red > 0 ? '#fff5f5' : '#fff') + ';border:1px solid ' + (statusCounts.red > 0 ? '#fecaca' : '#e8eaf0') + ';border-radius:10px;padding:12px 14px;text-align:center;">' +
+        '<div style="font-size:20px;font-weight:800;color:' + (statusCounts.red > 0 ? '#ef4444' : '#ccc') + ';">' + statusCounts.red + '</div>' +
+        '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">🔴 At Risk</div>' +
+      '</div>' +
+      '<div style="background:' + (statusCounts.yellow > 0 ? '#fffbeb' : '#fff') + ';border:1px solid ' + (statusCounts.yellow > 0 ? '#fde68a' : '#e8eaf0') + ';border-radius:10px;padding:12px 14px;text-align:center;">' +
+        '<div style="font-size:20px;font-weight:800;color:' + (statusCounts.yellow > 0 ? '#f59e0b' : '#ccc') + ';">' + statusCounts.yellow + '</div>' +
+        '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">🟡 Watch</div>' +
+      '</div>' +
+      '<div style="background:' + (statusCounts.green > 0 ? '#f0fdf4' : '#fff') + ';border:1px solid ' + (statusCounts.green > 0 ? '#bbf7d0' : '#e8eaf0') + ';border-radius:10px;padding:12px 14px;text-align:center;">' +
+        '<div style="font-size:20px;font-weight:800;color:' + (statusCounts.green > 0 ? '#22c55e' : '#ccc') + ';">' + statusCounts.green + '</div>' +
+        '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">🟢 Engaged</div>' +
+      '</div>' +
       INTERACTIONS.map(i =>
         '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:12px 14px;text-align:center;">' +
-          '<div style="font-size:16px;margin-bottom:2px;">' + i.icon + '</div>' +
+          '<div style="font-size:15px;margin-bottom:2px;">' + i.icon + '</div>' +
           '<div style="font-size:18px;font-weight:800;color:' + (counts[i.field] > 0 ? '#4169E1' : '#ccc') + ';">' + counts[i.field] + '</div>' +
           '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">' + i.label + '</div>' +
         '</div>'
@@ -3695,10 +3747,11 @@ function renderFeedbackPage() {
     '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">' +
       '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
         '<thead><tr style="background:#f5f7ff;">' +
-          '<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Name</th>' +
-          (locationFilter === 'all' ? '<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Location</th>' : '') +
+          '<th style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;width:60px;">Status</th>' +
+          '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Name</th>' +
+          (locationFilter === 'all' ? '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Location</th>' : '') +
           INTERACTIONS.map(i => '<th style="padding:10px 6px;text-align:center;font-size:17px;" title="' + i.label + '">' + i.icon + '</th>').join('') +
-          '<th style="width:40px;"></th>' +
+          '<th style="width:56px;"></th>' +
         '</tr></thead>' +
         '<tbody>' + rows + '</tbody>' +
       '</table>' +
