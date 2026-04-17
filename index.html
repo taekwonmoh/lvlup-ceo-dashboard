@@ -48,7 +48,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .header h1 { font-size: 20px; font-weight: 700; color: var(--primary); letter-spacing: -0.5px; display: flex; align-items: center; gap: 6px; }
 .header h1 .accent { color: var(--accent); }
 .nav-tabs { display: flex; gap: 4px; background: var(--card); border-radius: 10px; padding: 3px; box-shadow: var(--shadow); }
-.nav-tab { padding: 8px 16px; border-radius: 8px; border: none; background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--gray-500); white-space: nowrap; transition: all 0.15s; }
+.nav-tab { padding: 7px 12px; border-radius: 8px; border: none; background: transparent; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--gray-500); white-space: nowrap; transition: all 0.15s; }
 .nav-tab.active { background: var(--primary); color: #fff; }
 .nav-tab:not(.active):hover { background: var(--gray-100); }
 
@@ -1191,38 +1191,37 @@ function seedIfEmpty() {
 /*  -  -  Render  -  -  */
 function render() {
   const app = document.getElementById('app');
+  // Backward-compat: old links to removed tabs redirect into merged pages
+  if (state.activeSection === 'performance') { state.scorecardTab = 'performance'; state.activeSection = 'scorecard'; }
+  if (state.activeSection === 'monthlyGoals') { state.goalsTab = 'monthly'; state.activeSection = 'goals'; }
   const s = state.activeSection;
 
   app.innerHTML = renderHeader() +
-    (s === 'home' ? renderHomePage() :
-     s === 'scorecard' ? renderScorecardPage() :
-     s === 'performance' ? renderPerformancePage() :
-     s === 'rocks' ? renderRocksPage() :
-     s === 'events' ? renderEventsPage() :
-     s === 'goals' ? renderGoalsPage() :
-          s === 'tasks' ? renderTasksPage() :
-          s === 'monthlyGoals' ? renderMonthlyGoalsPage() :
-          s === 'l10' ? renderL10Page() :
-          s === 'watchlist' ? renderFeedbackPage() :
-          s === 'development' ? renderDevelopmentPage() :
-          s === 'feedback' ? renderFeedbackPage() : '');
-    if(s === 'performance') initKPICharts();
+    (s === 'home'        ? renderHomePage() :
+     s === 'scorecard'   ? renderScorecardPage() :
+     s === 'rocks'       ? renderRocksPage() :
+     s === 'events'      ? renderEventsPage() :
+     s === 'goals'       ? renderGoalsPage() :
+     s === 'tasks'       ? renderTasksPage() :
+     s === 'l10'         ? renderL10Page() :
+     s === 'watchlist'   ? renderFeedbackPage() :
+     s === 'development' ? renderDevelopmentPage() :
+     s === 'feedback'    ? renderFeedbackPage() : '');
+  if (s === 'scorecard' && state.scorecardTab === 'performance') initKPICharts();
 }
 
 function renderHeader() {
   const sections = [
-    { id: 'home', label: 'Home' },
-    { id: 'scorecard', label: 'Scorecard' },
-    { id: 'performance', label: 'Performance' },
-    { id: 'rocks', label: 'Rocks' },
-    { id: 'events', label: 'Events' },
-    { id: 'goals', label: 'Goal Tracker' },
-        { id: 'tasks', label: 'Tasks' },
-      { id: 'monthlyGoals', label: 'Monthly Goals' },
-      { id: 'l10', label: 'L10 Meeting' },
-      { id: 'development', label: 'Development' },
-      { id: 'feedback', label: 'Students' },
-    ];
+    { id: 'home',        label: '🏠 Home'     },
+    { id: 'scorecard',   label: '📊 Scorecard' },
+    { id: 'rocks',       label: '🪨 Rocks'     },
+    { id: 'events',      label: '📅 Events'    },
+    { id: 'goals',       label: '🎯 Goals'     },
+    { id: 'tasks',       label: '✅ Tasks'     },
+    { id: 'l10',         label: '🤝 L10'       },
+    { id: 'development', label: '📚 Dev'       },
+    { id: 'feedback',    label: '👥 Students'  },
+  ];
   return '<div class="header">' +
     '<h1><span style="font-family:Arial Black,sans-serif;font-weight:900;color:#4169E1;letter-spacing:-1px;font-size:1.4rem">LVLUP</span> <span style="color:#999;font-weight:300">/</span> <span style="font-family:Arial Black,sans-serif;font-weight:900;color:#e94560;letter-spacing:-0.5px;font-size:1.4rem">Go Ninja</span> <span>HQ Dashboard</span></h1>' +
     '<div class="nav-tabs">' +
@@ -1294,12 +1293,58 @@ function getMotivationalQuote() {
   return quotes[dayOfYear % quotes.length];
 }
 
+function renderPulseBar() {
+  // ── At-risk students ──
+  const roster = state.feedback.roster || {};
+  const redCount = Object.values(roster).filter(s => s.active !== false && s.status === 'red').length;
+
+  // ── Events this week ──
+  const today = new Date(); today.setHours(0,0,0,0);
+  const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 7);
+  const eventsArr = Array.isArray(state.events) ? state.events : Object.values(state.events || {});
+  const eventsThisWeek = eventsArr.filter(e => { if (!e || !e.date) return false; const d = new Date(e.date + 'T00:00:00'); return d >= today && d <= weekEnd; }).length;
+
+  // ── Off-track rocks ──
+  const companyRocks = (state.rocks && state.rocks.company) || [];
+  const offTrackRocks = companyRocks.filter(r => r && r.status === 'off-track').length;
+
+  // ── Today's daily tasks across locations ──
+  const todayKey = new Date().toISOString().split('T')[0];
+  let tasksDone = 0, tasksTotal = 0;
+  ['waunakee','eastmad','verona'].forEach(loc => {
+    const daily = getDailyTasks(loc);
+    tasksTotal += daily.length;
+    const done = ((state.tasksData[loc] || {}).daily || {})[todayKey] || {};
+    tasksDone += daily.filter(t => done[t.id]).length;
+  });
+
+  const chip = (bg, border, text, icon, section) =>
+    '<button onclick="setSection(\'' + section + '\')" style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:' + bg + ';border:1.5px solid ' + border + ';border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:#1a1a2e;transition:all 0.15s;white-space:nowrap;" onmouseover="this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.transform=\'\'"><span>' + icon + '</span>' + text + '</button>';
+
+  let bar = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;align-items:center;">';
+  bar += chip(redCount > 0 ? '#fef2f2' : '#f0fdf4', redCount > 0 ? '#fca5a5' : '#86efac',
+    redCount > 0 ? redCount + ' Student' + (redCount !== 1 ? 's' : '') + ' at Risk' : 'All Students On Track',
+    redCount > 0 ? '⚠️' : '✅', 'feedback');
+  bar += chip(eventsThisWeek > 0 ? '#eff6ff' : '#f9fafb', eventsThisWeek > 0 ? '#93c5fd' : '#e5e7eb',
+    eventsThisWeek > 0 ? eventsThisWeek + ' Event' + (eventsThisWeek !== 1 ? 's' : '') + ' This Week' : 'No Events This Week',
+    '📅', 'events');
+  bar += chip(offTrackRocks > 0 ? '#fffbeb' : '#f9fafb', offTrackRocks > 0 ? '#fde68a' : '#e5e7eb',
+    offTrackRocks > 0 ? offTrackRocks + ' Rock' + (offTrackRocks !== 1 ? 's' : '') + ' Off Track' : 'All Rocks On Track',
+    '🪨', 'rocks');
+  bar += chip(tasksTotal > 0 && tasksDone === tasksTotal ? '#f0fdf4' : '#f9fafb',
+    tasksTotal > 0 && tasksDone === tasksTotal ? '#86efac' : '#e5e7eb',
+    'Tasks: ' + tasksDone + ' / ' + tasksTotal + ' Today',
+    '✅', 'tasks');
+  bar += '</div>';
+  return bar;
+}
+
 function renderHomePage() {
   const cycle = getCurrentCycleInfo();
   const quote = getMotivationalQuote();
   const events = state.events || [];
 
-  let html = '';
+  let html = renderPulseBar();
 
   // Core Values strip — hidden while quiz is active
   const quizActive = state._cvQuiz && !state._cvQuiz.complete && state._cvQuiz.current >= 0;
@@ -1483,7 +1528,20 @@ function formatTestDate(dateStr) {
 }
 
 /*  -  -  Scorecard Page  -  -  */
+function renderScSubTabs() {
+  const tab = state.scorecardTab || 'weekly';
+  const tabs = [{ id:'weekly', label:'📋 Weekly' }, { id:'performance', label:'📈 KPIs & Financials' }];
+  return '<div style="display:flex;gap:4px;background:#fff;border-radius:10px;padding:3px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px;">' +
+    tabs.map(t => '<button onclick="setScorecardTab(\'' + t.id + '\')" style="padding:7px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;' + (tab === t.id ? 'background:#1a1a2e;color:#fff;' : 'background:transparent;color:#6b7280;') + '">' + t.label + '</button>').join('') +
+    '</div>';
+}
+
 function renderScorecardPage() {
+  const subNav = renderScSubTabs();
+  if ((state.scorecardTab || 'weekly') === 'performance') {
+    return subNav + renderPerformancePage();
+  }
+
   const monthKey = getMonthKey();
   // state.scorecard.monthly is already the current month's data (keyed by locId, not month)
   const monthData = state.scorecard.monthly || {};
@@ -1660,7 +1718,7 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
 
   monthlyHtml += '</tbody></table></div></div>';
 
-  return tableHtml + monthlyHtml;
+  return subNav + kpiHtml + tableHtml + monthlyHtml;
 }
 
 /*  -  -  KPIs Page (Monthly KPIs for 3 LVLUP locations)  -  -  */
@@ -2391,7 +2449,20 @@ function getGoalActualRevenue(locId, monthIdx) {
   return parseFloat(md.grossTY) || parseFloat(md.grossRevenue) || 0;
 }
 
+function renderGoalsSubTabs() {
+  const tab = state.goalsTab || 'annual';
+  const tabs = [{ id:'annual', label:'🏆 Annual Tracker' }, { id:'monthly', label:'📋 Monthly Plan' }];
+  return '<div style="display:flex;gap:4px;background:#fff;border-radius:10px;padding:3px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px;">' +
+    tabs.map(t => '<button onclick="setGoalsTab(\'' + t.id + '\')" style="padding:7px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;' + (tab === t.id ? 'background:#1a1a2e;color:#fff;' : 'background:transparent;color:#6b7280;') + '">' + t.label + '</button>').join('') +
+    '</div>';
+}
+
 function renderGoalsPage() {
+  const subNav = renderGoalsSubTabs();
+  if ((state.goalsTab || 'annual') === 'monthly') {
+    return subNav + renderMonthlyGoalsPage();
+  }
+
   const goals = state.goals || {};
   const vacationTarget = parseFloat(goals._target) || 50000;
   const monthlyGoals = goals.monthlyGoals || {};
@@ -2488,7 +2559,7 @@ function renderGoalsPage() {
   });
   html += '</div></div>';
 
-  return html;
+  return subNav + html;
 }
 
 function updateGoalTarget(val) {
@@ -2515,6 +2586,8 @@ state.goalsLoc = 'waunakee';
 state.goalsMonth = getMonthKey();
 state.goalsData = {};
 state.modalTask = null;
+state.scorecardTab = 'weekly';   // 'weekly' | 'performance'
+state.goalsTab     = 'annual';   // 'annual' | 'monthly'
 
 function isGoNinja(locId){return locId==='goninjaW'||locId==='goninjaV';}
 function getDailyTasks(locId){return isGoNinja(locId)?GONINJA_DAILY:LVLUP_DAILY;}
@@ -2590,6 +2663,8 @@ function setTasksCycleWeek(w){state.tasksCycleWeek=w;render();}
 function toggleSection(key){state.collapsedSections[key]=!state.collapsedSections[key];render();}
 function setGoalsLoc(locId){state.goalsLoc=locId;listenGoals();}
 function setGoalsMonth(mk){state.goalsMonth=mk;listenGoals();}
+function setScorecardTab(t){state.scorecardTab=t;render();if(t==='performance')setTimeout(initKPICharts,80);}
+function setGoalsTab(t){state.goalsTab=t;if(t==='monthly')listenGoals();render();}
 function updateGoalField(field,val){
     fbDebounce('monthlyGoals/'+state.goalsLoc+'/'+state.goalsMonth+'/'+field,val);
     recalcRevTotal();
