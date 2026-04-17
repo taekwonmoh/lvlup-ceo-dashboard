@@ -574,7 +574,8 @@ let state = {
   devCourse: {},
   devActiveModule: null,
   devQuizAnswers: {},
-  devQuizSubmitted: false
+  devQuizSubmitted: false,
+  feedback: { roster: {}, tracking: {}, monthOffset: 0, locationFilter: 'all' }
 };
 
 let debounceTimers = {};
@@ -1014,6 +1015,26 @@ function listenAll() {
   const devRef = fbRef('development');
   devRef.on('value', snap => { state.devCourse = snap.val() || {}; render(); });
   activeListeners.push({ ref: devRef, event: 'value' });
+
+  // Feedback roster (persistent student list)
+  const fbRosterRef = db.ref('feedbackRoster');
+  fbRosterRef.on('value', snap => { state.feedback.roster = snap.val() || {}; render(); });
+  activeListeners.push({ ref: fbRosterRef, event: 'value' });
+
+  // Feedback tracking (monthly interactions) — re-listen when month changes
+  listenFeedbackTracking();
+}
+
+function listenFeedbackTracking() {
+  // Remove any existing feedbackTracking listener
+  activeListeners = activeListeners.filter(l => {
+    if (l._feedbackTracking) { l.ref.off(l.event); return false; }
+    return true;
+  });
+  const mk = getFeedbackMonthKey();
+  const ftRef = db.ref('feedbackTracking/' + mk);
+  ftRef.on('value', snap => { state.feedback.tracking = snap.val() || {}; render(); });
+  activeListeners.push({ ref: ftRef, event: 'value', _feedbackTracking: true });
 }
 
 /*  -  -  Navigation  -  -  */
@@ -1178,7 +1199,8 @@ function render() {
           s === 'monthlyGoals' ? renderMonthlyGoalsPage() :
           s === 'l10' ? renderL10Page() :
           s === 'watchlist' ? renderWatchListPage() :
-          s === 'development' ? renderDevelopmentPage() : '');
+          s === 'development' ? renderDevelopmentPage() :
+          s === 'feedback' ? renderFeedbackPage() : '');
     if(s === 'performance') initKPICharts();
 }
 
@@ -1195,6 +1217,7 @@ function renderHeader() {
       { id: 'l10', label: 'L10 Meeting' },
       { id: 'watchlist', label: 'Watch List' },
       { id: 'development', label: 'Development' },
+      { id: 'feedback', label: 'Student Feedback' },
     ];
   return '<div class="header">' +
     '<h1><span style="font-family:Arial Black,sans-serif;font-weight:900;color:#4169E1;letter-spacing:-1px;font-size:1.4rem">LVLUP</span> <span style="color:#999;font-weight:300">/</span> <span style="font-family:Arial Black,sans-serif;font-weight:900;color:#e94560;letter-spacing:-0.5px;font-size:1.4rem">Go Ninja</span> <span>HQ Dashboard</span></h1>' +
@@ -3281,6 +3304,257 @@ function seedEMadGoals() {
     });
     if (Object.keys(updates).length) ref.update(updates);
   });
+}
+
+/* ─────────────────────────────────────────
+   STUDENT FEEDBACK TRACKER
+───────────────────────────────────────── */
+
+function getFeedbackMonthKey() {
+  const d = new Date();
+  d.setMonth(d.getMonth() + state.feedback.monthOffset);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function getFeedbackMonthLabel() {
+  const d = new Date();
+  d.setMonth(d.getMonth() + state.feedback.monthOffset);
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function feedbackChangeMonth(delta) {
+  state.feedback.monthOffset += delta;
+  listenFeedbackTracking();
+}
+
+function feedbackSetLocationFilter(loc) {
+  state.feedback.locationFilter = loc;
+  render();
+}
+
+function feedbackToggle(studentKey, field) {
+  const mk = getFeedbackMonthKey();
+  const current = (state.feedback.tracking[studentKey] || {})[field];
+  db.ref('feedbackTracking/' + mk + '/' + studentKey + '/' + field).set(!current);
+}
+
+function feedbackDeleteStudent(studentKey) {
+  if (!confirm('Remove this student from the roster?')) return;
+  db.ref('feedbackRoster/' + studentKey).remove();
+}
+
+function feedbackOpenImport() {
+  // Build a modal overlay
+  const existing = document.getElementById('fbImportModal');
+  if (existing) existing.remove();
+
+  const locOptions = ['waunakee','eastmad','verona'].map(l =>
+    '<option value="' + l + '">' + {waunakee:'Waunakee', eastmad:'East Madison', verona:'Verona'}[l] + '</option>'
+  ).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'fbImportModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:28px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.18);">
+      <h3 style="margin:0 0 6px;font-size:16px;font-weight:700;color:#1a1a2e;">Import Students</h3>
+      <p style="margin:0 0 16px;font-size:13px;color:#666;">
+        Paste one student per line, or use CSV format: <code style="background:#f4f4f4;padding:1px 5px;border-radius:4px;">Name, Location</code><br>
+        Location values: <strong>waunakee</strong>, <strong>eastmad</strong>, <strong>verona</strong>
+      </p>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Default Location (for rows without one)</label>
+        <select id="fbImportLoc" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">
+          ${locOptions}
+        </select>
+      </div>
+      <textarea id="fbImportText" placeholder="John Doe, waunakee&#10;Jane Smith, verona&#10;Alex Lee" style="width:100%;height:200px;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
+      <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">
+        <button onclick="document.getElementById('fbImportModal').remove()" style="padding:8px 18px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">Cancel</button>
+        <button onclick="feedbackImportConfirm()" style="padding:8px 18px;border:none;border-radius:8px;background:#4169E1;color:#fff;cursor:pointer;font-size:13px;font-weight:600;">Import Students</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function feedbackImportConfirm() {
+  const raw = document.getElementById('fbImportText').value.trim();
+  const defaultLoc = document.getElementById('fbImportLoc').value;
+  if (!raw) return;
+
+  const locMap = { waunakee: 'waunakee', eastmad: 'eastmad', 'east madison': 'eastmad', 'east mad': 'eastmad', verona: 'verona' };
+
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const updates = {};
+  lines.forEach(line => {
+    const parts = line.split(',').map(p => p.trim());
+    const name = parts[0];
+    if (!name) return;
+    const locRaw = (parts[1] || '').toLowerCase();
+    const location = locMap[locRaw] || defaultLoc;
+    const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    updates[key] = { name, location };
+  });
+
+  if (!Object.keys(updates).length) return;
+  db.ref('feedbackRoster').update(updates, err => {
+    if (!err) {
+      document.getElementById('fbImportModal').remove();
+    } else {
+      alert('Error saving: ' + err.message);
+    }
+  });
+}
+
+function feedbackAddStudent() {
+  const nameEl = document.getElementById('fbNewName');
+  const locEl  = document.getElementById('fbNewLoc');
+  const name   = nameEl.value.trim();
+  if (!name) { nameEl.focus(); return; }
+  const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  db.ref('feedbackRoster/' + key).set({ name, location: locEl.value });
+  nameEl.value = '';
+}
+
+function renderFeedbackPage() {
+  const { roster, tracking, locationFilter } = state.feedback;
+  const monthLabel = getFeedbackMonthLabel();
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const INTERACTIONS = [
+    { field: 'postcard',    icon: '📬', label: 'Postcard' },
+    { field: 'video',       icon: '🎥', label: 'Video' },
+    { field: 'phoneCall',   icon: '📞', label: 'Call' },
+    { field: 'conference',  icon: '🤝', label: 'Conf.' },
+  ];
+
+  // Filter roster
+  const allStudents = Object.entries(roster).map(([k, v]) => ({ key: k, ...v }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const filtered = locationFilter === 'all' ? allStudents : allStudents.filter(s => s.location === locationFilter);
+
+  // Stats
+  const total = filtered.length;
+  const counts = {};
+  INTERACTIONS.forEach(i => {
+    counts[i.field] = filtered.filter(s => (tracking[s.key] || {})[i.field]).length;
+  });
+  const contacted = filtered.filter(s => {
+    const t = tracking[s.key] || {};
+    return INTERACTIONS.some(i => t[i.field]);
+  }).length;
+
+  // Filter pill style helper
+  const pill = (id, label) => {
+    const active = locationFilter === id;
+    return '<button onclick="feedbackSetLocationFilter(\'' + id + '\')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s;background:' + (active ? '#4169E1' : '#f1f3f9') + ';color:' + (active ? '#fff' : '#555') + ';">' + label + '</button>';
+  };
+
+  // Checkbox helper
+  const chk = (studentKey, field, checked) =>
+    '<td style="text-align:center;padding:10px 4px;">' +
+    '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="feedbackToggle(\'' + studentKey + '\',\'' + field + '\')" style="width:17px;height:17px;cursor:pointer;accent-color:#4169E1;">' +
+    '</td>';
+
+  // Build rows
+  let rows = '';
+  if (filtered.length === 0) {
+    rows = '<tr><td colspan="7" style="text-align:center;padding:32px;color:#999;font-size:13px;">No students yet — import a roster to get started.</td></tr>';
+  } else {
+    // Group by location
+    const byLoc = { waunakee: [], eastmad: [], verona: [], '': [] };
+    filtered.forEach(s => (byLoc[s.location] || byLoc['']).push(s));
+
+    ['waunakee', 'eastmad', 'verona', ''].forEach(loc => {
+      const group = byLoc[loc];
+      if (!group || !group.length) return;
+      if (locationFilter === 'all') {
+        rows += '<tr><td colspan="7" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' + (LOC_LABELS[loc] || 'Unknown') + ' — ' + group.length + ' students</td></tr>';
+      }
+      group.forEach(s => {
+        const t = tracking[s.key] || {};
+        const anyContact = INTERACTIONS.some(i => t[i.field]);
+        rows += '<tr style="background:' + (anyContact ? '#f9fff9' : '#fff') + ';">' +
+          '<td style="padding:10px 12px;font-size:13px;font-weight:500;color:#1a1a2e;">' + s.name + '</td>' +
+          (locationFilter === 'all' ? '<td style="padding:10px 12px;font-size:12px;color:#666;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
+          INTERACTIONS.map(i => chk(s.key, i.field, !!t[i.field])).join('') +
+          '<td style="padding:10px 6px;text-align:center;"><button onclick="feedbackDeleteStudent(\'' + s.key + '\')" title="Remove" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 6px;border-radius:4px;" onmouseover="this.style.color=\'#e74c3c\'" onmouseout="this.style.color=\'#ccc\'">✕</button></td>' +
+          '</tr>';
+      });
+    });
+  }
+
+  const colCount = locationFilter === 'all' ? 7 : 6;
+
+  return '<div class="page" style="max-width:900px;">' +
+
+    // ── Header ──
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">' +
+      '<div>' +
+        '<h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">Student Feedback Tracker</h2>' +
+        '<p style="margin:0;font-size:13px;color:#888;">Track monthly outreach: postcards, video shoutouts, calls, and in-person conferences.</p>' +
+      '</div>' +
+      '<button onclick="feedbackOpenImport()" style="padding:9px 18px;background:#4169E1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">+ Import Students</button>' +
+    '</div>' +
+
+    // ── Month navigator ──
+    '<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">' +
+      '<div style="display:flex;align-items:center;gap:8px;background:#f1f3f9;border-radius:10px;padding:4px;">' +
+        '<button onclick="feedbackChangeMonth(-1)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 10px;border-radius:7px;color:#4169E1;font-weight:700;" title="Previous month">‹</button>' +
+        '<span style="font-size:14px;font-weight:700;color:#1a1a2e;min-width:140px;text-align:center;">' + monthLabel + '</span>' +
+        '<button onclick="feedbackChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 10px;border-radius:7px;color:#4169E1;font-weight:700;" title="Next month">›</button>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+        pill('all', 'All') + pill('waunakee', 'Waunakee') + pill('eastmad', 'East Madison') + pill('verona', 'Verona') +
+      '</div>' +
+    '</div>' +
+
+    // ── Stats ──
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:20px;">' +
+      '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:12px 14px;text-align:center;">' +
+        '<div style="font-size:20px;font-weight:800;color:#1a1a2e;">' + total + '</div>' +
+        '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Students</div>' +
+      '</div>' +
+      '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:12px 14px;text-align:center;">' +
+        '<div style="font-size:20px;font-weight:800;color:' + (contacted > 0 ? '#22c55e' : '#ccc') + ';">' + contacted + '</div>' +
+        '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Contacted</div>' +
+      '</div>' +
+      INTERACTIONS.map(i =>
+        '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:12px 14px;text-align:center;">' +
+          '<div style="font-size:18px;margin-bottom:2px;">' + i.icon + '</div>' +
+          '<div style="font-size:18px;font-weight:800;color:' + (counts[i.field] > 0 ? '#4169E1' : '#ccc') + ';">' + counts[i.field] + '</div>' +
+          '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">' + i.label + '</div>' +
+        '</div>'
+      ).join('') +
+    '</div>' +
+
+    // ── Quick-add row ──
+    '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">' +
+      '<input id="fbNewName" placeholder="Student name" style="flex:1;min-width:160px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" onkeydown="if(event.key===\'Enter\')feedbackAddStudent()">' +
+      '<select id="fbNewLoc" style="padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">' +
+        '<option value="waunakee">Waunakee</option><option value="eastmad">East Madison</option><option value="verona">Verona</option>' +
+      '</select>' +
+      '<button onclick="feedbackAddStudent()" style="padding:8px 16px;background:#f1f3f9;border:1px solid #ddd;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#4169E1;">+ Add</button>' +
+    '</div>' +
+
+    // ── Table ──
+    '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+        '<thead>' +
+          '<tr style="background:#f5f7ff;">' +
+            '<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Name</th>' +
+            (locationFilter === 'all' ? '<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Location</th>' : '') +
+            INTERACTIONS.map(i => '<th style="padding:10px 4px;text-align:center;font-size:18px;" title="' + i.label + '">' + i.icon + '</th>').join('') +
+            '<th style="width:36px;"></th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+    '</div>' +
+
+    // ── Footer note ──
+    '<p style="font-size:12px;color:#aaa;margin-top:12px;text-align:center;">Checks save automatically. Roster is shared across months; interactions are tracked per month.</p>' +
+
+  '</div>';
 }
 
 init();
