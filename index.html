@@ -575,7 +575,7 @@ let state = {
   devActiveModule: null,
   devQuizAnswers: {},
   devQuizSubmitted: false,
-  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'all', showInactive: false }
+  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'all', showInactive: false, openNotes: {} }
 };
 
 let debounceTimers = {};
@@ -1203,7 +1203,7 @@ function render() {
           s === 'tasks' ? renderTasksPage() :
           s === 'monthlyGoals' ? renderMonthlyGoalsPage() :
           s === 'l10' ? renderL10Page() :
-          s === 'watchlist' ? renderWatchListPage() :
+          s === 'watchlist' ? renderFeedbackPage() :
           s === 'development' ? renderDevelopmentPage() :
           s === 'feedback' ? renderFeedbackPage() : '');
     if(s === 'performance') initKPICharts();
@@ -1220,9 +1220,8 @@ function renderHeader() {
         { id: 'tasks', label: 'Tasks' },
       { id: 'monthlyGoals', label: 'Monthly Goals' },
       { id: 'l10', label: 'L10 Meeting' },
-      { id: 'watchlist', label: 'Watch List' },
       { id: 'development', label: 'Development' },
-      { id: 'feedback', label: 'Student Feedback' },
+      { id: 'feedback', label: 'Students' },
     ];
   return '<div class="header">' +
     '<h1><span style="font-family:Arial Black,sans-serif;font-weight:900;color:#4169E1;letter-spacing:-1px;font-size:1.4rem">LVLUP</span> <span style="color:#999;font-weight:300">/</span> <span style="font-family:Arial Black,sans-serif;font-weight:900;color:#e94560;letter-spacing:-0.5px;font-size:1.4rem">Go Ninja</span> <span>HQ Dashboard</span></h1>' +
@@ -3356,6 +3355,15 @@ function feedbackSetStatus(studentKey, status) {
   db.ref('feedbackRoster/' + studentKey + '/status').set(current === status ? null : status);
 }
 
+function feedbackToggleNote(studentKey) {
+  state.feedback.openNotes[studentKey] = !state.feedback.openNotes[studentKey];
+  render();
+}
+
+function feedbackUpdateNote(studentKey, value) {
+  fbDebounce('feedbackRoster/' + studentKey + '/notes', value || null);
+}
+
 function feedbackMarkInactive(studentKey) {
   db.ref('feedbackRoster/' + studentKey + '/active').set(false);
   db.ref('feedbackRoster/' + studentKey + '/inactiveSince').set(getCurrentMonthKey());
@@ -3538,7 +3546,7 @@ function feedbackAddStudent() {
 }
 
 function renderFeedbackPage() {
-  const { roster, tracking, rosterMeta, locationFilter, showInactive } = state.feedback;
+  const { roster, tracking, rosterMeta, locationFilter, showInactive, openNotes } = state.feedback;
   const monthLabel   = getFeedbackMonthLabel();
   const currentMonth = getCurrentMonthKey();
   const isCurrentMonth = getFeedbackMonthKey() === currentMonth;
@@ -3619,7 +3627,7 @@ function renderFeedbackPage() {
   // ── Rows ──
   let rows = '';
   if (!displayed.length) {
-    rows = '<tr><td colspan="8" style="text-align:center;padding:36px;color:#999;font-size:13px;">' +
+    rows = '<tr><td colspan="9" style="text-align:center;padding:36px;color:#999;font-size:13px;">' +
       (Object.keys(roster).length === 0 ? 'No students yet — sync a roster to get started.' : 'No students to display.') +
       '</td></tr>';
   } else {
@@ -3639,7 +3647,7 @@ function renderFeedbackPage() {
       if (locationFilter === 'all') {
         const activeCount = group.filter(s => s.active !== false).length;
         const redCount    = group.filter(s => s.active !== false && s.status === 'red').length;
-        rows += '<tr><td colspan="8" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' +
+        rows += '<tr><td colspan="9" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' +
           (LOC_LABELS[loc] || 'Unknown') + ' — ' + activeCount + ' active' +
           (redCount ? ' · <span style="color:#ef4444;">⚠ ' + redCount + ' at risk</span>' : '') +
           (showInactive && group.length > activeCount ? ' · ' + (group.length - activeCount) + ' inactive' : '') +
@@ -3663,12 +3671,19 @@ function renderFeedbackPage() {
           (locationFilter === 'all' ? '<td style="padding:10px 10px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
           INTERACTIONS.map(i => chk(s.key, i.field, !!t[i.field], isInactive)).join('') +
           '<td style="padding:10px 6px;text-align:center;white-space:nowrap;">' +
+            '<button onclick="feedbackToggleNote(\'' + s.key + '\')" title="Notes" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px 5px;border-radius:4px;opacity:' + (s.notes ? '1' : '0.35') + ';filter:' + (openNotes[s.key] ? 'none' : 'grayscale(1)') + ';" onmouseover="this.style.opacity=\'1\';this.style.filter=\'none\'" onmouseout="this.style.opacity=\'' + (s.notes ? '1' : '0.35') + '\';this.style.filter=\'' + (openNotes[s.key] ? 'none' : 'grayscale(1)') + '\'">📝</button>' +
             (isInactive
               ? '<button onclick="feedbackMarkActive(\'' + s.key + '\')" title="Reactivate" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:13px;padding:2px 5px;border-radius:4px;font-weight:700;" onmouseover="this.style.color=\'#22c55e\'" onmouseout="this.style.color=\'#ccc\'">↩</button>'
               : '<button onclick="feedbackMarkInactive(\'' + s.key + '\')" title="Mark inactive" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 5px;border-radius:4px;" onmouseover="this.style.color=\'#f59e0b\'" onmouseout="this.style.color=\'#ccc\'">⏸</button>') +
             '<button onclick="feedbackDeleteStudent(\'' + s.key + '\')" title="Delete student" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 5px;border-radius:4px;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#ccc\'">🗑</button>' +
           '</td>' +
-          '</tr>';
+          '</tr>' +
+          // ── Inline notes sub-row ──
+          (openNotes[s.key]
+            ? '<tr style="background:' + rowBg + ';"><td colspan="9" style="padding:0 12px 12px ' + (locationFilter === 'all' ? '80px' : '70px') + ';">' +
+              '<textarea oninput="feedbackUpdateNote(\'' + s.key + '\',this.value)" placeholder="Add notes about this student — concerns, context, conversation history…" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid ' + (status === 'red' ? '#fca5a5' : status === 'yellow' ? '#fde68a' : '#e2e8f0') + ';border-radius:8px;font-size:13px;font-family:inherit;line-height:1.6;resize:vertical;min-height:72px;color:#1a1a2e;background:#fff;outline:none;" onfocus="this.style.borderColor=\'#4169E1\'" onblur="this.style.borderColor=\'' + (status === 'red' ? '#fca5a5' : status === 'yellow' ? '#fde68a' : '#e2e8f0') + '\'">' + (s.notes || '') + '</textarea>' +
+              '</td></tr>'
+            : '');
       });
     });
   }
@@ -3678,8 +3693,8 @@ function renderFeedbackPage() {
     // ── Header ──
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">' +
       '<div>' +
-        '<h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">Student Feedback Tracker</h2>' +
-        '<p style="margin:0;font-size:13px;color:#888;">Track monthly outreach: postcards, video shoutouts, calls & conferences.</p>' +
+        '<h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">Students</h2>' +
+        '<p style="margin:0;font-size:13px;color:#888;">Roster, engagement status, monthly outreach tracking, and notes.</p>' +
       '</div>' +
       '<button onclick="feedbackOpenSync()" style="padding:9px 18px;background:#4169E1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">🔄 Sync Roster</button>' +
     '</div>' +
@@ -3751,7 +3766,7 @@ function renderFeedbackPage() {
           '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Name</th>' +
           (locationFilter === 'all' ? '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Location</th>' : '') +
           INTERACTIONS.map(i => '<th style="padding:10px 6px;text-align:center;font-size:17px;" title="' + i.label + '">' + i.icon + '</th>').join('') +
-          '<th style="width:56px;"></th>' +
+          '<th style="width:80px;"></th>' +
         '</tr></thead>' +
         '<tbody>' + rows + '</tbody>' +
       '</table>' +
