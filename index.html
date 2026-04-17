@@ -523,8 +523,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .wl-stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-top:2px}
     </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 <div class="conn-status offline" id="connStatus">Connecting...</div>
@@ -3400,8 +3398,8 @@ function feedbackOpenSync(preselectedLoc) {
         <h3 style="margin:0;font-size:16px;font-weight:800;color:#1a1a2e;">🔄 Sync Student Roster</h3>
         <button onclick="document.getElementById('fbSyncModal').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa;padding:0 4px;">✕</button>
       </div>
-      <p style="margin:0 0 16px;font-size:13px;color:#666;line-height:1.6;">
-        Upload an Excel/CSV export or paste names. New students are added, missing students are marked inactive, and all historical data is preserved.
+      <p style="margin:0 0 4px;font-size:13px;color:#666;line-height:1.6;">
+        In GymDesk, run a <strong>Members report</strong>, select the <strong>First Name</strong> and <strong>Last Name</strong> columns, copy, and paste below. New students are added, missing students are marked inactive, and all historical data is preserved.
       </p>
 
       <div style="margin-bottom:14px;">
@@ -3411,28 +3409,9 @@ function feedbackOpenSync(preselectedLoc) {
         </select>
       </div>
 
-      <input type="file" id="fbSyncFileInput" accept=".xlsx,.xls,.csv,.pdf" style="display:none" onchange="feedbackHandleFile(this.files[0])">
-
-      <div id="fbSyncDropZone"
-        onclick="document.getElementById('fbSyncFileInput').click()"
-        ondragover="event.preventDefault();this.style.borderColor='#4169E1';this.style.background='#eef2ff';"
-        ondragleave="this.style.borderColor='#c7d2fe';this.style.background='#f5f7ff';"
-        ondrop="event.preventDefault();this.style.borderColor='#c7d2fe';this.style.background='#f5f7ff';feedbackHandleFile(event.dataTransfer.files[0])"
-        style="border:2px dashed #c7d2fe;border-radius:10px;background:#f5f7ff;padding:20px;text-align:center;cursor:pointer;margin-bottom:12px;transition:all 0.15s;">
-        <div style="font-size:28px;margin-bottom:6px;">📊</div>
-        <div style="font-size:13px;font-weight:700;color:#4169E1;margin-bottom:2px;">Drop file here</div>
-        <div style="font-size:12px;color:#94a3b8;">or click to browse · .pdf, .xlsx, .xls, .csv</div>
-        <div id="fbSyncFileName" style="margin-top:8px;font-size:12px;font-weight:600;color:#22c55e;display:none;"></div>
-      </div>
-
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-        <div style="flex:1;height:1px;background:#e2e8f0;"></div>
-        <span style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">or paste names</span>
-        <div style="flex:1;height:1px;background:#e2e8f0;"></div>
-      </div>
-
       <div style="margin-bottom:12px;">
-        <textarea id="fbSyncText" placeholder="John Doe&#10;Jane Smith&#10;Alex Lee" style="width:100%;height:140px;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.6;" oninput="feedbackSyncPreview()"></textarea>
+        <label style="font-size:12px;font-weight:700;color:#555;display:block;margin-bottom:5px;">PASTE STUDENT NAMES</label>
+        <textarea id="fbSyncText" placeholder="John Doe&#10;Jane Smith&#10;Alex Lee" style="width:100%;height:180px;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.6;" oninput="feedbackSyncPreview()"></textarea>
       </div>
 
       <div id="fbSyncPreview" style="margin-bottom:16px;"></div>
@@ -3443,161 +3422,6 @@ function feedbackOpenSync(preselectedLoc) {
       </div>
     </div>`;
   document.body.appendChild(modal);
-}
-
-function feedbackHandleFile(file) {
-  if (!file) return;
-  const nameEl = document.getElementById('fbSyncFileName');
-  if (nameEl) { nameEl.textContent = '⏳ Reading ' + file.name + '…'; nameEl.style.display = 'block'; nameEl.style.color = '#94a3b8'; }
-
-  const ext = file.name.toLowerCase().split('.').pop();
-
-  if (ext === 'pdf') {
-    feedbackParsePDF(file);
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      let names = [];
-      if (ext === 'csv') {
-        names = feedbackExtractNamesFromRows(e.target.result.split('\n').map(r => r.split(',')));
-      } else {
-        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        names = feedbackExtractNamesFromRows(XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }));
-      }
-      feedbackPopulateFromNames(names, file.name);
-    } catch(err) {
-      alert('Could not read file: ' + err.message);
-    }
-  };
-  ext === 'csv' ? reader.readAsText(file) : reader.readAsArrayBuffer(file);
-}
-
-function feedbackParsePDF(file) {
-  if (typeof pdfjsLib === 'undefined') { alert('PDF library not loaded yet — try again in a moment.'); return; }
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise.then(function(pdf) {
-      const pageJobs = [];
-      for (let p = 1; p <= pdf.numPages; p++) {
-        pageJobs.push(pdf.getPage(p).then(page => page.getTextContent()));
-      }
-      return Promise.all(pageJobs);
-    }).then(function(pages) {
-      // Collect all text items across every page
-      // PDF.js returns items with {str, transform} where transform[4]=x, transform[5]=y
-      // Group items by approximate y-position (same line), then within each line
-      // take the leftmost item — that's the name column in GymDesk's layout.
-      const allItems = [];
-      pages.forEach(tc => tc.items.forEach(item => {
-        if (item.str && item.str.trim()) allItems.push({ str: item.str.trim(), x: item.transform[4], y: item.transform[5] });
-      }));
-
-      // Sort top-to-bottom, left-to-right
-      allItems.sort((a, b) => b.y - a.y || a.x - b.x);
-
-      // Group into lines (items within ~4pt of same y)
-      const lines = [];
-      let currentLine = null;
-      allItems.forEach(item => {
-        if (!currentLine || Math.abs(item.y - currentLine.y) > 4) {
-          currentLine = { y: item.y, items: [] };
-          lines.push(currentLine);
-        }
-        currentLine.items.push(item);
-      });
-
-      // The name column is always the leftmost non-header item.
-      // Find the minimum x across all lines (ignoring page numbers / tiny x values).
-      const xValues = lines.flatMap(l => l.items.map(i => i.x)).filter(x => x > 20);
-      const minX = Math.min(...xValues);
-
-      // For each line, pick the item closest to the left edge (within 60pt of minX)
-      // — that's the first column. Then filter through looksLikeName.
-      const seen = new Set();
-      const names = [];
-      lines.forEach(line => {
-        const leftmost = line.items.filter(i => i.x < minX + 80).map(i => i.str);
-        // Concatenate adjacent left-column fragments that together form a name
-        const candidate = leftmost.join(' ').trim();
-        if (looksLikeName(candidate) && !seen.has(candidate.toLowerCase())) {
-          seen.add(candidate.toLowerCase());
-          names.push(candidate);
-        } else {
-          // Try each fragment individually (handles multi-word cells split across items)
-          leftmost.forEach(frag => {
-            if (looksLikeName(frag) && !seen.has(frag.toLowerCase())) {
-              seen.add(frag.toLowerCase());
-              names.push(frag);
-            }
-          });
-        }
-      });
-
-      feedbackPopulateFromNames(names, file.name);
-    }).catch(err => alert('Could not read PDF: ' + err.message));
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function feedbackPopulateFromNames(names, filename) {
-  const nameEl = document.getElementById('fbSyncFileName');
-  if (nameEl) {
-    nameEl.textContent = '✓ ' + filename + ' — ' + names.length + ' students found';
-    nameEl.style.color = '#22c55e';
-  }
-  const textarea = document.getElementById('fbSyncText');
-  if (textarea) { textarea.value = names.join('\n'); feedbackSyncPreview(); }
-}
-
-function feedbackExtractNamesFromRows(rows) {
-  if (!rows || !rows.length) return [];
-  const norm = v => String(v || '').trim();
-
-  // Check for a recognized name header column
-  const firstRow = rows[0].map(c => norm(c).toLowerCase());
-  const hasHeader = firstRow.some(c => ['name','first','last','student','member','full'].some(k => c.includes(k)));
-  let nameColIdx = -1, firstColIdx = -1, lastColIdx = -1;
-
-  if (hasHeader) {
-    firstRow.forEach((h, i) => {
-      if ((h === 'name' || h === 'full name' || h === 'student name' || h === 'member name') && nameColIdx < 0) nameColIdx = i;
-      if ((h.includes('first') || h === 'firstname') && firstColIdx < 0) firstColIdx = i;
-      if ((h.includes('last') || h === 'lastname') && lastColIdx < 0) lastColIdx = i;
-    });
-  }
-
-  const dataRows = hasHeader ? rows.slice(1) : rows;
-
-  // If we found clean name columns, use them directly
-  if (nameColIdx >= 0 || (firstColIdx >= 0 && lastColIdx >= 0)) {
-    return dataRows.map(row => {
-      if (nameColIdx >= 0) return norm(row[nameColIdx]);
-      return (norm(row[firstColIdx]) + ' ' + norm(row[lastColIdx])).trim();
-    }).filter(looksLikeName);
-  }
-
-  // GymDesk / messy export: scan EVERY cell across all rows and
-  // collect anything that passes looksLikeName, preserving row order
-  // and deduplicating case-insensitively.
-  const seen = new Set();
-  const names = [];
-  dataRows.forEach(row => {
-    (Array.isArray(row) ? row : [row]).forEach(cell => {
-      const val = norm(cell);
-      const key = val.toLowerCase();
-      if (looksLikeName(val) && !seen.has(key)) {
-        seen.add(key);
-        names.push(val);
-      }
-    });
-  });
-  return names;
 }
 
 function looksLikeName(str) {
