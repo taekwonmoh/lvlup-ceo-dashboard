@@ -3486,13 +3486,11 @@ function feedbackHandleFile(file) {
 
 function feedbackExtractNamesFromRows(rows) {
   if (!rows || !rows.length) return [];
-
   const norm = v => String(v || '').trim();
 
-  // Check if first row looks like a header
+  // Check for a recognized name header column
   const firstRow = rows[0].map(c => norm(c).toLowerCase());
   const hasHeader = firstRow.some(c => ['name','first','last','student','member','full'].some(k => c.includes(k)));
-
   let nameColIdx = -1, firstColIdx = -1, lastColIdx = -1;
 
   if (hasHeader) {
@@ -3505,14 +3503,30 @@ function feedbackExtractNamesFromRows(rows) {
 
   const dataRows = hasHeader ? rows.slice(1) : rows;
 
-  const candidates = dataRows.map(row => {
-    if (nameColIdx >= 0) return norm(row[nameColIdx]);
-    if (firstColIdx >= 0 && lastColIdx >= 0) return (norm(row[firstColIdx]) + ' ' + norm(row[lastColIdx])).trim();
-    if (firstColIdx >= 0) return norm(row[firstColIdx]);
-    return norm(row[0]);
-  });
+  // If we found clean name columns, use them directly
+  if (nameColIdx >= 0 || (firstColIdx >= 0 && lastColIdx >= 0)) {
+    return dataRows.map(row => {
+      if (nameColIdx >= 0) return norm(row[nameColIdx]);
+      return (norm(row[firstColIdx]) + ' ' + norm(row[lastColIdx])).trim();
+    }).filter(looksLikeName);
+  }
 
-  return candidates.filter(looksLikeName);
+  // GymDesk / messy export: scan EVERY cell across all rows and
+  // collect anything that passes looksLikeName, preserving row order
+  // and deduplicating case-insensitively.
+  const seen = new Set();
+  const names = [];
+  dataRows.forEach(row => {
+    (Array.isArray(row) ? row : [row]).forEach(cell => {
+      const val = norm(cell);
+      const key = val.toLowerCase();
+      if (looksLikeName(val) && !seen.has(key)) {
+        seen.add(key);
+        names.push(val);
+      }
+    });
+  });
+  return names;
 }
 
 function looksLikeName(str) {
@@ -3547,15 +3561,22 @@ function looksLikeName(str) {
 
   // Reject known non-name lead sources and status words
   const skipPrefixes = [
-    'active ', 'tiger ', 'legacy', 'level ',
+    'active ','active\t','tiger ','legacy','level ',
     'white -','yellow -','orange -','green -','blue -','purple -',
     'red -','black -','camo -','red / black',
     '1st ','2nd ','3rd ','4th ','5th ','6th ','7th ','8th ','9th ',
     'we\'d love','please','thanks','after ','and we ','but after',
     'or we ','jan ','feb ','mar ','apr ','jun ','jul ','aug ','sep ',
-    'oct ','nov ','dec ',
+    'oct ','nov ','dec ','ara the',
   ];
   if (skipPrefixes.some(p => lower.startsWith(p))) return false;
+
+  // Reject standalone status/source words that slip past prefix check
+  const blockedWords = new Set([
+    'active','referral','referrals','website','other','event','school',
+    'google','search','engine','maps','decided','recommended',
+  ]);
+  if (words.length === 2 && words.some(w => blockedWords.has(w.toLowerCase()))) return false;
 
   // Reject single words (need at least first + last name)
   const words = str.split(/\s+/).filter(Boolean);
@@ -3574,7 +3595,7 @@ function feedbackSyncPreview() {
   const confirmBtn = document.getElementById('fbSyncConfirmBtn');
   if (!previewEl || !confirmBtn) return;
 
-  const names = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const names = raw.split('\n').map(l => l.trim()).filter(looksLikeName);
   if (!names.length) {
     previewEl.innerHTML = '';
     confirmBtn.disabled = true;
@@ -3625,7 +3646,7 @@ function feedbackSyncPreview() {
 function feedbackSyncConfirm() {
   const raw = document.getElementById('fbSyncText').value;
   const loc = document.getElementById('fbSyncLoc').value;
-  const names = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const names = raw.split('\n').map(l => l.trim()).filter(looksLikeName);
   if (!names.length) return;
 
   const normalizedNew = new Set(names.map(n => n.toLowerCase()));
