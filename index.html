@@ -3476,18 +3476,28 @@ function feedbackOpenNoteModal(studentKey) {
         </div>
         <button onclick="document.getElementById('fbNoteModal').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#bbb;padding:0 4px;line-height:1;">✕</button>
       </div>
-      <div style="padding:18px 22px;">
-        <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px;">Notes</label>
+      <div style="padding:18px 22px 12px;">
+        <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;">Parent Email <span style="font-weight:400;text-transform:none;letter-spacing:0;">(for member portal)</span></label>
+        <input id="fbNoteModalEmail" type="email" placeholder="parent@email.com"
+          value="${s.email || ''}"
+          oninput="feedbackSaveEmail('${studentKey}', this.value)"
+          style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#1a1a2e;background:#fafbff;outline:none;transition:border-color 0.15s;"
+          onfocus="this.style.borderColor='${accentColor}';this.style.background='${accentLight}'"
+          onblur="this.style.borderColor='#e2e8f0';this.style.background='#fafbff'">
+      </div>
+      <div style="padding:0 22px 12px;">
+        <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px;">Internal Notes</label>
         <textarea id="fbNoteModalTextarea"
           placeholder="Add context, concerns, conversation history, goals…"
           oninput="feedbackUpdateNote('${studentKey}', this.value); feedbackNoteModalSaved()"
-          style="width:100%;box-sizing:border-box;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;line-height:1.7;resize:vertical;min-height:140px;color:#1a1a2e;background:#fafbff;outline:none;transition:border-color 0.15s;"
+          style="width:100%;box-sizing:border-box;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;line-height:1.7;resize:vertical;min-height:120px;color:#1a1a2e;background:#fafbff;outline:none;transition:border-color 0.15s;"
           onfocus="this.style.borderColor='${accentColor}';this.style.background='${accentLight}'"
           onblur="this.style.borderColor='#e2e8f0';this.style.background='#fafbff'"
         >${s.notes || ''}</textarea>
         <div id="fbNoteModalSaved" style="font-size:11px;color:#22c55e;margin-top:6px;opacity:0;transition:opacity 0.3s;">✓ Saved</div>
       </div>
-      <div style="padding:0 22px 18px;display:flex;justify-content:flex-end;">
+      <div style="padding:0 22px 18px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <button onclick="document.getElementById('fbNoteModal').remove();feedbackOpenSendModal('${studentKey}')" style="padding:8px 16px;background:#eef2ff;border:none;border-radius:8px;font-size:13px;font-weight:600;color:#4169E1;cursor:pointer;">📨 Send Monthly Feedback</button>
         <button onclick="document.getElementById('fbNoteModal').remove()" style="padding:8px 20px;background:#f1f5f9;border:none;border-radius:8px;font-size:13px;font-weight:600;color:#555;cursor:pointer;">Done</button>
       </div>
     </div>`;
@@ -3825,6 +3835,104 @@ async function feedbackGenerateReports() {
   generated.forEach(g => { window._bulkReports[g.key] = g.report; });
 
   document.body.appendChild(modal);
+}
+
+function feedbackSaveEmail(studentKey, value) {
+  const path = 'feedbackRoster/' + studentKey + '/email';
+  clearTimeout(debounceTimers[path]);
+  debounceTimers[path] = setTimeout(() => db.ref(path).set(value.trim() || null), 600);
+}
+
+function feedbackOpenSendModal(studentKey) {
+  const existing = document.getElementById('fbSendModal');
+  if (existing) existing.remove();
+
+  const s = state.feedback.roster[studentKey] || {};
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const locLabel = LOC_LABELS[s.location] || s.location || '';
+  const monthLabel = getFeedbackMonthLabel();
+  const savedInstructor = localStorage.getItem('fbLastInstructor') || '';
+
+  const modal = document.createElement('div');
+  modal.id = 'fbSendModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden;">
+      <div style="padding:18px 22px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:#1a1a2e;">📨 Send Monthly Feedback</div>
+          <div style="font-size:12px;color:#aaa;margin-top:2px;">${s.name || 'Student'} · ${locLabel} · ${monthLabel}</div>
+        </div>
+        <button onclick="document.getElementById('fbSendModal').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#bbb;padding:0 4px;line-height:1;">✕</button>
+      </div>
+      <div style="padding:18px 22px 0;">
+        ${!s.email ? '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px;">⚠ No parent email on file. <button onclick="document.getElementById(\'fbSendModal\').remove();feedbackOpenNoteModal(\''+studentKey+'\')" style="background:none;border:none;color:#4169E1;font-size:12px;font-weight:700;cursor:pointer;padding:0;">Add email in student notes →</button></div>' : ''}
+        <div style="margin-bottom:14px;">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;">Instructor Name</label>
+          <input id="fbSendInstructor" type="text" placeholder="Your name" value="${savedInstructor}"
+            style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#1a1a2e;background:#fafbff;outline:none;"
+            onfocus="this.style.borderColor='#4169E1'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <div style="margin-bottom:6px;">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;">Feedback Message <span style="font-weight:400;text-transform:none;">(visible to parent/student)</span></label>
+          <textarea id="fbSendText" placeholder="Write a personalized note about their progress, attitude, goals, areas to work on…"
+            style="width:100%;box-sizing:border-box;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;line-height:1.7;resize:vertical;min-height:150px;color:#1a1a2e;background:#fafbff;outline:none;"
+            onfocus="this.style.borderColor='#4169E1'" onblur="this.style.borderColor='#e2e8f0'"></textarea>
+        </div>
+        <div id="fbSendStatus" style="font-size:12px;min-height:18px;margin-bottom:4px;"></div>
+      </div>
+      <div style="padding:12px 22px 18px;display:flex;justify-content:flex-end;gap:8px;">
+        <button onclick="document.getElementById('fbSendModal').remove()" style="padding:8px 18px;background:#f1f5f9;border:none;border-radius:8px;font-size:13px;font-weight:600;color:#555;cursor:pointer;">Cancel</button>
+        <button onclick="feedbackPublishMonthly('${studentKey}')" ${!s.email ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''} style="padding:8px 20px;background:#4169E1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Publish to Member Portal →</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  setTimeout(() => { const ta = document.getElementById('fbSendText'); if (ta) ta.focus(); }, 50);
+}
+
+function feedbackPublishMonthly(studentKey) {
+  const s = state.feedback.roster[studentKey] || {};
+  const email = (s.email || '').trim().toLowerCase();
+  if (!email) { alert('No parent email on file for this student.'); return; }
+
+  const text = (document.getElementById('fbSendText').value || '').trim();
+  const instructor = (document.getElementById('fbSendInstructor').value || '').trim();
+  if (!text) { document.getElementById('fbSendStatus').innerHTML = '<span style="color:#ef4444;">Please write a feedback message.</span>'; return; }
+  if (!instructor) { document.getElementById('fbSendStatus').innerHTML = '<span style="color:#ef4444;">Please enter your name.</span>'; return; }
+
+  // Cache instructor name for next time
+  localStorage.setItem('fbLastInstructor', instructor);
+
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const emailKey = email.replace(/[.#$[\]/]/g, '_');
+  const monthKey = getFeedbackMonthKey();
+  const monthLabel = getFeedbackMonthLabel();
+  const locLabel = LOC_LABELS[s.location] || s.location || '';
+
+  const statusEl = document.getElementById('fbSendStatus');
+  statusEl.innerHTML = '<span style="color:#888;">Publishing…</span>';
+
+  const updates = {};
+  // Ensure student record exists for the lookup
+  updates['students/' + emailKey] = { name: s.name, location: s.location || '' };
+  // Write the monthly feedback card
+  updates['feedback/' + emailKey + '/' + monthKey] = {
+    monthLabel,
+    instructor,
+    location: locLabel,
+    text,
+    publishedAt: Date.now()
+  };
+
+  db.ref().update(updates, err => {
+    if (err) {
+      statusEl.innerHTML = '<span style="color:#ef4444;">Error: ' + err.message + '</span>';
+    } else {
+      statusEl.innerHTML = '<span style="color:#22c55e;">✓ Published! Student can now view this in the member portal.</span>';
+      setTimeout(() => { const m = document.getElementById('fbSendModal'); if (m) m.remove(); }, 1800);
+    }
+  });
 }
 
 function feedbackMarkInactive(studentKey) {
@@ -4220,6 +4328,7 @@ function renderFeedbackPage() {
               '</td>';
           })() +
           '<td style="padding:10px 6px;text-align:center;white-space:nowrap;">' +
+            '<button onclick="feedbackOpenSendModal(\'' + s.key + '\')" title="Send monthly feedback to member portal" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px 5px;border-radius:4px;" onmouseover="this.style.opacity=\'0.7\'" onmouseout="this.style.opacity=\'1\'">📨</button>' +
             (isInactive
               ? '<button onclick="feedbackMarkActive(\'' + s.key + '\')" title="Reactivate" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:13px;padding:2px 5px;border-radius:4px;font-weight:700;" onmouseover="this.style.color=\'#22c55e\'" onmouseout="this.style.color=\'#ccc\'">↩</button>'
               : '<button onclick="feedbackMarkInactive(\'' + s.key + '\')" title="Mark inactive" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 5px;border-radius:4px;" onmouseover="this.style.color=\'#f59e0b\'" onmouseout="this.style.color=\'#ccc\'">⏸</button>') +
