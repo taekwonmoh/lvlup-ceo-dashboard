@@ -2299,6 +2299,31 @@ function deleteEvent(key) {
   }
 }
 
+function duplicateEvent(key) {
+  const e = (state.events || []).find(ev => ev._key === key);
+  if (!e) return;
+  // Load into form so user can adjust dates before saving
+  document.getElementById('evtName').value = e.event || '';
+  document.getElementById('evtDate').value = e.date || '';
+  document.getElementById('evtEndDate').value = e.endDate || '';
+  document.getElementById('evtLoc').value = e.loc || '';
+  document.getElementById('evtType').value = e.type || 'special';
+  document.getElementById('evtLink').value = e.link || '';
+  document.getElementById('evtHidden').checked = !!e.hiddenFromStudents;
+  document.getElementById('evtFeatured').checked = !!e.featured;
+  if (document.getElementById('evtDesc')) document.getElementById('evtDesc').value = e.description || '';
+  clearEvtPhoto();
+  if (e.photo) { _evtExistingPhotoUrl = e.photo; showEvtPhotoPreview(e.photo); }
+  // Make sure we're in "new event" mode (no editingKey)
+  const btn = document.getElementById('evtAddBtn');
+  btn.textContent = '+ Add Event';
+  btn.style.background = '';
+  btn.dataset.editingKey = '';
+  document.getElementById('evtCancelBtn').style.display = 'inline-flex';
+  document.getElementById('evtName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.getElementById('evtDate').focus();
+}
+
 function calNavMonth(offset) {
   state.calMonth = (state.calMonth || new Date().getMonth()) + offset;
   state.calYear = state.calYear || new Date().getFullYear();
@@ -2442,6 +2467,7 @@ function renderEventsPage() {
       if (e.link) html += '<a class="cal-list-link" href="' + esc(e.link) + '" target="_blank">GymDesk \u2192</a>';
       html += '<div style="display:flex;gap:6px;margin-left:auto;">';
       html += '<button class="evt-edit-btn" onclick="editEvent(\'' + esc(e._key || '') + '\')" title="Edit">✏️</button>';
+      html += '<button class="evt-edit-btn" onclick="duplicateEvent(\'' + esc(e._key || '') + '\')" title="Duplicate" style="opacity:0.6;">⧉</button>';
       html += '<button class="evt-delete-btn" onclick="deleteEvent(\'' + esc(e._key || '') + '\')">\u00d7</button>';
       html += '</div>';
       html += '</div>';
