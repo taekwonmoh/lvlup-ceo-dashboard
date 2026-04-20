@@ -3628,59 +3628,96 @@ async function callReportProxy(studentData, monthLabel) {
   return data.report;
 }
 
-function showReportModal(studentName, monthLabel, reportText, reportUrl) {
+// onSave: async function(editedText) — called when user clicks Save to Portal
+function showReportModal(studentName, monthLabel, reportText, reportUrl, onSave) {
   document.getElementById('reportPreviewModal')?.remove();
   const modal = document.createElement('div');
   modal.id = 'reportPreviewModal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;';
   modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
 
-  const escaped = esc(reportText);
-  const lines = escaped.split('\n').map(l => {
-    l = l.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    l = l.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    return l;
-  }).join('<br>');
-
   modal.innerHTML = `
-    <div style="background:#fff;border-radius:14px;width:100%;max-width:620px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.22);overflow:hidden;">
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:640px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.22);overflow:hidden;">
       <div style="padding:18px 22px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;">
         <div>
           <div style="font-size:15px;font-weight:800;color:#1a1a2e;">📄 Progress Report — ${esc(studentName)}</div>
-          <div style="font-size:11px;color:#aaa;margin-top:2px;">${esc(monthLabel)}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:2px;">${esc(monthLabel)} · Edit before saving to portal</div>
         </div>
-        <button onclick="document.getElementById('reportPreviewModal').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#bbb;padding:0 4px;line-height:1;">✕</button>
+        <button id="reportModalClose" style="background:none;border:none;font-size:18px;cursor:pointer;color:#bbb;padding:0 4px;line-height:1;">✕</button>
       </div>
-      <div style="padding:20px 22px;overflow-y:auto;flex:1;font-size:13.5px;line-height:1.8;color:#1a1a2e;white-space:pre-wrap;font-family:inherit;">${lines}</div>
-      <div style="padding:14px 22px;border-top:1px solid #f0f0f0;display:flex;gap:10px;flex-shrink:0;flex-wrap:wrap;">
-        <button onclick="navigator.clipboard.writeText(document.getElementById('reportPreviewModal').querySelector('._rtext').innerText || '').catch(()=>{})"
+      <div style="padding:16px 22px;flex:1;overflow-y:auto;display:flex;flex-direction:column;">
+        <textarea id="reportEditArea"
+          style="flex:1;width:100%;min-height:320px;box-sizing:border-box;padding:14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:13.5px;font-family:inherit;line-height:1.8;color:#1a1a2e;resize:vertical;outline:none;background:#fafbff;"
+          onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#e2e8f0'"
+        ></textarea>
+        <div id="reportSavedBadge" style="font-size:11px;color:#22c55e;margin-top:6px;height:16px;"></div>
+      </div>
+      <div style="padding:14px 22px;border-top:1px solid #f0f0f0;display:flex;gap:10px;flex-shrink:0;flex-wrap:wrap;align-items:center;">
+        <button id="reportSaveBtn"
+          style="padding:9px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">💾 Save to Portal</button>
+        <button id="reportCopyBtn"
           style="padding:9px 16px;background:#f0f4ff;color:#3730a3;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📋 Copy</button>
-        <button onclick="reportDownload('${esc(studentName)}','${esc(monthLabel)}')"
+        <button id="reportDownloadBtn"
           style="padding:9px 16px;background:#f0fdf4;color:#166534;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">⬇️ Download</button>
-        <button onclick="window.open('${esc(reportUrl)}','_blank')"
-          style="padding:9px 16px;background:#fdf4ff;color:#7c3aed;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">🔗 Open Link</button>
-        <button onclick="reportPrint(this)"
+        <button id="reportPrintBtn"
           style="padding:9px 16px;background:#fff7ed;color:#92400e;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">🖨️ Print / PDF</button>
+        ${reportUrl ? '<a id="reportLinkBtn" href="' + esc(reportUrl) + '" target="_blank" style="padding:9px 16px;background:#fdf4ff;color:#7c3aed;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:none;">🔗 View Link</a>' : ''}
       </div>
     </div>`;
 
-  // Store report text for copy/download
   modal._reportText = reportText;
   modal._studentName = studentName;
   modal._monthLabel = monthLabel;
 
-  // Fix copy button to use stored text
-  modal.querySelector('button[onclick*="clipboard"]').onclick = function() {
-    navigator.clipboard.writeText(reportText).then(() => {
+  const textarea = modal.querySelector('#reportEditArea');
+  textarea.value = reportText;
+
+  modal.querySelector('#reportModalClose').onclick = () => modal.remove();
+
+  modal.querySelector('#reportCopyBtn').onclick = function() {
+    navigator.clipboard.writeText(textarea.value).then(() => {
       this.textContent = '✓ Copied!';
       setTimeout(() => { this.textContent = '📋 Copy'; }, 2000);
-    }).catch(() => alert(reportText));
-  };
-  modal.querySelector('button[onclick*="reportDownload"]').onclick = function() {
-    reportDownload(studentName, monthLabel, reportText);
+    });
   };
 
+  modal.querySelector('#reportDownloadBtn').onclick = function() {
+    reportDownload(studentName, monthLabel, textarea.value);
+  };
+
+  modal.querySelector('#reportPrintBtn').onclick = function() {
+    modal._reportText = textarea.value;
+    reportPrint(this);
+  };
+
+  const saveBtn = modal.querySelector('#reportSaveBtn');
+  const savedBadge = modal.querySelector('#reportSavedBadge');
+  const linkBtn = modal.querySelector('#reportLinkBtn');
+
+  if (onSave) {
+    saveBtn.onclick = async function() {
+      const edited = textarea.value.trim();
+      if (!edited) return;
+      saveBtn.disabled = true;
+      saveBtn.textContent = '⏳ Saving…';
+      try {
+        await onSave(edited);
+        saveBtn.textContent = '✅ Saved to Portal';
+        saveBtn.style.background = '#22c55e';
+        savedBadge.textContent = '✓ Saved — ' + new Date().toLocaleTimeString();
+        if (linkBtn) { linkBtn.style.display = 'inline-block'; }
+      } catch(err) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save to Portal';
+        alert('Save failed: ' + err.message);
+      }
+    };
+  } else {
+    saveBtn.style.display = 'none';
+  }
+
   document.body.appendChild(modal);
+  textarea.focus();
 }
 
 function reportDownload(studentName, monthLabel, text) {
@@ -3739,11 +3776,12 @@ async function feedbackGenerateOneReport(studentKey) {
   try {
     const monthLabel = getFeedbackMonthLabel();
     const report = await callReportProxy({ ...s, instructorFeedback: feedback }, monthLabel);
-    await db.ref('studentReports/' + mk + '/' + studentKey).set({
-      studentName: s.name, location: s.location, cycleLabel: monthLabel,
-      report, generatedAt: new Date().toISOString(), instructorFeedback: feedback, status: s.status || null
+    showReportModal(s.name, monthLabel, report, getReportViewUrl(mk, studentKey), async function(editedReport) {
+      await db.ref('studentReports/' + mk + '/' + studentKey).set({
+        studentName: s.name, location: s.location, cycleLabel: monthLabel,
+        report: editedReport, generatedAt: new Date().toISOString(), instructorFeedback: feedback, status: s.status || null
+      });
     });
-    showReportModal(s.name, monthLabel, report, getReportViewUrl(mk, studentKey));
   } catch(err) {
     alert('Failed to generate report for ' + s.name + ':\n' + err.message);
   } finally {
@@ -3781,12 +3819,8 @@ async function feedbackGenerateReports() {
   for (const s of students) {
     try {
       const report = await callReportProxy(s, monthLabel);
-      await db.ref('studentReports/' + mk + '/' + s.key).set({
-        studentName: s.name, location: s.location, cycleLabel: monthLabel,
-        report, generatedAt: new Date().toISOString(), instructorFeedback: s.instructorFeedback, status: s.status || null
-      });
       successCount++;
-      generated.push({ key: s.key, name: s.name, report });
+      generated.push({ key: s.key, name: s.name, location: s.location, instructorFeedback: s.instructorFeedback, report });
     } catch(err) {
       console.error('Failed:', s.name, err);
       failCount++;
@@ -3811,9 +3845,10 @@ async function feedbackGenerateReports() {
   const rows = generated.map(g =>
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f0;gap:10px;">' +
       '<span style="font-size:13px;font-weight:600;color:#1a1a2e;">' + esc(g.name) + '</span>' +
-      '<div style="display:flex;gap:8px;">' +
-        '<button onclick="showReportModal(\'' + esc(g.name) + '\',\'' + esc(monthLabel) + '\',window._bulkReports[\'' + g.key + '\'],\'' + esc(getReportViewUrl(mk, g.key)) + '\')" style="padding:5px 12px;background:#f0f4ff;color:#3730a3;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">👁 View</button>' +
-        '<a href="' + esc(getReportViewUrl(mk, g.key)) + '" target="_blank" style="padding:5px 12px;background:#fdf4ff;color:#7c3aed;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;">🔗 Link</a>' +
+      '<div style="display:flex;gap:8px;align-items:center;">' +
+        '<span id="savedBadge_' + g.key + '" style="font-size:11px;color:#22c55e;display:none;">✓ Saved</span>' +
+        '<button id="viewBtn_' + g.key + '" style="padding:5px 12px;background:#f0f4ff;color:#3730a3;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">✏️ Review & Save</button>' +
+        '<a id="linkBtn_' + g.key + '" href="' + esc(getReportViewUrl(mk, g.key)) + '" target="_blank" style="padding:5px 12px;background:#fdf4ff;color:#7c3aed;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:none;">🔗 Link</a>' +
       '</div>' +
     '</div>'
   ).join('');
@@ -3830,11 +3865,30 @@ async function feedbackGenerateReports() {
       <div style="padding:14px 22px;border-top:1px solid #f0f0f0;font-size:12px;color:#aaa;flex-shrink:0;">Saved to Firebase · Ready for member portal</div>
     </div>`;
 
-  // Store reports for View buttons
-  window._bulkReports = {};
-  generated.forEach(g => { window._bulkReports[g.key] = g.report; });
-
   document.body.appendChild(modal);
+
+  // Wire up Review & Save buttons for each generated report
+  generated.forEach(g => {
+    const viewBtn = modal.querySelector('#viewBtn_' + g.key);
+    if (!viewBtn) return;
+    viewBtn.onclick = function() {
+      showReportModal(g.name, monthLabel, g.report, getReportViewUrl(mk, g.key), async function(editedReport) {
+        await db.ref('studentReports/' + mk + '/' + g.key).set({
+          studentName: g.name, location: g.location, cycleLabel: monthLabel,
+          report: editedReport, generatedAt: new Date().toISOString(),
+          instructorFeedback: g.instructorFeedback, status: null
+        });
+        // Update bulk list UI to show saved
+        const badge = modal.querySelector('#savedBadge_' + g.key);
+        const link  = modal.querySelector('#linkBtn_' + g.key);
+        if (badge) badge.style.display = 'inline';
+        if (link)  link.style.display  = 'inline-block';
+        viewBtn.textContent = '✅ Saved';
+        viewBtn.style.background = '#f0fdf4';
+        viewBtn.style.color = '#166534';
+      });
+    };
+  });
 }
 
 function feedbackSaveEmail(studentKey, value) {
