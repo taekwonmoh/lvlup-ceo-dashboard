@@ -3580,6 +3580,44 @@ function feedbackToggleSelectAll() {
   render();
 }
 
+// ── Shared proxy helper ──
+async function getReportProxyConfig() {
+  const snap = await db.ref('config').once('value').catch(() => ({ val: () => ({}) }));
+  const cfg = snap.val() || {};
+  let proxyUrl = (cfg.reportProxyUrl || '').trim().replace(/\/$/, '');
+  if (!proxyUrl) {
+    proxyUrl = prompt('Enter your webhooks server URL to generate reports\n(e.g. https://your-server.com or http://localhost:3001)\n\nThis will be saved for future use:');
+    if (!proxyUrl) throw new Error('No proxy URL configured');
+    proxyUrl = proxyUrl.trim().replace(/\/$/, '');
+    db.ref('config/reportProxyUrl').set(proxyUrl);
+  }
+  const secret = cfg.webhookSecret || cfg.reportProxySecret || 'lvlup-watchlist-2026';
+  return { proxyUrl, secret };
+}
+
+async function callReportProxy(studentData, monthLabel) {
+  const { proxyUrl, secret } = await getReportProxyConfig();
+  const resp = await fetch(proxyUrl + '/generate-report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      secret,
+      studentName: studentData.name,
+      location: studentData.location,
+      cycleLabel: monthLabel,
+      status: studentData.status || null,
+      notes: studentData.notes || '',
+      instructorFeedback: studentData.instructorFeedback,
+    }),
+  });
+  if (!resp.ok) {
+    const errBody = await resp.json().catch(() => ({}));
+    throw new Error(errBody.error || 'Proxy error ' + resp.status);
+  }
+  const data = await resp.json();
+  return data.report;
+}
+
 async function feedbackGenerateOneReport(studentKey) {
   const s = state.feedback.roster[studentKey];
   if (!s) return;
@@ -3588,39 +3626,19 @@ async function feedbackGenerateOneReport(studentKey) {
   const feedback = (t.instructorFeedback || '').trim();
   if (!feedback) { alert('No instructor feedback written for ' + s.name + ' yet.'); return; }
 
-  let apiKey = '';
-  try { const snap = await db.ref('config/anthropicApiKey').once('value'); apiKey = snap.val() || ''; } catch(e) {}
-  if (!apiKey) {
-    apiKey = prompt('Enter your Anthropic API key:');
-    if (!apiKey) return;
-    db.ref('config/anthropicApiKey').set(apiKey);
-  }
-
-  const LOC_LABELS = { waunakee: 'LVLUP Waunakee', eastmad: 'LVLUP East Madison', verona: 'LVLUP Verona' };
-  const STATUS_LABELS = { red: 'Needs extra support / at risk of quitting', yellow: 'Making progress but needs encouragement', green: 'Highly engaged and thriving' };
-  const monthLabel = getFeedbackMonthLabel();
-
-  // Find and disable the button temporarily
   const btns = document.querySelectorAll('button[onclick*="feedbackGenerateOneReport(\'' + studentKey + '\')"]');
   btns.forEach(b => { b.disabled = true; b.textContent = '⏳'; });
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-client-side-allow-all': 'true' },
-      body: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022', max_tokens: 600,
-        system: 'You are writing a student progress report for a martial arts school (LVLUP Martial Arts). Write a warm, specific, encouraging progress report for a parent/guardian. Keep it 2-3 short paragraphs. Be concrete and personal. Avoid generic praise. Sign off with encouragement for the next cycle.',
-        messages: [{ role: 'user', content: 'Student: ' + s.name + '\nLocation: ' + (LOC_LABELS[s.location] || 'LVLUP Martial Arts') + '\nCycle: ' + monthLabel + '\nEngagement status: ' + (STATUS_LABELS[s.status] || 'Active student') + (s.notes ? '\nBackground notes: ' + s.notes : '') + '\nInstructor observations this cycle: ' + feedback + '\n\nWrite the progress report now.' }]
-      })
+    const monthLabel = getFeedbackMonthLabel();
+    const report = await callReportProxy({ ...s, instructorFeedback: feedback }, monthLabel);
+    await db.ref('studentReports/' + mk + '/' + studentKey).set({
+      studentName: s.name, location: s.location, cycleLabel: monthLabel,
+      report, generatedAt: new Date().toISOString(), instructorFeedback: feedback, status: s.status || null
     });
-    if (!resp.ok) { const errBody = await resp.json().catch(() => ({})); throw new Error((errBody.error && errBody.error.message) || ('API error ' + resp.status)); }
-    const data = await resp.json();
-    const report = data.content[0].text;
-    await db.ref('studentReports/' + mk + '/' + studentKey).set({ studentName: s.name, location: s.location, cycleLabel: monthLabel, report, generatedAt: new Date().toISOString(), instructorFeedback: feedback, status: s.status || null });
-    alert('✅ Report generated for ' + s.name + ' and saved to Firebase!');
+    alert('✅ Report generated for ' + s.name + ' and saved!');
   } catch(err) {
-    alert('Failed to generate report for ' + s.name + ': ' + err.message);
+    alert('Failed to generate report for ' + s.name + ':\n' + err.message);
   } finally {
     btns.forEach(b => { b.disabled = false; b.textContent = '⚡'; });
   }
@@ -3632,91 +3650,36 @@ async function feedbackGenerateReports() {
   const { roster, tracking, locationFilter, selectedStudents } = state.feedback;
   const sel = selectedStudents || new Set();
 
-  // If students are selected, generate only those; otherwise all with feedback in current filter
   const students = Object.entries(roster)
     .filter(([k, s]) => {
       if (s.active === false) return false;
       if (sel.size > 0 && !sel.has(k)) return false;
       if (sel.size === 0 && locationFilter !== 'all' && s.location !== locationFilter) return false;
-      const feedback = (tracking[k] || {}).instructorFeedback || '';
-      return feedback.trim().length > 0;
+      return ((tracking[k] || {}).instructorFeedback || '').trim().length > 0;
     })
     .map(([k, s]) => ({ key: k, ...s, instructorFeedback: (tracking[k] || {}).instructorFeedback }));
 
   if (!students.length) {
-    alert('No students have instructor feedback written yet for ' + monthLabel + '. Write feedback first, then generate reports.');
+    alert('No students have instructor feedback written yet for ' + monthLabel + '.\nWrite feedback first, then generate reports.');
     return;
   }
-
-  // Get API key from Firebase
-  let apiKey = '';
-  try {
-    const snap = await db.ref('config/anthropicApiKey').once('value');
-    apiKey = snap.val() || '';
-  } catch(e) {}
-
-  if (!apiKey) {
-    apiKey = prompt('Enter your Anthropic API key to generate reports (it will be saved securely):');
-    if (!apiKey) return;
-    db.ref('config/anthropicApiKey').set(apiKey);
-  }
-
-  const LOC_LABELS = { waunakee: 'LVLUP Waunakee', eastmad: 'LVLUP East Madison', verona: 'LVLUP Verona' };
-  const STATUS_LABELS = { red: 'Needs extra support / at risk of quitting', yellow: 'Making progress but needs encouragement', green: 'Highly engaged and thriving' };
 
   const btn = document.querySelector('button[onclick="feedbackGenerateReports()"]');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Generating…'; }
 
-  let successCount = 0;
-  let failCount = 0;
+  let successCount = 0, failCount = 0;
   const failMessages = [];
 
   for (const s of students) {
     try {
-      const systemPrompt = `You are writing a student progress report for a martial arts school (LVLUP Martial Arts). Write a warm, specific, encouraging progress report for a parent/guardian to read. Keep it 2-3 short paragraphs. Be concrete and personal — mention specific skills, achievements, and next steps. Avoid generic praise. Sign off with encouragement for the next cycle.`;
-
-      const userMsg = `Student: ${s.name}
-Location: ${LOC_LABELS[s.location] || s.location || 'LVLUP Martial Arts'}
-Cycle: ${monthLabel}
-Engagement status: ${STATUS_LABELS[s.status] || 'Active student'}
-${s.notes ? 'Background notes: ' + s.notes : ''}
-Instructor observations this cycle: ${s.instructorFeedback}
-
-Write the progress report now.`;
-
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-client-side-allow-all': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-opus-4-5',
-          max_tokens: 600,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userMsg }]
-        })
-      });
-
-      if (!resp.ok) { const errBody = await resp.json().catch(() => ({})); throw new Error((errBody.error && errBody.error.message) || ('API error ' + resp.status)); }
-      const data = await resp.json();
-      const report = data.content[0].text;
-
+      const report = await callReportProxy(s, monthLabel);
       await db.ref('studentReports/' + mk + '/' + s.key).set({
-        studentName: s.name,
-        location: s.location,
-        cycleLabel: monthLabel,
-        report: report,
-        generatedAt: new Date().toISOString(),
-        instructorFeedback: s.instructorFeedback,
-        status: s.status || null
+        studentName: s.name, location: s.location, cycleLabel: monthLabel,
+        report, generatedAt: new Date().toISOString(), instructorFeedback: s.instructorFeedback, status: s.status || null
       });
-
       successCount++;
     } catch(err) {
-      console.error('Failed to generate report for', s.name, err);
+      console.error('Failed:', s.name, err);
       failCount++;
       failMessages.push(s.name + ': ' + err.message);
     }
@@ -3724,9 +3687,11 @@ Write the progress report now.`;
 
   if (btn) { btn.disabled = false; btn.textContent = '⚡ Generate Reports'; }
   if (failCount > 0 && successCount === 0) {
-    alert('❌ Failed to generate reports.\n\n' + failMessages.join('\n'));
+    alert('❌ All reports failed.\n\n' + failMessages.join('\n'));
   } else {
-    alert('Done! ' + successCount + ' report' + (successCount !== 1 ? 's' : '') + ' generated' + (failCount ? '\n\n⚠️ ' + failCount + ' failed:\n' + failMessages.join('\n') : '') + (successCount > 0 ? '\n\nReports are saved to Firebase and ready for the member website.' : ''));
+    alert('Done! ' + successCount + ' report' + (successCount !== 1 ? 's' : '') + ' generated.' +
+      (failCount ? '\n\n⚠️ ' + failCount + ' failed:\n' + failMessages.join('\n') : '') +
+      (successCount > 0 ? '\n\nSaved to Firebase — ready for the member website.' : ''));
   }
 }
 
