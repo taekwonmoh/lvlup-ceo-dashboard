@@ -3609,12 +3609,12 @@ async function feedbackGenerateOneReport(studentKey) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-client-side-allow-all': 'true' },
       body: JSON.stringify({
-        model: 'claude-opus-4-5', max_tokens: 600,
+        model: 'claude-3-5-haiku-20241022', max_tokens: 600,
         system: 'You are writing a student progress report for a martial arts school (LVLUP Martial Arts). Write a warm, specific, encouraging progress report for a parent/guardian. Keep it 2-3 short paragraphs. Be concrete and personal. Avoid generic praise. Sign off with encouragement for the next cycle.',
         messages: [{ role: 'user', content: 'Student: ' + s.name + '\nLocation: ' + (LOC_LABELS[s.location] || 'LVLUP Martial Arts') + '\nCycle: ' + monthLabel + '\nEngagement status: ' + (STATUS_LABELS[s.status] || 'Active student') + (s.notes ? '\nBackground notes: ' + s.notes : '') + '\nInstructor observations this cycle: ' + feedback + '\n\nWrite the progress report now.' }]
       })
     });
-    if (!resp.ok) throw new Error('API error ' + resp.status);
+    if (!resp.ok) { const errBody = await resp.json().catch(() => ({})); throw new Error((errBody.error && errBody.error.message) || ('API error ' + resp.status)); }
     const data = await resp.json();
     const report = data.content[0].text;
     await db.ref('studentReports/' + mk + '/' + studentKey).set({ studentName: s.name, location: s.location, cycleLabel: monthLabel, report, generatedAt: new Date().toISOString(), instructorFeedback: feedback, status: s.status || null });
@@ -3669,6 +3669,7 @@ async function feedbackGenerateReports() {
 
   let successCount = 0;
   let failCount = 0;
+  const failMessages = [];
 
   for (const s of students) {
     try {
@@ -3699,7 +3700,7 @@ Write the progress report now.`;
         })
       });
 
-      if (!resp.ok) throw new Error('API error ' + resp.status);
+      if (!resp.ok) { const errBody = await resp.json().catch(() => ({})); throw new Error((errBody.error && errBody.error.message) || ('API error ' + resp.status)); }
       const data = await resp.json();
       const report = data.content[0].text;
 
@@ -3717,11 +3718,16 @@ Write the progress report now.`;
     } catch(err) {
       console.error('Failed to generate report for', s.name, err);
       failCount++;
+      failMessages.push(s.name + ': ' + err.message);
     }
   }
 
   if (btn) { btn.disabled = false; btn.textContent = '⚡ Generate Reports'; }
-  alert('Done! ' + successCount + ' report' + (successCount !== 1 ? 's' : '') + ' generated' + (failCount ? ' (' + failCount + ' failed)' : '') + '.\n\nReports are saved to Firebase and ready for the member website.');
+  if (failCount > 0 && successCount === 0) {
+    alert('❌ Failed to generate reports.\n\n' + failMessages.join('\n'));
+  } else {
+    alert('Done! ' + successCount + ' report' + (successCount !== 1 ? 's' : '') + ' generated' + (failCount ? '\n\n⚠️ ' + failCount + ' failed:\n' + failMessages.join('\n') : '') + (successCount > 0 ? '\n\nReports are saved to Firebase and ready for the member website.' : ''));
+  }
 }
 
 function feedbackMarkInactive(studentKey) {
