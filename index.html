@@ -575,7 +575,7 @@ let state = {
   devActiveModule: null,
   devQuizAnswers: {},
   devQuizSubmitted: false,
-  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'all', showInactive: false }
+  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'all', showInactive: false, selectedStudents: new Set() }
 };
 
 let debounceTimers = {};
@@ -3563,16 +3563,81 @@ function feedbackSaveCycleFeedback(studentKey, value) {
   }, 500);
 }
 
+function feedbackToggleSelect(studentKey) {
+  const sel = state.feedback.selectedStudents || (state.feedback.selectedStudents = new Set());
+  if (sel.has(studentKey)) sel.delete(studentKey); else sel.add(studentKey);
+  render();
+}
+
+function feedbackToggleSelectAll() {
+  const sel = state.feedback.selectedStudents || (state.feedback.selectedStudents = new Set());
+  const { roster, locationFilter, showInactive } = state.feedback;
+  const allStudents = Object.entries(roster).map(([k, v]) => ({ key: k, ...v }));
+  const displayed = (locationFilter === 'all' ? allStudents : allStudents.filter(s => s.location === locationFilter))
+    .filter(s => (showInactive || s.active !== false) && s.active !== false);
+  const allSelected = displayed.every(s => sel.has(s.key));
+  displayed.forEach(s => allSelected ? sel.delete(s.key) : sel.add(s.key));
+  render();
+}
+
+async function feedbackGenerateOneReport(studentKey) {
+  const s = state.feedback.roster[studentKey];
+  if (!s) return;
+  const mk = getFeedbackMonthKey();
+  const t = state.feedback.tracking[studentKey] || {};
+  const feedback = (t.instructorFeedback || '').trim();
+  if (!feedback) { alert('No instructor feedback written for ' + s.name + ' yet.'); return; }
+
+  let apiKey = '';
+  try { const snap = await db.ref('config/anthropicApiKey').once('value'); apiKey = snap.val() || ''; } catch(e) {}
+  if (!apiKey) {
+    apiKey = prompt('Enter your Anthropic API key:');
+    if (!apiKey) return;
+    db.ref('config/anthropicApiKey').set(apiKey);
+  }
+
+  const LOC_LABELS = { waunakee: 'LVLUP Waunakee', eastmad: 'LVLUP East Madison', verona: 'LVLUP Verona' };
+  const STATUS_LABELS = { red: 'Needs extra support / at risk of quitting', yellow: 'Making progress but needs encouragement', green: 'Highly engaged and thriving' };
+  const monthLabel = getFeedbackMonthLabel();
+
+  // Find and disable the button temporarily
+  const btns = document.querySelectorAll('button[onclick*="feedbackGenerateOneReport(\'' + studentKey + '\')"]');
+  btns.forEach(b => { b.disabled = true; b.textContent = '⏳'; });
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-client-side-allow-all': 'true' },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5', max_tokens: 600,
+        system: 'You are writing a student progress report for a martial arts school (LVLUP Martial Arts). Write a warm, specific, encouraging progress report for a parent/guardian. Keep it 2-3 short paragraphs. Be concrete and personal. Avoid generic praise. Sign off with encouragement for the next cycle.',
+        messages: [{ role: 'user', content: 'Student: ' + s.name + '\nLocation: ' + (LOC_LABELS[s.location] || 'LVLUP Martial Arts') + '\nCycle: ' + monthLabel + '\nEngagement status: ' + (STATUS_LABELS[s.status] || 'Active student') + (s.notes ? '\nBackground notes: ' + s.notes : '') + '\nInstructor observations this cycle: ' + feedback + '\n\nWrite the progress report now.' }]
+      })
+    });
+    if (!resp.ok) throw new Error('API error ' + resp.status);
+    const data = await resp.json();
+    const report = data.content[0].text;
+    await db.ref('studentReports/' + mk + '/' + studentKey).set({ studentName: s.name, location: s.location, cycleLabel: monthLabel, report, generatedAt: new Date().toISOString(), instructorFeedback: feedback, status: s.status || null });
+    alert('✅ Report generated for ' + s.name + ' and saved to Firebase!');
+  } catch(err) {
+    alert('Failed to generate report for ' + s.name + ': ' + err.message);
+  } finally {
+    btns.forEach(b => { b.disabled = false; b.textContent = '⚡'; });
+  }
+}
+
 async function feedbackGenerateReports() {
   const mk = getFeedbackMonthKey();
   const monthLabel = getFeedbackMonthLabel();
-  const { roster, tracking, locationFilter } = state.feedback;
+  const { roster, tracking, locationFilter, selectedStudents } = state.feedback;
+  const sel = selectedStudents || new Set();
 
-  // Gather students with feedback written
+  // If students are selected, generate only those; otherwise all with feedback in current filter
   const students = Object.entries(roster)
     .filter(([k, s]) => {
       if (s.active === false) return false;
-      if (locationFilter !== 'all' && s.location !== locationFilter) return false;
+      if (sel.size > 0 && !sel.has(k)) return false;
+      if (sel.size === 0 && locationFilter !== 'all' && s.location !== locationFilter) return false;
       const feedback = (tracking[k] || {}).instructorFeedback || '';
       return feedback.trim().length > 0;
     })
@@ -3953,6 +4018,12 @@ function renderFeedbackPage() {
   };
   const feedbackCount = activeStudents.filter(s => !!(((tracking[s.key] || {}).instructorFeedback || '').trim())).length;
 
+  // ── Selection state ──
+  const sel = state.feedback.selectedStudents || (state.feedback.selectedStudents = new Set());
+  const visibleActiveKeys = displayed.filter(s => s.active !== false).map(s => s.key);
+  const allSelected = visibleActiveKeys.length > 0 && visibleActiveKeys.every(k => sel.has(k));
+  const selectedCount = visibleActiveKeys.filter(k => sel.has(k)).length;
+
   // ── Helpers ──
   const pill = (id, label) => {
     const active = locationFilter === id;
@@ -3982,7 +4053,7 @@ function renderFeedbackPage() {
   // ── Rows ──
   let rows = '';
   if (!displayed.length) {
-    rows = '<tr><td colspan="10" style="text-align:center;padding:36px;color:#999;font-size:13px;">' +
+    rows = '<tr><td colspan="11" style="text-align:center;padding:36px;color:#999;font-size:13px;">' +
       (Object.keys(roster).length === 0 ? 'No students yet — sync a roster to get started.' : 'No students to display.') +
       '</td></tr>';
   } else {
@@ -4002,7 +4073,7 @@ function renderFeedbackPage() {
       if (locationFilter === 'all') {
         const activeCount = group.filter(s => s.active !== false).length;
         const redCount    = group.filter(s => s.active !== false && s.status === 'red').length;
-        rows += '<tr><td colspan="10" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' +
+        rows += '<tr><td colspan="11" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' +
           (LOC_LABELS[loc] || 'Unknown') + ' — ' + activeCount + ' active' +
           (redCount ? ' · <span style="color:#ef4444;">⚠ ' + redCount + ' at risk</span>' : '') +
           (showInactive && group.length > activeCount ? ' · ' + (group.length - activeCount) + ' inactive' : '') +
@@ -4019,7 +4090,11 @@ function renderFeedbackPage() {
           : '#fff';
         const nameStyle = isInactive ? 'color:#bbb;text-decoration:line-through;' : 'color:#1a1a2e;font-weight:600;';
         const hasNotes = !!(s.notes && s.notes.trim());
-        rows += '<tr style="background:' + rowBg + ';">' +
+        const isSelected = sel.has(s.key);
+        rows += '<tr style="background:' + (isSelected && !isInactive ? 'rgba(124,58,237,0.06)' : rowBg) + ';outline:' + (isSelected && !isInactive ? '1px solid rgba(124,58,237,0.2)' : 'none') + ';">' +
+          '<td style="text-align:center;padding:10px 4px;">' +
+            '<input type="checkbox" ' + (isSelected ? 'checked' : '') + (isInactive ? ' disabled' : '') + ' onchange="feedbackToggleSelect(\'' + s.key + '\')" style="width:15px;height:15px;accent-color:#7c3aed;cursor:' + (isInactive ? 'default' : 'pointer') + ';opacity:' + (isInactive ? '0.2' : '1') + ';">' +
+          '</td>' +
           statusDot(s.key, status, isInactive) +
           '<td style="padding:10px 10px;font-size:13px;cursor:pointer;" onclick="feedbackOpenNoteModal(\'' + s.key + '\')" title="' + (hasNotes ? 'View/edit notes' : 'Add notes') + '">' +
             '<span style="' + nameStyle + '">' + s.name + '</span>' +
@@ -4030,12 +4105,15 @@ function renderFeedbackPage() {
           INTERACTIONS.map(i => chk(s.key, i.field, !!t[i.field], isInactive)).join('') +
           (function() {
             const hasFeedback = !!(t.instructorFeedback && t.instructorFeedback.trim());
-            return '<td style="text-align:center;padding:10px 4px;">' +
+            return '<td style="text-align:center;padding:10px 4px;white-space:nowrap;">' +
               '<button onclick="' + (isInactive ? '' : 'feedbackOpenCycleFeedbackModal(\'' + s.key + '\')') + '" ' +
               'title="' + (hasFeedback ? 'Edit cycle feedback' : 'Add cycle feedback') + '" ' +
-              'style="background:none;border:none;cursor:' + (isInactive ? 'default' : 'pointer') + ';font-size:16px;opacity:' + (isInactive ? '0.2' : '1') + ';padding:2px 4px;">' +
+              'style="background:none;border:none;cursor:' + (isInactive ? 'default' : 'pointer') + ';font-size:16px;opacity:' + (isInactive ? '0.2' : '1') + ';padding:2px 3px;">' +
               (hasFeedback ? '✅' : '✏️') +
               '</button>' +
+              (hasFeedback && !isInactive
+                ? '<button onclick="feedbackGenerateOneReport(\'' + s.key + '\')" title="Generate progress report for ' + s.name + '" style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px 3px;opacity:0.6;" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.6\'">⚡</button>'
+                : '') +
               '</td>';
           })() +
           '<td style="padding:10px 6px;text-align:center;white-space:nowrap;">' +
@@ -4059,7 +4137,7 @@ function renderFeedbackPage() {
       '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
         '<button onclick="feedbackOpenSync()" style="padding:9px 18px;background:#4169E1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">🔄 Sync Roster</button>' +
-        '<button onclick="feedbackGenerateReports()" style="padding:9px 18px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">⚡ Generate Reports</button>' +
+        '<button onclick="feedbackGenerateReports()" style="padding:9px 18px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">⚡ ' + (selectedCount > 0 ? 'Generate (' + selectedCount + ')' : 'Generate Reports') + '</button>' +
       '</div>' +
     '</div>' +
 
@@ -4127,15 +4205,18 @@ function renderFeedbackPage() {
     '</div>' +
 
     // ── Table ──
-    '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">' +
+    '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;">' +
       '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
         '<thead><tr style="background:#f5f7ff;">' +
-          '<th style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;width:60px;">Status</th>' +
-          '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Name</th>' +
-          (locationFilter === 'all' ? '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;">Location</th>' : '') +
-          INTERACTIONS.map(i => '<th style="padding:10px 6px;text-align:center;font-size:17px;" title="' + i.label + '">' + i.icon + '</th>').join('') +
-          '<th style="padding:10px 6px;text-align:center;font-size:17px;" title="Instructor Feedback">💬</th>' +
-          '<th style="width:80px;"></th>' +
+          // Sticky styles on each th so they float as user scrolls
+          '<th style="padding:10px 6px;text-align:center;width:36px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">' +
+            '<input type="checkbox" ' + (allSelected ? 'checked' : '') + ' onchange="feedbackToggleSelectAll()" style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;" title="Select all"></th>' +
+          '<th style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;width:60px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">Status</th>' +
+          '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">Name</th>' +
+          (locationFilter === 'all' ? '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">Location</th>' : '') +
+          INTERACTIONS.map(i => '<th style="padding:10px 6px;text-align:center;font-size:17px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="' + i.label + '">' + i.icon + '</th>').join('') +
+          '<th style="padding:10px 6px;text-align:center;font-size:17px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="Instructor Feedback">💬</th>' +
+          '<th style="width:80px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;"></th>' +
         '</tr></thead>' +
         '<tbody>' + rows + '</tbody>' +
       '</table>' +
