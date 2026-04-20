@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>LVLUP Progress Report</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7ff;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:32px 16px;}
+  .card{background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.10);width:100%;max-width:640px;overflow:hidden;}
+  .header{background:linear-gradient(135deg,#1a1a2e 0%,#3730a3 100%);padding:28px 32px;color:#fff;}
+  .logo{font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;opacity:0.7;margin-bottom:10px;}
+  .student-name{font-size:26px;font-weight:900;margin-bottom:4px;}
+  .meta{font-size:13px;opacity:0.7;}
+  .body{padding:28px 32px;font-size:15px;line-height:1.85;color:#1a1a2e;white-space:pre-wrap;}
+  .footer{padding:20px 32px;border-top:1px solid #f0f0f0;display:flex;gap:12px;flex-wrap:wrap;}
+  .btn{padding:9px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;}
+  .btn-copy{background:#f0f4ff;color:#3730a3;}
+  .btn-print{background:#fff7ed;color:#92400e;}
+  .loading{padding:48px 32px;text-align:center;color:#888;font-size:15px;}
+  .error{padding:48px 32px;text-align:center;color:#ef4444;font-size:15px;}
+  @media print{body{background:#fff;padding:0}.footer{display:none}.card{box-shadow:none;border-radius:0;max-width:100%}}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="loading" id="loading">Loading report…</div>
+</div>
+
+<script>
+  firebase.initializeApp({
+    apiKey: "AIzaSyAExV-Gva6QuVocM8Hq70VU7Le10piB8p4",
+    authDomain: "lvlup-members-app.firebaseapp.com",
+    databaseURL: "https://lvlup-members-app-default-rtdb.firebaseio.com",
+    projectId: "lvlup-members-app",
+    storageBucket: "lvlup-members-app.firebasestorage.app",
+    messagingSenderId: "440131514498",
+    appId: "1:440131514498:web:46165370923bc74994849b"
+  });
+
+  const params = new URLSearchParams(window.location.search);
+  const cycle = params.get('c');
+  const key   = params.get('s');
+
+  if (!cycle || !key) {
+    document.getElementById('loading').className = 'error';
+    document.getElementById('loading').textContent = 'Invalid link — missing report parameters.';
+  } else {
+    firebase.database().ref('studentReports/' + cycle + '/' + key)
+      .once('value')
+      .then(snap => {
+        const d = snap.val();
+        if (!d) {
+          document.getElementById('loading').className = 'error';
+          document.getElementById('loading').textContent = 'Report not found. It may not have been generated yet.';
+          return;
+        }
+        const LOC = {waunakee:'LVLUP Waunakee',eastmad:'LVLUP East Madison',verona:'LVLUP Verona',goninjaW:'Go Ninja Waunakee',goninjaV:'Go Ninja Verona'};
+        const date = d.generatedAt ? new Date(d.generatedAt).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : '';
+        document.title = (d.studentName || 'Student') + ' — LVLUP Progress Report';
+
+        const card = document.getElementById('card');
+        card.innerHTML =
+          '<div class="header">' +
+            '<div class="logo">LVLUP Martial Arts · Progress Report</div>' +
+            '<div class="student-name">' + esc(d.studentName || '') + '</div>' +
+            '<div class="meta">' + esc(LOC[d.location] || d.location || '') + (d.cycleLabel ? ' · ' + esc(d.cycleLabel) : '') + (date ? ' · Generated ' + date : '') + '</div>' +
+          '</div>' +
+          '<div class="body" id="reportBody">' + esc(d.report || '') + '</div>' +
+          '<div class="footer">' +
+            '<button class="btn btn-copy" id="copyBtn">📋 Copy</button>' +
+            '<button class="btn btn-print" onclick="window.print()">🖨️ Print / Save PDF</button>' +
+          '</div>';
+
+        document.getElementById('copyBtn').onclick = function() {
+          navigator.clipboard.writeText(d.report || '').then(() => {
+            this.textContent = '✓ Copied!';
+            setTimeout(() => { this.textContent = '📋 Copy'; }, 2000);
+          });
+        };
+      })
+      .catch(err => {
+        document.getElementById('loading').className = 'error';
+        document.getElementById('loading').textContent = 'Error loading report: ' + err.message;
+      });
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>

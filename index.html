@@ -3618,6 +3618,75 @@ async function callReportProxy(studentData, monthLabel) {
   return data.report;
 }
 
+function showReportModal(studentName, monthLabel, reportText, reportUrl) {
+  document.getElementById('reportPreviewModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'reportPreviewModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+
+  const escaped = esc(reportText);
+  const lines = escaped.split('\n').map(l => {
+    l = l.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    l = l.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    return l;
+  }).join('<br>');
+
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:620px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.22);overflow:hidden;">
+      <div style="padding:18px 22px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:#1a1a2e;">📄 Progress Report — ${esc(studentName)}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:2px;">${esc(monthLabel)}</div>
+        </div>
+        <button onclick="document.getElementById('reportPreviewModal').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#bbb;padding:0 4px;line-height:1;">✕</button>
+      </div>
+      <div style="padding:20px 22px;overflow-y:auto;flex:1;font-size:13.5px;line-height:1.8;color:#1a1a2e;white-space:pre-wrap;font-family:inherit;">${lines}</div>
+      <div style="padding:14px 22px;border-top:1px solid #f0f0f0;display:flex;gap:10px;flex-shrink:0;flex-wrap:wrap;">
+        <button onclick="navigator.clipboard.writeText(document.getElementById('reportPreviewModal').querySelector('._rtext').innerText || '').catch(()=>{})"
+          style="padding:9px 16px;background:#f0f4ff;color:#3730a3;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📋 Copy</button>
+        <button onclick="reportDownload('${esc(studentName)}','${esc(monthLabel)}')"
+          style="padding:9px 16px;background:#f0fdf4;color:#166534;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">⬇️ Download</button>
+        <button onclick="window.open('${esc(reportUrl)}','_blank')"
+          style="padding:9px 16px;background:#fdf4ff;color:#7c3aed;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">🔗 Open Link</button>
+        <button onclick="window.print()"
+          style="padding:9px 16px;background:#fff7ed;color:#92400e;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">🖨️ Print / PDF</button>
+      </div>
+    </div>`;
+
+  // Store report text for copy/download
+  modal._reportText = reportText;
+  modal._studentName = studentName;
+  modal._monthLabel = monthLabel;
+
+  // Fix copy button to use stored text
+  modal.querySelector('button[onclick*="clipboard"]').onclick = function() {
+    navigator.clipboard.writeText(reportText).then(() => {
+      this.textContent = '✓ Copied!';
+      setTimeout(() => { this.textContent = '📋 Copy'; }, 2000);
+    }).catch(() => alert(reportText));
+  };
+  modal.querySelector('button[onclick*="reportDownload"]').onclick = function() {
+    reportDownload(studentName, monthLabel, reportText);
+  };
+
+  document.body.appendChild(modal);
+}
+
+function reportDownload(studentName, monthLabel, text) {
+  const safeName = studentName.replace(/[^a-z0-9]/gi, '_');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Report_' + safeName + '_' + monthLabel + '.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function getReportViewUrl(mk, studentKey) {
+  return 'https://taekwonmoh.github.io/lvlup-ceo-dashboard/report.html?c=' + encodeURIComponent(mk) + '&s=' + encodeURIComponent(studentKey);
+}
+
 async function feedbackGenerateOneReport(studentKey) {
   const s = state.feedback.roster[studentKey];
   if (!s) return;
@@ -3636,7 +3705,7 @@ async function feedbackGenerateOneReport(studentKey) {
       studentName: s.name, location: s.location, cycleLabel: monthLabel,
       report, generatedAt: new Date().toISOString(), instructorFeedback: feedback, status: s.status || null
     });
-    alert('✅ Report generated for ' + s.name + ' and saved!');
+    showReportModal(s.name, monthLabel, report, getReportViewUrl(mk, studentKey));
   } catch(err) {
     alert('Failed to generate report for ' + s.name + ':\n' + err.message);
   } finally {
@@ -3670,6 +3739,7 @@ async function feedbackGenerateReports() {
   let successCount = 0, failCount = 0;
   const failMessages = [];
 
+  const generated = [];
   for (const s of students) {
     try {
       const report = await callReportProxy(s, monthLabel);
@@ -3678,6 +3748,7 @@ async function feedbackGenerateReports() {
         report, generatedAt: new Date().toISOString(), instructorFeedback: s.instructorFeedback, status: s.status || null
       });
       successCount++;
+      generated.push({ key: s.key, name: s.name, report });
     } catch(err) {
       console.error('Failed:', s.name, err);
       failCount++;
@@ -3685,14 +3756,47 @@ async function feedbackGenerateReports() {
     }
   }
 
-  if (btn) { btn.disabled = false; btn.textContent = '⚡ Generate Reports'; }
+  if (btn) { btn.disabled = false; btn.textContent = '⚡ ' + (state.feedback.selectedStudents?.size > 0 ? 'Generate (' + state.feedback.selectedStudents.size + ')' : 'Generate Reports'); }
+
   if (failCount > 0 && successCount === 0) {
     alert('❌ All reports failed.\n\n' + failMessages.join('\n'));
-  } else {
-    alert('Done! ' + successCount + ' report' + (successCount !== 1 ? 's' : '') + ' generated.' +
-      (failCount ? '\n\n⚠️ ' + failCount + ' failed:\n' + failMessages.join('\n') : '') +
-      (successCount > 0 ? '\n\nSaved to Firebase — ready for the member website.' : ''));
+    return;
   }
+
+  // Show bulk results modal with links
+  document.getElementById('reportPreviewModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'reportPreviewModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+
+  const rows = generated.map(g =>
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f0;gap:10px;">' +
+      '<span style="font-size:13px;font-weight:600;color:#1a1a2e;">' + esc(g.name) + '</span>' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button onclick="showReportModal(\'' + esc(g.name) + '\',\'' + esc(monthLabel) + '\',window._bulkReports[\'' + g.key + '\'],\'' + esc(getReportViewUrl(mk, g.key)) + '\')" style="padding:5px 12px;background:#f0f4ff;color:#3730a3;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">👁 View</button>' +
+        '<a href="' + esc(getReportViewUrl(mk, g.key)) + '" target="_blank" style="padding:5px 12px;background:#fdf4ff;color:#7c3aed;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;">🔗 Link</a>' +
+      '</div>' +
+    '</div>'
+  ).join('');
+
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:540px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.22);overflow:hidden;">
+      <div style="padding:18px 22px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+        <div style="font-size:15px;font-weight:800;color:#1a1a2e;">⚡ ${successCount} Report${successCount !== 1 ? 's' : ''} Generated</div>
+        <button onclick="document.getElementById('reportPreviewModal').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#bbb;padding:0 4px;line-height:1;">✕</button>
+      </div>
+      <div style="padding:16px 22px;overflow-y:auto;flex:1;">${rows}
+        ${failCount ? '<div style="margin-top:14px;padding:10px 14px;background:#fff5f5;border-radius:8px;font-size:12px;color:#c53030;">⚠️ ' + failCount + ' failed: ' + esc(failMessages.join(', ')) + '</div>' : ''}
+      </div>
+      <div style="padding:14px 22px;border-top:1px solid #f0f0f0;font-size:12px;color:#aaa;flex-shrink:0;">Saved to Firebase · Ready for member portal</div>
+    </div>`;
+
+  // Store reports for View buttons
+  window._bulkReports = {};
+  generated.forEach(g => { window._bulkReports[g.key] = g.report; });
+
+  document.body.appendChild(modal);
 }
 
 function feedbackMarkInactive(studentKey) {
