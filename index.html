@@ -1149,6 +1149,11 @@ function updateKPI(locId, metric, val) {
   fbDebounce('kpis/2026/' + monthKey + '/' + locId + '/' + metric, val);
 }
 
+function updateRevenue(locId, monthKey, val) {
+  const num = parseFloat(String(val).replace(/[$,]/g, '')) || null;
+  fbDebounce('kpis/2026/' + monthKey + '/' + locId + '/revenue', num);
+}
+
 /*  -  -  Seed default data  -  -  */
 function seedIfEmpty() {
   fbRef('rocks/company').once('value', snap => {
@@ -1709,10 +1714,19 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
       if (numGoal > 0 && val !== '') {
         mValColor = numCur >= numGoal ? 'color:#10b981' : 'color:#ef4444';
       }
-      const displayVal = metric.currency && val !== '' ? fmtCurrency(numCur) : esc(String(val));
+      let curCell;
+      if (metric.id === 'grossRevenue') {
+        curCell = '<input type="number" step="0.01" value="' + (numCur || '') + '" placeholder="Enter MTD revenue" ' +
+          'onchange="updateKPI(\'' + loc.id + '\',\'revenue\',this.value)" ' +
+          'style="width:130px;border:1px solid var(--blue);border-radius:6px;padding:4px 8px;font-size:13px;' +
+          'font-family:inherit;text-align:right;background:var(--card);color:' + (mValColor ? mValColor.replace('color:','') : 'var(--primary)') + ';font-weight:600">';
+      } else {
+        const displayVal = metric.currency && val !== '' ? fmtCurrency(numCur) : esc(String(val));
+        curCell = '<span style="' + mValColor + ';font-weight:600">' + displayVal + '</span>';
+      }
       monthlyHtml += '<tr><td>' + loc.short + '</td><td>' + metric.label + '</td>' +
         '<td>' + goal + '</td>' +
-        '<td style="' + mValColor + ';font-weight:600">' + displayVal + '</td></tr>';
+        '<td>' + curCell + '</td></tr>';
     });
   });
 
@@ -1888,7 +1902,8 @@ function renderFinancialsPage() {
       html += '<tr' + (m === curIdx ? ' class="kpi-current-row"' : '') + '>';
       html += '<td style="text-align:left;font-weight:500">' + mkShort + (m === curIdx ? ' ●' : '') + '</td>';
       html += '<td style="padding:2px 4px"><input style="width:90px;border:1px solid var(--gray-200);border-radius:6px;padding:3px 6px;font-size:12px;text-align:right;font-family:inherit;background:var(--gray-50)" value="' + (monthGoal || '') + '" placeholder="—" onchange="updateFinancialGoal(\'' + loc.id + '\',\'' + mkShort + '\',this.value)"></td>';
-      html += '<td class="currency">' + (grossTY ? fmtCurrency(grossTY) : '') + '</td>';
+      const revBg = m === curIdx ? 'var(--card);border-color:var(--blue);box-shadow:0 0 0 2px rgba(59,130,246,0.15)' : 'var(--gray-50)';
+      html += '<td style="padding:2px 4px"><input style="width:100px;border:1px solid var(--gray-200);border-radius:6px;padding:3px 6px;font-size:12px;text-align:right;font-family:inherit;background:' + revBg + '" value="' + (grossTY || '') + '" placeholder="—" onchange="updateRevenue(\'' + loc.id + '\',\'' + mk + '\',this.value)"></td>';
       html += '<td class="' + (vsGoal >= 0 ? 'positive' : 'negative') + '">' + (grossTY && monthGoal ? fmtCurrency(vsGoal) : '') + '</td>';
       html += '<td class="currency" style="color:var(--gray-400)">' + (grossLY ? fmtCurrency(grossLY) : '') + '</td>';
       html += '<td class="' + (tyVsLy >= 0 ? 'positive' : 'negative') + '">' + (grossTY && grossLY ? fmtCurrency(tyVsLy) : '') + '</td>';
