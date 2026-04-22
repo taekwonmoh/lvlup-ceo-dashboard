@@ -2502,15 +2502,21 @@ function renderGoalsPage() {
     return subNav + renderMonthlyGoalsPage();
   }
 
-  const goals = state.goals || {};
-  const vacationTarget = parseFloat(goals._target) || 50000;
-  const monthlyGoals = goals.monthlyGoals || {};
-  const yearlyTotal = parseFloat(goals.yearlyTotal) || 2031600;
+  const VACATION_GOAL = 1986100; // sum of all 5 locations' 2026 monthly goals
   const now = new Date();
   const currentMonthIdx = now.getMonth();
   const allLocs = ['waunakee','eastmad','verona','goninjaW','goninjaV'];
+  const MFULL = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const MSHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  // Calculate actual vs planned cumulative through each month
+  // Read monthly goals from financials (same source as financials table)
+  function getFinGoal(loc, m) {
+    const finLoc = (state.financials || {})[loc] || {};
+    const fd = finLoc[MFULL[m]] || finLoc[MSHORT[m]] || {};
+    return parseFloat(fd.goal) || 0;
+  }
+
+  // Build month-by-month data
   let cumulativeActual = 0, cumulativePlanned = 0;
   const monthData = [];
   let latestWithData = -1;
@@ -2518,81 +2524,77 @@ function renderGoalsPage() {
   for (let m = 0; m < 12; m++) {
     let monthActual = 0, monthPlanned = 0;
     allLocs.forEach(loc => {
-      monthActual += getGoalActualRevenue(loc, m);
-      const locGoals = monthlyGoals[loc] || [];
-      monthPlanned += parseFloat(locGoals[m]) || 0;
+      monthActual  += getGoalActualRevenue(loc, m);
+      monthPlanned += getFinGoal(loc, m);
     });
-    cumulativeActual += monthActual;
+    cumulativeActual  += monthActual;
     cumulativePlanned += monthPlanned;
-    const ahead = cumulativeActual - cumulativePlanned;
+    const pace = monthActual - monthPlanned; // this month's +/-
+    const ahead = cumulativeActual - cumulativePlanned; // cumulative +/-
     const hasData = monthActual > 0;
     if (hasData) latestWithData = m;
-    monthData.push({ actual: monthActual, planned: monthPlanned, cumActual: cumulativeActual, cumPlanned: cumulativePlanned, ahead, hasData });
+    monthData.push({ actual: monthActual, planned: monthPlanned, pace, cumActual: cumulativeActual, cumPlanned: cumulativePlanned, ahead, hasData });
   }
 
-  const currentAhead = latestWithData >= 0 ? monthData[latestWithData].ahead : 0;
-  const prevAhead = latestWithData > 0 ? monthData[latestWithData - 1].ahead : 0;
-  const monthChange = currentAhead - prevAhead;
-  const totalActual = latestWithData >= 0 ? monthData[latestWithData].cumActual : 0;
-
-  // Progress toward yearly goal
-  const yearPct = yearlyTotal > 0 ? Math.min(Math.round(totalActual / yearlyTotal * 100), 100) : 0;
-  // Progress toward vacation target (amount ahead)
-  const vacPct = vacationTarget > 0 ? Math.min(Math.round(Math.max(currentAhead, 0) / vacationTarget * 100), 100) : 0;
-  const vacRemaining = Math.max(vacationTarget - currentAhead, 0);
-  const monthsLeft = 12 - currentMonthIdx;
+  const ytdActual   = latestWithData >= 0 ? monthData[latestWithData].cumActual : 0;
+  const remaining   = Math.max(VACATION_GOAL - ytdActual, 0);
+  const pct         = Math.min(Math.round(ytdActual / VACATION_GOAL * 100), 100);
+  const monthsLeft  = 12 - currentMonthIdx;
+  const curPace     = latestWithData >= 0 ? monthData[latestWithData].pace : 0;
+  const cumPace     = latestWithData >= 0 ? monthData[latestWithData].ahead : 0;
+  const won         = ytdActual >= VACATION_GOAL;
 
   let html = '<div class="section">';
 
-  // Hero section
+  // Hero
   html += '<div class="goal-hero">';
   html += '<div class="goal-hero-main">';
-  html += '<div class="goal-hero-title">2026 Team Vacation Fund</div>';
-  html += '<div class="goal-hero-sub">Auto-calculated from actual revenue vs monthly goals across all 5 locations. Beat the target and the team earns a vacation!</div>';
-  html += '<div class="goal-hero-amount" style="color:' + (currentAhead >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (currentAhead >= 0 ? '+' : '') + fmtCurrency(currentAhead) + ' ahead</div>';
-  html += '<div class="goal-hero-target">of ' + fmtCurrency(vacationTarget) + ' vacation target</div>';
-  html += '<div class="goal-progress-wrap"><div class="goal-progress-fill" style="width:' + vacPct + '%"></div><span class="goal-progress-label">' + vacPct + '%</span></div>';
-  html += '<div class="goal-target-input"><label>Vacation Target:</label><input value="' + vacationTarget + '" placeholder="50000" onchange="updateGoalTarget(this.value)" /></div>';
+  html += '<div class="goal-hero-title">🏖️ 2026 Team Vacation — Revenue Goal</div>';
+  html += '<div class="goal-hero-sub">Hit $' + VACATION_GOAL.toLocaleString() + ' in total revenue across all 5 locations and the team earns a vacation.</div>';
+
+  if (won) {
+    html += '<div class="goal-hero-amount" style="color:var(--green)">🎉 Goal Reached!</div>';
+  } else {
+    html += '<div class="goal-hero-amount">' + fmtCurrency(remaining) + '</div>';
+    html += '<div class="goal-hero-target">remaining to unlock the vacation</div>';
+  }
+
+  html += '<div class="goal-progress-wrap" style="margin-top:14px"><div class="goal-progress-fill" style="width:' + pct + '%"></div><span class="goal-progress-label">' + pct + '%</span></div>';
+  html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray-500);margin-top:4px"><span>' + fmtCurrency(ytdActual) + ' earned</span><span>' + fmtCurrency(VACATION_GOAL) + ' goal</span></div>';
   html += '</div>';
 
   // Stats
   html += '<div class="goal-hero-stats">';
-  html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (monthChange >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (monthChange >= 0 ? '+' : '') + fmtCurrency(monthChange) + '</div><div class="goal-stat-label">vs Last Month</div></div>';
-  html += '<div class="goal-stat"><div class="goal-stat-num">' + fmtCurrency(vacRemaining) + '</div><div class="goal-stat-label">Still Needed</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (curPace >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (curPace >= 0 ? '+' : '') + fmtCurrency(curPace) + '</div><div class="goal-stat-label">This Month vs Goal</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (cumPace >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (cumPace >= 0 ? '+' : '') + fmtCurrency(cumPace) + '</div><div class="goal-stat-label">Cumulative Pace</div></div>';
   html += '<div class="goal-stat"><div class="goal-stat-num">' + monthsLeft + '</div><div class="goal-stat-label">Months Left</div></div>';
-  html += '<div class="goal-stat"><div class="goal-stat-num">' + vacPct + '%</div><div class="goal-stat-label">Vacation Progress</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num">' + pct + '%</div><div class="goal-stat-label">Goal Complete</div></div>';
   html += '</div>';
   html += '</div>';
 
-  // Yearly revenue progress bar
-  html += '<div class="section" style="padding:16px 20px">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
-  html += '<div style="font-size:14px;font-weight:700;color:var(--gray-200)">Yearly Revenue Progress</div>';
-  html += '<div style="font-size:13px;color:var(--gray-400)">' + fmtCurrency(totalActual) + ' / ' + fmtCurrency(yearlyTotal) + ' (' + yearPct + '%)</div>';
-  html += '</div>';
-  html += '<div style="background:var(--gray-800);border-radius:10px;height:14px;overflow:hidden"><div style="width:' + yearPct + '%;height:100%;background:linear-gradient(90deg,var(--blue),#10b981);border-radius:10px;transition:width 0.3s"></div></div>';
-  html += '</div>';
-
-  // Monthly grid — auto-calculated
-  html += '<div style="padding:4px 20px 0;font-size:12px;color:var(--gray-500);font-weight:600">Monthly Breakdown (auto-calculated: actual revenue vs planned goals)</div>';
+  // Monthly grid
+  html += '<div style="padding:4px 20px 0;font-size:12px;color:var(--gray-500);font-weight:600;letter-spacing:0.3px">Monthly Pace — actual vs goal (cumulative)</div>';
   html += '<div class="goal-grid">';
-  MONTHS_SHORT.forEach((m, i) => {
+  MONTHS_SHORT.forEach((mon, i) => {
     const md = monthData[i];
     const isCurrent = i === currentMonthIdx;
     let cls = 'goal-month';
     if (md.hasData) cls += ' has-value';
     if (isCurrent) cls += ' is-current';
     html += '<div class="' + cls + '">';
-    html += '<div class="month-label">' + m + (isCurrent ? ' (now)' : '') + '</div>';
+    html += '<div class="month-label">' + mon + (isCurrent ? ' ●' : '') + '</div>';
     if (md.hasData) {
-      const color = md.ahead >= 0 ? 'var(--green)' : 'var(--red)';
-      html += '<div style="font-size:15px;font-weight:700;color:' + color + ';padding:6px 0">' + (md.ahead >= 0 ? '+' : '') + fmtCurrency(md.ahead) + '</div>';
-      html += '<div style="font-size:10px;color:var(--gray-500)">Actual: ' + fmtCurrency(md.cumActual) + '</div>';
-      html += '<div style="font-size:10px;color:var(--gray-500)">Goal: ' + fmtCurrency(md.cumPlanned) + '</div>';
-      html += '<div class="goal-cumulative" style="color:' + color + '">' + (md.ahead >= 0 ? 'Ahead' : 'Behind') + '</div>';
+      const paceColor = md.pace >= 0 ? 'var(--green)' : 'var(--red)';
+      const cumColor  = md.ahead >= 0 ? 'var(--green)' : 'var(--red)';
+      html += '<div style="font-size:14px;font-weight:800;color:' + paceColor + ';padding:4px 0">' + (md.pace >= 0 ? '+' : '') + fmtCurrency(md.pace) + '</div>';
+      html += '<div style="font-size:10px;color:var(--gray-500)">Goal: ' + fmtCurrency(md.planned) + '</div>';
+      html += '<div style="font-size:10px;color:var(--gray-500)">Actual: ' + fmtCurrency(md.actual) + '</div>';
+      html += '<div style="font-size:10px;font-weight:700;color:' + cumColor + ';margin-top:3px">' + (md.ahead >= 0 ? '+' : '') + fmtCurrency(md.ahead) + ' YTD</div>';
+    } else if (md.planned > 0) {
+      html += '<div style="font-size:12px;color:var(--gray-600);padding:4px 0">—</div>';
+      html += '<div style="font-size:10px;color:var(--gray-600)">Goal: ' + fmtCurrency(md.planned) + '</div>';
     } else {
-      html += '<div style="font-size:13px;color:var(--gray-600);padding:6px 0">—</div>';
-      html += '<div style="font-size:10px;color:var(--gray-600)">Goal: ' + fmtCurrency(md.cumPlanned) + '</div>';
+      html += '<div style="font-size:12px;color:var(--gray-700);padding:4px 0">—</div>';
     }
     html += '</div>';
   });
