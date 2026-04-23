@@ -554,6 +554,14 @@ const db = firebase.database();
 const storage = firebase.storage();
 const CEO = 'ceo'; // root path in Firebase
 
+// Secondary app — events are stored here, shared with the members portal & iCal calendar worker
+const eventsApp = firebase.initializeApp(
+  { databaseURL: "https://va-dashboard-bf7ca-default-rtdb.firebaseio.com" },
+  "events"
+);
+const eventsDb = eventsApp.database();
+function evtRef(path) { return eventsDb.ref(CEO + '/' + path); }
+
 /*  -  -  State  -  -  */
 let state = {
   activeSection: 'home',
@@ -965,7 +973,7 @@ function listenAll() {
   activeListeners.push({ ref: rocksRef, event: 'value' });
 
   // Events
-  const eventsRef = fbRef('events');
+  const eventsRef = evtRef('events');
   eventsRef.on('value', snap => { const raw = snap.val() || {}; state.events = Array.isArray(raw) ? raw : Object.entries(raw).map(([k,v])=>({_key:k,...v})); render(); });
   activeListeners.push({ ref: eventsRef, event: 'value' });
 
@@ -1176,9 +1184,9 @@ function seedIfEmpty() {
     }
   });
 
-  fbRef('events').once('value', snap => {
+  evtRef('events').once('value', snap => {
     if (!snap.val()) {
-      fbSet('events', [
+      evtRef('events').set([
         { date: '2/13', event: 'Teen Night', location: 'Waunakee', link: '' },
         { date: '3/28', event: 'Leadership Training', location: 'Waunakee', link: 'https://lvlupwaunakee.gymdesk.com/book?date=2026-03-28&s=1458188&schedule=27854' },
         { date: '3/6', event: 'East Madison PNO', location: 'E. Mad', link: 'https://lvlupeastmadison.gymdesk.com/book?date=2026-03-06&s=1428111&schedule=27821' },
@@ -2242,7 +2250,7 @@ async function addEvent() {
   const desc = document.getElementById('evtDesc') ? document.getElementById('evtDesc').value.trim() : '';
   if (desc) payload.description = desc;
 
-  fbRef('events/' + key).set(payload);
+  evtRef('events/' + key).set(payload);
   cancelEditEvent();
 }
 
@@ -2294,7 +2302,7 @@ function cancelEditEvent() {
 
 function deleteEvent(key) {
   if (confirm('Delete this event?')) {
-    fbRef('events/' + key).remove();
+    evtRef('events/' + key).remove();
     if (document.getElementById('evtAddBtn').dataset.editingKey === key) cancelEditEvent();
   }
 }
