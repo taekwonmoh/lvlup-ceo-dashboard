@@ -1321,13 +1321,14 @@ function renderPulseBar() {
   const companyRocks = (state.rocks && state.rocks.company) || [];
   const offTrackRocks = companyRocks.filter(r => r && r.status === 'off-track').length;
 
-  // ── Today's daily tasks across locations ──
+  // ── This week's tasks across locations ──
   const todayKey = new Date().toISOString().split('T')[0];
+  const thisWeekKey = getTaskWeekKey(todayKey);
   let tasksDone = 0, tasksTotal = 0;
   ['waunakee','eastmad','verona'].forEach(loc => {
     const daily = getDailyTasks(loc);
     tasksTotal += daily.length;
-    const done = ((state.tasksData[loc] || {}).daily || {})[todayKey] || {};
+    const done = ((state.tasksData[loc] || {}).thisweek || {})[thisWeekKey] || {};
     tasksDone += daily.filter(t => done[t.id]).length;
   });
 
@@ -2655,12 +2656,12 @@ function getTaskWeekKey(dateStr){
 /*  -  -  Tasks Firebase Listeners  -  -  */
 function listenTasks(){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
-  const dailyRef=fbRef('tasks/'+loc+'/daily/'+dateKey);
-  dailyRef.on('value',snap=>{
+  const thisweekRef=fbRef('tasks/'+loc+'/thisweek/'+weekKey);
+  thisweekRef.on('value',snap=>{
     if(!state.tasksData[loc])state.tasksData[loc]={};
-    if(!state.tasksData[loc].daily)state.tasksData[loc].daily={};
-    state.tasksData[loc].daily[dateKey]=snap.val()||{};render();
-  });activeListeners.push({ref:dailyRef,event:'value'});
+    if(!state.tasksData[loc].thisweek)state.tasksData[loc].thisweek={};
+    state.tasksData[loc].thisweek[weekKey]=snap.val()||{};render();
+  });activeListeners.push({ref:thisweekRef,event:'value'});
   const weeklyRef=fbRef('tasks/'+loc+'/weekly/'+weekKey);
   weeklyRef.on('value',snap=>{
     if(!state.tasksData[loc])state.tasksData[loc]={};
@@ -2691,21 +2692,21 @@ function confirmTask(){
   if(!initials){input.style.borderColor='var(--red)';return;}
   const m=state.modalTask,loc=state.tasksLoc,dateKey=state.tasksDate;
   const weekKey=getTaskWeekKey(dateKey),ts=Date.now();
-  if(m.section==='daily')fbSet('tasks/'+loc+'/daily/'+dateKey+'/'+m.taskId,{initials,ts});
+  if(m.section==='thisweek')fbSet('tasks/'+loc+'/thisweek/'+weekKey+'/'+m.taskId,{initials,ts});
   else if(m.section==='weekly')fbSet('tasks/'+loc+'/weekly/'+weekKey+'/'+m.taskId,{initials,ts});
   else if(m.section==='cycle')fbSet('tasks/'+loc+'/cycle/'+weekKey+'/'+m.taskId,{initials,ts});
   state.modalTask=null;render();
 }
 function undoTask(section,taskId){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
-  if(section==='daily')fbSet('tasks/'+loc+'/daily/'+dateKey+'/'+taskId,null);
+  if(section==='thisweek')fbSet('tasks/'+loc+'/thisweek/'+weekKey+'/'+taskId,null);
   else if(section==='weekly')fbSet('tasks/'+loc+'/weekly/'+weekKey+'/'+taskId,null);
   else if(section==='cycle')fbSet('tasks/'+loc+'/cycle/'+weekKey+'/'+taskId,null);
 }
 function cancelModal(){state.modalTask=null;render();}
 function setTasksLoc(locId){state.tasksLoc=locId;listenTasks();}
 function changeTasksDate(delta){
-  const d=new Date(state.tasksDate+'T12:00:00');d.setDate(d.getDate()+delta);
+  const d=new Date(state.tasksDate+'T12:00:00');d.setDate(d.getDate()+(delta*7));
   state.tasksDate=d.toISOString().split('T')[0];listenTasks();
 }
 function setTasksCycleWeek(w){state.tasksCycleWeek=w;render();}
@@ -2736,14 +2737,18 @@ function updateGoalField(field,val){
 function renderTasksPage(){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
   const locData=state.tasksData[loc]||{};
-  const dailyData=(locData.daily||{})[dateKey]||{};
+  const thisweekData=(locData.thisweek||{})[weekKey]||{};
   const weeklyData=(locData.weekly||{})[weekKey]||{};
   const cycleData=(locData.cycle||{})[weekKey]||{};
   const dailyTasks=getDailyTasks(loc),weeklyRec=getWeeklyRec(loc);
   const cycleDefs=getCycleTasks(loc),cycleWeek=state.tasksCycleWeek;
   const cw=cycleDefs[cycleWeek]||{name:'',tasks:[]};
-  const dateObj=new Date(dateKey+'T12:00:00');
-  const dateLabel=dateObj.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric',year:'numeric'});
+  // Compute week range label (Mon–Sun)
+  const monObj=new Date(dateKey+'T12:00:00');
+  const dow=monObj.getDay();monObj.setDate(monObj.getDate()-(dow===0?6:dow-1));
+  const sunObj=new Date(monObj);sunObj.setDate(monObj.getDate()+6);
+  const fmt=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const weekLabel='Week of '+fmt(monObj)+' – '+fmt(sunObj)+', '+sunObj.getFullYear()+' ('+weekKey+')';
   let html='<div class="loc-selector">';
   const taskLocs=[
     {id:'waunakee',short:'WAU',gn:false},
@@ -2756,11 +2761,11 @@ function renderTasksPage(){
     html+='<button class="loc-btn '+cls+'" onclick="setTasksLoc(\''+l.id+'\')">'+l.short+'</button>';
   });
   html+='</div><div class="date-nav">';
-  html+='<button onclick="changeTasksDate(-1)">&larr; Prev</button>';
-  html+='<span class="date-label">'+dateLabel+'</span>';
-  html+='<button onclick="changeTasksDate(1)">Next &rarr;</button></div>';
-  html+=renderTaskSection('daily','Daily Tasks',dailyTasks,dailyData);
-  html+=renderTaskSection('weekly','Weekly Recurring ('+weekKey+')',weeklyRec,weeklyData);
+  html+='<button onclick="changeTasksDate(-1)">&larr; Prev Week</button>';
+  html+='<span class="date-label">'+weekLabel+'</span>';
+  html+='<button onclick="changeTasksDate(1)">Next Week &rarr;</button></div>';
+  html+=renderTaskSection('thisweek','This Week\'s Tasks',dailyTasks,thisweekData);
+  html+=renderTaskSection('weekly','Weekly Recurring',weeklyRec,weeklyData);
   html+='<div class="cycle-week-nav">';
   for(let w=1;w<=8;w++){
     html+='<button class="cycle-week-btn '+(w===cycleWeek?'active':'')+'" onclick="setTasksCycleWeek('+w+')">Wk '+w+'</button>';
