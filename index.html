@@ -639,12 +639,10 @@ const LVLUP_DAILY = [
 ];
 const GONINJA_DAILY = [
   {id:'clock',text:'Clock in/out via Homebase'},
-  {id:'tv',text:'Update TV & whiteboard announcements'},
-  {id:'attendance',text:'Log attendance in system'},
-  {id:'retail',text:'Fulfill retail orders'},
-  {id:'mats',text:'Mats mopped & lobby cleaned'},
-  {id:'bathrooms',text:'Bathrooms spot-checked & cleaned'},
-  {id:'eos',text:'End-of-day report submitted'},
+  {id:'eos',text:'EOS report submitted via Slack'},
+  {id:'party_room',text:'Party room cleaned up'},
+  {id:'whiteboard',text:'Whiteboard schedule updated'},
+  {id:'spot_clean',text:'Spot clean / mop if needed'},
 ];
 const LVLUP_WEEKLY_REC = [
   {id:'lifelinks',text:'Review LifeLinks and award belt clips'},
@@ -655,8 +653,21 @@ const LVLUP_WEEKLY_REC = [
   {id:'school_visit',text:'Schedule or complete school visit (goal: 3/month)'},
 ];
 const GONINJA_WEEKLY_REC = [
-  {id:'newsletter',text:'Send Go Ninja newsletter (by Tuesday)'},
-  {id:'social',text:'Post 2x on social media'},
+  {id:'social',text:'Social media post'},
+  {id:'desk',text:'Organize desk and file attendance sheet'},
+  {id:'party_reset',text:'Reset party room for birthday parties (Friday)'},
+  {id:'schedule',text:'Update schedule (Mondays)'},
+  {id:'mop_mats',text:'Mop mats / sanitize obstacles'},
+  {id:'dust',text:'Dust trim and cabinets'},
+  {id:'party_supplies',text:'Check party supplies inventory (restock if needed)'},
+];
+const LVLUP_MONTHLY = [];
+const GONINJA_MONTHLY = [
+  {id:'event_promo',text:'Event promotion (3 weeks prior to upcoming events)'},
+  {id:'newsletter',text:'GoNinja Newsletter (sent by first week of month)'},
+  {id:'pno',text:'Prep and organize PNO activities'},
+  {id:'family_updates',text:'Family updates as needed for MVMT'},
+  {id:'graduation',text:'Prep arm sleeves and certificates for graduation (cycle based)'},
 ];
 const LVLUP_CYCLE = {
   1:{name:'Cycle Launch',tasks:[
@@ -2642,7 +2653,9 @@ state.goalsTab     = 'annual';   // 'annual' | 'monthly'
 function isGoNinja(locId){return locId==='goninjaW'||locId==='goninjaV';}
 function getDailyTasks(locId){return isGoNinja(locId)?GONINJA_DAILY:LVLUP_DAILY;}
 function getWeeklyRec(locId){return isGoNinja(locId)?GONINJA_WEEKLY_REC:LVLUP_WEEKLY_REC;}
+function getMonthlyTasks(locId){return isGoNinja(locId)?GONINJA_MONTHLY:LVLUP_MONTHLY;}
 function getCycleTasks(locId){return isGoNinja(locId)?GONINJA_CYCLE:LVLUP_CYCLE;}
+function getTaskMonthKey(){const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');}
 function getGoalsFields(locId){return isGoNinja(locId)?GONINJA_GOALS_FIELDS:LVLUP_GOALS_FIELDS;}
 function getTaskWeekKey(dateStr){
   const d=new Date(dateStr+'T12:00:00');const day=d.getDay();
@@ -2674,8 +2687,16 @@ function listenTasks(){
     if(!state.tasksData[loc].cycle)state.tasksData[loc].cycle={};
     state.tasksData[loc].cycle[weekKey]=snap.val()||{};render();
   });activeListeners.push({ref:cycleRef,event:'value'});
+  // Monthly tasks
+  const monthKey=getTaskMonthKey();
+  const monthlyRef=fbRef('tasks/'+loc+'/monthly/'+monthKey);
+  monthlyRef.on('value',snap=>{
+    if(!state.tasksData[loc])state.tasksData[loc]={};
+    if(!state.tasksData[loc].monthly)state.tasksData[loc].monthly={};
+    state.tasksData[loc].monthly[monthKey]=snap.val()||{};render();
+  });activeListeners.push({ref:monthlyRef,event:'value'});
   // Custom tasks (editable by staff)
-  ['thisweek','weekly'].forEach(section=>{
+  ['thisweek','weekly','monthly'].forEach(section=>{
     const cRef=fbRef('tasks/'+loc+'/custom_'+section+'/'+weekKey);
     cRef.on('value',snap=>{
       if(!state.tasksData[loc])state.tasksData[loc]={};
@@ -2702,14 +2723,17 @@ function confirmTask(){
   if(!initials){input.style.borderColor='var(--red)';return;}
   const m=state.modalTask,loc=state.tasksLoc,dateKey=state.tasksDate;
   const weekKey=getTaskWeekKey(dateKey),ts=Date.now();
-  const sectionPath=m.section==='cycle'?'cycle':m.section==='weekly'?'weekly':'thisweek';
-  fbSet('tasks/'+loc+'/'+sectionPath+'/'+weekKey+'/'+m.taskId,{initials,ts});
+  const monthKey=getTaskMonthKey();
+  const sectionPath=m.section==='cycle'?'cycle':m.section==='weekly'?'weekly':m.section==='monthly'?'monthly':'thisweek';
+  const sectionKey=m.section==='monthly'?monthKey:m.section==='cycle'?weekKey:weekKey;
+  fbSet('tasks/'+loc+'/'+sectionPath+'/'+sectionKey+'/'+m.taskId,{initials,ts});
   state.modalTask=null;render();
 }
 function undoTask(section,taskId){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
-  const sPath=section==='cycle'?'cycle':section==='weekly'?'weekly':'thisweek';
-  fbSet('tasks/'+loc+'/'+sPath+'/'+weekKey+'/'+taskId,null);
+  const sPath=section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'thisweek';
+  const sKey=section==='monthly'?getTaskMonthKey():weekKey;
+  fbSet('tasks/'+loc+'/'+sPath+'/'+sKey+'/'+taskId,null);
 }
 function cancelModal(){state.modalTask=null;render();}
 function setTasksLoc(locId){state.tasksLoc=locId;listenTasks();}
@@ -2748,7 +2772,9 @@ function renderTasksPage(){
   const thisweekData=(locData.thisweek||{})[weekKey]||{};
   const weeklyData=(locData.weekly||{})[weekKey]||{};
   const cycleData=(locData.cycle||{})[weekKey]||{};
-  const dailyTasks=getDailyTasks(loc),weeklyRec=getWeeklyRec(loc);
+  const monthKey=getTaskMonthKey();
+  const monthlyData=(locData.monthly||{})[monthKey]||{};
+  const dailyTasks=getDailyTasks(loc),weeklyRec=getWeeklyRec(loc),monthlyTasks=getMonthlyTasks(loc);
   const cycleDefs=getCycleTasks(loc),cycleWeek=state.tasksCycleWeek;
   const cw=cycleDefs[cycleWeek]||{name:'',tasks:[]};
   // Compute week range label (Mon–Sun)
@@ -2776,6 +2802,11 @@ function renderTasksPage(){
   const customWeekly=(locData['custom_weekly']||{})[weekKey]||{};
   html+=renderTaskSection('thisweek','This Week\'s Tasks',dailyTasks,thisweekData,customThisweek);
   html+=renderTaskSection('weekly','Weekly Recurring',weeklyRec,weeklyData,customWeekly);
+  const customMonthly=(locData['custom_monthly']||{})[monthKey]||{};
+  if(monthlyTasks.length>0||Object.keys(customMonthly).length>0){
+    const monthLabel=new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    html+=renderTaskSection('monthly','Monthly Tasks — '+monthLabel,monthlyTasks,monthlyData,customMonthly);
+  }
   html+='<div class="cycle-week-nav">';
   for(let w=1;w<=8;w++){
     html+='<button class="cycle-week-btn '+(w===cycleWeek?'active':'')+'" onclick="setTasksCycleWeek('+w+')">Wk '+w+'</button>';
@@ -2807,23 +2838,24 @@ function renderTaskSection(section,title,tasks,completionData,customTasksObj){
   html+='</div></div>';return html;
 }
 
+function deleteCustomTask(section,taskId){
+  const loc=state.tasksLoc,weekKey=getTaskWeekKey(state.tasksDate),monthKey=getTaskMonthKey();
+  const sKey=section==='monthly'?monthKey:weekKey;
+  fbSet('tasks/'+loc+'/custom_'+section+'/'+sKey+'/'+taskId,null);
+  const sPath=section==='weekly'?'weekly':section==='monthly'?'monthly':'thisweek';
+  fbSet('tasks/'+loc+'/'+sPath+'/'+sKey+'/'+taskId,null);
+}
+
 function addCustomTask(section){
   const input=document.getElementById('customTaskInput_'+section);
   if(!input)return;
   const text=input.value.trim();
   if(!text)return;
-  const loc=state.tasksLoc,weekKey=getTaskWeekKey(state.tasksDate);
+  const loc=state.tasksLoc,weekKey=getTaskWeekKey(state.tasksDate),monthKey=getTaskMonthKey();
+  const sKey=section==='monthly'?monthKey:weekKey;
   const id='c_'+Date.now();
-  fbSet('tasks/'+loc+'/custom_'+section+'/'+weekKey+'/'+id,{text,createdAt:Date.now()});
+  fbSet('tasks/'+loc+'/custom_'+section+'/'+sKey+'/'+id,{text,createdAt:Date.now()});
   input.value='';
-}
-
-function deleteCustomTask(section,taskId){
-  const loc=state.tasksLoc,weekKey=getTaskWeekKey(state.tasksDate);
-  fbSet('tasks/'+loc+'/custom_'+section+'/'+weekKey+'/'+taskId,null);
-  // Also clear completion if any
-  const sPath=section==='weekly'?'weekly':'thisweek';
-  fbSet('tasks/'+loc+'/'+sPath+'/'+weekKey+'/'+taskId,null);
 }
 function renderCycleSection(section,title,tasks,completionData){
   const key='cycle',collapsed=state.collapsedSections[key];
