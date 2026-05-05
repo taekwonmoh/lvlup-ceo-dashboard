@@ -554,13 +554,27 @@ const db = firebase.database();
 const storage = firebase.storage();
 const CEO = 'ceo'; // root path in Firebase
 
-// Secondary app — events are stored here, shared with the members portal & iCal calendar worker
-const eventsApp = firebase.initializeApp(
-  { databaseURL: "https://va-dashboard-bf7ca-default-rtdb.firebaseio.com" },
-  "events"
-);
-const eventsDb = eventsApp.database();
-function evtRef(path) { return eventsDb.ref(CEO + '/' + path); }
+// Events database — shared with the members portal & iCal calendar worker
+// Using REST API directly (SDK WebSocket connection unreliable for secondary databases)
+const EVENTS_DB_URL = 'https://va-dashboard-bf7ca-default-rtdb.firebaseio.com/ceo';
+function evtRestGet(path) {
+  return fetch(EVENTS_DB_URL + '/' + path + '.json').then(r => r.json());
+}
+function evtRestSet(path, data) {
+  return fetch(EVENTS_DB_URL + '/' + path + '.json', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  }).then(r => r.json());
+}
+function evtRestDelete(path) {
+  return fetch(EVENTS_DB_URL + '/' + path + '.json', { method: 'DELETE' });
+}
+function loadEvents() {
+  evtRestGet('events').then(raw => {
+    raw = raw || {};
+    state.events = Array.isArray(raw) ? raw : Object.entries(raw).map(([k,v]) => ({_key:k,...v}));
+    render();
+  }).catch(err => console.error('[Events] load error:', err));
+}
 
 /*  -  -  State  -  -  */
 let state = {
@@ -983,10 +997,8 @@ function listenAll() {
   });
   activeListeners.push({ ref: rocksRef, event: 'value' });
 
-  // Events
-  const eventsRef = evtRef('events');
-  eventsRef.on('value', snap => { const raw = snap.val() || {}; state.events = Array.isArray(raw) ? raw : Object.entries(raw).map(([k,v])=>({_key:k,...v})); render(); });
-  activeListeners.push({ ref: eventsRef, event: 'value' });
+  // Events — load via REST API (SDK WebSocket unreliable for secondary database)
+  loadEvents();
 
   // Goals
   const goalsRef = fbRef('goals/2026');
@@ -1195,21 +1207,6 @@ function seedIfEmpty() {
     }
   });
 
-  evtRef('events').once('value', snap => {
-    if (!snap.val()) {
-      evtRef('events').set([
-        { date: '2/13', event: 'Teen Night', location: 'Waunakee', link: '' },
-        { date: '3/28', event: 'Leadership Training', location: 'Waunakee', link: 'https://lvlupwaunakee.gymdesk.com/book?date=2026-03-28&s=1458188&schedule=27854' },
-        { date: '3/6', event: 'East Madison PNO', location: 'E. Mad', link: 'https://lvlupeastmadison.gymdesk.com/book?date=2026-03-06&s=1428111&schedule=27821' },
-        { date: '4/24', event: 'PNO', location: 'E. Mad', link: '' },
-        { date: '3/22', event: 'Laser Tag PNO', location: 'Verona', link: 'https://lvlupverona.gymdesk.com/book?date=2026-03-22&s=1488500&schedule=27822' },
-        { date: '4/4', event: 'Spring Nationals Prep', location: 'Verona', link: '' },
-        { date: '2/27', event: 'Laser Tag PNO-Verona', location: 'Go Ninja', link: 'https://goninjaverona.gymdesk.com/book?date=2026-02-27&s=1451714&schedule=27916' },
-        { date: '4/3', event: 'Beast Games Verona', location: 'Go Ninja', link: 'https://goninjaverona.gymdesk.com/book?date=2026-04-03&s=1451721&schedule=27916' },
-        { date: '4/4', event: 'Beast Games Waunakee', location: 'Go Ninja', link: 'https://goninjawaunakee.gymdesk.com/book?date=2026-04-04&s=1451727&schedule=27860' },
-      ]);
-    }
-  });
 }
 
 /*  -  -  Render  -  -  */
@@ -2262,7 +2259,7 @@ async function addEvent() {
   const desc = document.getElementById('evtDesc') ? document.getElementById('evtDesc').value.trim() : '';
   if (desc) payload.description = desc;
 
-  evtRef('events/' + key).set(payload);
+  evtRestSet('events/' + key, payload).then(() => loadEvents());
   cancelEditEvent();
 }
 
@@ -2314,7 +2311,7 @@ function cancelEditEvent() {
 
 function deleteEvent(key) {
   if (confirm('Delete this event?')) {
-    evtRef('events/' + key).remove();
+    evtRestDelete('events/' + key).then(() => loadEvents());
     if (document.getElementById('evtAddBtn').dataset.editingKey === key) cancelEditEvent();
   }
 }
