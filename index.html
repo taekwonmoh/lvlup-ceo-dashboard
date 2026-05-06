@@ -3504,26 +3504,77 @@ const DEV_MODULES = [
       { q: 'How should you frame a struggling student to their parents?', opts: ['"Your child is behind the others"', '"She needs more discipline at home"', '"This is normal for her age group. Here is what we are doing to help"', '"Maybe try a different activity"'], ans: 2, why: 'Developmental framing normalizes the struggle, shows your expertise, and positions you as a partner working with the parent.' }
     ]
   }
+  ,{ id: 'retention', title: 'Retention & Attendance', icon: '📈', desc: 'Why students quit, early warning signs, and how to re-engage at-risk students.',
+    content: [
+      { h: 'The Retention Truth', p: 'Most students do not quit because of the martial arts. They quit because they feel invisible. No one noticed they were struggling. No one reached out after their absences. No one remembered their name after three months. Retention is not a marketing problem — it is a relationships problem. Every student who quits costs your school $1,500–$3,000 in lost annual revenue and requires 5–10 new leads to replace. Keeping one student costs pennies.' },
+      { h: 'The Stoplight System', p: 'Green: attending regularly, engaged, on track for testing. Yellow: missing 2 or more classes in a row, less engaged, falling behind on curriculum. Red: not seen in 3+ weeks, not responding, at risk of quitting. Your job is to catch students before they turn red. A yellow student reached within 48 hours has an 80% chance of returning. A red student reached after 3 weeks has a 30% chance. Speed matters.' },
+      { h: 'Outreach That Actually Works', p: 'Generic texts do not work. "Hey, we missed you!" is easily ignored. Specific, personal messages do: "Hi, this is Bryan from LVLUP Waunakee. Marcus has been working really hard on his form — I wanted to personally invite him back this week so we can get him ready for testing. I saved him a spot in Thursday\'s class." You named the student, referenced something specific, created urgency, and made the next step easy. That message has a 70%+ response rate.' },
+      { h: 'Milestone Moments', p: 'Students are most likely to quit at three points: before their first belt test (the unknown scares them), during a long plateau between belts, and after a negative social experience. Protect these windows proactively. Before testing: give daily encouragement, preview what to expect, normalize nervousness. During plateaus: highlight the invisible growth happening. After conflict: address it same-day before they go home.' },
+      { h: 'On the Mat Tip', p: 'At the start of each week, scan your roster for any student you have not seen in 7 or more days. That is your outreach list for Monday. Do it before you leave the building. A 2-minute text today prevents a quit next month.' }
+    ],
+    quiz: [
+      { q: 'A student turns "yellow" in the stoplight system. What does this mean?', opts: ['They earned their yellow belt', 'They are missing 2+ classes in a row or falling behind', 'They have a negative attitude', 'They are too advanced for their current class'], ans: 1, why: 'Yellow means early warning: absences are increasing, engagement is dropping, and intervention is needed within 48 hours.' },
+      { q: 'What is the approximate success rate for specific, personal outreach vs generic messages?', opts: ['About the same', 'Generic works better because it is less pressuring', 'Specific, personal messages have significantly higher success (~70%+)', 'Only phone calls work'], ans: 2, why: 'Specific messages that name the student and reference something real dramatically outperform generic texts.' },
+      { q: 'When are students most likely to quit?', opts: ['After their first class', 'During summer months only', 'Before first belt test, during long plateaus, after negative social experiences', 'Only when school gets busy'], ans: 2, why: 'These three windows are high-risk moments that can be proactively managed with the right timing and approach.' },
+      { q: 'What should you do at the start of each week to stay ahead of potential quitters?', opts: ['Post on social media', 'Offer discounts to all students', 'Scan your roster for anyone not seen in 7+ days and reach out', 'Update the stoplight report manually'], ans: 2, why: 'A weekly roster scan takes 2 minutes and catches at-risk students while there is still time to re-engage them.' }
+    ]
+  },
+  { id: 'class_mgmt', title: 'Class Structure & Management', icon: '📋', desc: 'Planning your class, smooth transitions, and handling disruptions with confidence.',
+    content: [
+      { h: 'The Class Arc', p: 'Every great class has the same arc: Arrival Energy → Warmup → Skill Work → Challenge → Cool Down → Connection. Students need a predictable rhythm. When they know what comes next, they can give 100% to the current activity instead of using mental bandwidth wondering what is happening. Post your class structure or run it the same way every time. Predictability is not boring — it is freeing.' },
+      { h: 'The 3-Part Skill Block', p: 'Introduce, Practice, Pressure. Introduce: demonstrate and explain the technique (under 90 seconds). Practice: students drill with low stakes, get correction. Pressure: increase difficulty, speed, or complexity to test retention. This arc ensures students understand before they practice, and they apply skills under realistic conditions before leaving class. Skipping the pressure step means students learn it in the drill but lose it when it matters.' },
+      { h: 'Transitions Without Chaos', p: 'The most class time is lost during transitions: lining up, switching partners, moving to a new station. Use countdowns: "In 10 seconds, freeze and look at me." Use physical anchors: "Everyone to your push-up position now." Use games: "First row to freeze wins." The goal is to make transitions feel like part of the class, not a break from it. When transitions are tight, you gain 5–8 minutes of extra instruction time per class.' },
+      { h: 'Handling Disruptions', p: 'Disruptions come in three forms: attention-seeking, boredom, and overwhelm. Attention-seekers need a job — give them leadership before they take it themselves. Bored students need more challenge — they are ahead. Overwhelmed students need a private check-in — they are acting out because they cannot keep up. Publicly shaming any of the three converts a manageable disruption into a behavior spiral.' },
+      { h: 'On the Mat Tip', p: 'Write a 5-word plan for each class before you start: "Forms, sparring combos, partner drills, game." This takes 30 seconds and eliminates the 2 most common class killers: dead time while you figure out what is next, and finishing early with nothing to do. Students sense when you are winging it — and they fill that space with chaos.' }
+    ],
+    quiz: [
+      { q: 'What is the correct sequence of the 3-Part Skill Block?', opts: ['Practice → Introduce → Pressure', 'Introduce → Practice → Pressure', 'Pressure → Practice → Introduce', 'Introduce → Pressure → Practice'], ans: 1, why: 'Introduce establishes understanding, Practice builds repetition, Pressure tests retention under realistic conditions.' },
+      { q: 'How can you reclaim 5-8 minutes of instruction time per class?', opts: ['Start class earlier', 'Skip the cooldown', 'Tighten transitions with countdowns, anchors, and routines', 'Give fewer breaks'], ans: 2, why: 'Transitions are where most class time is lost. Structured transitions with countdowns and physical cues reclaim that time efficiently.' },
+      { q: 'A student is disrupting class because they are clearly bored. Best response?', opts: ['Give them pushups as consequence', 'Remove them from class', 'Increase their challenge level — they likely need more', 'Ignore the behavior'], ans: 2, why: 'Boredom-driven disruption signals the student needs more challenge. Increasing difficulty redirects their energy constructively.' },
+      { q: 'Why does predictable class structure help students learn?', opts: ['It makes the instructor\'s job easier', 'Students can give 100% to each activity instead of using mental energy figuring out what comes next', 'It impresses parents', 'It follows the national curriculum'], ans: 1, why: 'When students know the structure, they can fully engage with each segment rather than managing uncertainty.' }
+    ]
+  },
+  { id: 'culture', title: 'School Culture & Pride', icon: '🏫', desc: 'Building the identity, traditions, and belonging that make students stay for years.',
+    content: [
+      { h: 'Culture Is Your Retention Strategy', p: 'Students stay for the training. They stay for years because of the community. Culture is the invisible glue — the reason a student comes back after a rough week, the reason a family refers three friends, the reason a student cries when they earn their black belt. You build culture through consistency, ceremony, and intentional belonging. A strong culture turns students into ambassadors and parents into recruiters.' },
+      { h: 'Traditions and Ceremonies', p: 'Traditions create shared memory. Belt ceremonies should feel significant, not rushed. The student has earned this moment. Use specific language: "This belt represents not just what you learned, but who you became in the process." Birthday acknowledgments, first-stripe celebrations, the annual Bring a Buddy Day — these moments give students stories to tell. When a student has memories at your school, leaving feels like losing something, not just canceling a service.' },
+      { h: 'The Belonging Formula', p: 'Students feel they belong when three things are true: they are known by name, they are noticed when absent, and they are celebrated for something specific. Use students\' names 5 times every class. Acknowledge when a student returns after being gone: "We missed you this week — it was not the same without you." These small acts compound over months into an identity: "I am a LVLUP student." That identity is hard to walk away from.' },
+      { h: 'Values in Action', p: 'Every school has values on the wall. Few schools live them daily. Pick one value per cycle and make it visible: give out recognition cards that catch students displaying the life skill. Reference it in mat chats. Use it in parent conversations: "Your son showed real courage today." When the life skill is tied to real moments, it becomes part of the culture rather than a poster. Students begin using the language themselves — and that is when you know the culture has taken hold.' },
+      { h: 'On the Mat Tip', p: 'Run a culture check at the end of each month: did every student get recognized for something specific? Did you run a tradition or ceremony? Did you personally reach out to 3+ families? Did you catch and name a student living a school value? If you hit all four, your culture is alive. If not, pick one to improve next month.' }
+    ],
+    quiz: [
+      { q: 'What three things make a student feel they truly belong at your school?', opts: ['Free classes, good snacks, and trophies', 'Known by name, noticed when absent, celebrated for something specific', 'High rankings, tournament wins, and a nice facility', 'Strict rules and consistent uniform standards'], ans: 1, why: 'Belonging is built through personal recognition: knowing their name, noticing their absence, and celebrating something real about them.' },
+      { q: 'Why do traditions like belt ceremonies matter for retention?', opts: ['They fill class time', 'They impress potential new students', 'They create shared memories that make leaving feel like a loss, not a cancellation', 'They are required by the association'], ans: 2, why: 'Traditions create emotional anchors. Students with memories at your school have something to lose when they consider quitting.' },
+      { q: 'You want to make this cycle\'s life skill feel real, not just a poster. Best approach?', opts: ['Write it on the board', 'Catch students displaying it and name it specifically in the moment', 'Have students memorize the definition', 'Give a lecture about it at the start of each class'], ans: 1, why: 'Values come alive when tied to real moments. Catching and naming specific examples makes the life skill part of the school identity.' },
+      { q: 'What does a strong school culture ultimately create?', opts: ['Higher testing fees', 'Students who become ambassadors and parents who become recruiters', 'A larger social media following', 'More tournament medals'], ans: 1, why: 'A culture where students belong and feel valued converts them into voluntary ambassadors — the most powerful marketing a school can have.' }
+    ]
+  }
 ];
 
-function devSetModule(idx) { state.devActiveModule = idx; state.devQuizAnswers = {}; state.devQuizSubmitted = false; render(); }
+function devSetModule(idx) { state.devActiveModule = idx; state.devQuizAnswers = {}; state.devQuizSubmitted = false; state.devQuizScore = undefined; state.devCompletionSaved = null; render(); }
 function devBackToMenu() { state.devActiveModule = null; render(); }
 function devSelectAnswer(qIdx, aIdx) { if (state.devQuizSubmitted) return; state.devQuizAnswers[qIdx] = aIdx; render(); }
 function devSubmitQuiz() {
   const mod = DEV_MODULES[state.devActiveModule];
   if (!mod) return;
   const totalQ = mod.quiz.length;
-  const answered = Object.keys(state.devQuizAnswers).length;
-  if (answered < totalQ) return alert('Please answer all questions before submitting.');
+  if (Object.keys(state.devQuizAnswers).length < totalQ) return alert('Please answer all questions before submitting.');
   state.devQuizSubmitted = true;
   let correct = 0;
   mod.quiz.forEach((q, i) => { if (state.devQuizAnswers[i] === q.ans) correct++; });
-  const score = Math.round(correct / totalQ * 100);
-  const passed = score >= 80;
-  fbSet('development/modules/' + mod.id, { score, passed, completedAt: new Date().toISOString() });
+  state.devQuizScore = Math.round(correct / totalQ * 100);
   render();
 }
-function devRetryQuiz() { state.devQuizAnswers = {}; state.devQuizSubmitted = false; render(); }
+function devRetryQuiz() { state.devQuizAnswers = {}; state.devQuizSubmitted = false; state.devQuizScore = undefined; state.devCompletionSaved = null; render(); }
+function devSaveCompletion(empId) {
+  const emp = TASK_EMPLOYEES.find(e => e.id === empId);
+  const mod = DEV_MODULES[state.devActiveModule];
+  if (!emp || !mod) return;
+  const score = state.devQuizScore || 0;
+  fbSet('development/completions/' + mod.id + '/' + empId, { name: emp.name, score, passed: score >= 80, completedAt: new Date().toISOString() });
+  state.devCompletionSaved = empId;
+  render();
+}
 function devGenerateCert() {
   const name = prompt('Enter your full name for the certificate:');
   if (!name) return;
@@ -3532,137 +3583,155 @@ function devGenerateCert() {
 }
 
 function renderDevelopmentPage() {
-  const progress = (state.devCourse && state.devCourse.modules) || {};
-  const cert = state.devCourse && state.devCourse.certificate;
-  const passedCount = DEV_MODULES.filter(m => progress[m.id] && progress[m.id].passed).length;
-  const allPassed = passedCount === DEV_MODULES.length;
+  const completions = (state.devCourse && state.devCourse.completions) || {};
 
-  // Module detail view
+  // ── Module detail view ──
   if (state.devActiveModule !== null) {
     const mod = DEV_MODULES[state.devActiveModule];
-    const modProgress = progress[mod.id] || {};
+    if (!mod) { state.devActiveModule = null; return renderDevelopmentPage(); }
+    const modComp = completions[mod.id] || {};
+    const passedNames = Object.values(modComp).filter(c => c.passed).map(c => c.name);
+
     let html = '<div class="section">';
-    html += '<div style="padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--gray-800)">';
-    html += '<button onclick="devBackToMenu()" style="background:none;border:1px solid var(--gray-700);border-radius:8px;color:var(--gray-300);cursor:pointer;padding:6px 14px;font-size:13px">&larr; Back</button>';
-    html += '<span style="font-size:28px">' + mod.icon + '</span>';
-    html += '<div><div style="font-size:18px;font-weight:700">Module ' + (state.devActiveModule + 1) + ': ' + esc(mod.title) + '</div>';
+    // Header
+    html += '<div style="padding:14px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--gray-100);flex-wrap:wrap">';
+    html += '<button onclick="devBackToMenu()" style="background:none;border:1px solid var(--gray-200);border-radius:8px;color:var(--gray-600);cursor:pointer;padding:6px 14px;font-size:13px">&larr; Back</button>';
+    html += '<span style="font-size:24px">' + mod.icon + '</span>';
+    html += '<div style="flex:1"><div style="font-size:17px;font-weight:700;color:var(--primary)">Module ' + (state.devActiveModule + 1) + ': ' + esc(mod.title) + '</div>';
     html += '<div style="font-size:12px;color:var(--gray-500)">' + esc(mod.desc) + '</div></div>';
-    if (modProgress.passed) html += '<span style="margin-left:auto;background:#10b981;color:white;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">Passed ' + modProgress.score + '%</span>';
+    if (passedNames.length > 0) {
+      html += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
+      passedNames.forEach(n => { html += '<span style="background:#d1fae5;color:#065f46;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700">✓ ' + esc(n) + '</span>'; });
+      html += '</div>';
+    }
     html += '</div>';
 
-    // Content sections
+    // Content sections — light theme
     mod.content.forEach(c => {
-      html += '<div style="padding:20px 24px;border-bottom:1px solid var(--gray-800)">';
-      html += '<h3 style="margin:0 0 8px;font-size:15px;font-weight:700;color:var(--gray-100)">' + esc(c.h) + '</h3>';
-      html += '<p style="margin:0;font-size:14px;line-height:1.7;color:var(--gray-300)">' + esc(c.p) + '</p>';
+      html += '<div style="padding:18px 24px;border-bottom:1px solid var(--gray-100)">';
+      html += '<h3 style="margin:0 0 8px;font-size:15px;font-weight:700;color:var(--primary)">' + esc(c.h) + '</h3>';
+      html += '<p style="margin:0;font-size:14px;line-height:1.8;color:#374151">' + esc(c.p) + '</p>';
       html += '</div>';
     });
 
-    // Quiz section
-    html += '<div style="padding:20px 24px;background:var(--gray-900);border-top:2px solid var(--blue)">';
-    html += '<h3 style="margin:0 0 16px;font-size:16px;font-weight:700;color:var(--gray-100)">📝 Knowledge Check — Score 80% or higher to pass</h3>';
-
+    // Quiz
+    html += '<div style="padding:20px 24px;background:#f9fafb;border-top:2px solid var(--blue)">';
+    html += '<h3 style="margin:0 0 16px;font-size:15px;font-weight:700;color:var(--primary)">📝 Knowledge Check — Score 80% or higher to pass</h3>';
     mod.quiz.forEach((q, qi) => {
       const selected = state.devQuizAnswers[qi];
       const submitted = state.devQuizSubmitted;
       const isCorrect = submitted && selected === q.ans;
-      const isWrong = submitted && selected !== undefined && selected !== q.ans;
-      html += '<div style="margin-bottom:20px;padding:16px;background:var(--gray-800);border-radius:10px;border-left:3px solid ' + (submitted ? (isCorrect ? '#10b981' : '#ef4444') : 'var(--blue)') + '">';
-      html += '<div style="font-weight:600;margin-bottom:10px;font-size:14px;color:var(--gray-100)">' + (qi + 1) + '. ' + esc(q.q) + '</div>';
+      html += '<div style="margin-bottom:18px;padding:16px;background:#fff;border-radius:10px;border:1px solid #e5e7eb;border-left:3px solid ' + (submitted ? (isCorrect ? '#10b981' : '#ef4444') : 'var(--blue)') + '">';
+      html += '<div style="font-weight:600;margin-bottom:10px;font-size:14px;color:var(--primary)">' + (qi + 1) + '. ' + esc(q.q) + '</div>';
       q.opts.forEach((opt, oi) => {
-        const isSel = selected === oi;
-        const isAns = submitted && oi === q.ans;
-        let bg = 'var(--gray-900)'; let border = 'var(--gray-700)'; let col = 'var(--gray-300)';
-        if (isSel && !submitted) { bg = 'rgba(59,130,246,0.15)'; border = 'var(--blue)'; col = 'var(--gray-100)'; }
-        if (submitted && isAns) { bg = 'rgba(16,185,129,0.15)'; border = '#10b981'; col = '#10b981'; }
-        if (submitted && isSel && !isAns) { bg = 'rgba(239,68,68,0.15)'; border = '#ef4444'; col = '#ef4444'; }
-        html += '<div onclick="devSelectAnswer(' + qi + ',' + oi + ')" style="padding:10px 14px;margin:6px 0;border-radius:8px;border:1px solid ' + border + ';background:' + bg + ';color:' + col + ';cursor:' + (submitted ? 'default' : 'pointer') + ';font-size:13px;transition:all 0.15s">';
-        html += (isSel ? '● ' : '○ ') + esc(opt);
-        html += '</div>';
+        const isSel = selected === oi, isAns = submitted && oi === q.ans;
+        let bg = '#fff', border = '#e5e7eb', col = '#374151';
+        if (isSel && !submitted) { bg = '#eff6ff'; border = '#3b82f6'; col = '#1d4ed8'; }
+        if (submitted && isAns) { bg = '#f0fdf4'; border = '#10b981'; col = '#065f46'; }
+        if (submitted && isSel && !isAns) { bg = '#fef2f2'; border = '#ef4444'; col = '#b91c1c'; }
+        html += '<div onclick="devSelectAnswer(' + qi + ',' + oi + ')" style="padding:10px 14px;margin:5px 0;border-radius:8px;border:1px solid ' + border + ';background:' + bg + ';color:' + col + ';cursor:' + (submitted ? 'default' : 'pointer') + ';font-size:13px">';
+        html += (isSel ? '● ' : '○ ') + esc(opt) + '</div>';
       });
       if (submitted) {
-        html += '<div style="margin-top:8px;padding:8px 12px;border-radius:6px;font-size:12px;background:rgba(255,255,255,0.03);color:var(--gray-400)">' + (isCorrect ? '✅ ' : '❌ ') + esc(q.why) + '</div>';
+        html += '<div style="margin-top:8px;padding:8px 12px;border-radius:6px;font-size:12px;background:' + (isCorrect ? '#f0fdf4' : '#fef2f2') + ';color:' + (isCorrect ? '#065f46' : '#b91c1c') + '">' + (isCorrect ? '✅ ' : '❌ ') + esc(q.why) + '</div>';
       }
       html += '</div>';
     });
 
     if (!state.devQuizSubmitted) {
-      html += '<button onclick="devSubmitQuiz()" style="padding:10px 24px;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">Submit Answers</button>';
+      const allAnswered = Object.keys(state.devQuizAnswers).length === mod.quiz.length;
+      html += '<button onclick="devSubmitQuiz()" style="padding:10px 24px;background:' + (allAnswered ? 'var(--blue)' : '#9ca3af') + ';color:#fff;border:none;border-radius:8px;cursor:' + (allAnswered ? 'pointer' : 'not-allowed') + ';font-size:14px;font-weight:600">Submit Answers</button>';
     } else {
-      const correct = mod.quiz.filter((q, i) => state.devQuizAnswers[i] === q.ans).length;
-      const score = Math.round(correct / mod.quiz.length * 100);
+      const score = state.devQuizScore !== undefined ? state.devQuizScore : 0;
       const passed = score >= 80;
-      html += '<div style="padding:16px;border-radius:10px;background:' + (passed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)') + ';border:1px solid ' + (passed ? '#10b981' : '#ef4444') + ';text-align:center">';
+      const correct = mod.quiz.filter((q, i) => state.devQuizAnswers[i] === q.ans).length;
+      html += '<div style="padding:16px;border-radius:10px;background:' + (passed ? '#f0fdf4' : '#fef2f2') + ';border:1px solid ' + (passed ? '#10b981' : '#ef4444') + ';text-align:center;margin-bottom:16px">';
       html += '<div style="font-size:28px;font-weight:800;color:' + (passed ? '#10b981' : '#ef4444') + '">' + score + '%</div>';
-      html += '<div style="font-size:14px;color:var(--gray-300);margin:4px 0">' + correct + '/' + mod.quiz.length + ' correct</div>';
-      html += passed ? '<div style="font-size:13px;color:#10b981;font-weight:600">✅ Module passed!</div>' : '<div style="margin-top:8px"><button onclick="devRetryQuiz()" style="padding:8px 20px;background:#ef4444;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">Retry Quiz</button></div>';
+      html += '<div style="font-size:14px;color:#374151;margin:4px 0">' + correct + '/' + mod.quiz.length + ' correct — ' + (passed ? 'Passed! 🎉' : 'Need 80% to pass') + '</div>';
+      if (!passed) html += '<button onclick="devRetryQuiz()" style="margin-top:8px;padding:8px 20px;background:#ef4444;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">Retry Quiz</button>';
       html += '</div>';
+      if (passed) {
+        html += '<div style="padding:16px;background:#fff;border-radius:10px;border:1px solid #e5e7eb">';
+        html += '<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:10px">🏅 Select your name to save your completion:</div>';
+        html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+        TASK_EMPLOYEES.forEach(emp => {
+          const c = modComp[emp.id];
+          if (c && c.passed) {
+            html += '<span style="padding:7px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-size:12px;font-weight:700;border:1px solid #a7f3d0">✓ ' + esc(emp.name) + '</span>';
+          } else {
+            const justSaved = state.devCompletionSaved === emp.id;
+            html += '<button onclick="devSaveCompletion(\'' + emp.id + '\')" style="padding:7px 14px;background:' + (justSaved ? '#d1fae5' : 'var(--blue)') + ';color:' + (justSaved ? '#065f46' : '#fff') + ';border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">' + (justSaved ? '✓ Saved — ' : '') + esc(emp.name) + '</button>';
+          }
+        });
+        html += '</div></div>';
+      }
     }
     html += '</div></div>';
     return html;
   }
 
-  // Landing page
+  // ── Landing page ──
   let html = '';
 
   // Hero
-  html += '<div class="section" style="text-align:center;padding:32px 24px">';
-  html += '<div style="font-size:40px;margin-bottom:8px">🥋</div>';
-  html += '<h2 style="margin:0 0 4px;font-size:22px;font-weight:800;color:var(--gray-100)">Instructor Development Program</h2>';
-  html += '<div style="font-size:14px;color:var(--gray-400);margin-bottom:20px">Child Development & Coaching Excellence for LVLUP and Go Ninja Instructors</div>';
-  html += '<div style="display:flex;justify-content:center;gap:24px;margin-bottom:16px">';
-  html += '<div><span style="font-size:28px;font-weight:800;color:var(--blue)">' + passedCount + '</span><span style="font-size:28px;color:var(--gray-600)">/' + DEV_MODULES.length + '</span><div style="font-size:11px;color:var(--gray-500)">Modules Passed</div></div>';
-  const avgScore = DEV_MODULES.reduce((sum, m) => sum + ((progress[m.id] && progress[m.id].score) || 0), 0) / Math.max(DEV_MODULES.filter(m => progress[m.id] && progress[m.id].score).length, 1);
-  html += '<div><span style="font-size:28px;font-weight:800;color:var(--blue)">' + (passedCount > 0 ? Math.round(avgScore) + '%' : '--') + '</span><div style="font-size:11px;color:var(--gray-500)">Avg Score</div></div>';
+  html += '<div class="section" style="padding:24px;text-align:center">';
+  html += '<div style="font-size:36px;margin-bottom:6px">📚</div>';
+  html += '<h2 style="margin:0 0 4px;font-size:20px;font-weight:800;color:var(--primary)">Instructor Development Program</h2>';
+  html += '<div style="font-size:13px;color:var(--gray-500)">Child Development & Coaching Excellence</div>';
   html += '</div>';
-  // Progress bar
-  const pct = Math.round(passedCount / DEV_MODULES.length * 100);
-  html += '<div style="max-width:400px;margin:0 auto;background:var(--gray-800);border-radius:10px;height:12px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:linear-gradient(90deg,var(--blue),#10b981);border-radius:10px;transition:width 0.3s"></div></div>';
-  html += '<div style="font-size:12px;color:var(--gray-500);margin-top:6px">' + pct + '% complete</div>';
-  html += '</div>';
+
+  // Staff progress matrix
+  html += '<div class="section" style="padding:0 0 8px">';
+  html += '<div style="padding:14px 20px;border-bottom:1px solid var(--gray-100);font-size:14px;font-weight:700;color:var(--primary)">📊 Staff Progress</div>';
+  html += '<div style="overflow-x:auto;padding:8px 16px 12px">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:500px">';
+  html += '<thead><tr style="border-bottom:2px solid var(--gray-200)">';
+  html += '<th style="text-align:left;padding:6px 12px;color:var(--gray-500);font-weight:600;white-space:nowrap">Instructor</th>';
+  DEV_MODULES.forEach((m, i) => {
+    html += '<th style="padding:6px 8px;color:var(--gray-500);font-weight:600;text-align:center;min-width:36px" title="' + esc(m.title) + '">' + m.icon + '</th>';
+  });
+  html += '<th style="padding:6px 8px;color:var(--gray-500);font-weight:600;text-align:center">Done</th>';
+  html += '</tr></thead><tbody>';
+  TASK_EMPLOYEES.forEach((emp, ri) => {
+    html += '<tr style="border-bottom:1px solid var(--gray-100);background:' + (ri % 2 === 0 ? '#fff' : '#f9fafb') + '">';
+    html += '<td style="padding:8px 12px;font-weight:600;color:var(--primary);white-space:nowrap">' + esc(emp.name) + '</td>';
+    let empTotal = 0;
+    DEV_MODULES.forEach(m => {
+      const c = (completions[m.id] || {})[emp.id];
+      if (c && c.passed) { html += '<td style="padding:7px;text-align:center;font-size:14px" title="' + c.score + '%">✅</td>'; empTotal++; }
+      else if (c) { html += '<td style="padding:7px;text-align:center"><span style="font-size:10px;color:#ef4444;font-weight:600">' + c.score + '%</span></td>'; }
+      else { html += '<td style="padding:7px;text-align:center;color:#d1d5db">○</td>'; }
+    });
+    const totCol = empTotal === DEV_MODULES.length ? '#10b981' : empTotal > 0 ? 'var(--blue)' : 'var(--gray-400)';
+    html += '<td style="padding:7px;text-align:center;font-weight:700;color:' + totCol + '">' + empTotal + '/' + DEV_MODULES.length + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
 
   // Module cards
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;padding:0 0 20px">';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:0 0 24px">';
   DEV_MODULES.forEach((mod, i) => {
-    const mp = progress[mod.id] || {};
-    const passed = mp.passed;
-    const attempted = mp.score !== undefined;
-    const borderColor = passed ? '#10b981' : 'var(--gray-800)';
-    html += '<div onclick="devSetModule(' + i + ')" style="background:var(--gray-900);border:1px solid ' + borderColor + ';border-radius:12px;padding:20px;cursor:pointer;transition:all 0.15s;position:relative" onmouseover="this.style.borderColor=\'var(--blue)\'" onmouseout="this.style.borderColor=\'' + borderColor + '\'">';
-    if (passed) html += '<div style="position:absolute;top:12px;right:12px;background:#10b981;color:white;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">PASSED ' + mp.score + '%</div>';
-    html += '<div style="font-size:28px;margin-bottom:8px">' + mod.icon + '</div>';
-    html += '<div style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Module ' + (i + 1) + '</div>';
-    html += '<div style="font-size:15px;font-weight:700;color:var(--gray-100);margin-bottom:6px">' + esc(mod.title) + '</div>';
-    html += '<div style="font-size:12px;color:var(--gray-400);line-height:1.5">' + esc(mod.desc) + '</div>';
-    if (attempted && !passed) html += '<div style="margin-top:8px;font-size:11px;color:#ef4444;font-weight:600">Score: ' + mp.score + '% — Retry needed</div>';
+    const mc = completions[mod.id] || {};
+    const passedPeople = Object.values(mc).filter(c => c.passed);
+    const allDone = passedPeople.length === TASK_EMPLOYEES.length;
+    const someDone = passedPeople.length > 0;
+    const borderColor = allDone ? '#10b981' : someDone ? '#3b82f6' : 'var(--gray-200)';
+    html += '<div onclick="devSetModule(' + i + ')" style="background:var(--card);border:1.5px solid ' + borderColor + ';border-radius:12px;padding:18px;cursor:pointer;box-shadow:var(--shadow);transition:transform 0.15s" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'\'">';
+    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">';
+    html += '<span style="font-size:24px">' + mod.icon + '</span>';
+    html += '<span style="font-size:10px;color:var(--gray-400);font-weight:600;background:var(--gray-100);padding:2px 8px;border-radius:999px">M' + (i + 1) + '</span>';
     html += '</div>';
-  });
-  html += '</div>';
-
-  // Certificate section
-  html += '<div class="section" style="text-align:center;padding:24px">';
-  if (allPassed) {
-    if (cert) {
-      html += '<div style="border:3px double var(--blue);border-radius:16px;padding:40px 32px;max-width:600px;margin:0 auto;background:linear-gradient(135deg,rgba(65,105,225,0.05),rgba(16,185,129,0.05))">';
-      html += '<div style="font-size:48px;margin-bottom:12px">🏆</div>';
-      html += '<div style="font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:3px;margin-bottom:8px">Certificate of Completion</div>';
-      html += '<div style="font-size:22px;font-weight:800;color:var(--gray-100);margin-bottom:4px">' + esc(cert.name) + '</div>';
-      html += '<div style="font-size:14px;color:var(--gray-400);margin-bottom:16px">LVLUP / Go Ninja Certified Instructor</div>';
-      html += '<div style="font-size:13px;color:var(--gray-400)">Instructor Development Program — Child Development & Coaching Excellence</div>';
-      html += '<div style="font-size:12px;color:var(--gray-500);margin-top:8px">Completed: ' + new Date(cert.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) + '</div>';
-      html += '<div style="margin-top:20px"><button onclick="window.print()" style="padding:8px 20px;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px">🖨️ Print Certificate</button></div>';
+    html += '<div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:4px">' + esc(mod.title) + '</div>';
+    html += '<div style="font-size:12px;color:var(--gray-500);line-height:1.5;margin-bottom:10px">' + esc(mod.desc) + '</div>';
+    if (passedPeople.length > 0) {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:3px">';
+      passedPeople.forEach(c => { html += '<span style="background:#d1fae5;color:#065f46;font-size:10px;padding:1px 7px;border-radius:10px;font-weight:600">✓ ' + esc(c.name) + '</span>'; });
       html += '</div>';
     } else {
-      html += '<div style="font-size:36px;margin-bottom:8px">🎉</div>';
-      html += '<div style="font-size:16px;font-weight:700;color:var(--gray-100);margin-bottom:8px">All Modules Complete!</div>';
-      html += '<div style="font-size:13px;color:var(--gray-400);margin-bottom:16px">Generate your certificate of completion.</div>';
-      html += '<button onclick="devGenerateCert()" style="padding:10px 24px;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🏆 Generate Certificate</button>';
+      html += '<div style="font-size:11px;color:var(--gray-400);font-style:italic">Not yet completed</div>';
     }
-  } else {
-    html += '<div style="font-size:28px;margin-bottom:8px;opacity:0.4">🏆</div>';
-    html += '<div style="font-size:14px;color:var(--gray-500)">Complete all ' + DEV_MODULES.length + ' modules to earn your Certified Instructor certificate</div>';
-    html += '<div style="font-size:12px;color:var(--gray-600);margin-top:4px">' + (DEV_MODULES.length - passedCount) + ' module' + (DEV_MODULES.length - passedCount !== 1 ? 's' : '') + ' remaining</div>';
-  }
+    html += '</div>';
+  });
   html += '</div>';
 
   return html;
