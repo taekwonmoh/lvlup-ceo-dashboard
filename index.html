@@ -4164,16 +4164,16 @@ function looksLikeName(str) {
   ];
   if (skipPrefixes.some(p => lower.startsWith(p))) return false;
 
+  // Reject single words (need at least first + last name)
+  const words = str.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 4) return false;
+
   // Reject standalone status/source words that slip past prefix check
   const blockedWords = new Set([
     'active','referral','referrals','website','other','event','school',
     'google','search','engine','maps','decided','recommended',
   ]);
   if (words.length === 2 && words.some(w => blockedWords.has(w.toLowerCase()))) return false;
-
-  // Reject single words (need at least first + last name)
-  const words = str.split(/\s+/).filter(Boolean);
-  if (words.length < 2 || words.length > 4) return false;
 
   // Each word must look like a name component:
   // letters, apostrophes, hyphens; optionally wrapped in quotes (nicknames)
