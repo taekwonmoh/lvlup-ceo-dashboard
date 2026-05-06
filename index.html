@@ -614,7 +614,7 @@ const LOCATIONS = [
 ];
 
 const WEEKLY_METRICS = [
-  { id: 'attrition', label: 'Attrition', pct: true },
+  { id: 'attrition', label: 'Attrition' },
   { id: 'newMembers', label: 'New TKD Members' },
   { id: 'trials', label: 'Trials' },
   { id: 'leads', label: 'Leads' },
@@ -1649,14 +1649,13 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
         let goalDisplay = '';
         if (rawGoal !== undefined && rawGoal !== null) {
           if (metric.id === 'attrition' && goalNum < 1) {
-            // Goal stored as monthly rate → show rate + equivalent student count
-            const rateGoal = goalNum; // e.g. 0.0067
+            // Goal stored as monthly rate → show rate + equivalent quit count
+            const rateGoal = goalNum; // e.g. 0.03
             const totalMem = parseFloat((state.kpis[loc.id] || {}).totalMembers) || 0;
             const monthlyCount = totalMem > 0 ? +(rateGoal * totalMem).toFixed(1) : 0;
-            // For weekly comparison: threshold = monthly count ÷ 4 weeks
-            goalNum = monthlyCount > 0 ? +(monthlyCount / 4).toFixed(2) : rateGoal;
-            goalDisplay = (rateGoal * 100).toFixed(1) + '%'
-              + (monthlyCount > 0 ? ' (≤' + Math.ceil(monthlyCount) + ' students/mo)' : '');
+            goalNum = monthlyCount > 0 ? monthlyCount : rateGoal;
+            goalDisplay = (rateGoal * 100).toFixed(0) + '%'
+              + (monthlyCount > 0 ? ' (≤' + Math.ceil(monthlyCount) + ' quits)' : '');
           } else if (metric.pct) {
             goalDisplay = (goalNum * 100).toFixed(1) + '%';
           } else {
@@ -1669,6 +1668,12 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
         if (metric.id === 'leadToTrial') {
           displayVal = numVal > 0 ? (numVal * 100).toFixed(0) + '%' : '0%';
           inputVal   = null; // read-only — auto-calculated
+        } else if (metric.id === 'attrition') {
+          // User enters quit count; auto-calculate % from total members
+          const totalMem = parseFloat((state.kpis[loc.id] || {}).totalMembers) || 0;
+          const rate = totalMem > 0 && numVal > 0 ? (numVal / totalMem * 100).toFixed(1) : null;
+          displayVal = (numVal > 0 ? numVal : '0') + (rate !== null ? ' (' + rate + '%)' : '');
+          inputVal   = rawVal !== undefined && rawVal !== '' ? rawVal : 0;
         } else if (metric.pct) {
           displayVal = (numVal * 100).toFixed(1) + '%';
           inputVal   = rawVal !== undefined && rawVal !== '' ? rawVal : 0;
@@ -1681,7 +1686,7 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
         let valColor = '';
         if (rawGoal !== undefined && rawGoal !== null) {
           if (metric.id === 'attrition') {
-            valColor = numVal <= goalNum ? 'color:#10b981' : 'color:#ef4444';
+            valColor = (numVal === 0 || numVal <= goalNum) ? 'color:#10b981' : 'color:#ef4444';
           } else if (metric.id === 'leadToTrial') {
             valColor = numVal >= goalNum ? 'color:#10b981' : (numVal > 0 ? 'color:#ef4444' : '');
           } else {
