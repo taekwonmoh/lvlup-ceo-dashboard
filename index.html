@@ -982,11 +982,11 @@ function listenAll() {
   activeListeners.forEach(l => l.ref.off(l.event));
   activeListeners = [];
 
-  // Scorecard monthly tracker
-  const scTrackerKey = getScorecardMonthKey(state.scMonthOffset);
-  const scTrackerRef = fbRef('scorecard/monthly/' + scTrackerKey);
-  scTrackerRef.on('value', snap => { state.scorecard.weekly = snap.val() || {}; render(); });
-  activeListeners.push({ ref: scTrackerRef, event: 'value' });
+  // Scorecard weekly
+  const weekKey = getWeekKey(state.weekOffset);
+  const scWeekRef = fbRef('scorecard/weekly/' + weekKey);
+  scWeekRef.on('value', snap => { state.scorecard.weekly = snap.val() || {}; render(); });
+  activeListeners.push({ ref: scWeekRef, event: 'value' });
 
   // Scorecard goals
   const scGoalsRef = fbRef('scorecard/goals');
@@ -1091,8 +1091,8 @@ function changeScorecardMonth(d) { state.scMonthOffset += d; listenAll(); }
 
 /*  -  -  Update functions  -  -  */
 function updateScorecard(locId, personId, metricId, weekIdx, val) {
-  const monthKey = getScorecardMonthKey(state.scMonthOffset);
-  fbDebounce('scorecard/monthly/' + monthKey + '/' + locId + '/' + personId + '/' + metricId, val);
+  const weekKey = getWeekKey(state.weekOffset - weekIdx);
+  fbDebounce('scorecard/weekly/' + weekKey + '/' + locId + '/' + personId + '/' + metricId, val);
 }
 
 function updateMonthly(locId, metricId, val) {
@@ -1603,19 +1603,18 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
   });
   kpiHtml += '</div>';
 
-  // Monthly scorecard table
-  const monthLabel = getScorecardMonthLabel(state.scMonthOffset);
-  const monthShort = monthLabel.split(' ')[0];
+  // Weekly scorecard table
+  const weekLabel = getWeekLabel(state.weekOffset);
   const weekData = state.scorecard.weekly || {};
   const goalsData = state.scorecard.goals || {};
 
   let tableHtml = '<div class="section">' +
-    '<div class="section-header"><h2>Monthly Scorecard</h2>' +
-    '<div class="week-nav"><button onclick="changeScorecardMonth(-1)">&larr;</button>' +
-    '<span class="week-label">' + monthLabel + '</span>' +
-    '<button onclick="changeScorecardMonth(1)">&rarr;</button></div></div>' +
+    '<div class="section-header"><h2>Weekly Scorecard</h2>' +
+    '<div class="week-nav"><button onclick="changeWeek(-1)">&larr;</button>' +
+    '<span class="week-label">' + weekLabel + '</span>' +
+    '<button onclick="changeWeek(1)">&rarr;</button></div></div>' +
     '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
-    '<th>Who</th><th>Measurable</th><th>Goal</th><th>' + monthShort + ' MTD</th>' +
+    '<th>Who</th><th>Measurable</th><th>Goal</th><th>This Week</th>' +
     '</tr></thead><tbody>';
 
   LOCATIONS.forEach(loc => {
