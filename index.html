@@ -847,6 +847,21 @@ const GONINJA_CYCLE = {
     {id:'w8r1',cat:'Reporting',text:'Cycle summary report'},
   ]},
 };
+
+// LVLUP instructor cycle checklist — one list per cycle, grouped by week
+const LVLUP_CYCLE_CHECKLIST = [
+  {id:'cc_w1_roster',   week:1, text:'Update student roster in the "Students" section'},
+  {id:'cc_w2_retain',   week:2, text:'Plan and post a retention event'},
+  {id:'cc_w3_attn',     week:3, text:'Check up on students with low attendance or missing stripes'},
+  {id:'cc_w4_revenue',  week:4, text:'Plan and post a revenue / new members event'},
+  {id:'cc_w5_attn',     week:5, text:'Check up on students with low attendance or missing stripes'},
+  {id:'cc_w6_tigers',   week:6, text:'Reach out to Tigers about moving up to the beginners class'},
+  {id:'cc_w6_sparring', week:6, text:'Contact current yellow belts about purchasing sparring gear'},
+  {id:'cc_bday',        week:0, text:'Run a minimum of 2 birthday parties this cycle'},
+  {id:'cc_upgrades',    week:0, text:'Upgrade 2 students to AD or Legacy — list their names'},
+];
+const FRONTDESK_CYCLE_CHECKLIST = []; // TBD
+
 const LVLUP_GOALS_FIELDS = {
   membership:[
     {id:'currentMembership',label:'Current membership # as of 1st day of month',type:'number'},
@@ -2650,6 +2665,13 @@ function getDailyTasks(empId){return isGoNinja(empId)?GONINJA_DAILY:isFrontDesk(
 function getWeeklyRec(empId){return isGoNinja(empId)?GONINJA_WEEKLY_REC:isFrontDesk(empId)?FRONTDESK_WEEKLY:LVLUP_WEEKLY_REC;}
 function getMonthlyTasks(empId){return isGoNinja(empId)?GONINJA_MONTHLY:isFrontDesk(empId)?FRONTDESK_MONTHLY:LVLUP_MONTHLY;}
 function getCycleTasks(locId){return isGoNinja(locId)?GONINJA_CYCLE:LVLUP_CYCLE;}
+function getCycleChecklist(empId){return isFrontDesk(empId)?FRONTDESK_CYCLE_CHECKLIST:LVLUP_CYCLE_CHECKLIST;}
+function getCycleChecklistKey(){
+  const c=getCurrentCycleInfo();
+  if(!c)return 'cycle-current';
+  const yr=(c.startDate||String(new Date().getFullYear())).substring(0,4);
+  return yr+'-C'+c.cycleNum;
+}
 function getTaskMonthKey(){const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');}
 function getGoalsFields(locId){return isGoNinja(locId)?GONINJA_GOALS_FIELDS:LVLUP_GOALS_FIELDS;}
 function getTaskWeekKey(dateStr){
@@ -2696,11 +2718,19 @@ function listenTasks(){
     if(!state.tasksData[emp].weekly)state.tasksData[emp].weekly={};
     state.tasksData[emp].weekly[weekKey]=snap.val()||{};render();
   });activeListeners.push({ref:weeklyRef,event:'value'});
-  const cycleRef=fbRef(base+'/cycle/'+weekKey);
+  const _isGN=isGoNinja(emp);
+  const cycleKey=getCycleChecklistKey();
+  const cycleRef=_isGN?fbRef(base+'/cycle/'+weekKey):fbRef(base+'/cycle_checklist/'+cycleKey);
   cycleRef.on('value',snap=>{
     if(!state.tasksData[emp])state.tasksData[emp]={};
-    if(!state.tasksData[emp].cycle)state.tasksData[emp].cycle={};
-    state.tasksData[emp].cycle[weekKey]=snap.val()||{};render();
+    if(_isGN){
+      if(!state.tasksData[emp].cycle)state.tasksData[emp].cycle={};
+      state.tasksData[emp].cycle[weekKey]=snap.val()||{};
+    }else{
+      if(!state.tasksData[emp].cycle_checklist)state.tasksData[emp].cycle_checklist={};
+      state.tasksData[emp].cycle_checklist[cycleKey]=snap.val()||{};
+    }
+    render();
   });activeListeners.push({ref:cycleRef,event:'value'});
   const monthKey=getTaskMonthKey();
   const monthlyRef=fbRef(base+'/monthly/'+monthKey);
@@ -2743,15 +2773,17 @@ function confirmTask(){
   const m=state.modalTask,dateKey=state.tasksDate;
   const weekKey=getTaskWeekKey(dateKey),ts=Date.now();
   const monthKey=getTaskMonthKey();
-  const sectionPath=m.section==='cycle'?'cycle':m.section==='weekly'?'weekly':m.section==='monthly'?'monthly':'daily';
-  const sectionKey=m.section==='monthly'?monthKey:m.section==='cycle'?weekKey:m.section==='weekly'?weekKey:dateKey;
+  const cycleKey=getCycleChecklistKey();
+  const sectionPath=m.section==='cycle_checklist'?'cycle_checklist':m.section==='cycle'?'cycle':m.section==='weekly'?'weekly':m.section==='monthly'?'monthly':'daily';
+  const sectionKey=m.section==='cycle_checklist'?cycleKey:m.section==='monthly'?monthKey:m.section==='cycle'||m.section==='weekly'?weekKey:dateKey;
   fbSet(empPath(state.tasksLoc)+'/'+sectionPath+'/'+sectionKey+'/'+m.taskId,{initials,ts});
   state.modalTask=null;render();
 }
 function undoTask(section,taskId){
   const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
-  const sPath=section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
-  const sKey=section==='monthly'?getTaskMonthKey():section==='weekly'||section==='cycle'?weekKey:dateKey;
+  const cycleKey=getCycleChecklistKey();
+  const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
+  const sKey=section==='cycle_checklist'?cycleKey:section==='monthly'?getTaskMonthKey():section==='weekly'||section==='cycle'?weekKey:dateKey;
   fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,null);
 }
 function cancelModal(){state.modalTask=null;render();}
@@ -2910,12 +2942,16 @@ function renderTasksPage(){
     const monthLabel=new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
     html+=renderTaskSection('monthly','Monthly Tasks — '+monthLabel,monthlyTasks,monthlyData,customMonthly);
   }
-  html+='<div class="cycle-week-nav">';
-  for(let w=1;w<=8;w++){
-    html+='<button class="cycle-week-btn '+(w===cycleWeek?'active':'')+'" onclick="setTasksCycleWeek('+w+')">Wk '+w+'</button>';
+  if(isGoNinja(loc)){
+    html+='<div class="cycle-week-nav">';
+    for(let w=1;w<=8;w++){
+      html+='<button class="cycle-week-btn '+(w===cycleWeek?'active':'')+'" onclick="setTasksCycleWeek('+w+')">Wk '+w+'</button>';
+    }
+    html+='</div>';
+    html+=renderCycleSection('cycle','Week '+cycleWeek+': '+cw.name,cw.tasks,cycleData);
+  }else{
+    html+=renderCycleChecklistSection(loc,locData);
   }
-  html+='</div>';
-  html+=renderCycleSection('cycle','Week '+cycleWeek+': '+cw.name,cw.tasks,cycleData);
   if(state.modalTask)html+=renderInitialsModal();
   return html;
 }
@@ -2974,6 +3010,44 @@ function renderCycleSection(section,title,tasks,completionData){
     html+=renderTaskItem(section,t,completionData[t.id]);
   });
   html+='</div></div>';return html;
+}
+
+function renderCycleChecklistSection(empId,locData){
+  const tasks=getCycleChecklist(empId)||[];
+  const cycleKey=getCycleChecklistKey();
+  const doneData=(locData.cycle_checklist||{})[cycleKey]||{};
+  const completed=tasks.filter(t=>doneData[t.id]).length;
+  const total=tasks.length;
+  const pillCls=completed===total&&total>0?'complete':completed>0?'partial':'empty';
+  const key='cycle_checklist';
+  const collapsed=state.collapsedSections[key];
+  const c=getCurrentCycleInfo();
+  const currentWeek=c?c.weekNum:0;
+  const title='Cycle '+(c?c.cycleNum:'')+' Checklist';
+  let html='<div class="task-section">';
+  html+='<div class="task-section-header" onclick="toggleSection(\''+key+'\')"><h3><span class="chevron '+(collapsed?'':'open')+'">&#9654;</span>'+title+'</h3><span class="progress-pill '+pillCls+'">'+completed+'/'+total+'</span></div>';
+  html+='<div class="task-list '+(collapsed?'collapsed':'')+'">';
+  if(tasks.length===0){
+    html+='<div style="padding:16px 20px;color:var(--gray-400);font-size:13px;font-style:italic;">No cycle tasks defined yet.</div>';
+  }else{
+    // Group tasks by week, ascending; week 0 = "Ongoing"
+    const byWeek={};
+    tasks.forEach(t=>{const w=t.week??0;if(!byWeek[w])byWeek[w]=[];byWeek[w].push(t);});
+    Object.keys(byWeek).map(Number).sort((a,b)=>a-b).forEach(w=>{
+      const isPast=w>0&&w<currentWeek;
+      const isCurrent=w===currentWeek;
+      const isFuture=w>0&&w>currentWeek;
+      let weekLabel=w===0?'🔁 Ongoing — Any Time This Cycle':'Week '+w;
+      let badge='';
+      if(isCurrent)badge=' <span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:999px;font-weight:700;margin-left:6px;">Current</span>';
+      else if(isPast)badge=' <span style="font-size:10px;background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:999px;margin-left:6px;">Past</span>';
+      else if(isFuture)badge=' <span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:999px;margin-left:6px;">Upcoming</span>';
+      html+='<div class="task-cat">'+weekLabel+badge+'</div>';
+      byWeek[w].forEach(t=>{ html+=renderTaskItem('cycle_checklist',t,doneData[t.id]); });
+    });
+  }
+  html+='</div></div>';
+  return html;
 }
 function renderTaskItem(section,task,doneData,isCustom,locked){
   const isDone=!!doneData,initials=doneData?doneData.initials:'';
