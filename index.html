@@ -303,6 +303,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cycle-week-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--gray-200);background:var(--card);cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-600)}
 .cycle-week-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 .cycle-week-btn:not(.active):hover{background:var(--blue-light)}
+.task-item.locked{opacity:0.55;pointer-events:none}
+.task-item.day-off{background:#f0fdf4}
+.task-item.day-off .task-text{color:var(--gray-400);text-decoration:line-through}
+.bonus-tracker{background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px}
+.bonus-week-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.bonus-week-card{flex:1;min-width:120px;border-radius:10px;padding:10px 12px;border:2px solid var(--gray-200);text-align:center}
+.bonus-week-card.signed{background:var(--green-light);border-color:var(--green)}
+.bonus-week-card.failed{background:var(--red-light);border-color:var(--red)}
+.bonus-week-card.current{background:var(--blue-light);border-color:var(--blue)}
+.bonus-week-card.future{background:var(--gray-50);border-color:var(--gray-200)}
+.bonus-week-card .bwc-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.bonus-week-card .bwc-status{font-size:18px;margin-bottom:2px}
+.bonus-week-card .bwc-dates{font-size:10px;color:var(--gray-400)}
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;justify-content:center}
 .modal-box{background:var(--card);border-radius:14px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2);min-width:280px;text-align:center}
 .modal-box h3{font-size:16px;margin-bottom:4px}
@@ -2624,6 +2637,24 @@ function getTaskWeekKey(dateStr){
   const wk=Math.ceil((days+oneJan.getDay()+1)/7);
   return yr+'-W'+String(wk).padStart(2,'0');
 }
+function getWeekMonday(weekKey){
+  const [yr,wStr]=weekKey.split('-W');const year=parseInt(yr),week=parseInt(wStr);
+  const jan4=new Date(year,0,4);const jan4dow=jan4.getDay()||7;
+  const mon=new Date(jan4);mon.setDate(jan4.getDate()-(jan4dow-1)+(week-1)*7);
+  return mon;
+}
+function getWeekSunday(weekKey){const mon=getWeekMonday(weekKey);const sun=new Date(mon);sun.setDate(mon.getDate()+6);return sun;}
+function isWeekLocked(weekKey){
+  const sun=getWeekSunday(weekKey);sun.setHours(23,59,59,0);
+  return new Date()>sun;
+}
+function getMonthWeekKeys(year,month){
+  // Weeks where Monday falls in the given month (1-indexed)
+  const weeks=[];const d=new Date(year,month-1,1);
+  const dow=d.getDay()||7;if(dow!==1)d.setDate(d.getDate()+(8-dow));
+  while(d.getMonth()===month-1){weeks.push(getTaskWeekKey(d.toISOString().split('T')[0]));d.setDate(d.getDate()+7);}
+  return weeks;
+}
 
 /*  -  -  Tasks Firebase Listeners  -  -  */
 function listenTasks(){
@@ -2665,6 +2696,13 @@ function listenTasks(){
       state.tasksData[loc][key][sKey]=snap.val()||{};render();
     });activeListeners.push({ref:cRef,event:'value'});
   });
+  // Did-not-work flags and weekly sign-offs (whole collections, small datasets)
+  const dnwRef=fbRef('tasks/'+loc+'/did_not_work');
+  dnwRef.on('value',snap=>{if(!state.tasksData[loc])state.tasksData[loc]={};state.tasksData[loc].did_not_work=snap.val()||{};render();});
+  activeListeners.push({ref:dnwRef,event:'value'});
+  const signoffRef=fbRef('tasks/'+loc+'/weekly_signoff');
+  signoffRef.on('value',snap=>{if(!state.tasksData[loc])state.tasksData[loc]={};state.tasksData[loc].weekly_signoff=snap.val()||{};render();});
+  activeListeners.push({ref:signoffRef,event:'value'});
 }
 function listenGoals(){
   const loc=state.goalsLoc,mk=state.goalsMonth;
@@ -2696,6 +2734,22 @@ function undoTask(section,taskId){
   fbSet('tasks/'+loc+'/'+sPath+'/'+sKey+'/'+taskId,null);
 }
 function cancelModal(){state.modalTask=null;render();}
+function markDidNotWork(){state.modalTask={section:'_dnw',taskId:state.tasksDate};render();}
+function confirmDidNotWork(){
+  const input=document.getElementById('initialsInput');if(!input)return;
+  const initials=input.value.trim().toUpperCase();if(!initials){input.style.borderColor='var(--red)';return;}
+  fbSet('tasks/'+state.tasksLoc+'/did_not_work/'+state.tasksDate,{initials,ts:Date.now()});
+  state.modalTask=null;render();
+}
+function undoDidNotWork(dateKey){fbSet('tasks/'+state.tasksLoc+'/did_not_work/'+dateKey,null);}
+function showSignOffModal(){state.modalTask={section:'_signoff',taskId:getTaskWeekKey(state.tasksDate)};render();}
+function confirmSignOff(){
+  const input=document.getElementById('initialsInput');if(!input)return;
+  const initials=input.value.trim().toUpperCase();if(!initials){input.style.borderColor='var(--red)';return;}
+  const weekKey=getTaskWeekKey(state.tasksDate);
+  fbSet('tasks/'+state.tasksLoc+'/weekly_signoff/'+weekKey,{initials,ts:Date.now()});
+  state.modalTask=null;render();
+}
 function setTasksLoc(locId){state.tasksLoc=locId;listenTasks();}
 function changeTasksDate(delta){
   const d=new Date(state.tasksDate+'T12:00:00');d.setDate(d.getDate()+delta);
@@ -2755,19 +2809,78 @@ function renderTasksPage(){
     html+='<button class="loc-btn '+cls+'" onclick="setTasksLoc(\''+l.id+'\')">'+l.short+'</button>';
   });
   html+='</div>';
-  // Bonus warning banner
-  html+='<div style="background:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff;border-radius:12px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:14px;">';
-  html+='<span style="font-size:26px;flex-shrink:0;">⚠️</span>';
-  html+='<div><div style="font-weight:800;font-size:14px;margin-bottom:3px;">Bonus Eligibility Requirement</div>';
-  html+='<div style="font-size:13px;opacity:0.9;line-height:1.5;">All required daily and weekly tasks must be completed each week to remain eligible for your bonus. Incomplete checklists will disqualify you for that week.</div></div></div>';
+  const locSignoffs=locData.weekly_signoff||{};
+  const locDnw=locData.did_not_work||{};
+  const weekLocked=isWeekLocked(weekKey)||!!locSignoffs[weekKey];
+  const dayOff=!!locDnw[dateKey];
+  const dailyLocked=weekLocked;
+
+  // Bonus tracker
+  const now=new Date(),bmYear=now.getFullYear(),bmMonth=now.getMonth()+1;
+  const monthWeeks=getMonthWeekKeys(bmYear,bmMonth);
+  const signedCount=monthWeeks.filter(wk=>locSignoffs[wk]).length;
+  const eligible=signedCount>=4;
+  html+='<div class="bonus-tracker">';
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;">';
+  html+='<div style="font-weight:800;font-size:14px;color:var(--primary);">🏆 Bonus Tracker — '+now.toLocaleDateString('en-US',{month:'long',year:'numeric'})+'</div>';
+  html+='<div style="font-size:13px;font-weight:700;color:'+(eligible?'var(--green)':signedCount===0?'var(--gray-400)':'var(--orange)')+';">'+signedCount+'/4 weeks signed off</div>';
+  html+='</div>';
+  html+='<div class="bonus-week-row">';
+  monthWeeks.forEach((wk,i)=>{
+    const mon=getWeekMonday(wk),sun=getWeekSunday(wk);
+    const fmt=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const isCur=wk===weekKey,isPast=isWeekLocked(wk),isSigned=!!locSignoffs[wk];
+    let cls='bonus-week-card '+(isSigned?'signed':isPast&&!isSigned?'failed':isCur?'current':'future');
+    let statusIcon=isSigned?'✅':isPast&&!isSigned?'❌':isCur?'⏳':'🔜';
+    let label='Week '+(i+1);
+    html+='<div class="'+cls+'"><div class="bwc-label">'+label+'</div><div class="bwc-status">'+statusIcon+'</div><div class="bwc-dates">'+fmt(mon)+' – '+fmt(sun)+'</div>';
+    if(isSigned){html+='<div style="font-size:10px;color:var(--green);font-weight:600;margin-top:2px;">Signed: '+esc(locSignoffs[wk].initials)+'</div>';}
+    html+='</div>';
+  });
+  if(monthWeeks.length<4){
+    for(let i=monthWeeks.length;i<4;i++){
+      html+='<div class="bonus-week-card future"><div class="bwc-label">Week '+(i+1)+'</div><div class="bwc-status">🔜</div><div class="bwc-dates">Upcoming</div></div>';
+    }
+  }
+  html+='</div>';
+  if(eligible){html+='<div style="margin-top:10px;padding:8px 12px;background:var(--green-light);border-radius:8px;font-size:13px;font-weight:700;color:var(--green);">🎉 Eligible for this month\'s bonus!</div>';}
+  else{html+='<div style="margin-top:10px;padding:8px 12px;background:var(--orange-light);border-radius:8px;font-size:13px;color:#92400e;">Need '+(4-signedCount)+' more signed week'+(4-signedCount!==1?'s':'')+' to qualify for bonus this month.</div>';}
+  html+='</div>';
+
   html+='<div class="date-nav">';
   html+='<button onclick="changeTasksDate(-1)">&larr; Yesterday</button>';
   html+='<span class="date-label">'+navLabel+'</span>';
   html+='<button onclick="changeTasksDate(1)">Tomorrow &rarr;</button></div>';
+
+  // "Did not work" bar for daily section
   const customDaily=(locData['custom_daily']||{})[dateKey]||{};
   const customWeekly=(locData['custom_weekly']||{})[weekKey]||{};
-  html+=renderTaskSection('daily','Daily Checklist',dailyTasks,dailyData,customDaily);
-  html+=renderTaskSection('weekly','Weekly Recurring',weeklyRec,weeklyData,customWeekly);
+  let dnwBar='';
+  if(!weekLocked){
+    if(dayOff){
+      dnwBar='<div style="display:flex;align-items:center;gap:10px;padding:10px 20px;background:#f0fdf4;border-radius:10px;margin-bottom:8px;border:1.5px solid var(--green);">';
+      dnwBar+='<span style="font-size:20px;">😴</span><span style="font-weight:700;font-size:13px;color:var(--green);flex:1;">Day off marked by '+esc(locDnw[dateKey].initials)+'</span>';
+      dnwBar+='<button onclick="undoDidNotWork(\''+dateKey+'\')" style="font-size:12px;padding:4px 10px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;cursor:pointer;color:var(--gray-600);">Undo</button></div>';
+    }else{
+      dnwBar='<div style="display:flex;justify-content:flex-end;margin-bottom:6px;">';
+      dnwBar+='<button onclick="markDidNotWork()" style="font-size:12px;padding:6px 14px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;color:var(--gray-600);font-weight:600;">😴 Did not work today</button></div>';
+    }
+  }
+  html+=dnwBar;
+  html+=renderTaskSection('daily','Daily Checklist',dailyTasks,dayOff?{}:dailyData,customDaily,dailyLocked||dayOff);
+  html+=renderTaskSection('weekly','Weekly Recurring',weeklyRec,weeklyData,customWeekly,weekLocked);
+
+  // Week sign-off button
+  if(!weekLocked){
+    html+='<div style="margin-top:8px;padding:16px 20px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;gap:12px;">';
+    html+='<div><div style="font-weight:700;font-size:14px;">Ready to sign off this week?</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px;">Sign off confirms all tasks are complete. The week will be locked and count toward your bonus.</div></div>';
+    html+='<button onclick="showSignOffModal()" style="padding:10px 20px;background:var(--green);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;">✅ Sign Off Week</button>';
+    html+='</div>';
+  }else if(locSignoffs[weekKey]){
+    html+='<div style="margin-top:8px;padding:12px 20px;background:var(--green-light);border-radius:12px;font-size:13px;font-weight:700;color:var(--green);">✅ Week signed off by '+esc(locSignoffs[weekKey].initials)+' — counts toward bonus</div>';
+  }else{
+    html+='<div style="margin-top:8px;padding:12px 20px;background:var(--red-light);border-radius:12px;font-size:13px;font-weight:700;color:var(--red);">🔒 This week is locked. It was not signed off and will not count toward bonus.</div>';
+  }
   const customMonthly=(locData['custom_monthly']||{})[monthKey]||{};
   if(monthlyTasks.length>0||Object.keys(customMonthly).length>0){
     const monthLabel=new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
@@ -2782,25 +2895,27 @@ function renderTasksPage(){
   if(state.modalTask)html+=renderInitialsModal();
   return html;
 }
-function renderTaskSection(section,title,tasks,completionData,customTasksObj){
+function renderTaskSection(section,title,tasks,completionData,customTasksObj,locked){
   const key=section,collapsed=state.collapsedSections[key];
   const customArr=Object.entries(customTasksObj||{}).map(([id,v])=>({id,text:v.text,custom:true}));
   const allTasks=[...tasks,...customArr];
   const completed=allTasks.filter(t=>completionData[t.id]).length,total=allTasks.length;
   const pillCls=completed===total&&total>0?'complete':completed>0?'partial':'empty';
   let html='<div class="task-section">';
-  html+='<div class="task-section-header" onclick="toggleSection(\''+key+'\')"><h3><span class="chevron '+(collapsed?'':'open')+'">&#9654;</span>'+title+'</h3><span class="progress-pill '+pillCls+'">'+completed+'/'+total+'</span></div>';
+  const lockBadge=locked?'<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:999px;margin-left:8px;">🔒 Locked</span>':'';
+  html+='<div class="task-section-header" onclick="toggleSection(\''+key+'\')"><h3><span class="chevron '+(collapsed?'':'open')+'">&#9654;</span>'+title+lockBadge+'</h3><span class="progress-pill '+pillCls+'">'+completed+'/'+total+'</span></div>';
   html+='<div class="task-list '+(collapsed?'collapsed':'')+'">';
-  tasks.forEach(t=>{html+=renderTaskItem(section,t,completionData[t.id]);});
+  tasks.forEach(t=>{html+=renderTaskItem(section,t,completionData[t.id],false,locked);});
   if(customArr.length>0){
-    html+='<div class="task-cat">Added This Week</div>';
-    customArr.forEach(t=>{html+=renderTaskItem(section,t,completionData[t.id],true);});
+    html+='<div class="task-cat">Added</div>';
+    customArr.forEach(t=>{html+=renderTaskItem(section,t,completionData[t.id],true,locked);});
   }
-  // Add-task input row
-  html+='<div style="display:flex;align-items:center;gap:8px;padding:10px 20px;border-top:1px solid var(--gray-100);background:var(--gray-50)">';
-  html+='<input id="customTaskInput_'+section+'" placeholder="Add a task…" maxlength="120" onkeydown="if(event.key===\'Enter\')addCustomTask(\''+section+'\')" style="flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;outline:none" />';
-  html+='<button onclick="addCustomTask(\''+section+'\')" style="padding:7px 14px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">+ Add</button>';
-  html+='</div>';
+  if(!locked){
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:10px 20px;border-top:1px solid var(--gray-100);background:var(--gray-50)">';
+    html+='<input id="customTaskInput_'+section+'" placeholder="Add a task…" maxlength="120" onkeydown="if(event.key===\'Enter\')addCustomTask(\''+section+'\')" style="flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;outline:none" />';
+    html+='<button onclick="addCustomTask(\''+section+'\')" style="padding:7px 14px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">+ Add</button>';
+    html+='</div>';
+  }
   html+='</div></div>';return html;
 }
 
@@ -2835,22 +2950,30 @@ function renderCycleSection(section,title,tasks,completionData){
   });
   html+='</div></div>';return html;
 }
-function renderTaskItem(section,task,doneData,isCustom){
+function renderTaskItem(section,task,doneData,isCustom,locked){
   const isDone=!!doneData,initials=doneData?doneData.initials:'';
   const ts=doneData?doneData.ts:0;
   const timeStr=ts?new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
-  let html='<div class="task-item '+(isDone?'done':'')+'">';
+  let cls='task-item'+(isDone?' done':'')+(locked?' locked':'');
+  let html='<div class="'+cls+'">';
   if(isDone){
-    html+='<div class="task-check checked" onclick="undoTask(\''+section+'\',\''+task.id+'\')">'+esc(initials)+'</div>';
+    html+='<div class="task-check checked"'+(locked?'':' onclick="undoTask(\''+section+'\',\''+task.id+'\')"')+'>'+esc(initials)+'</div>';
   }else{
-    html+='<div class="task-check" onclick="showInitialsModal(\''+section+'\',\''+task.id+'\')" title="Click to complete"></div>';
+    html+='<div class="task-check"'+(locked?'':' onclick="showInitialsModal(\''+section+'\',\''+task.id+'\')" title="Click to complete"')+'></div>';
   }
   html+='<span class="task-text">'+esc(task.text)+'</span>';
   if(isDone){html+='<span class="task-initials">'+esc(initials)+'</span><span class="task-time">'+timeStr+'</span>';}
-  if(isCustom){html+='<button onclick="deleteCustomTask(\''+section+'\',\''+task.id+'\')" title="Remove task" style="background:none;border:none;cursor:pointer;color:var(--gray-300);font-size:14px;padding:0 4px;line-height:1;flex-shrink:0;" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--gray-300)\'">✕</button>';}
+  if(isCustom&&!locked){html+='<button onclick="deleteCustomTask(\''+section+'\',\''+task.id+'\')" title="Remove task" style="background:none;border:none;cursor:pointer;color:var(--gray-300);font-size:14px;padding:0 4px;line-height:1;flex-shrink:0;" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--gray-300)\'">✕</button>';}
   html+='</div>';return html;
 }
 function renderInitialsModal(){
+  const m=state.modalTask;
+  if(m&&m.section==='_dnw'){
+    return '<div class="modal-overlay" onclick="cancelModal()"><div class="modal-box" onclick="event.stopPropagation()"><h3>Did Not Work</h3><p>Enter your initials to mark today as a day off — daily tasks will be waived.</p><input id="initialsInput" maxlength="4" placeholder="e.g. MM" autofocus onkeydown="if(event.key===\'Enter\')confirmDidNotWork()" /><div class="modal-actions"><button class="btn-cancel" onclick="cancelModal()">Cancel</button><button class="btn-confirm" onclick="confirmDidNotWork()">Confirm</button></div></div></div>';
+  }
+  if(m&&m.section==='_signoff'){
+    return '<div class="modal-overlay" onclick="cancelModal()"><div class="modal-box" onclick="event.stopPropagation()"><h3>Sign Off This Week</h3><p>By signing off you confirm all required tasks were completed this week. This will lock the week.</p><input id="initialsInput" maxlength="4" placeholder="e.g. MM" autofocus onkeydown="if(event.key===\'Enter\')confirmSignOff()" /><div class="modal-actions"><button class="btn-cancel" onclick="cancelModal()">Cancel</button><button class="btn-confirm" onclick="confirmSignOff()">Sign Off</button></div></div></div>';
+  }
   return '<div class="modal-overlay" onclick="cancelModal()"><div class="modal-box" onclick="event.stopPropagation()"><h3>Complete Task</h3><p>Enter your initials to mark as done</p><input id="initialsInput" maxlength="4" placeholder="e.g. MM" autofocus onkeydown="if(event.key===\'Enter\')confirmTask()" /><div class="modal-actions"><button class="btn-cancel" onclick="cancelModal()">Cancel</button><button class="btn-confirm" onclick="confirmTask()">Complete</button></div></div></div>';
 }
 /*  -  -  Render Monthly Goals Page  -  -  */
