@@ -1348,7 +1348,7 @@ function renderPulseBar() {
   ['waunakee','eastmad','verona'].forEach(loc => {
     const daily = getDailyTasks(loc);
     tasksTotal += daily.length;
-    const done = ((state.tasksData[loc] || {}).thisweek || {})[thisWeekKey] || {};
+    const done = ((state.tasksData[loc] || {}).daily || {})[todayKey] || {};
     tasksDone += daily.filter(t => done[t.id]).length;
   });
 
@@ -2628,12 +2628,13 @@ function getTaskWeekKey(dateStr){
 /*  -  -  Tasks Firebase Listeners  -  -  */
 function listenTasks(){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
-  const thisweekRef=fbRef('tasks/'+loc+'/thisweek/'+weekKey);
-  thisweekRef.on('value',snap=>{
+  // Daily tasks — keyed by calendar date, reset each day
+  const dailyRef=fbRef('tasks/'+loc+'/daily/'+dateKey);
+  dailyRef.on('value',snap=>{
     if(!state.tasksData[loc])state.tasksData[loc]={};
-    if(!state.tasksData[loc].thisweek)state.tasksData[loc].thisweek={};
-    state.tasksData[loc].thisweek[weekKey]=snap.val()||{};render();
-  });activeListeners.push({ref:thisweekRef,event:'value'});
+    if(!state.tasksData[loc].daily)state.tasksData[loc].daily={};
+    state.tasksData[loc].daily[dateKey]=snap.val()||{};render();
+  });activeListeners.push({ref:dailyRef,event:'value'});
   const weeklyRef=fbRef('tasks/'+loc+'/weekly/'+weekKey);
   weeklyRef.on('value',snap=>{
     if(!state.tasksData[loc])state.tasksData[loc]={};
@@ -2655,13 +2656,13 @@ function listenTasks(){
     state.tasksData[loc].monthly[monthKey]=snap.val()||{};render();
   });activeListeners.push({ref:monthlyRef,event:'value'});
   // Custom tasks (editable by staff)
-  ['thisweek','weekly','monthly'].forEach(section=>{
-    const cRef=fbRef('tasks/'+loc+'/custom_'+section+'/'+weekKey);
+  [['daily',dateKey],['weekly',weekKey],['monthly',getTaskMonthKey()]].forEach(([section,sKey])=>{
+    const cRef=fbRef('tasks/'+loc+'/custom_'+section+'/'+sKey);
     cRef.on('value',snap=>{
       if(!state.tasksData[loc])state.tasksData[loc]={};
       const key='custom_'+section;
       if(!state.tasksData[loc][key])state.tasksData[loc][key]={};
-      state.tasksData[loc][key][weekKey]=snap.val()||{};render();
+      state.tasksData[loc][key][sKey]=snap.val()||{};render();
     });activeListeners.push({ref:cRef,event:'value'});
   });
 }
@@ -2683,21 +2684,21 @@ function confirmTask(){
   const m=state.modalTask,loc=state.tasksLoc,dateKey=state.tasksDate;
   const weekKey=getTaskWeekKey(dateKey),ts=Date.now();
   const monthKey=getTaskMonthKey();
-  const sectionPath=m.section==='cycle'?'cycle':m.section==='weekly'?'weekly':m.section==='monthly'?'monthly':'thisweek';
-  const sectionKey=m.section==='monthly'?monthKey:m.section==='cycle'?weekKey:weekKey;
+  const sectionPath=m.section==='cycle'?'cycle':m.section==='weekly'?'weekly':m.section==='monthly'?'monthly':'daily';
+  const sectionKey=m.section==='monthly'?monthKey:m.section==='cycle'?weekKey:m.section==='weekly'?weekKey:dateKey;
   fbSet('tasks/'+loc+'/'+sectionPath+'/'+sectionKey+'/'+m.taskId,{initials,ts});
   state.modalTask=null;render();
 }
 function undoTask(section,taskId){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
-  const sPath=section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'thisweek';
-  const sKey=section==='monthly'?getTaskMonthKey():weekKey;
+  const sPath=section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
+  const sKey=section==='monthly'?getTaskMonthKey():section==='weekly'||section==='cycle'?weekKey:dateKey;
   fbSet('tasks/'+loc+'/'+sPath+'/'+sKey+'/'+taskId,null);
 }
 function cancelModal(){state.modalTask=null;render();}
 function setTasksLoc(locId){state.tasksLoc=locId;listenTasks();}
 function changeTasksDate(delta){
-  const d=new Date(state.tasksDate+'T12:00:00');d.setDate(d.getDate()+(delta*7));
+  const d=new Date(state.tasksDate+'T12:00:00');d.setDate(d.getDate()+delta);
   state.tasksDate=d.toISOString().split('T')[0];listenTasks();
 }
 function setTasksCycleWeek(w){state.tasksCycleWeek=w;render();}
@@ -2728,7 +2729,7 @@ function updateGoalField(field,val){
 function renderTasksPage(){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
   const locData=state.tasksData[loc]||{};
-  const thisweekData=(locData.thisweek||{})[weekKey]||{};
+  const dailyData=(locData.daily||{})[dateKey]||{};
   const weeklyData=(locData.weekly||{})[weekKey]||{};
   const cycleData=(locData.cycle||{})[weekKey]||{};
   const monthKey=getTaskMonthKey();
@@ -2736,12 +2737,12 @@ function renderTasksPage(){
   const dailyTasks=getDailyTasks(loc),weeklyRec=getWeeklyRec(loc),monthlyTasks=getMonthlyTasks(loc);
   const cycleDefs=getCycleTasks(loc),cycleWeek=state.tasksCycleWeek;
   const cw=cycleDefs[cycleWeek]||{name:'',tasks:[]};
-  // Compute week range label (Mon–Sun)
-  const monObj=new Date(dateKey+'T12:00:00');
-  const dow=monObj.getDay();monObj.setDate(monObj.getDate()-(dow===0?6:dow-1));
-  const sunObj=new Date(monObj);sunObj.setDate(monObj.getDate()+6);
-  const fmt=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  const weekLabel='Week of '+fmt(monObj)+' – '+fmt(sunObj)+', '+sunObj.getFullYear()+' ('+weekKey+')';
+  // Date label
+  const dateObj=new Date(dateKey+'T12:00:00');
+  const today=new Date().toISOString().split('T')[0];
+  const isToday=dateKey===today;
+  const dayLabel=dateObj.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const navLabel=isToday?'Today — '+dayLabel:dayLabel;
   let html='<div class="loc-selector">';
   const taskLocs=[
     {id:'waunakee',short:'WAU',gn:false},
@@ -2753,13 +2754,19 @@ function renderTasksPage(){
     const cls=l.id===loc?(l.gn?'active':'active lvlup'):'';
     html+='<button class="loc-btn '+cls+'" onclick="setTasksLoc(\''+l.id+'\')">'+l.short+'</button>';
   });
-  html+='</div><div class="date-nav">';
-  html+='<button onclick="changeTasksDate(-1)">&larr; Prev Week</button>';
-  html+='<span class="date-label">'+weekLabel+'</span>';
-  html+='<button onclick="changeTasksDate(1)">Next Week &rarr;</button></div>';
-  const customThisweek=(locData['custom_thisweek']||{})[weekKey]||{};
+  html+='</div>';
+  // Bonus warning banner
+  html+='<div style="background:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff;border-radius:12px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:14px;">';
+  html+='<span style="font-size:26px;flex-shrink:0;">⚠️</span>';
+  html+='<div><div style="font-weight:800;font-size:14px;margin-bottom:3px;">Bonus Eligibility Requirement</div>';
+  html+='<div style="font-size:13px;opacity:0.9;line-height:1.5;">All required daily and weekly tasks must be completed each week to remain eligible for your bonus. Incomplete checklists will disqualify you for that week.</div></div></div>';
+  html+='<div class="date-nav">';
+  html+='<button onclick="changeTasksDate(-1)">&larr; Yesterday</button>';
+  html+='<span class="date-label">'+navLabel+'</span>';
+  html+='<button onclick="changeTasksDate(1)">Tomorrow &rarr;</button></div>';
+  const customDaily=(locData['custom_daily']||{})[dateKey]||{};
   const customWeekly=(locData['custom_weekly']||{})[weekKey]||{};
-  html+=renderTaskSection('thisweek','This Week\'s Tasks',dailyTasks,thisweekData,customThisweek);
+  html+=renderTaskSection('daily','Daily Checklist',dailyTasks,dailyData,customDaily);
   html+=renderTaskSection('weekly','Weekly Recurring',weeklyRec,weeklyData,customWeekly);
   const customMonthly=(locData['custom_monthly']||{})[monthKey]||{};
   if(monthlyTasks.length>0||Object.keys(customMonthly).length>0){
@@ -2798,10 +2805,10 @@ function renderTaskSection(section,title,tasks,completionData,customTasksObj){
 }
 
 function deleteCustomTask(section,taskId){
-  const loc=state.tasksLoc,weekKey=getTaskWeekKey(state.tasksDate),monthKey=getTaskMonthKey();
-  const sKey=section==='monthly'?monthKey:weekKey;
+  const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),monthKey=getTaskMonthKey();
+  const sKey=section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
   fbSet('tasks/'+loc+'/custom_'+section+'/'+sKey+'/'+taskId,null);
-  const sPath=section==='weekly'?'weekly':section==='monthly'?'monthly':'thisweek';
+  const sPath=section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
   fbSet('tasks/'+loc+'/'+sPath+'/'+sKey+'/'+taskId,null);
 }
 
@@ -2810,8 +2817,8 @@ function addCustomTask(section){
   if(!input)return;
   const text=input.value.trim();
   if(!text)return;
-  const loc=state.tasksLoc,weekKey=getTaskWeekKey(state.tasksDate),monthKey=getTaskMonthKey();
-  const sKey=section==='monthly'?monthKey:weekKey;
+  const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),monthKey=getTaskMonthKey();
+  const sKey=section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
   const id='c_'+Date.now();
   fbSet('tasks/'+loc+'/custom_'+section+'/'+sKey+'/'+id,{text,createdAt:Date.now()});
   input.value='';
