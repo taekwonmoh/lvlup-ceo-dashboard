@@ -654,6 +654,14 @@ const SCORECARD_PEOPLE = {
   goninjaW: [{ id: 'smith', name: 'Ms. Smith' }],
   goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
 };
+const TASK_EMPLOYEES = [
+  { id: 'bryanG',   name: 'Bryan G',   loc: 'waunakee', label: 'Waunakee', bonus: true  },
+  { id: 'nikkiB',   name: 'Nikki B',   loc: 'eastmad',  label: 'E. Madison', bonus: true  },
+  { id: 'joeyZ',    name: 'Joey Z',    loc: 'verona',   label: 'Verona',   bonus: true  },
+  { id: 'sueK',     name: 'Sue K',     loc: 'waunakee', label: 'LVLUP',    bonus: true  },
+  { id: 'mirandaS', name: 'Miranda S', loc: 'goninjaW', label: 'Go Ninja', bonus: true  },
+  { id: 'marioS',   name: 'Mario S',   loc: 'verona',   label: 'Verona',   bonus: false },
+];
 
 /*  -  -  Task Definitions  -  -  */
 const LVLUP_DAILY = [
@@ -2610,7 +2618,7 @@ function updateConnStatus(online) {
 /*  -  -  Init  -  -  */
 
 /*  -  -  Tasks Hub State  -  -  */
-state.tasksLoc = 'waunakee';
+state.tasksLoc = 'bryanG';
 state.tasksDate = new Date().toISOString().split('T')[0];
 state.tasksCycleWeek = 1;
 state.tasksData = {};
@@ -2622,7 +2630,12 @@ state.modalTask = null;
 state.scorecardTab = 'weekly';   // 'weekly' | 'performance'
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
 
-function isGoNinja(locId){return locId==='goninjaW'||locId==='goninjaV';}
+function isGoNinja(empOrLocId){
+  const emp=TASK_EMPLOYEES.find(e=>e.id===empOrLocId);
+  if(emp)return emp.loc==='goninjaW'||emp.loc==='goninjaV';
+  return empOrLocId==='goninjaW'||empOrLocId==='goninjaV';
+}
+function getEmpById(empId){return TASK_EMPLOYEES.find(e=>e.id===empId)||TASK_EMPLOYEES[0];}
 function getDailyTasks(locId){return isGoNinja(locId)?GONINJA_DAILY:LVLUP_DAILY;}
 function getWeeklyRec(locId){return isGoNinja(locId)?GONINJA_WEEKLY_REC:LVLUP_WEEKLY_REC;}
 function getMonthlyTasks(locId){return isGoNinja(locId)?GONINJA_MONTHLY:LVLUP_MONTHLY;}
@@ -2657,51 +2670,49 @@ function getMonthWeekKeys(year,month){
 }
 
 /*  -  -  Tasks Firebase Listeners  -  -  */
+function empPath(empId){return 'tasks/emp/'+empId;}
 function listenTasks(){
-  const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
-  // Daily tasks — keyed by calendar date, reset each day
-  const dailyRef=fbRef('tasks/'+loc+'/daily/'+dateKey);
+  const emp=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
+  const base=empPath(emp);
+  const dailyRef=fbRef(base+'/daily/'+dateKey);
   dailyRef.on('value',snap=>{
-    if(!state.tasksData[loc])state.tasksData[loc]={};
-    if(!state.tasksData[loc].daily)state.tasksData[loc].daily={};
-    state.tasksData[loc].daily[dateKey]=snap.val()||{};render();
+    if(!state.tasksData[emp])state.tasksData[emp]={};
+    if(!state.tasksData[emp].daily)state.tasksData[emp].daily={};
+    state.tasksData[emp].daily[dateKey]=snap.val()||{};render();
   });activeListeners.push({ref:dailyRef,event:'value'});
-  const weeklyRef=fbRef('tasks/'+loc+'/weekly/'+weekKey);
+  const weeklyRef=fbRef(base+'/weekly/'+weekKey);
   weeklyRef.on('value',snap=>{
-    if(!state.tasksData[loc])state.tasksData[loc]={};
-    if(!state.tasksData[loc].weekly)state.tasksData[loc].weekly={};
-    state.tasksData[loc].weekly[weekKey]=snap.val()||{};render();
+    if(!state.tasksData[emp])state.tasksData[emp]={};
+    if(!state.tasksData[emp].weekly)state.tasksData[emp].weekly={};
+    state.tasksData[emp].weekly[weekKey]=snap.val()||{};render();
   });activeListeners.push({ref:weeklyRef,event:'value'});
-  const cycleRef=fbRef('tasks/'+loc+'/cycle/'+weekKey);
+  const cycleRef=fbRef(base+'/cycle/'+weekKey);
   cycleRef.on('value',snap=>{
-    if(!state.tasksData[loc])state.tasksData[loc]={};
-    if(!state.tasksData[loc].cycle)state.tasksData[loc].cycle={};
-    state.tasksData[loc].cycle[weekKey]=snap.val()||{};render();
+    if(!state.tasksData[emp])state.tasksData[emp]={};
+    if(!state.tasksData[emp].cycle)state.tasksData[emp].cycle={};
+    state.tasksData[emp].cycle[weekKey]=snap.val()||{};render();
   });activeListeners.push({ref:cycleRef,event:'value'});
-  // Monthly tasks
   const monthKey=getTaskMonthKey();
-  const monthlyRef=fbRef('tasks/'+loc+'/monthly/'+monthKey);
+  const monthlyRef=fbRef(base+'/monthly/'+monthKey);
   monthlyRef.on('value',snap=>{
-    if(!state.tasksData[loc])state.tasksData[loc]={};
-    if(!state.tasksData[loc].monthly)state.tasksData[loc].monthly={};
-    state.tasksData[loc].monthly[monthKey]=snap.val()||{};render();
+    if(!state.tasksData[emp])state.tasksData[emp]={};
+    if(!state.tasksData[emp].monthly)state.tasksData[emp].monthly={};
+    state.tasksData[emp].monthly[monthKey]=snap.val()||{};render();
   });activeListeners.push({ref:monthlyRef,event:'value'});
-  // Custom tasks (editable by staff)
-  [['daily',dateKey],['weekly',weekKey],['monthly',getTaskMonthKey()]].forEach(([section,sKey])=>{
-    const cRef=fbRef('tasks/'+loc+'/custom_'+section+'/'+sKey);
+  [['daily',dateKey],['weekly',weekKey],['monthly',monthKey]].forEach(([section,sKey])=>{
+    const cRef=fbRef(base+'/custom_'+section+'/'+sKey);
     cRef.on('value',snap=>{
-      if(!state.tasksData[loc])state.tasksData[loc]={};
+      if(!state.tasksData[emp])state.tasksData[emp]={};
       const key='custom_'+section;
-      if(!state.tasksData[loc][key])state.tasksData[loc][key]={};
-      state.tasksData[loc][key][sKey]=snap.val()||{};render();
+      if(!state.tasksData[emp][key])state.tasksData[emp][key]={};
+      state.tasksData[emp][key][sKey]=snap.val()||{};render();
     });activeListeners.push({ref:cRef,event:'value'});
   });
-  // Did-not-work flags and weekly sign-offs (whole collections, small datasets)
-  const dnwRef=fbRef('tasks/'+loc+'/did_not_work');
-  dnwRef.on('value',snap=>{if(!state.tasksData[loc])state.tasksData[loc]={};state.tasksData[loc].did_not_work=snap.val()||{};render();});
+  const dnwRef=fbRef(base+'/did_not_work');
+  dnwRef.on('value',snap=>{if(!state.tasksData[emp])state.tasksData[emp]={};state.tasksData[emp].did_not_work=snap.val()||{};render();});
   activeListeners.push({ref:dnwRef,event:'value'});
-  const signoffRef=fbRef('tasks/'+loc+'/weekly_signoff');
-  signoffRef.on('value',snap=>{if(!state.tasksData[loc])state.tasksData[loc]={};state.tasksData[loc].weekly_signoff=snap.val()||{};render();});
+  const signoffRef=fbRef(base+'/weekly_signoff');
+  signoffRef.on('value',snap=>{if(!state.tasksData[emp])state.tasksData[emp]={};state.tasksData[emp].weekly_signoff=snap.val()||{};render();});
   activeListeners.push({ref:signoffRef,event:'value'});
 }
 function listenGoals(){
@@ -2719,35 +2730,35 @@ function confirmTask(){
   const input=document.getElementById('initialsInput');if(!input)return;
   const initials=input.value.trim().toUpperCase();
   if(!initials){input.style.borderColor='var(--red)';return;}
-  const m=state.modalTask,loc=state.tasksLoc,dateKey=state.tasksDate;
+  const m=state.modalTask,dateKey=state.tasksDate;
   const weekKey=getTaskWeekKey(dateKey),ts=Date.now();
   const monthKey=getTaskMonthKey();
   const sectionPath=m.section==='cycle'?'cycle':m.section==='weekly'?'weekly':m.section==='monthly'?'monthly':'daily';
   const sectionKey=m.section==='monthly'?monthKey:m.section==='cycle'?weekKey:m.section==='weekly'?weekKey:dateKey;
-  fbSet('tasks/'+loc+'/'+sectionPath+'/'+sectionKey+'/'+m.taskId,{initials,ts});
+  fbSet(empPath(state.tasksLoc)+'/'+sectionPath+'/'+sectionKey+'/'+m.taskId,{initials,ts});
   state.modalTask=null;render();
 }
 function undoTask(section,taskId){
-  const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
+  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
   const sPath=section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
   const sKey=section==='monthly'?getTaskMonthKey():section==='weekly'||section==='cycle'?weekKey:dateKey;
-  fbSet('tasks/'+loc+'/'+sPath+'/'+sKey+'/'+taskId,null);
+  fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,null);
 }
 function cancelModal(){state.modalTask=null;render();}
 function markDidNotWork(){state.modalTask={section:'_dnw',taskId:state.tasksDate};render();}
 function confirmDidNotWork(){
   const input=document.getElementById('initialsInput');if(!input)return;
   const initials=input.value.trim().toUpperCase();if(!initials){input.style.borderColor='var(--red)';return;}
-  fbSet('tasks/'+state.tasksLoc+'/did_not_work/'+state.tasksDate,{initials,ts:Date.now()});
+  fbSet(empPath(state.tasksLoc)+'/did_not_work/'+state.tasksDate,{initials,ts:Date.now()});
   state.modalTask=null;render();
 }
-function undoDidNotWork(dateKey){fbSet('tasks/'+state.tasksLoc+'/did_not_work/'+dateKey,null);}
+function undoDidNotWork(dateKey){fbSet(empPath(state.tasksLoc)+'/did_not_work/'+dateKey,null);}
 function showSignOffModal(){state.modalTask={section:'_signoff',taskId:getTaskWeekKey(state.tasksDate)};render();}
 function confirmSignOff(){
   const input=document.getElementById('initialsInput');if(!input)return;
   const initials=input.value.trim().toUpperCase();if(!initials){input.style.borderColor='var(--red)';return;}
   const weekKey=getTaskWeekKey(state.tasksDate);
-  fbSet('tasks/'+state.tasksLoc+'/weekly_signoff/'+weekKey,{initials,ts:Date.now()});
+  fbSet(empPath(state.tasksLoc)+'/weekly_signoff/'+weekKey,{initials,ts:Date.now()});
   state.modalTask=null;render();
 }
 function setTasksLoc(locId){state.tasksLoc=locId;listenTasks();}
@@ -2797,16 +2808,13 @@ function renderTasksPage(){
   const isToday=dateKey===today;
   const dayLabel=dateObj.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   const navLabel=isToday?'Today — '+dayLabel:dayLabel;
+  const emp=getEmpById(loc);
   let html='<div class="loc-selector">';
-  const taskLocs=[
-    {id:'waunakee',short:'WAU',gn:false},
-    {id:'eastmad',short:'E.MAD',gn:false},
-    {id:'verona',short:'VER',gn:false},
-    {id:'goninjaW',short:'Go Ninja',gn:true}
-  ];
-  taskLocs.forEach(l=>{
-    const cls=l.id===loc?(l.gn?'active':'active lvlup'):'';
-    html+='<button class="loc-btn '+cls+'" onclick="setTasksLoc(\''+l.id+'\')">'+l.short+'</button>';
+  TASK_EMPLOYEES.forEach(e=>{
+    const isActive=e.id===loc;
+    const gn=e.loc==='goninjaW'||e.loc==='goninjaV';
+    const cls=isActive?(gn?'active':'active lvlup'):'';
+    html+='<button class="loc-btn '+cls+'" onclick="setTasksLoc(\''+e.id+'\')" title="'+e.label+'">'+e.name+'</button>';
   });
   html+='</div>';
   const locSignoffs=locData.weekly_signoff||{};
@@ -2820,32 +2828,36 @@ function renderTasksPage(){
   const monthWeeks=getMonthWeekKeys(bmYear,bmMonth);
   const signedCount=monthWeeks.filter(wk=>locSignoffs[wk]).length;
   const eligible=signedCount>=4;
-  html+='<div class="bonus-tracker">';
-  html+='<div style="display:flex;justify-content:space-between;align-items:center;">';
-  html+='<div style="font-weight:800;font-size:14px;color:var(--primary);">🏆 Bonus Tracker — '+now.toLocaleDateString('en-US',{month:'long',year:'numeric'})+'</div>';
-  html+='<div style="font-size:13px;font-weight:700;color:'+(eligible?'var(--green)':signedCount===0?'var(--gray-400)':'var(--orange)')+';">'+signedCount+'/4 weeks signed off</div>';
-  html+='</div>';
-  html+='<div class="bonus-week-row">';
-  monthWeeks.forEach((wk,i)=>{
-    const mon=getWeekMonday(wk),sun=getWeekSunday(wk);
-    const fmt=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-    const isCur=wk===weekKey,isPast=isWeekLocked(wk),isSigned=!!locSignoffs[wk];
-    let cls='bonus-week-card '+(isSigned?'signed':isPast&&!isSigned?'failed':isCur?'current':'future');
-    let statusIcon=isSigned?'✅':isPast&&!isSigned?'❌':isCur?'⏳':'🔜';
-    let label='Week '+(i+1);
-    html+='<div class="'+cls+'"><div class="bwc-label">'+label+'</div><div class="bwc-status">'+statusIcon+'</div><div class="bwc-dates">'+fmt(mon)+' – '+fmt(sun)+'</div>';
-    if(isSigned){html+='<div style="font-size:10px;color:var(--green);font-weight:600;margin-top:2px;">Signed: '+esc(locSignoffs[wk].initials)+'</div>';}
+  if(emp.bonus){
+    html+='<div class="bonus-tracker">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;">';
+    html+='<div style="font-weight:800;font-size:14px;color:var(--primary);">🏆 Bonus Tracker — '+now.toLocaleDateString('en-US',{month:'long',year:'numeric'})+'</div>';
+    html+='<div style="font-size:13px;font-weight:700;color:'+(eligible?'var(--green)':signedCount===0?'var(--gray-400)':'var(--orange)')+';">'+signedCount+'/4 weeks signed off</div>';
     html+='</div>';
-  });
-  if(monthWeeks.length<4){
-    for(let i=monthWeeks.length;i<4;i++){
-      html+='<div class="bonus-week-card future"><div class="bwc-label">Week '+(i+1)+'</div><div class="bwc-status">🔜</div><div class="bwc-dates">Upcoming</div></div>';
+    html+='<div class="bonus-week-row">';
+    monthWeeks.forEach((wk,i)=>{
+      const mon=getWeekMonday(wk),sun=getWeekSunday(wk);
+      const fmt=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      const isCur=wk===weekKey,isPast=isWeekLocked(wk),isSigned=!!locSignoffs[wk];
+      let cls='bonus-week-card '+(isSigned?'signed':isPast&&!isSigned?'failed':isCur?'current':'future');
+      let statusIcon=isSigned?'✅':isPast&&!isSigned?'❌':isCur?'⏳':'🔜';
+      let label='Week '+(i+1);
+      html+='<div class="'+cls+'"><div class="bwc-label">'+label+'</div><div class="bwc-status">'+statusIcon+'</div><div class="bwc-dates">'+fmt(mon)+' – '+fmt(sun)+'</div>';
+      if(isSigned){html+='<div style="font-size:10px;color:var(--green);font-weight:600;margin-top:2px;">Signed: '+esc(locSignoffs[wk].initials)+'</div>';}
+      html+='</div>';
+    });
+    if(monthWeeks.length<4){
+      for(let i=monthWeeks.length;i<4;i++){
+        html+='<div class="bonus-week-card future"><div class="bwc-label">Week '+(i+1)+'</div><div class="bwc-status">🔜</div><div class="bwc-dates">Upcoming</div></div>';
+      }
     }
+    html+='</div>';
+    if(eligible){html+='<div style="margin-top:10px;padding:8px 12px;background:var(--green-light);border-radius:8px;font-size:13px;font-weight:700;color:var(--green);">🎉 Eligible for this month\'s bonus!</div>';}
+    else{html+='<div style="margin-top:10px;padding:8px 12px;background:var(--orange-light);border-radius:8px;font-size:13px;color:#92400e;">Need '+(4-signedCount)+' more signed week'+(4-signedCount!==1?'s':'')+' to qualify for bonus this month.</div>';}
+    html+='</div>';
+  } else {
+    html+='<div style="margin-top:4px;margin-bottom:4px;padding:12px 16px;background:var(--gray-50);border-radius:12px;border:1.5px dashed var(--gray-200);font-size:13px;color:var(--gray-500);font-weight:600;">⏸ Part-time — not currently eligible for bonus</div>';
   }
-  html+='</div>';
-  if(eligible){html+='<div style="margin-top:10px;padding:8px 12px;background:var(--green-light);border-radius:8px;font-size:13px;font-weight:700;color:var(--green);">🎉 Eligible for this month\'s bonus!</div>';}
-  else{html+='<div style="margin-top:10px;padding:8px 12px;background:var(--orange-light);border-radius:8px;font-size:13px;color:#92400e;">Need '+(4-signedCount)+' more signed week'+(4-signedCount!==1?'s':'')+' to qualify for bonus this month.</div>';}
-  html+='</div>';
 
   html+='<div class="date-nav">';
   html+='<button onclick="changeTasksDate(-1)">&larr; Yesterday</button>';
@@ -2870,16 +2882,18 @@ function renderTasksPage(){
   html+=renderTaskSection('daily','Daily Checklist',dailyTasks,dayOff?{}:dailyData,customDaily,dailyLocked||dayOff);
   html+=renderTaskSection('weekly','Weekly Recurring',weeklyRec,weeklyData,customWeekly,weekLocked);
 
-  // Week sign-off button
-  if(!weekLocked){
-    html+='<div style="margin-top:8px;padding:16px 20px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;gap:12px;">';
-    html+='<div><div style="font-weight:700;font-size:14px;">Ready to sign off this week?</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px;">Sign off confirms all tasks are complete. The week will be locked and count toward your bonus.</div></div>';
-    html+='<button onclick="showSignOffModal()" style="padding:10px 20px;background:var(--green);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;">✅ Sign Off Week</button>';
-    html+='</div>';
-  }else if(locSignoffs[weekKey]){
-    html+='<div style="margin-top:8px;padding:12px 20px;background:var(--green-light);border-radius:12px;font-size:13px;font-weight:700;color:var(--green);">✅ Week signed off by '+esc(locSignoffs[weekKey].initials)+' — counts toward bonus</div>';
-  }else{
-    html+='<div style="margin-top:8px;padding:12px 20px;background:var(--red-light);border-radius:12px;font-size:13px;font-weight:700;color:var(--red);">🔒 This week is locked. It was not signed off and will not count toward bonus.</div>';
+  // Week sign-off button (bonus-eligible staff only)
+  if(emp.bonus){
+    if(!weekLocked){
+      html+='<div style="margin-top:8px;padding:16px 20px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;gap:12px;">';
+      html+='<div><div style="font-weight:700;font-size:14px;">Ready to sign off this week?</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px;">Sign off confirms all tasks are complete. The week will be locked and count toward your bonus.</div></div>';
+      html+='<button onclick="showSignOffModal()" style="padding:10px 20px;background:var(--green);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;">✅ Sign Off Week</button>';
+      html+='</div>';
+    }else if(locSignoffs[weekKey]){
+      html+='<div style="margin-top:8px;padding:12px 20px;background:var(--green-light);border-radius:12px;font-size:13px;font-weight:700;color:var(--green);">✅ Week signed off by '+esc(locSignoffs[weekKey].initials)+' — counts toward bonus</div>';
+    }else{
+      html+='<div style="margin-top:8px;padding:12px 20px;background:var(--red-light);border-radius:12px;font-size:13px;font-weight:700;color:var(--red);">🔒 This week is locked. It was not signed off and will not count toward bonus.</div>';
+    }
   }
   const customMonthly=(locData['custom_monthly']||{})[monthKey]||{};
   if(monthlyTasks.length>0||Object.keys(customMonthly).length>0){
@@ -2920,11 +2934,12 @@ function renderTaskSection(section,title,tasks,completionData,customTasksObj,loc
 }
 
 function deleteCustomTask(section,taskId){
-  const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),monthKey=getTaskMonthKey();
+  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),monthKey=getTaskMonthKey();
   const sKey=section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
-  fbSet('tasks/'+loc+'/custom_'+section+'/'+sKey+'/'+taskId,null);
+  const base=empPath(state.tasksLoc);
+  fbSet(base+'/custom_'+section+'/'+sKey+'/'+taskId,null);
   const sPath=section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
-  fbSet('tasks/'+loc+'/'+sPath+'/'+sKey+'/'+taskId,null);
+  fbSet(base+'/'+sPath+'/'+sKey+'/'+taskId,null);
 }
 
 function addCustomTask(section){
@@ -2932,10 +2947,10 @@ function addCustomTask(section){
   if(!input)return;
   const text=input.value.trim();
   if(!text)return;
-  const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),monthKey=getTaskMonthKey();
+  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),monthKey=getTaskMonthKey();
   const sKey=section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
   const id='c_'+Date.now();
-  fbSet('tasks/'+loc+'/custom_'+section+'/'+sKey+'/'+id,{text,createdAt:Date.now()});
+  fbSet(empPath(state.tasksLoc)+'/custom_'+section+'/'+sKey+'/'+id,{text,createdAt:Date.now()});
   input.value='';
 }
 function renderCycleSection(section,title,tasks,completionData){
