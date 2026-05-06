@@ -1362,14 +1362,14 @@ function renderPulseBar() {
   const companyRocks = (state.rocks && state.rocks.company) || [];
   const offTrackRocks = companyRocks.filter(r => r && r.status === 'off-track').length;
 
-  // ── This week's tasks across locations ──
+  // ── Today's tasks across all employees ──
   const todayKey = new Date().toISOString().split('T')[0];
   const thisWeekKey = getTaskWeekKey(todayKey);
   let tasksDone = 0, tasksTotal = 0;
-  ['waunakee','eastmad','verona'].forEach(loc => {
-    const daily = getDailyTasks(loc);
+  TASK_EMPLOYEES.forEach(emp => {
+    const daily = getDailyTasks(emp.id);
     tasksTotal += daily.length;
-    const done = ((state.tasksData[loc] || {}).daily || {})[todayKey] || {};
+    const done = ((state.tasksData[emp.id] || {}).daily || {})[todayKey] || {};
     tasksDone += daily.filter(t => done[t.id]).length;
   });
 
