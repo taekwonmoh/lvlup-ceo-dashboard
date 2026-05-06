@@ -580,6 +580,7 @@ function loadEvents() {
 let state = {
   activeSection: 'home',
   weekOffset: 0,
+  scMonthOffset: 0,
   scorecard: { weekly: {}, monthly: {}, goals: {} },
   rocks: { company: [], individual: {} },
   events: [],
@@ -918,6 +919,16 @@ function getMonthKey() {
   const now = new Date();
   return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
 }
+function getScorecardMonthKey(offset) {
+  const d = new Date(); d.setDate(1);
+  d.setMonth(d.getMonth() + (offset || 0));
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+function getScorecardMonthLabel(offset) {
+  const d = new Date(); d.setDate(1);
+  d.setMonth(d.getMonth() + (offset || 0));
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
 
 function getCurrentMonth() {
   return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -971,11 +982,11 @@ function listenAll() {
   activeListeners.forEach(l => l.ref.off(l.event));
   activeListeners = [];
 
-  // Scorecard weekly
-  const weekKey = getWeekKey(state.weekOffset);
-  const scWeekRef = fbRef('scorecard/weekly/' + weekKey);
-  scWeekRef.on('value', snap => { state.scorecard.weekly = snap.val() || {}; render(); });
-  activeListeners.push({ ref: scWeekRef, event: 'value' });
+  // Scorecard monthly tracker
+  const scTrackerKey = getScorecardMonthKey(state.scMonthOffset);
+  const scTrackerRef = fbRef('scorecard/monthly/' + scTrackerKey);
+  scTrackerRef.on('value', snap => { state.scorecard.weekly = snap.val() || {}; render(); });
+  activeListeners.push({ ref: scTrackerRef, event: 'value' });
 
   // Scorecard goals
   const scGoalsRef = fbRef('scorecard/goals');
@@ -1076,11 +1087,12 @@ function listenFeedbackTracking() {
 /*  -  -  Navigation  -  -  */
 function setSection(s) { state.activeSection = s; render(); }
 function changeWeek(d) { state.weekOffset += d; listenAll(); }
+function changeScorecardMonth(d) { state.scMonthOffset += d; listenAll(); }
 
 /*  -  -  Update functions  -  -  */
 function updateScorecard(locId, personId, metricId, weekIdx, val) {
-  const weekKey = getWeekKey(state.weekOffset - weekIdx);
-  fbDebounce('scorecard/weekly/' + weekKey + '/' + locId + '/' + personId + '/' + metricId, val);
+  const monthKey = getScorecardMonthKey(state.scMonthOffset);
+  fbDebounce('scorecard/monthly/' + monthKey + '/' + locId + '/' + personId + '/' + metricId, val);
 }
 
 function updateMonthly(locId, metricId, val) {
@@ -1591,19 +1603,19 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
   });
   kpiHtml += '</div>';
 
-  // Weekly scorecard table
-  const weekKey = getWeekKey(state.weekOffset);
-  const weekLabel = getWeekLabel(state.weekOffset);
+  // Monthly scorecard table
+  const monthLabel = getScorecardMonthLabel(state.scMonthOffset);
+  const monthShort = monthLabel.split(' ')[0];
   const weekData = state.scorecard.weekly || {};
   const goalsData = state.scorecard.goals || {};
 
   let tableHtml = '<div class="section">' +
-    '<div class="section-header"><h2>Weekly Scorecard</h2>' +
-    '<div class="week-nav"><button onclick="changeWeek(-1)">&larr;</button>' +
-    '<span class="week-label">' + weekLabel + '</span>' +
-    '<button onclick="changeWeek(1)">&rarr;</button></div></div>' +
+    '<div class="section-header"><h2>Monthly Scorecard</h2>' +
+    '<div class="week-nav"><button onclick="changeScorecardMonth(-1)">&larr;</button>' +
+    '<span class="week-label">' + monthLabel + '</span>' +
+    '<button onclick="changeScorecardMonth(1)">&rarr;</button></div></div>' +
     '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
-    '<th>Who</th><th>Measurable</th><th>Goal</th><th>This Week</th>' +
+    '<th>Who</th><th>Measurable</th><th>Goal</th><th>' + monthShort + ' MTD</th>' +
     '</tr></thead><tbody>';
 
   LOCATIONS.forEach(loc => {
@@ -1695,61 +1707,7 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
   tableHtml += '</tbody></table></div></div>';
 
   // Monthly revenue/members table
-  const curMonthFull2 = ['january','february','march','april','may','june','july','august','september','october','november','december'][new Date().getMonth()];
-  const curMonthShort2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][new Date().getMonth()];
-
-  let monthlyHtml = '<div class="section">' +
-    '<div class="section-header"><h2>Monthly Totals &mdash; ' + getCurrentMonth() + '</h2><div class="badge">MTD</div></div>' +
-    '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
-    '<th>Who</th><th>Measurable</th><th>' + getCurrentMonth() + ' Goal</th><th>Current</th>' +
-    '</tr></thead><tbody>';
-
-  LOCATIONS.forEach(loc => {
-    monthlyHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
-    MONTHLY_METRICS.forEach(metric => {
-      if (metric.id === 'totalMembers' && (loc.id === 'goninjaW' || loc.id === 'goninjaV')) return;
-      let val = '', goal = '', numGoal = 0;
-
-      if (metric.id === 'grossRevenue') {
-        // Live revenue from kpis (Gymdesk)
-        val = parseFloat((state.kpis[loc.id] || {}).revenue) || '';
-        // Monthly goal from financials
-        const finLoc = state.financials[loc.id] || {};
-        numGoal = parseFloat((finLoc[curMonthFull2] || finLoc[curMonthShort2] || {}).goal) || loc.revenueGoal;
-        goal = fmtCurrency(numGoal);
-      } else if (metric.id === 'totalMembers') {
-        // Live member count from kpis, fall back to membership data
-        val = parseFloat((state.kpis[loc.id] || {}).totalMembers) ||
-              parseFloat((state.membership[loc.id] || {})[curMonthFull2]?.total) || '';
-        const memGoal = parseFloat((state.membership[loc.id] || {})[curMonthFull2]?.goal) || 0;
-        numGoal = memGoal;
-        goal = memGoal || '';
-      }
-
-      const numCur = parseFloat(val) || 0;
-      let mValColor = '';
-      if (numGoal > 0 && val !== '') {
-        mValColor = numCur >= numGoal ? 'color:#10b981' : 'color:#ef4444';
-      }
-      let curCell;
-      if (metric.id === 'grossRevenue') {
-        curCell = '<input type="number" step="0.01" value="' + (numCur || '') + '" placeholder="Enter MTD revenue" ' +
-          'onchange="updateKPI(\'' + loc.id + '\',\'revenue\',this.value)" ' +
-          'style="width:130px;border:1px solid var(--blue);border-radius:6px;padding:4px 8px;font-size:13px;' +
-          'font-family:inherit;text-align:right;background:var(--card);color:' + (mValColor ? mValColor.replace('color:','') : 'var(--primary)') + ';font-weight:600">';
-      } else {
-        const displayVal = metric.currency && val !== '' ? fmtCurrency(numCur) : esc(String(val));
-        curCell = '<span style="' + mValColor + ';font-weight:600">' + displayVal + '</span>';
-      }
-      monthlyHtml += '<tr><td>' + loc.short + '</td><td>' + metric.label + '</td>' +
-        '<td>' + goal + '</td>' +
-        '<td>' + curCell + '</td></tr>';
-    });
-  });
-
-  monthlyHtml += '</tbody></table></div></div>';
-
-  return subNav + kpiHtml + tableHtml + monthlyHtml;
+  return subNav + kpiHtml + tableHtml;
 }
 
 /*  -  -  KPIs Page (Monthly KPIs for 3 LVLUP locations)  -  -  */
