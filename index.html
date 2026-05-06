@@ -680,16 +680,17 @@ const GONINJA_DAILY = [
   {id:'spot_clean',text:'Spot clean / mop if needed'},
 ];
 const LVLUP_WEEKLY_REC = [
-  {id:'bathroom_photos',    text:'Bathroom photos — 1 of toilets + 2 showing overall cleanliness'},
+  {id:'bathroom_photos',    text:'Bathroom photos (post in #LVLUPHQ) — 1 of toilets + 2 showing overall cleanliness'},
+  {id:'mirror_board',       text:'Update announcements on mirror/board + post photo to #LVLUPHQ'},
   {id:'fb_shoutout',        text:'Post 1 shoutout or promo on Facebook members group page'},
   {id:'social_posts',       text:'2 social media posts this week'},
-  {id:'wet_mop',            text:'Wet mop mats + post photo'},
+  {id:'wet_mop',            text:'Wet mop mats + post photo to #LVLUPHQ'},
   {id:'dots',               text:'Check dots and replace as needed'},
   {id:'supplies',           text:'Check supplies and message #inventory'},
   {id:'ad_invites',         text:'Invite 2 students to try AD class — list their names'},
   {id:'lifelinks',          text:'Review LifeLinks and award belt clips'},
-  {id:'signage',            text:'Update signage + take photos of all signage'},
-  {id:'instructor_station', text:'Clean instructor station + take photo'},
+  {id:'signage',            text:'Update signage + take photos of all signage (post to #LVLUPHQ)'},
+  {id:'instructor_station', text:'Clean instructor station + take photo (post to #LVLUPHQ)'},
 ];
 const GONINJA_WEEKLY_REC = [
   {id:'social',text:'Social media post'},
@@ -701,6 +702,10 @@ const GONINJA_WEEKLY_REC = [
   {id:'party_supplies',text:'Check party supplies inventory (restock if needed)'},
 ];
 const LVLUP_MONTHLY = [];
+// Front desk managers (Sue K, Mario S) — tasks TBD
+const FRONTDESK_DAILY   = [];
+const FRONTDESK_WEEKLY  = [];
+const FRONTDESK_MONTHLY = [];
 const GONINJA_MONTHLY = [
   {id:'event_promo',text:'Event promotion (3 weeks prior to upcoming events)'},
   {id:'newsletter',text:'GoNinja Newsletter (sent by first week of month)'},
@@ -2639,9 +2644,11 @@ function isGoNinja(empOrLocId){
   return empOrLocId==='goninjaW'||empOrLocId==='goninjaV';
 }
 function getEmpById(empId){return TASK_EMPLOYEES.find(e=>e.id===empId)||TASK_EMPLOYEES[0];}
-function getDailyTasks(locId){return isGoNinja(locId)?GONINJA_DAILY:LVLUP_DAILY;}
-function getWeeklyRec(locId){return isGoNinja(locId)?GONINJA_WEEKLY_REC:LVLUP_WEEKLY_REC;}
-function getMonthlyTasks(locId){return isGoNinja(locId)?GONINJA_MONTHLY:LVLUP_MONTHLY;}
+const FRONTDESK_EMP_IDS = new Set(['sueK','marioS']);
+function isFrontDesk(empId){return FRONTDESK_EMP_IDS.has(empId);}
+function getDailyTasks(empId){return isGoNinja(empId)?GONINJA_DAILY:isFrontDesk(empId)?FRONTDESK_DAILY:LVLUP_DAILY;}
+function getWeeklyRec(empId){return isGoNinja(empId)?GONINJA_WEEKLY_REC:isFrontDesk(empId)?FRONTDESK_WEEKLY:LVLUP_WEEKLY_REC;}
+function getMonthlyTasks(empId){return isGoNinja(empId)?GONINJA_MONTHLY:isFrontDesk(empId)?FRONTDESK_MONTHLY:LVLUP_MONTHLY;}
 function getCycleTasks(locId){return isGoNinja(locId)?GONINJA_CYCLE:LVLUP_CYCLE;}
 function getTaskMonthKey(){const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');}
 function getGoalsFields(locId){return isGoNinja(locId)?GONINJA_GOALS_FIELDS:LVLUP_GOALS_FIELDS;}
