@@ -663,6 +663,16 @@ const TASK_EMPLOYEES = [
   { id: 'marioS',   name: 'Mario S',   loc: 'verona',   label: 'Verona',   bonus: false },
 ];
 
+/*  -  -  Team Wall  -  -  */
+const WALL_TYPES = [
+  { id: 'clean',      icon: '🧹', label: 'Clean Check',  bg: '#f0fdf4', border: '#86efac', text: '#14532d' },
+  { id: 'newstudent', icon: '🎉', label: 'New Student',  bg: '#fefce8', border: '#fde047', text: '#713f12' },
+  { id: 'lead',       icon: '🔥', label: 'Lead',         bg: '#fff7ed', border: '#fdba74', text: '#7c2d12' },
+  { id: 'win',        icon: '💪', label: 'Win',          bg: '#eff6ff', border: '#93c5fd', text: '#1e3a8a' },
+  { id: 'shoutout',   icon: '📣', label: 'Shoutout',     bg: '#fdf4ff', border: '#d8b4fe', text: '#581c87' },
+  { id: 'photo',      icon: '📸', label: 'Photo',        bg: '#f0f9ff', border: '#7dd3fc', text: '#0c4a6e' },
+];
+
 /*  -  -  Task Definitions  -  -  */
 const LVLUP_DAILY = [
   {id:'bathrooms',    text:'Clean bathrooms'},
@@ -1097,6 +1107,11 @@ function listenAll() {
   wlRef.on('value', snap => { state.watchlist = snap.val() || {}; render(); });
   activeListeners.push({ ref: wlRef, event: 'value' });
 
+  // Team wall
+  const wallQuery = fbRef('wall').orderByChild('ts').limitToLast(80);
+  wallQuery.on('value', snap => { state.wall = snap.val() || {}; render(); });
+  activeListeners.push({ ref: wallQuery, event: 'value' });
+
   // Development course
   const devRef = fbRef('development');
   devRef.on('value', snap => { state.devCourse = snap.val() || {}; render(); });
@@ -1275,6 +1290,7 @@ function render() {
 
   app.innerHTML = renderHeader() +
     (s === 'home'        ? renderHomePage() :
+     s === 'wall'        ? renderWallPage() :
      s === 'scorecard'   ? renderScorecardPage() :
      s === 'rocks'       ? renderRocksPage() :
      s === 'events'      ? renderEventsPage() :
@@ -1290,6 +1306,7 @@ function render() {
 function renderHeader() {
   const sections = [
     { id: 'home',        label: '🏠 Home'        },
+    { id: 'wall',        label: '🔥 Wall'         },
     { id: 'scorecard',   label: '📊 Scorecard'   },
     { id: 'tasks',       label: '✅ Tasks'        },
     { id: 'rocks',       label: '🪨 Rocks'        },
@@ -2652,6 +2669,9 @@ state.goalsData = {};
 state.modalTask = null;
 state.scorecardTab = 'weekly';   // 'weekly' | 'performance'
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
+state.wall         = {};
+state.wallPostType = 'win';
+state.wallPostEmp  = TASK_EMPLOYEES[0].id;
 
 function isGoNinja(empOrLocId){
   const emp=TASK_EMPLOYEES.find(e=>e.id===empOrLocId);
@@ -3580,6 +3600,143 @@ function devGenerateCert() {
   if (!name) return;
   fbSet('development/certificate', { name, date: new Date().toISOString() });
   render();
+}
+
+/*  -  -  Team Wall  -  -  */
+function setWallPostType(t){ state.wallPostType=t; render(); }
+function setWallPostEmp(id){ state.wallPostEmp=id; render(); }
+function timeAgo(ts){
+  const d=Date.now()-ts;
+  if(d<60000)return 'just now';
+  if(d<3600000)return Math.floor(d/60000)+'m ago';
+  if(d<86400000)return Math.floor(d/3600000)+'h ago';
+  if(d<604800000)return Math.floor(d/86400000)+'d ago';
+  return new Date(ts).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+function postToWall(){
+  const empId=state.wallPostEmp;
+  const emp=TASK_EMPLOYEES.find(e=>e.id===empId);
+  const input=document.getElementById('wallPostMsg');
+  if(!emp||!input)return;
+  const msg=input.value.trim();
+  if(!msg)return;
+  const type=state.wallPostType||'win';
+  const ts=Date.now();
+  fbSet('wall/'+ts,{empId,name:emp.name,label:emp.label,type,message:msg,ts});
+  input.value='';
+}
+function reactToWallPost(key){
+  const empId=state.wallPostEmp;
+  if(!empId)return;
+  const post=(state.wall||{})[key];
+  if(!post)return;
+  const already=post.reactions&&post.reactions[empId];
+  fbSet('wall/'+key+'/reactions/'+empId, already?null:true);
+}
+function deleteWallPost(key){
+  if(!confirm('Delete this post?'))return;
+  fbSet('wall/'+key,null);
+}
+
+function renderWallPage(){
+  const posts=Object.entries(state.wall||{})
+    .map(([k,v])=>({key:k,...v}))
+    .filter(p=>p.ts)
+    .sort((a,b)=>b.ts-a.ts);
+
+  const now=new Date(), weekStart=new Date(now);
+  weekStart.setDate(now.getDate()-now.getDay()||7); weekStart.setHours(0,0,0,0);
+  const weekTs=weekStart.getTime();
+
+  // Activity counts this week per employee
+  const weekCounts={};
+  TASK_EMPLOYEES.forEach(e=>{ weekCounts[e.id]=0; });
+  posts.forEach(p=>{ if(p.ts>=weekTs&&p.empId) weekCounts[p.empId]=(weekCounts[p.empId]||0)+1; });
+
+  const activeEmp=TASK_EMPLOYEES.find(e=>e.id===state.wallPostEmp)||TASK_EMPLOYEES[0];
+  const activeType=WALL_TYPES.find(t=>t.id===state.wallPostType)||WALL_TYPES[3];
+
+  let html='';
+
+  // ── Composer ──
+  html+='<div class="section" style="padding:16px 20px 20px">';
+  html+='<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:10px">📣 Post to the Team Wall</div>';
+
+  // Employee selector
+  html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+  TASK_EMPLOYEES.forEach(e=>{
+    const active=e.id===state.wallPostEmp;
+    html+='<button onclick="setWallPostEmp(\''+e.id+'\')" style="padding:5px 12px;border-radius:20px;border:1.5px solid '+(active?'var(--blue)':'var(--gray-200)')+';background:'+(active?'var(--blue)':'#fff')+';color:'+(active?'#fff':'var(--gray-600)')+';font-size:12px;font-weight:600;cursor:pointer">'+esc(e.name)+'</button>';
+  });
+  html+='</div>';
+
+  // Post type selector
+  html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">';
+  WALL_TYPES.forEach(t=>{
+    const active=t.id===state.wallPostType;
+    html+='<button onclick="setWallPostType(\''+t.id+'\')" style="padding:5px 12px;border-radius:20px;border:1.5px solid '+(active?t.border:'var(--gray-200)')+';background:'+(active?t.bg:'#fff')+';color:'+(active?t.text:'var(--gray-500)')+';font-size:12px;font-weight:600;cursor:pointer">'+t.icon+' '+t.label+'</button>';
+  });
+  html+='</div>';
+
+  // Message + post button
+  html+='<div style="display:flex;gap:8px;align-items:flex-start">';
+  html+='<textarea id="wallPostMsg" placeholder="What\'s happening? New student? Area clean? Lead generated? Brag away! 🏆" rows="2" style="flex:1;padding:10px 12px;border:1.5px solid var(--gray-200);border-radius:10px;font-size:13px;font-family:inherit;resize:vertical;outline:none;line-height:1.5" onkeydown="if(event.key===\'Enter\'&&(event.metaKey||event.ctrlKey))postToWall()"></textarea>';
+  html+='<button onclick="postToWall()" style="padding:10px 18px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;align-self:stretch">Post 🚀</button>';
+  html+='</div>';
+  html+='<div style="font-size:11px;color:var(--gray-400);margin-top:5px">Cmd/Ctrl + Enter to post</div>';
+  html+='</div>';
+
+  // ── This Week's Activity ──
+  const sorted=TASK_EMPLOYEES.slice().sort((a,b)=>(weekCounts[b.id]||0)-(weekCounts[a.id]||0));
+  const topCount=weekCounts[sorted[0].id]||0;
+  html+='<div class="section" style="padding:12px 20px">';
+  html+='<div style="font-size:12px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">This Week\'s Activity</div>';
+  html+='<div style="display:flex;flex-wrap:wrap;gap:10px">';
+  sorted.forEach(e=>{
+    const cnt=weekCounts[e.id]||0;
+    const pct=topCount>0?Math.round(cnt/topCount*100):0;
+    const isTop=cnt>0&&cnt===topCount;
+    html+='<div style="flex:1;min-width:90px">';
+    html+='<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="font-weight:600;color:var(--primary)">'+esc(e.name)+(isTop?' 🏆':'')+'</span><span style="font-weight:700;color:var(--blue)">'+cnt+'</span></div>';
+    html+='<div style="height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(isTop?'var(--green)':'var(--blue)')+';border-radius:3px;transition:width .3s"></div></div>';
+    html+='</div>';
+  });
+  html+='</div></div>';
+
+  // ── Feed ──
+  if(posts.length===0){
+    html+='<div class="section" style="padding:40px 24px;text-align:center">';
+    html+='<div style="font-size:32px;margin-bottom:8px">🔥</div>';
+    html+='<div style="font-size:14px;font-weight:600;color:var(--gray-500)">Nothing posted yet — be the first!</div>';
+    html+='</div>';
+  }else{
+    html+='<div style="display:flex;flex-direction:column;gap:10px;padding-bottom:24px">';
+    posts.forEach(p=>{
+      const wt=WALL_TYPES.find(t=>t.id===p.type)||WALL_TYPES[3];
+      const reactionCount=Object.keys(p.reactions||{}).length;
+      const iReacted=p.reactions&&p.reactions[state.wallPostEmp];
+      const isOwn=p.empId===state.wallPostEmp;
+      html+='<div style="background:var(--card);border:1.5px solid '+wt.border+';border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)">';
+      // Header
+      html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+      html+='<span style="font-size:18px">'+wt.icon+'</span>';
+      html+='<span style="font-weight:700;font-size:13px;color:var(--primary)">'+esc(p.name||'')+'</span>';
+      html+='<span style="font-size:11px;background:'+wt.bg+';color:'+wt.text+';padding:1px 8px;border-radius:10px;font-weight:600">'+wt.label+'</span>';
+      if(p.label) html+='<span style="font-size:11px;color:var(--gray-400)">· '+esc(p.label)+'</span>';
+      html+='<span style="margin-left:auto;font-size:11px;color:var(--gray-400)">'+timeAgo(p.ts)+'</span>';
+      html+='</div>';
+      // Message
+      html+='<div style="font-size:14px;color:#1f2937;line-height:1.6;margin-bottom:10px">'+esc(p.message||'')+'</div>';
+      // Footer: reactions + delete
+      html+='<div style="display:flex;align-items:center;gap:8px">';
+      html+='<button onclick="reactToWallPost(\''+p.key+'\')" style="padding:4px 12px;border-radius:20px;border:1.5px solid '+(iReacted?'#f97316':'var(--gray-200)')+';background:'+(iReacted?'#fff7ed':'#fff')+';color:'+(iReacted?'#ea580c':'var(--gray-500)')+';font-size:12px;font-weight:600;cursor:pointer">🔥 '+(reactionCount||0)+'</button>';
+      if(isOwn) html+='<button onclick="deleteWallPost(\''+p.key+'\')" style="margin-left:auto;font-size:11px;color:var(--gray-300);background:none;border:none;cursor:pointer;padding:0" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--gray-300)\'">Delete</button>';
+      html+='</div>';
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+  return html;
 }
 
 function renderDevelopmentPage() {
