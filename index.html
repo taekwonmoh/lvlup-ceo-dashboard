@@ -1112,6 +1112,11 @@ function listenAll() {
   wallQuery.on('value', snap => { state.wall = snap.val() || {}; render(); });
   activeListeners.push({ ref: wallQuery, event: 'value' });
 
+  // GymDesk training course
+  const gdRef = fbRef('development/gymdesk');
+  gdRef.on('value', snap => { state.gdCourse = snap.val() || {}; render(); });
+  activeListeners.push({ ref: gdRef, event: 'value' });
+
   // Development course
   const devRef = fbRef('development');
   devRef.on('value', snap => { state.devCourse = snap.val() || {}; render(); });
@@ -2668,6 +2673,13 @@ state.goalsData = {};
 state.modalTask = null;
 state.scorecardTab = 'weekly';   // 'weekly' | 'performance'
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
+state.devTab        = 'instructor'; // 'instructor' | 'gymdesk'
+state.gdActiveModule = null;
+state.gdQuizAnswers  = {};
+state.gdQuizSubmitted = false;
+state.gdQuizScore    = undefined;
+state.gdCompletionSaved = null;
+state.gdCourse       = {};
 state.wall         = {};
 state.wallPostType = 'win';
 state.wallPostEmp  = TASK_EMPLOYEES[0].id;
@@ -3416,6 +3428,85 @@ function renderL10Page() {
   return html;
 }
 
+/*  -  -  GymDesk Training Course  -  -  */
+const GYMDESK_MODULES = [
+  { id: 'gd_checkin', title: 'Front Desk & Check-In', icon: '🖥️', desc: 'How to activate Front Desk Mode, check in members, and handle attendance.',
+    content: [
+      { h: 'What is Front Desk Mode?', p: 'Front Desk Mode turns GymDesk into a self-service kiosk for any computer, tablet, or smartphone at reception. It handles two things: member self-registration with waiver completion, and attendance check-ins. To activate it, log into your manager account, go to Front Desk in the main menu, and select Activate Front Desk Mode. To exit, click the Exit link and authenticate with your manager password. Important: attendance tracking must be turned on under Member Settings → Attendance before check-ins will work.' },
+      { h: 'Check-In by Numeric Code', p: 'Every member and visitor has a unique numeric code shown directly below their name in their profile — it cannot be hidden. The member enters their code using the tablet keypad. Admins can set the required code length and control whether members can update their own codes. This is the most common check-in method and works without any hardware beyond a tablet.' },
+      { h: 'Check-In by Name Search or QR Code', p: 'Name search lets the member type their name on screen — the system shows matching results and they select themselves. This can be disabled in Attendance Settings. QR code scanning uses the device\'s built-in camera (front-facing recommended) to scan physical or digital membership cards — this option only appears when QR Code is set as the preferred type in Attendance Settings → Membership Cards. A hardware barcode scanner also works as a keyboard input across all check-in tabs.' },
+      { h: 'Session Selection', p: 'Before processing a batch of check-ins, staff can select a specific class or session. All subsequent check-ins are automatically recorded under that session. For gyms without a formal schedule, enable "attendance tracking with no schedule/classes" in Settings → Attendance so members can still check in without selecting a class.' },
+      { h: 'Privacy & Attendance Reports', p: 'You can hide the member list during check-ins via Settings → Attendance Tracking → Show recent check-ins. When disabled, members authenticate by code or name only — recommended for privacy. View all attendance history and visual graphs under Members → Attendance. This also shows each member\'s progress toward rank promotions.' }
+    ],
+    quiz: [
+      { q: 'Where do you go to activate Front Desk Mode?', opts: ['Settings → Front Desk', 'Front Desk in the main menu, then Activate Front Desk Mode', 'Members → Attendance → Enable Kiosk', 'Billing → Front Desk Setup'], ans: 1, why: 'Navigate to Front Desk in the main menu and select Activate Front Desk Mode in the dialog that appears.' },
+      { q: 'What must be enabled before Front Desk Mode check-ins will work?', opts: ['POS integration', 'SMS messaging', 'Attendance tracking in Member Settings', 'Family accounts'], ans: 2, why: 'Attendance tracking must be turned on under Member Settings → Attendance as a prerequisite for any check-in to record.' },
+      { q: 'A member forgot their check-in code. Where do you find it?', opts: ['It is emailed to the member automatically', 'It is visible below their name in their member profile', 'It is in Billing → Payments', 'It cannot be retrieved — a new one must be generated'], ans: 1, why: 'Every member has a unique numeric code shown directly below their name in their profile at all times.' },
+      { q: 'A member wants to check in to a specific class. What should you do before they scan in?', opts: ['Nothing — the system auto-detects the class', 'Ask them to select it from the mobile app', 'Select the session first so all subsequent check-ins record under it', 'Create a manual attendance entry after class'], ans: 2, why: 'Staff selects the session before processing check-ins so all attendees are automatically recorded under the correct class.' }
+    ]
+  },
+  { id: 'gd_members', title: 'Member Profiles & Accounts', icon: '👤', desc: 'Navigating member profiles, editing info, managing payments, and family accounts.',
+    content: [
+      { h: 'The Member Profile Overview', p: 'The member profile is the central hub for all member data. The left sidebar shows the member\'s name, contact info, address, emergency contact, check-in code, and payment methods on file (card type, expiration, last four digits). There are buttons to edit information, send login instructions, and generate a membership card. The main area shows an attendance graph, attendance history, notes, memberships, recurring payments, and a full payment/purchase log.' },
+      { h: 'Editing Member Information and Notes', p: 'Click the Edit button in the sidebar to update any contact details. Notes are private by default but can be configured to display as a message on the check-in screen when the member checks in. Notes can also include tasks for follow-up. Use notes to track anything important about the member — injury history, preferences, follow-up reminders.' },
+      { h: 'Managing Payment Methods', p: 'Payment methods on file are shown in the left sidebar — you can see the card type, expiration date, and last four digits. Staff can update or remove a payment method via the settings icon next to it. To create a one-time manual charge, use the Create a charge button within the member\'s profile. The system also prevents accidental duplicate recurring payments when assigning memberships.' },
+      { h: 'Members vs. Visitors', p: 'This is important: when someone enrolls in a trial membership, GymDesk lists them as a Visitor — not a Member. Visitors become Members only when they convert to a paid, full membership. This distinction affects how they appear in reports and filters. When you are looking for a trial student and cannot find them under Members, check Visitors.' },
+      { h: 'Family Accounts', p: 'Family accounts consolidate billing and communications for multiple household members under one primary profile. All family members can share the same payment method (stored on the primary member\'s profile only). All invoices and receipts can route to the primary member\'s email. Staff can access all family members from any one family member\'s profile sidebar — use Create a new family account, add existing members, or register new family members from there.' }
+    ],
+    quiz: [
+      { q: 'A trial student cannot be found in the Members list. Where should you look?', opts: ['Billing → Overdue', 'The Visitors list — trial enrollees are Visitors, not Members', 'Marketing → Leads', 'They may have been deleted'], ans: 1, why: 'Trial membership enrollees are listed as Visitors in GymDesk until they convert to a paid full membership.' },
+      { q: 'How do you create a one-time manual charge for a member?', opts: ['Billing → Create Invoice', 'Sales → Create Sale → Member Account', 'Use the Create a charge button inside the member\'s profile', 'Settings → Billing → Manual Entry'], ans: 2, why: 'The Create a charge button is located directly within the member\'s profile for quick one-time billing.' },
+      { q: 'A family shares one payment method. Where is it stored?', opts: ['On each individual family member\'s profile', 'In a shared family billing account', 'On the primary member\'s profile only', 'In Billing → Recurring'], ans: 2, why: 'In family accounts, the shared payment method is stored on the primary member\'s profile only.' },
+      { q: 'You want a note to appear as a message on screen when a member checks in. How do you set that up?', opts: ['Add it in the member\'s profile notes and configure notes to display on check-in', 'Send them a direct message via Marketing → Messaging', 'Add a tag to their profile', 'It is not possible — notes are always private'], ans: 0, why: 'Notes are private by default but can be configured to display as a check-in screen message — useful for alerts, flags, or greetings.' }
+    ]
+  },
+  { id: 'gd_leads', title: 'Memberships, Trials & Leads', icon: '🎯', desc: 'Setting up trial memberships, managing the lead pipeline, and converting prospects.',
+    content: [
+      { h: 'How Memberships Work', p: 'Memberships are assigned directly from a member\'s profile. When you assign a membership, the system auto-generates recurring payment schedules. You can adjust the start date, payment date, proration, cost, sign-up fees, and tax settings at the time of assignment. Up to 6 upcoming scheduled payments are visible in the member\'s Memberships section — you can modify dates, amounts, or payment methods, cancel future payments, or undo changes.' },
+      { h: 'Trial Memberships', p: 'To set up a trial, go to Members → Memberships → Add Membership Option. Name it clearly (e.g., "2-Week Trial"), attach any waivers, and select Trial as the pricing type. Free trials use $0.00; paid trials use a one-time intro rate. Set Limited Duration for a time-based trial. You can configure trials to automatically convert to a full membership when they expire. Access can be unlimited, session-based (e.g., 3 classes), or day-based. Keep online availability checked to let new leads register themselves.' },
+      { h: 'The Lead Pipeline — 6 Stages', p: 'GymDesk has a built-in CRM. Every potential customer is a Lead with one of six statuses: New (no contact yet), Conversation (engaged with staff or automations), Booked (trial scheduled), Contact Later (not ready now), Cold (unresponsive), or Spam. Leads enter through website capture forms, session bookings, or manual staff entry via Create Lead. Your job is to move leads forward — from New → Conversation → Booked → Attended → Member.' },
+      { h: 'Lead Profile Actions', p: 'Inside a lead record you can send email or text messages, view automation activity, add notes, create tasks, and see the full activity feed. Two key buttons: "Invite to Sign-up" sends an email invitation to complete registration, and "Convert to member" converts the lead directly to a full member. You can also trigger automations manually from the lead profile if needed.' },
+      { h: 'The Marketing Dashboard', p: 'Go to Marketing → Dashboard to see the Acquisition Funnel — it tracks how many leads were captured, how many booked a trial, and how many attended. This is your conversion rate data. It also shows lead generation by source (website, referrals, social media) and latest referrals. Important: the Marketing Dashboard only tracks Leads — not existing members. Existing member bookings appear in Bookings View and Data Exports.' }
+    ],
+    quiz: [
+      { q: 'What are the 6 lead statuses in order from new to inactive?', opts: ['Interested, Contacted, Scheduled, Attended, Member, Lost', 'New, Conversation, Booked, Contact Later, Cold, Spam', 'Lead, Prospect, Trial, Active, Inactive, Closed', 'Open, Engaged, Scheduled, Visited, Converted, Churned'], ans: 1, why: 'The 6 GymDesk lead statuses are: New, Conversation, Booked, Contact Later, Cold, and Spam.' },
+      { q: 'How do you officially convert a lead into a member?', opts: ['Change their status to Active', 'Use the Convert to member button inside the lead profile', 'Assign them a membership from Billing → Memberships', 'They convert automatically after attending a class'], ans: 1, why: 'The Convert to member button directly inside the lead profile is the correct way to officially convert a prospect.' },
+      { q: 'You set up a 2-Week Trial membership. Someone signs up — where do they appear in GymDesk?', opts: ['Members list', 'Visitors list', 'Leads list', 'Billing → Pending'], ans: 1, why: 'Trial enrollees are listed as Visitors, not Members, until they convert to a paid full membership.' },
+      { q: 'What does the "Invite to Sign-up" button do in a lead record?', opts: ['Schedules a trial class automatically', 'Sends an email invitation to the lead to complete their registration', 'Converts the lead to a member immediately', 'Adds them to an automation sequence'], ans: 1, why: 'Invite to Sign-up sends the lead an email with a link to complete their own registration — staff does not have to do it for them.' }
+    ]
+  },
+  { id: 'gd_billing', title: 'Billing & Payments', icon: '💳', desc: 'Reading the billing dashboard, handling overdue payments, refunds, and discounts.',
+    content: [
+      { h: 'The Billing Dashboard', p: 'Go to Billing → Overview for a visual snapshot of the month: upcoming payments, processed payments, overdue payments, and 12 months of revenue history. The Overdue Payments section shows the 5 most recent overdue payments with a Change link to modify them. Recently Processed shows the 5 most recent successful payments. Click through for full lists. GymDesk has 5 payment statuses: Paid (done), Scheduled (future-dated), Pending (bank debit posted, processing takes 5–7 days), Overdue (unpaid), and Refunded.' },
+      { h: 'Handling Overdue Payments', p: 'Go to Billing → Payments → Overdue tab. From here you can view the invoice, mark as paid or cancel the charge, edit details (amount, description, late fee, tax, discount, date, method), and bulk-clear using "mark all as paid." Late fees are configured in Billing Settings and are automatically added to overdue payments when they are paid past the set timeframe — but only apply to future overdue payments, not historical ones.' },
+      { h: 'Refunds', p: 'Refunds are issued from the invoice screen. Open the relevant payment, find the invoice, and submit a refund. Partial refunds are supported — just adjust the amount before submitting. You can issue multiple partial refunds up to the full original amount. Important: if the original payment was recorded as manual (cash or check), GymDesk will not send any funds — you must refund the customer yourself outside the system.' },
+      { h: 'Discounts', p: 'Find discounts under Billing → Discounts. When creating one, configure: the title (appears on invoices), whether it is a percentage or fixed amount, whether it is for sign-up only or all payments, which memberships it applies to, an optional public code (e.g., "SUMMER25"), limited redemptions, and an expiration date. Staff can apply internal discounts from a dropdown during payment processing. Members enter public codes during sign-up.' },
+      { h: 'Custom Recurring Payments', p: 'Custom recurring payments are different from membership payments — they are manually created in Billing → Recurring, are NOT tied to a membership, and do NOT grant class access. Use them for things like private lesson packages or seminar fees. Configure the amount, frequency, description, first payment date, and whether to email an invoice. These show up separately from membership charges in the member\'s billing history.' }
+    ],
+    quiz: [
+      { q: 'What does a "Pending" payment status mean?', opts: ['The member has not been charged yet', 'A bank debit has been posted but takes 5–7 days to fully process', 'The invoice has been created but not sent', 'Staff needs to manually approve the charge'], ans: 1, why: 'Pending means the bank debit has been submitted and posted, but bank processing takes 5–7 business days to complete.' },
+      { q: 'A member paid cash last month and wants a refund. What is the correct process?', opts: ['Issue the refund through GymDesk — it handles all payment types', 'Issue the refund in GymDesk and GymDesk will mail a check', 'Record the refund in GymDesk for tracking, but return the cash to the member yourself — GymDesk cannot send funds for manual payments', 'Manual payments cannot be refunded in GymDesk'], ans: 2, why: 'For manual payments (cash/check), GymDesk will not send funds. You must return the money directly — but you can still record it in the system.' },
+      { q: 'What is the difference between a membership payment and a custom recurring payment?', opts: ['There is no difference — they work the same way', 'Membership payments grant class access; custom recurring payments do not and are not tied to a membership', 'Custom recurring payments are cheaper to set up', 'Membership payments must be paid by card; custom recurring can be cash'], ans: 1, why: 'Custom recurring payments are standalone billing entries — they do not grant class access and are not connected to any membership record.' },
+      { q: 'Can a discount code be applied to a POS (in-person retail) transaction?', opts: ['Yes, enter it in the discount code field at checkout', 'No — discount codes only work in the online store; use a manual discount at POS checkout', 'Only if the discount was created as a POS discount', 'Yes, but only for member accounts'], ans: 1, why: 'Discount codes cannot be applied in POS — only in the online store. At the POS, staff manually add a discount via the + Discount button.' }
+    ]
+  },
+  { id: 'gd_pos', title: 'Point of Sale (POS)', icon: '🛒', desc: 'Processing retail sales, payment methods, invoices, and managing products.',
+    content: [
+      { h: 'Creating a Sale', p: 'Go to Sales in the main menu → Create Sale. Add products via the Add to Sale buttons. For products with variants (like size or color), change the selector before adding. Use Add line item for custom items not set up as products. Taxes apply automatically based on your billing settings. Apply a manual discount using the + Discount button — remember, discount codes from Billing do NOT work in POS.' },
+      { h: 'Payment Options', p: 'GymDesk supports four payment methods in POS: (1) Card payment — manually enter card details or swipe via a connected card reader. (2) Member account — search the member by name and select from their saved payment methods (cards or bank accounts); manually entering card info bypasses saved methods. (3) Manual payment — record cash, check, or third-party processing without running it in-system. (4) Invoice — defer payment by creating an invoice; member invoices appear in their online account for self-payment.' },
+      { h: 'Managing Completed Sales', p: 'Find all transactions under Sales → Sales tab. Each record shows the customer name, which staff member processed it, any discount codes applied, the payment method, item description, and total. You can search by customer name or filter by invoice number, transaction ID, date range, staff member, product, sale type, or status. Click Receipt to issue a refund, cancel a manual sale, resend the receipt by email, or print it.' },
+      { h: 'Product Management', p: 'Manage your product catalog under Sales → Products. For each product, you can set a name, create variants (up to 2 option types, like size and color), set a base price and per-variant pricing, configure tax applicability, enable inventory tracking (the product becomes unavailable when stock hits zero), generate or manually set SKUs, add descriptions, and upload photos for the online shop. Products can be imported and exported via CSV — required fields are product name and product price.' },
+      { h: 'Online Shop Orders', p: 'Orders placed through the online shop have three statuses: Order Placed, Processed, and Picked Up. Staff updates the status via the Status Column\'s Update link. This keeps customers informed and helps the team track fulfillment. When inventory tracking is enabled, each sale automatically deducts from stock — so keep product quantities current to avoid selling items you do not have.' }
+    ],
+    quiz: [
+      { q: 'A customer has a discount code — can you apply it during a POS transaction?', opts: ['Yes, enter it in the POS discount code field', 'No — discount codes only work in the online store; add a manual discount instead', 'Only if the code was created as a POS-eligible discount', 'Yes, but only for members, not walk-ins'], ans: 1, why: 'Discount codes cannot be applied to POS transactions. Use the manual + Discount button at POS checkout instead.' },
+      { q: 'A walk-in customer wants to pay cash for a hoodie. Which payment method do you choose?', opts: ['Card payment', 'Member account', 'Manual payment', 'Invoice'], ans: 2, why: 'Manual payment is used to record cash, check, or third-party transactions without running them through GymDesk\'s payment processor.' },
+      { q: 'Where do you go to see who processed a specific sale and what discount was applied?', opts: ['Members → Payment History', 'Billing → Payments', 'Sales → Sales tab — each record shows staff, discount, method, and total', 'Reports → Transactions'], ans: 2, why: 'The Sales → Sales tab shows each transaction with the customer name, staff who processed it, discount codes, payment method, and total.' },
+      { q: 'You add a new t-shirt to the product catalog with inventory tracking enabled. Stock hits zero. What happens?', opts: ['Staff are notified by email', 'The product becomes unavailable for purchase automatically', 'Nothing — inventory tracking is informational only', 'The product is deleted from the catalog'], ans: 1, why: 'When inventory tracking is enabled, the product automatically becomes unavailable when stock reaches zero — preventing overselling.' }
+    ]
+  }
+];
+
 /*  -  -  Development Course  -  -  */
 const DEV_MODULES = [
   { id: 'brain', title: "How Kids' Brains Work", icon: '🧠', desc: 'Developmental stages from ages 3-12 and what they mean for your teaching.',
@@ -3569,6 +3660,31 @@ const DEV_MODULES = [
     ]
   }
 ];
+
+/*  -  -  GymDesk Course  -  -  */
+function gdSetModule(idx){ state.gdActiveModule=idx; state.gdQuizAnswers={}; state.gdQuizSubmitted=false; state.gdQuizScore=undefined; state.gdCompletionSaved=null; render(); }
+function gdBackToMenu(){ state.gdActiveModule=null; render(); }
+function gdSelectAnswer(qIdx,aIdx){ if(state.gdQuizSubmitted)return; state.gdQuizAnswers[qIdx]=aIdx; render(); }
+function gdSubmitQuiz(){
+  const mod=GYMDESK_MODULES[state.gdActiveModule];
+  if(!mod)return;
+  if(Object.keys(state.gdQuizAnswers).length<mod.quiz.length)return alert('Please answer all questions before submitting.');
+  state.gdQuizSubmitted=true;
+  let correct=0; mod.quiz.forEach((q,i)=>{ if(state.gdQuizAnswers[i]===q.ans)correct++; });
+  state.gdQuizScore=Math.round(correct/mod.quiz.length*100);
+  render();
+}
+function gdRetryQuiz(){ state.gdQuizAnswers={}; state.gdQuizSubmitted=false; state.gdQuizScore=undefined; state.gdCompletionSaved=null; render(); }
+function gdSaveCompletion(empId){
+  const emp=TASK_EMPLOYEES.find(e=>e.id===empId);
+  const mod=GYMDESK_MODULES[state.gdActiveModule];
+  if(!emp||!mod)return;
+  const score=state.gdQuizScore||0;
+  fbSet('development/gymdesk/completions/'+mod.id+'/'+empId,{name:emp.name,score,passed:score>=80,completedAt:new Date().toISOString()});
+  state.gdCompletionSaved=empId;
+  render();
+}
+function setDevTab(t){ state.devTab=t; state.gdActiveModule=null; state.devActiveModule=null; render(); }
 
 function devSetModule(idx) { state.devActiveModule = idx; state.devQuizAnswers = {}; state.devQuizSubmitted = false; state.devQuizScore = undefined; state.devCompletionSaved = null; render(); }
 function devBackToMenu() { state.devActiveModule = null; render(); }
@@ -3740,16 +3856,92 @@ function renderWallPage(){
 
 function renderDevelopmentPage() {
   const completions = (state.devCourse && state.devCourse.completions) || {};
+  const gdCompletions = (state.gdCourse && state.gdCourse.completions) || {};
 
-  // ── Module detail view ──
-  if (state.devActiveModule !== null) {
+  // ── GymDesk module detail view ──
+  if (state.devTab === 'gymdesk' && state.gdActiveModule !== null) {
+    const mod = GYMDESK_MODULES[state.gdActiveModule];
+    if (!mod) { state.gdActiveModule = null; return renderDevelopmentPage(); }
+    const modComp = gdCompletions[mod.id] || {};
+    const passedNames = Object.values(modComp).filter(c => c.passed).map(c => c.name);
+    let html = '<div class="section">';
+    html += '<div style="padding:14px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--gray-100);flex-wrap:wrap">';
+    html += '<button onclick="gdBackToMenu()" style="background:none;border:1px solid var(--gray-200);border-radius:8px;color:var(--gray-600);cursor:pointer;padding:6px 14px;font-size:13px">&larr; Back</button>';
+    html += '<span style="font-size:24px">' + mod.icon + '</span>';
+    html += '<div style="flex:1"><div style="font-size:17px;font-weight:700;color:var(--primary)">Module ' + (state.gdActiveModule + 1) + ': ' + esc(mod.title) + '</div>';
+    html += '<div style="font-size:12px;color:var(--gray-500)">' + esc(mod.desc) + '</div></div>';
+    if (passedNames.length > 0) {
+      html += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
+      passedNames.forEach(n => { html += '<span style="background:#d1fae5;color:#065f46;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700">✓ ' + esc(n) + '</span>'; });
+      html += '</div>';
+    }
+    html += '</div>';
+    mod.content.forEach(c => {
+      html += '<div style="padding:18px 24px;border-bottom:1px solid var(--gray-100)">';
+      html += '<h3 style="margin:0 0 8px;font-size:15px;font-weight:700;color:var(--primary)">' + esc(c.h) + '</h3>';
+      html += '<p style="margin:0;font-size:14px;line-height:1.8;color:#374151">' + esc(c.p) + '</p>';
+      html += '</div>';
+    });
+    html += '<div style="padding:20px 24px;background:#f9fafb;border-top:2px solid var(--blue)">';
+    html += '<h3 style="margin:0 0 16px;font-size:15px;font-weight:700;color:var(--primary)">📝 Knowledge Check — Score 80% or higher to pass</h3>';
+    mod.quiz.forEach((q, qi) => {
+      const selected = state.gdQuizAnswers[qi];
+      const submitted = state.gdQuizSubmitted;
+      const isCorrect = submitted && selected === q.ans;
+      html += '<div style="margin-bottom:18px;padding:16px;background:#fff;border-radius:10px;border:1px solid #e5e7eb;border-left:3px solid ' + (submitted ? (isCorrect ? '#10b981' : '#ef4444') : 'var(--blue)') + '">';
+      html += '<div style="font-weight:600;margin-bottom:10px;font-size:14px;color:var(--primary)">' + (qi + 1) + '. ' + esc(q.q) + '</div>';
+      q.opts.forEach((opt, oi) => {
+        const isSel = selected === oi, isAns = submitted && oi === q.ans;
+        let bg = '#fff', border = '#e5e7eb', col = '#374151';
+        if (isSel && !submitted) { bg = '#eff6ff'; border = '#3b82f6'; col = '#1d4ed8'; }
+        if (submitted && isAns) { bg = '#f0fdf4'; border = '#10b981'; col = '#065f46'; }
+        if (submitted && isSel && !isAns) { bg = '#fef2f2'; border = '#ef4444'; col = '#b91c1c'; }
+        html += '<div onclick="gdSelectAnswer(' + qi + ',' + oi + ')" style="padding:10px 14px;margin:5px 0;border-radius:8px;border:1px solid ' + border + ';background:' + bg + ';color:' + col + ';cursor:' + (submitted ? 'default' : 'pointer') + ';font-size:13px">';
+        html += (isSel ? '● ' : '○ ') + esc(opt) + '</div>';
+      });
+      if (submitted) {
+        html += '<div style="margin-top:8px;padding:8px 12px;border-radius:6px;font-size:12px;background:' + (isCorrect ? '#f0fdf4' : '#fef2f2') + ';color:' + (isCorrect ? '#065f46' : '#b91c1c') + '">' + (isCorrect ? '✅ ' : '❌ ') + esc(q.why) + '</div>';
+      }
+      html += '</div>';
+    });
+    if (!state.gdQuizSubmitted) {
+      const allAnswered = Object.keys(state.gdQuizAnswers).length === mod.quiz.length;
+      html += '<button onclick="gdSubmitQuiz()" style="padding:10px 24px;background:' + (allAnswered ? 'var(--blue)' : '#9ca3af') + ';color:#fff;border:none;border-radius:8px;cursor:' + (allAnswered ? 'pointer' : 'not-allowed') + ';font-size:14px;font-weight:600">Submit Answers</button>';
+    } else {
+      const score = state.gdQuizScore || 0, passed = score >= 80;
+      const correct = mod.quiz.filter((q, i) => state.gdQuizAnswers[i] === q.ans).length;
+      html += '<div style="padding:16px;border-radius:10px;background:' + (passed ? '#f0fdf4' : '#fef2f2') + ';border:1px solid ' + (passed ? '#10b981' : '#ef4444') + ';text-align:center;margin-bottom:16px">';
+      html += '<div style="font-size:28px;font-weight:800;color:' + (passed ? '#10b981' : '#ef4444') + '">' + score + '%</div>';
+      html += '<div style="font-size:14px;color:#374151;margin:4px 0">' + correct + '/' + mod.quiz.length + ' correct — ' + (passed ? 'Passed! 🎉' : 'Need 80% to pass') + '</div>';
+      if (!passed) html += '<button onclick="gdRetryQuiz()" style="margin-top:8px;padding:8px 20px;background:#ef4444;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">Retry Quiz</button>';
+      html += '</div>';
+      if (passed) {
+        html += '<div style="padding:16px;background:#fff;border-radius:10px;border:1px solid #e5e7eb">';
+        html += '<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:10px">🏅 Select your name to save your completion:</div>';
+        html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+        TASK_EMPLOYEES.forEach(emp => {
+          const c = modComp[emp.id];
+          if (c && c.passed) {
+            html += '<span style="padding:7px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-size:12px;font-weight:700;border:1px solid #a7f3d0">✓ ' + esc(emp.name) + '</span>';
+          } else {
+            const justSaved = state.gdCompletionSaved === emp.id;
+            html += '<button onclick="gdSaveCompletion(\'' + emp.id + '\')" style="padding:7px 14px;background:' + (justSaved ? '#d1fae5' : 'var(--blue)') + ';color:' + (justSaved ? '#065f46' : '#fff') + ';border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">' + (justSaved ? '✓ Saved — ' : '') + esc(emp.name) + '</button>';
+          }
+        });
+        html += '</div></div>';
+      }
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  // ── Instructor module detail view ──
+  if (state.devTab === 'instructor' && state.devActiveModule !== null) {
     const mod = DEV_MODULES[state.devActiveModule];
     if (!mod) { state.devActiveModule = null; return renderDevelopmentPage(); }
     const modComp = completions[mod.id] || {};
     const passedNames = Object.values(modComp).filter(c => c.passed).map(c => c.name);
-
     let html = '<div class="section">';
-    // Header
     html += '<div style="padding:14px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--gray-100);flex-wrap:wrap">';
     html += '<button onclick="devBackToMenu()" style="background:none;border:1px solid var(--gray-200);border-radius:8px;color:var(--gray-600);cursor:pointer;padding:6px 14px;font-size:13px">&larr; Back</button>';
     html += '<span style="font-size:24px">' + mod.icon + '</span>';
@@ -3761,16 +3953,12 @@ function renderDevelopmentPage() {
       html += '</div>';
     }
     html += '</div>';
-
-    // Content sections — light theme
     mod.content.forEach(c => {
       html += '<div style="padding:18px 24px;border-bottom:1px solid var(--gray-100)">';
       html += '<h3 style="margin:0 0 8px;font-size:15px;font-weight:700;color:var(--primary)">' + esc(c.h) + '</h3>';
       html += '<p style="margin:0;font-size:14px;line-height:1.8;color:#374151">' + esc(c.p) + '</p>';
       html += '</div>';
     });
-
-    // Quiz
     html += '<div style="padding:20px 24px;background:#f9fafb;border-top:2px solid var(--blue)">';
     html += '<h3 style="margin:0 0 16px;font-size:15px;font-weight:700;color:var(--primary)">📝 Knowledge Check — Score 80% or higher to pass</h3>';
     mod.quiz.forEach((q, qi) => {
@@ -3793,7 +3981,6 @@ function renderDevelopmentPage() {
       }
       html += '</div>';
     });
-
     if (!state.devQuizSubmitted) {
       const allAnswered = Object.keys(state.devQuizAnswers).length === mod.quiz.length;
       html += '<button onclick="devSubmitQuiz()" style="padding:10px 24px;background:' + (allAnswered ? 'var(--blue)' : '#9ca3af') + ';color:#fff;border:none;border-radius:8px;cursor:' + (allAnswered ? 'pointer' : 'not-allowed') + ';font-size:14px;font-weight:600">Submit Answers</button>';
@@ -3827,23 +4014,33 @@ function renderDevelopmentPage() {
   }
 
   // ── Landing page ──
+  const tab = state.devTab || 'instructor';
+  const modules = tab === 'gymdesk' ? GYMDESK_MODULES : DEV_MODULES;
+  const comps = tab === 'gymdesk' ? gdCompletions : completions;
+  const tabLabel = tab === 'gymdesk' ? 'GymDesk Training' : 'Instructor Development';
+
   let html = '';
 
-  // Hero
-  html += '<div class="section" style="padding:24px;text-align:center">';
-  html += '<div style="font-size:36px;margin-bottom:6px">📚</div>';
-  html += '<h2 style="margin:0 0 4px;font-size:20px;font-weight:800;color:var(--primary)">Instructor Development Program</h2>';
-  html += '<div style="font-size:13px;color:var(--gray-500)">Child Development & Coaching Excellence</div>';
-  html += '</div>';
+  // Hero + tab switcher
+  html += '<div class="section" style="padding:20px 24px">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">';
+  html += '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">📚 Resources — Staff Training</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">Complete modules and save your progress</div></div>';
+  html += '<div style="display:flex;gap:6px">';
+  ['instructor','gymdesk'].forEach(t => {
+    const active = tab === t;
+    const lbl = t === 'gymdesk' ? '🖥️ GymDesk' : '🥋 Instructor Dev';
+    html += '<button onclick="setDevTab(\'' + t + '\')" style="padding:7px 16px;border-radius:20px;border:1.5px solid ' + (active ? 'var(--blue)' : 'var(--gray-200)') + ';background:' + (active ? 'var(--blue)' : '#fff') + ';color:' + (active ? '#fff' : 'var(--gray-600)') + ';font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
+  });
+  html += '</div></div></div>';
 
   // Staff progress matrix
   html += '<div class="section" style="padding:0 0 8px">';
-  html += '<div style="padding:14px 20px;border-bottom:1px solid var(--gray-100);font-size:14px;font-weight:700;color:var(--primary)">📊 Staff Progress</div>';
+  html += '<div style="padding:14px 20px;border-bottom:1px solid var(--gray-100);font-size:13px;font-weight:700;color:var(--primary)">📊 ' + tabLabel + ' — Staff Progress</div>';
   html += '<div style="overflow-x:auto;padding:8px 16px 12px">';
-  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:500px">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:400px">';
   html += '<thead><tr style="border-bottom:2px solid var(--gray-200)">';
-  html += '<th style="text-align:left;padding:6px 12px;color:var(--gray-500);font-weight:600;white-space:nowrap">Instructor</th>';
-  DEV_MODULES.forEach((m, i) => {
+  html += '<th style="text-align:left;padding:6px 12px;color:var(--gray-500);font-weight:600;white-space:nowrap">Staff</th>';
+  modules.forEach((m, i) => {
     html += '<th style="padding:6px 8px;color:var(--gray-500);font-weight:600;text-align:center;min-width:36px" title="' + esc(m.title) + '">' + m.icon + '</th>';
   });
   html += '<th style="padding:6px 8px;color:var(--gray-500);font-weight:600;text-align:center">Done</th>';
@@ -3852,27 +4049,28 @@ function renderDevelopmentPage() {
     html += '<tr style="border-bottom:1px solid var(--gray-100);background:' + (ri % 2 === 0 ? '#fff' : '#f9fafb') + '">';
     html += '<td style="padding:8px 12px;font-weight:600;color:var(--primary);white-space:nowrap">' + esc(emp.name) + '</td>';
     let empTotal = 0;
-    DEV_MODULES.forEach(m => {
-      const c = (completions[m.id] || {})[emp.id];
+    modules.forEach(m => {
+      const c = (comps[m.id] || {})[emp.id];
       if (c && c.passed) { html += '<td style="padding:7px;text-align:center;font-size:14px" title="' + c.score + '%">✅</td>'; empTotal++; }
       else if (c) { html += '<td style="padding:7px;text-align:center"><span style="font-size:10px;color:#ef4444;font-weight:600">' + c.score + '%</span></td>'; }
       else { html += '<td style="padding:7px;text-align:center;color:#d1d5db">○</td>'; }
     });
-    const totCol = empTotal === DEV_MODULES.length ? '#10b981' : empTotal > 0 ? 'var(--blue)' : 'var(--gray-400)';
-    html += '<td style="padding:7px;text-align:center;font-weight:700;color:' + totCol + '">' + empTotal + '/' + DEV_MODULES.length + '</td>';
+    const totCol = empTotal === modules.length ? '#10b981' : empTotal > 0 ? 'var(--blue)' : 'var(--gray-400)';
+    html += '<td style="padding:7px;text-align:center;font-weight:700;color:' + totCol + '">' + empTotal + '/' + modules.length + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table></div></div>';
 
   // Module cards
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:0 0 24px">';
-  DEV_MODULES.forEach((mod, i) => {
-    const mc = completions[mod.id] || {};
+  modules.forEach((mod, i) => {
+    const mc = comps[mod.id] || {};
     const passedPeople = Object.values(mc).filter(c => c.passed);
     const allDone = passedPeople.length === TASK_EMPLOYEES.length;
     const someDone = passedPeople.length > 0;
     const borderColor = allDone ? '#10b981' : someDone ? '#3b82f6' : 'var(--gray-200)';
-    html += '<div onclick="devSetModule(' + i + ')" style="background:var(--card);border:1.5px solid ' + borderColor + ';border-radius:12px;padding:18px;cursor:pointer;box-shadow:var(--shadow);transition:transform 0.15s" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'\'">';
+    const clickFn = tab === 'gymdesk' ? 'gdSetModule(' + i + ')' : 'devSetModule(' + i + ')';
+    html += '<div onclick="' + clickFn + '" style="background:var(--card);border:1.5px solid ' + borderColor + ';border-radius:12px;padding:18px;cursor:pointer;box-shadow:var(--shadow);transition:transform 0.15s" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'\'">';
     html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">';
     html += '<span style="font-size:24px">' + mod.icon + '</span>';
     html += '<span style="font-size:10px;color:var(--gray-400);font-weight:600;background:var(--gray-100);padding:2px 8px;border-radius:999px">M' + (i + 1) + '</span>';
