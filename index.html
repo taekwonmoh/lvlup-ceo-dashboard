@@ -1585,10 +1585,13 @@ function renderHomePage() {
       const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       const locCls = e.loc ? ' loc-' + e.loc : '';
       const locLabel = e.loc === 'waunakee' ? 'Waunakee' : e.loc === 'eastmad' ? 'E. Madison' : e.loc === 'verona' ? 'Verona' : '';
+      const evtTimeStr = formatEvtTime(e.time);
       html += '<div class="home-event-item' + locCls + '">';
       html += '<div class="home-event-date"><span class="evt-month">' + monthNames[d.getMonth()] + '</span><span class="evt-day">' + d.getDate() + '</span></div>';
       html += '<div class="home-event-name">' + esc(e.event || e.name || e.title || '') + '</div>';
-      if (locLabel) html += '<div class="home-event-loc">' + locLabel + '</div>';
+      if (evtTimeStr) html += '<div class="home-event-loc" style="font-weight:600;color:var(--accent);">\u23f0 ' + evtTimeStr + '</div>';
+      else if (locLabel) html += '<div class="home-event-loc">' + locLabel + '</div>';
+      if (locLabel && evtTimeStr) html += '<div class="home-event-loc">' + locLabel + '</div>';
       if (e.link) html += '<a class="home-event-link" href="' + esc(e.link) + '" target="_blank">GymDesk \u2192</a>';
       html += '</div>';
     });
@@ -2196,6 +2199,15 @@ function updateInitiative(path, val) {
 /*  -  -  Events Page (Calendar View)  -  -  */
 function getEvtLocClass(loc) { return loc ? 'loc-' + loc : ''; }
 function getEvtLocLabel(loc) { return loc === 'waunakee' ? 'LVLUP Waunakee' : loc === 'eastmad' ? 'LVLUP E.Mad' : loc === 'verona' ? 'LVLUP Verona' : loc === 'goninjaW' ? 'GN Waunakee' : loc === 'goninjaV' ? 'GN Verona' : 'All'; }
+function formatEvtTime(t) {
+  if (!t) return '';
+  const [hStr, mStr] = t.split(':');
+  const h = parseInt(hStr, 10), m = parseInt(mStr, 10);
+  if (isNaN(h) || isNaN(m)) return '';
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return h12 + (m ? ':' + String(m).padStart(2,'0') : '') + ' ' + ampm;
+}
 
 // ── Photo upload state ──
 let _evtPendingFile = null;
@@ -2244,6 +2256,7 @@ async function addEvent() {
   const loc = document.getElementById('evtLoc').value;
   const type = document.getElementById('evtType').value;
   const endDate = document.getElementById('evtEndDate').value;
+  const time = document.getElementById('evtTime').value;
   const link = document.getElementById('evtLink').value.trim();
   const hidden = document.getElementById('evtHidden').checked;
   const featured = document.getElementById('evtFeatured').checked;
@@ -2282,6 +2295,7 @@ async function addEvent() {
   }
 
   const payload = { event: name, date: date, loc: loc, type: type, link: link };
+  if (time) payload.time = time;
   if (endDate && endDate !== date) payload.endDate = endDate;
   if (hidden) payload.hiddenFromStudents = true;
   if (featured) payload.featured = true;
@@ -2298,6 +2312,7 @@ function editEvent(key) {
   if (!e) return;
   document.getElementById('evtName').value = e.event || '';
   document.getElementById('evtDate').value = e.date || '';
+  document.getElementById('evtTime').value = e.time || '';
   document.getElementById('evtEndDate').value = e.endDate || '';
   document.getElementById('evtLoc').value = e.loc || '';
   document.getElementById('evtType').value = e.type || 'special';
@@ -2325,6 +2340,7 @@ function editEvent(key) {
 function cancelEditEvent() {
   document.getElementById('evtName').value = '';
   document.getElementById('evtDate').value = '';
+  document.getElementById('evtTime').value = '';
   document.getElementById('evtEndDate').value = '';
   document.getElementById('evtLink').value = '';
   document.getElementById('evtHidden').checked = false;
@@ -2352,6 +2368,7 @@ function duplicateEvent(key) {
   // Load into form so user can adjust dates before saving
   document.getElementById('evtName').value = e.event || '';
   document.getElementById('evtDate').value = e.date || '';
+  document.getElementById('evtTime').value = e.time || '';
   document.getElementById('evtEndDate').value = e.endDate || '';
   document.getElementById('evtLoc').value = e.loc || '';
   document.getElementById('evtType').value = e.type || 'special';
@@ -2421,6 +2438,7 @@ function renderEventsPage() {
   html += '<div class="evt-add-form">';
   html += '<input type="text" id="evtName" placeholder="Event name..." />';
   html += '<input type="date" id="evtDate" title="Start date" />';
+  html += '<input type="time" id="evtTime" title="Start time (optional)" style="max-width:130px;" />';
   html += '<input type="date" id="evtEndDate" title="End date (optional — leave blank for single-day)" />';
   html += '<select id="evtLoc"><option value="">All Locations</option><option value="waunakee">LVLUP Waunakee</option><option value="eastmad">LVLUP E.Mad</option><option value="verona">LVLUP Verona</option><option value="goninjaW">Go Ninja Waunakee</option><option value="goninjaV">Go Ninja Verona</option></select>';
   html += '<select id="evtType"><option value="testing">Belt Test</option><option value="tournament">Tournament</option><option value="seminar">Seminar</option><option value="camp">Summer Camp</option><option value="special">Special Event</option></select>';
@@ -2504,7 +2522,8 @@ function renderEventsPage() {
       }
       const isPast = (e.endDate ? new Date(e.endDate + 'T00:00:00') : dd) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
       html += '<div class="cal-list-item ' + getEvtLocClass(e.loc) + (isPast ? ' cal-list-past' : '') + '">';
-      html += '<div class="cal-list-date">' + dateStr + '</div>';
+      const timeStr = formatEvtTime(e.time);
+      html += '<div class="cal-list-date">' + dateStr + (timeStr ? '<br><span style="font-size:11px;font-weight:600;color:var(--accent)">⏰ ' + timeStr + '</span>' : '') + '</div>';
       html += '<div class="cal-list-name" style="display:flex;flex-direction:column;gap:2px;">';
       html += '<span>' + esc(e.event) + (e.loc ? ' <span style="font-size:11px;font-weight:400;color:var(--gray-500)">(' + getEvtLocLabel(e.loc) + ')</span>' : '') + '</span>';
       if (e.description) html += '<span style="font-size:12px;font-weight:400;color:var(--gray-500);line-height:1.5">' + linkify(e.description) + '</span>';
