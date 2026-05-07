@@ -1585,7 +1585,7 @@ function renderHomePage() {
       const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       const locCls = e.loc ? ' loc-' + e.loc : '';
       const locLabel = e.loc === 'waunakee' ? 'Waunakee' : e.loc === 'eastmad' ? 'E. Madison' : e.loc === 'verona' ? 'Verona' : '';
-      const evtTimeStr = formatEvtTime(e.time);
+      const evtTimeStr = formatEvtTimeRange(e.time, e.endTime);
       html += '<div class="home-event-item' + locCls + '">';
       html += '<div class="home-event-date"><span class="evt-month">' + monthNames[d.getMonth()] + '</span><span class="evt-day">' + d.getDate() + '</span></div>';
       html += '<div class="home-event-name">' + esc(e.event || e.name || e.title || '') + '</div>';
@@ -2208,6 +2208,16 @@ function formatEvtTime(t) {
   const h12 = h % 12 || 12;
   return h12 + (m ? ':' + String(m).padStart(2,'0') : '') + ' ' + ampm;
 }
+function formatEvtTimeRange(start, end) {
+  const s = formatEvtTime(start);
+  if (!s) return '';
+  const e = formatEvtTime(end);
+  if (!e) return s;
+  // If same AM/PM, strip suffix from start: "2:30 – 4:00 PM"
+  const sAmpm = s.slice(-2), eAmpm = e.slice(-2);
+  const sBase = sAmpm === eAmpm ? s.slice(0, -3) : s;
+  return sBase + ' – ' + e;
+}
 
 // ── Photo upload state ──
 let _evtPendingFile = null;
@@ -2257,6 +2267,7 @@ async function addEvent() {
   const type = document.getElementById('evtType').value;
   const endDate = document.getElementById('evtEndDate').value;
   const time = document.getElementById('evtTime').value;
+  const endTime = document.getElementById('evtEndTime').value;
   const link = document.getElementById('evtLink').value.trim();
   const hidden = document.getElementById('evtHidden').checked;
   const featured = document.getElementById('evtFeatured').checked;
@@ -2296,6 +2307,7 @@ async function addEvent() {
 
   const payload = { event: name, date: date, loc: loc, type: type, link: link };
   if (time) payload.time = time;
+  if (endTime) payload.endTime = endTime;
   if (endDate && endDate !== date) payload.endDate = endDate;
   if (hidden) payload.hiddenFromStudents = true;
   if (featured) payload.featured = true;
@@ -2313,6 +2325,7 @@ function editEvent(key) {
   document.getElementById('evtName').value = e.event || '';
   document.getElementById('evtDate').value = e.date || '';
   document.getElementById('evtTime').value = e.time || '';
+  document.getElementById('evtEndTime').value = e.endTime || '';
   document.getElementById('evtEndDate').value = e.endDate || '';
   document.getElementById('evtLoc').value = e.loc || '';
   document.getElementById('evtType').value = e.type || 'special';
@@ -2341,6 +2354,7 @@ function cancelEditEvent() {
   document.getElementById('evtName').value = '';
   document.getElementById('evtDate').value = '';
   document.getElementById('evtTime').value = '';
+  document.getElementById('evtEndTime').value = '';
   document.getElementById('evtEndDate').value = '';
   document.getElementById('evtLink').value = '';
   document.getElementById('evtHidden').checked = false;
@@ -2369,6 +2383,7 @@ function duplicateEvent(key) {
   document.getElementById('evtName').value = e.event || '';
   document.getElementById('evtDate').value = e.date || '';
   document.getElementById('evtTime').value = e.time || '';
+  document.getElementById('evtEndTime').value = e.endTime || '';
   document.getElementById('evtEndDate').value = e.endDate || '';
   document.getElementById('evtLoc').value = e.loc || '';
   document.getElementById('evtType').value = e.type || 'special';
@@ -2439,6 +2454,7 @@ function renderEventsPage() {
   html += '<input type="text" id="evtName" placeholder="Event name..." />';
   html += '<input type="date" id="evtDate" title="Start date" />';
   html += '<input type="time" id="evtTime" title="Start time (optional)" style="max-width:130px;" />';
+  html += '<input type="time" id="evtEndTime" title="End time (optional)" style="max-width:130px;" />';
   html += '<input type="date" id="evtEndDate" title="End date (optional — leave blank for single-day)" />';
   html += '<select id="evtLoc"><option value="">All Locations</option><option value="waunakee">LVLUP Waunakee</option><option value="eastmad">LVLUP E.Mad</option><option value="verona">LVLUP Verona</option><option value="goninjaW">Go Ninja Waunakee</option><option value="goninjaV">Go Ninja Verona</option></select>';
   html += '<select id="evtType"><option value="testing">Belt Test</option><option value="tournament">Tournament</option><option value="seminar">Seminar</option><option value="camp">Summer Camp</option><option value="special">Special Event</option></select>';
@@ -2522,7 +2538,7 @@ function renderEventsPage() {
       }
       const isPast = (e.endDate ? new Date(e.endDate + 'T00:00:00') : dd) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
       html += '<div class="cal-list-item ' + getEvtLocClass(e.loc) + (isPast ? ' cal-list-past' : '') + '">';
-      const timeStr = formatEvtTime(e.time);
+      const timeStr = formatEvtTimeRange(e.time, e.endTime);
       html += '<div class="cal-list-date">' + dateStr + (timeStr ? '<br><span style="font-size:11px;font-weight:600;color:var(--accent)">⏰ ' + timeStr + '</span>' : '') + '</div>';
       html += '<div class="cal-list-name" style="display:flex;flex-direction:column;gap:2px;">';
       html += '<span>' + esc(e.event) + (e.loc ? ' <span style="font-size:11px;font-weight:400;color:var(--gray-500)">(' + getEvtLocLabel(e.loc) + ')</span>' : '') + '</span>';
