@@ -3387,7 +3387,6 @@ function renderTasksPage(){
     const monthLabel=new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
     html+=renderTaskSection('monthly','Monthly Tasks — '+monthLabel,monthlyTasks,monthlyData,customMonthly);
   }
-  if(!isFrontDesk(loc)) html+=renderMatChatSection();
   if(isGoNinja(loc)){
     html+='<div class="cycle-week-nav">';
     for(let w=1;w<=8;w++){
