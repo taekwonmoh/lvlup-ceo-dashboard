@@ -1901,25 +1901,29 @@ function renderHomePage() {
   // Two-column grid
   html += '<div class="home-grid">';
 
-  // Mat Chat card
-  const week = (cycle.weeks || {})[cycle.weekNum] || {};
+  // Mat Chat card \u2014 sourced from MAT_CHATS constant
+  const mcSkill = MAT_CHATS[(cycle.lifeSkill||'').toLowerCase().trim()];
+  const mcWeek  = mcSkill ? mcSkill.weeks.find(x => x.w === cycle.weekNum) : null;
   html += '<div class="home-card">';
-  html += '<div class="home-card-header"><span class="card-icon">\uD83D\uDDE3\uFE0F</span><h3>Mat Chat - Week ' + cycle.weekNum + ': ' + esc(week.theme || '') + '</h3></div>';
+  html += '<div class="home-card-header"><span class="card-icon">\uD83D\uDDE3\uFE0F</span><h3>Mat Chat \u2014 Week ' + cycle.weekNum + '</h3></div>';
   html += '<div class="home-card-body">';
-  if (week.beginning) {
-    html += '<div class="mat-chat-section"><div class="mat-chat-label"><span class="mc-icon">\uD83D\uDD1C</span> Beginning of Class</div>';
-    html += '<div class="mat-chat-text">' + esc(week.beginning) + '</div></div>';
-  }
-  if (week.during) {
-    html += '<div class="mat-chat-section"><div class="mat-chat-label"><span class="mc-icon">\uD83E\uDD4B</span> During Class</div>';
-    html += '<div class="mat-chat-text">' + esc(week.during) + '</div></div>';
-  }
-  if (week.end) {
-    html += '<div class="mat-chat-section"><div class="mat-chat-label"><span class="mc-icon">\uD83C\uDFC1</span> End of Class</div>';
-    html += '<div class="mat-chat-text">' + esc(week.end) + '</div></div>';
-  }
-  if (week.keyPhrase) {
-    html += '<div style="margin-top:10px"><span class="mat-chat-key">\uD83D\uDD11 ' + esc(week.keyPhrase) + '</span></div>';
+  if (mcSkill && mcWeek) {
+    const mcColor = mcSkill.color;
+    html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:'+mcColor+';margin-bottom:10px;">' + esc(mcSkill.title) + ' \u2014 ' + esc(mcSkill.tagline) + '</div>';
+    const mcSections = [
+      { label: '\uD83D\uDD14 Beginning of Class', body: mcWeek.boc, key: mcWeek.boc_key },
+      { label: '\u2694\uFE0F During Class',       body: mcWeek.dur, key: mcWeek.dur_key },
+      { label: '\uD83C\uDFC1 End of Class',        body: mcWeek.eoc, key: mcWeek.eoc_key },
+    ];
+    mcSections.forEach(s => {
+      html += '<div class="mat-chat-section" style="border-left-color:'+mcColor+'">';
+      html += '<div class="mat-chat-label"><span class="mc-icon"></span>' + s.label + '</div>';
+      html += '<div class="mat-chat-text">' + esc(s.body) + '</div>';
+      html += '<div style="margin-top:6px;font-size:12px;font-weight:800;color:'+mcColor+';font-style:italic;">"' + esc(s.key) + '"</div>';
+      html += '</div>';
+    });
+  } else {
+    html += '<div style="color:var(--gray-400);font-size:13px;font-style:italic;">Set the life skill for Cycle ' + cycle.cycleNum + ' to see mat chat scripts here.</div>';
   }
   html += '</div></div>';
 
