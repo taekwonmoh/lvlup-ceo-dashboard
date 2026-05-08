@@ -876,6 +876,376 @@ const LVLUP_CYCLE_CHECKLIST = [
 ];
 const FRONTDESK_CYCLE_CHECKLIST = []; // TBD
 
+/* ── Mat Chat Scripts (ATA Legacy Pro) ── */
+const MAT_CHATS = {
+  discipline:{
+    title:'Discipline', tagline:'Is To Obey What Is Right!', color:'#dc2626',
+    weeks:[
+      {w:1,
+        boc:'Discipline is to obey what is right. Obeying what is right is making sure you do things as soon as you are told to do them.',
+        boc_key:'Right Away Is The RIGHT WAY',
+        dur:'The first level of Discipline is obedience. Let\'s show obedience in class by answering with a confident "yes sir/ma\'am" and doing things immediately.',
+        dur_key:'Move IMMEDIATELY',
+        eoc:'When your Mom or Dad asks you to take care of your chores at home, when do you do them? You do them immediately!',
+        eoc_key:'Get Chores Done RIGHT AWAY'},
+      {w:2,
+        boc:'This week, we will work on commitment! Disciplined students are committed to always do their very best, so let\'s train like champions.',
+        boc_key:'To Be Your Best You Must Be COMMITTED',
+        dur:'One of the best ways to show commitment is by following through on your board breaks. Who\'s going to break a board today?',
+        dur_key:'Following Through Leads To SUCCESS',
+        eoc:'Parents, this week the students will show Discipline at home by having the commitment to do everything the first time you ask them to.',
+        eoc_key:'Parents Should Only Ask ONCE'},
+      {w:3,
+        boc:'"Goals" is one of the pillars of Discipline! Today, we have the goal to be better than yesterday!',
+        boc_key:'Be BETTER Than Yesterday',
+        dur:'Your goal today is to earn your stripe. If we see that you are working towards that goal, you may also earn an invitation to the Leadership Program. Who\'s going to train hard today?',
+        dur_key:'Train HARD To Earn Rewards',
+        eoc:'Your goal at home this week is to follow your parents\' directions the first time they give them to you. Parents, let us know if your child accomplishes this goal.',
+        eoc_key:'Follow Directions The FIRST Time'},
+      {w:4,
+        boc:'This week, we will focus on determination. Disciplined students have the determination to never quit! Let\'s get started.',
+        boc_key:'NEVER Quit',
+        dur:'Last week\'s goal was to earn your stripe or an invitation to Leadership. Let\'s show determination to accomplish it this week or reach a new goal.',
+        dur_key:'Determination Leads To SUCCESS',
+        eoc:'Let\'s have the determination to be the best role model for your siblings and/or friends by showing obedience to our parents at home this week.',
+        eoc_key:'Be A POSITIVE Role Model'},
+      {w:5,
+        boc:'When you have Discipline, you have responsibility! While you\'re training today, take responsibility for your actions and be your best self.',
+        boc_key:'Be RESPONSIBLE For Your Actions',
+        dur:'Let\'s be responsible with our gear. Once you use it, make sure it\'s back inside your bag so you don\'t lose it.',
+        dur_key:'Put Your Things In Their PROPER Place',
+        eoc:'Today, we spoke about responsibility. At home, you are responsible for finishing your homework and putting it inside your backpack. If you are an older sibling, you have the responsibility to help your younger brother or sister with their homework.',
+        eoc_key:'Responsibility For YOUR School Work'},
+      {w:6,
+        boc:'Practicing Discipline will build your courage! We are getting closer to our belt promotion and some of us have the fear to perform in front of an audience. With courage, we will overcome those fears in class.',
+        boc_key:'Discipline Builds COURAGE',
+        dur:'Today, I want you to have the courage to commit to breaking your boards on the first try. Now, let\'s practice for testing and show your parents your courage.',
+        dur_key:'Have COURAGE In Your Abilities',
+        eoc:'A disciplined student shows courage at home by always telling the truth to their parents even when they know they did something wrong.',
+        eoc_key:'Show Courage And Do What\'s RIGHT'},
+      {w:7,
+        boc:'Vision is one of the strongest pillars of Discipline. Disciplined students will always use vision to accomplish their goals. What is your goal today?',
+        boc_key:'Visualize Your GOALS',
+        dur:'Testing is coming up so let\'s use vision to see how a champion looks at testing. A champion is strong, confident and has a high level of Discipline.',
+        dur_key:'Visualize Your ACCOMPLISHMENTS',
+        eoc:'A leader at home always has the vision of how they should behave, how their room should look or even how well they do in school. Who is using vision at home?',
+        eoc_key:'Put Vision Into ACTION'},
+      {w:8,
+        boc:'Passion is having strong feelings about something. Let\'s finish the cycle with the same passion we had when we started.',
+        boc_key:'Passion To The END',
+        dur:'Let\'s see who has the most passion to achieve their goals by the way you perform today.',
+        dur_key:'Passion Helps Achieve GOALS',
+        eoc:'A great way to show strong feelings or passion for your parents is by showing them love, listening to what they say and following the rules. Let\'s do our best!',
+        eoc_key:'Show PASSION To Parents'}
+    ]
+  },
+  honesty:{
+    title:'Honesty', tagline:'Is The First Step To An Abundant Life', color:'#2563eb',
+    weeks:[
+      {w:1,
+        boc:'This week, we start the cycle of Honesty. Honesty is the first step to an abundant life so let\'s start class by being honest to our self and trying our best.',
+        boc_key:'Try Your BEST',
+        dur:'Being Honest is very rewarding — like when you get rewarded in class for doing your best. Let\'s start this cycle with our highest level of Honesty.',
+        dur_key:'Giving Your BEST = REWARDS',
+        eoc:'Be Honest with your parents at all times. Even when we do something wrong, we should always be Honest with our parents and face the consequences. If we lie to our parents, they will lose trust in us and will always question our word — even when we are telling the truth.',
+        eoc_key:'Lie = Lose Trust'},
+      {w:2,
+        boc:'Honesty starts with yourself. You know when you are giving your best or not in class, so make the choice to give your best at all times.',
+        boc_key:'Choose To Be Your BEST',
+        dur:'Let\'s be Honest with ourselves… When we try our best, we will reach our highest potential. If you lie to yourself and don\'t really give it your all, then don\'t expect to pass your stripe testing.',
+        dur_key:'Give Your BEST To Pass Your Test',
+        eoc:'One of the best ways to be Honest with yourself at home is by always doing your best on your homework.',
+        eoc_key:'Do Your BEST On Your Homework'},
+      {w:3,
+        boc:'We are all born Honest, but often — through time — we learn to be dishonest. One of the best ways to be Honest with others is by always speaking the truth, like with our parents, friends and mentors.',
+        boc_key:'Tell The TRUTH To Others',
+        dur:'One of the best ways to be Honest with others is by telling them when they are doing something wrong. Make sure you are helping each other become better.',
+        dur_key:'The Truth Will Make You BETTER',
+        eoc:'Trust is very important both at home and school. That\'s why we always keep our word and tell the truth even when the consequences are not in our favor.',
+        eoc_key:'Keep Your WORD Regardless Of The Consequences'},
+      {w:4,
+        boc:'One of the best ways to show Honesty with society is to follow the rules. Today, we will see who will follow the rules the best and get rewarded for doing it.',
+        boc_key:'Follow The RULES',
+        dur:'In class, I\'m checking who is doing things the right way on every repetition. Remember, to show Honesty, you must do your very best at all times even when no one is watching.',
+        dur_key:'Do EVERY Rep The BEST You Can',
+        eoc:'Great job today! Remember the lesson of Honesty? We discussed doing the right thing even when no one is watching. This also applies at home; even when your parents are not looking at you, make sure to be Honest and follow the rules.',
+        eoc_key:'Do What\'s RIGHT Even When No One Is Watching'},
+      {w:5,
+        boc:'We have discussed Honesty with yourself, others and even society. Finally, one of the ways we show Honesty with the world is being an Honest leader. You must remember that leaders take action and actions speak louder than words.',
+        boc_key:'Leaders Take ACTION',
+        dur:'We are halfway through the cycle of Honesty and one of the best ways to be Honest in the world is being a positive leader. Whoever is the best leader in class today may win an invitation to leadership class.',
+        dur_key:'Step Up And LEAD',
+        eoc:'You can also be a leader at home with your siblings or friends by showing Honesty to your parents. Lead by example!',
+        eoc_key:'Lead By EXAMPLE'},
+      {w:6,
+        boc:'Train with accountability in your minds today. Class will be easier if we practice to the best of our abilities. Honesty starts with yourself so if you don\'t always try your best, there will be consequences when you test. Who\'s going to give their best?',
+        boc_key:'Hard Work = SUCCESS',
+        dur:'One of the pillars of Honesty is humility. If we make a mistake, it\'s ok. Leaders learn from their mistakes and apply it in the future. Let\'s try our best with this board break…',
+        dur_key:'LEARN From Your Mistakes',
+        eoc:'Humility can be a great lesson at home so we should say thank you to our parents for all the lessons they teach us. Let\'s be humble and accept the shortcomings we have and be thankful to our parents.',
+        eoc_key:'Know When To Be HUMBLE'},
+      {w:7,
+        boc:'This week, we are working on the pillar of integrity. We show integrity by making the right choices in all situations. Let\'s train with integrity today.',
+        boc_key:'Make GOOD Choices',
+        dur:'To show integrity in class, we must keep our word to train our hardest. Let\'s see who is showing integrity in class by training at their highest level possible and not slacking.',
+        dur_key:'Keep Your WORD',
+        eoc:'At home, you can keep showing integrity by displaying the values your parents teach you and making the right choices. Talk to your parents today about some ways you can improve at home.',
+        eoc_key:'Follow Your Parents\' Example Of HONESTY'},
+      {w:8,
+        boc:'The last pillar we are going to talk about in this cycle is self-esteem. Honest students will hold themselves to the highest level of self-esteem by always training to be their best.',
+        boc_key:'Train To Be Your BEST',
+        dur:'Honesty in class will show by your actions. Remember, if you give your best at all times, you should be prepared for belt promotions coming up.',
+        dur_key:'Being Honest Helps You Be PREPARED',
+        eoc:'Congratulations! Now that we are at the end of the cycle, your parents and I expect you to apply all the life lessons you have learned. If you want to have a great life, it starts with you being Honest!',
+        eoc_key:'Honesty Is The FIRST Step To An Abundant Life'}
+    ]
+  },
+  respect:{
+    title:'Respect', tagline:'Is Not What You Know — It\'s What You Do', color:'#16a34a',
+    weeks:[
+      {w:1,
+        boc:'A new cycle comes with a new attitude. This cycle is Respect. Respect is not what you know, it\'s what you do. Today we start with Respecting ourselves by doing our very best in class. Give 100 percent in everything you do today.',
+        boc_key:'Give 100 PERCENT For Best Results',
+        dur:'One of the ways you can demonstrate Respect for yourself is by having great eye contact when talking with others and practicing our forms.',
+        dur_key:'Maintain EYE CONTACT',
+        eoc:'At home this week, practice showing Respect to your parents by looking at them in the eyes when they speak to you.',
+        eoc_key:'Look At Your Parents In The EYES'},
+      {w:2,
+        boc:'Respecting ourselves comes in many forms. One of them is by taking care of your uniform and gear. Is your uniform clean, ironed and odor free? Remember, this shows Respect — not only for yourselves — but also your parents.',
+        boc_key:'Uniform SHARP And CLEAN',
+        dur:'I want to see who is showing Respect for their training equipment. Make sure you are using them correctly and that they always get back in your bag.',
+        dur_key:'RESPECT Your Equipment',
+        eoc:'This week, we want to see who is making the right choices at home. A great way to show Self-Respect this week is by having a clean and organized room.',
+        eoc_key:'A Clean Room Shows SELF-RESPECT'},
+      {w:3,
+        boc:'A great way to gain Respect is by giving Respect. You will apply this today when you are working with your partner by saying "thank you sir/ma\'am" and "yes sir/ma\'am." Who\'s going to have the highest level of Respect?',
+        boc_key:'Gain Respect By GIVING Respect',
+        dur:'A student that has a high level of Respect will always answer "yes sir/ma\'am" when responding to an instructor. Let\'s apply this today in class and create a great habit.',
+        dur_key:'Make Answering Up A HABIT',
+        eoc:'Parents! This week the students will work on showing Respect at home by responding "yes/no, sir/ma\'am" when spoken to and not talking back.',
+        eoc_key:'No Talking Back To PARENTS'},
+      {w:4,
+        boc:'Some of the best ways to show Respect in society are knowing and following the rules of the different places you visit. No matter where you go, you must follow the rules. This week, I want you to focus on following the rules here in this school.',
+        boc_key:'Follow The RULES',
+        dur:'In many cultures, Respect is shown in different ways. Today in class, we will show Respect to each other by using proper words and encouraging each other to break the board.',
+        dur_key:'Respect Others By ENCOURAGING Them',
+        eoc:'Leaders, at home this week, focus on being a positive role model for your friends and family by showing Respect to not only your parents — but all adults.',
+        eoc_key:'Leaders Show Respect To All ADULTS'},
+      {w:5,
+        boc:'There are many ways to show Respect for the world. However, one of the best ways is to be a leader. If you see an area around you that needs cleaned or organized, be a leader and take care of it.',
+        boc_key:'Help Keep Places CLEAN',
+        dur:'If everyone in class does their very best, we will all create a better and more Respectful world. Let\'s behave like leaders in class so others will follow our example of Respect.',
+        dur_key:'Lead By Your ACTIONS',
+        eoc:'Show Respect at home this week by utilizing all the levels of Respect we have been practicing so far; Respect for ourselves, others, society and the world.',
+        eoc_key:'Show Respect At ALL Times'},
+      {w:6,
+        boc:'We will work on one of the best pillars of Respect in class this week — trust. This will include learning to trust ourself and others.',
+        boc_key:'Respect Earns TRUST',
+        dur:'Today, we will develop trust for each other when we are sparring. Focus on having control because that will build trust with your classmates.',
+        dur_key:'Self-Control Builds TRUST',
+        eoc:'Trust is earned. One of the best ways to show Respect for our parents is by earning their trust. Practice developing a high level of trust with your parents this week by always speaking the truth.',
+        eoc_key:'Telling The Truth Earns TRUST'},
+      {w:7,
+        boc:'One of my favorite pillars of Respect is confidence. The way you stand tall and strong will not only showcase confidence but also a high level of Respect for yourself. Who\'s going to be the most confident?',
+        boc_key:'Confidence Builds SELF-RESPECT',
+        dur:'Confidence comes from believing in yourself. A student who has a high level of Respect for themselves will always believe in their abilities. Today, have confidence when you\'re doing your board break.',
+        dur_key:'Show Confidence By Believing In YOURSELF',
+        eoc:'A great way to show Respect at home this week is to avoid putting your siblings or friends down. A student with confidence always tries to lift others up.',
+        eoc_key:'Lift Others = SELF-RESPECT'},
+      {w:8,
+        boc:'This is the last week of the Respect cycle so we will be working on the 7th pillar of Respect today — which is listening. Throughout today\'s class, I want to see how well you listen and react right away.',
+        boc_key:'Listen And React IMMEDIATELY',
+        dur:'Listening is probably one of the best ways we can show Respect in class. Today, I will give a leadership invitation to whoever demonstrates they are listening the best.',
+        dur_key:'Listening In Class = REWARDS',
+        eoc:'This final week of the cycle is dedicated to the pillar of listening. The best way to develop Respect for your parents is by listening and reacting the very first time they ask.',
+        eoc_key:'Listening To Your Parents Develops RESPECT'}
+    ]
+  },
+  'self-esteem':{
+    title:'Self-Esteem', tagline:'Is The JOY Of Being Myself', color:'#7c3aed',
+    weeks:[
+      {w:1,
+        boc:'In this new cycle, we will cover Self-Esteem. Self-Esteem is the joy of being myself and starts with what we see in ourselves. We are going to start this cycle off by seeing ourselves as warriors, champions and leaders.',
+        boc_key:'Self-Esteem Is The JOY Of Being Myself',
+        dur:'In this cycle, I will challenge you both physically and mentally. The first pillar is confidence, and with confidence, you will be able to accomplish any task. Believe it and you can achieve it.',
+        dur_key:'Believe It To ACHIEVE It',
+        eoc:'At home this week, I would like for you to show your parents you have the confidence to try new things. Riding a new bike, swimming on your own or even trying new foods. Have the confidence to at least try.',
+        eoc_key:'TRY New Things'},
+      {w:2,
+        boc:'A strong way to show Self-Esteem is by the words we use. I want you to use positive words to build Self-Esteem in class, at home and at school. Today, I want you tell yourself "I can do it" or "yes I can" to any challenge I give you.',
+        boc_key:'POSITIVE Words Build Self-Esteem',
+        dur:'Let\'s encourage each other today when we are breaking boards. Use positive words and phrases to uplift each other, such as "Break that board" or "You can do it!"',
+        dur_key:'Say POSITIVE Things To Others',
+        eoc:'What we say to our parents can either be positive or negative. Make sure we use positive words like "please" and "thank you." Your parents\' Self-Esteem will increase because of how happy it will make them, as well as yours for doing the right thing.',
+        eoc_key:'Positive Words = HAPPY Parents'},
+      {w:3,
+        boc:'A great way to increase our Self-Esteem is through our actions. What we do has a high impact — not only in ourselves — but in others. This week we will not only talk about our goals, we will work to accomplish them.',
+        boc_key:'Take ACTION',
+        dur:'As leaders, one of the best ways to increase our own Self-Esteem is by increasing others. We will celebrate others by cheering and clapping every time one of your classmates earns a stripe.',
+        dur_key:'Celebrate OTHERS',
+        eoc:'Being a positive role model for your siblings is a great way to show Self-Esteem at home. By listening and doing what you\'re told right away, you are setting the right example.',
+        eoc_key:'Be A ROLE MODEL At Home'},
+      {w:4,
+        boc:'One of the best pillars of Self-Esteem is confidence. Confidence makes it easier for us to try new things and learn from our mistakes. In class today, I want you to give it your all and, if you don\'t succeed, try again.',
+        boc_key:'CONFIDENCE To Try Again',
+        dur:'Another way to build confidence is by having a positive attitude. Whenever I challenge you to learn something new, accept it and have confidence that you can accomplish it.',
+        dur_key:'POSITIVE Attitude Towards New Things',
+        eoc:'Sometimes we get mad at our parents when they ask us to do something we don\'t want to do. I challenge you to always have a positive response when asked to do something by your parents.',
+        eoc_key:'Be Positive Towards PARENTS'},
+      {w:5,
+        boc:'The third pillar of Self-Esteem is self-awareness — having the ability to know what is happening around us. Always be aware of your surroundings in school or at home. We will apply this today in class when working with our training tool and sparring.',
+        boc_key:'Be AWARE Of Your Surroundings',
+        dur:'Self-awareness is an important tool to use in class. Practice your self-awareness in sparring today by being aware of what is happening around you at all times so no one gets hurt.',
+        dur_key:'Self-Awareness = SAFETY',
+        eoc:'A way to practice self-awareness at home is to know where all the exits are and what to do in an emergency. Talk with your parents about making a plan just in case.',
+        eoc_key:'SAFETY Plan At Home'},
+      {w:6,
+        boc:'An important pillar of Self-Esteem is gratitude. We must be grateful for others such as our parents, teachers and mentors. So, before we start class today, go to your parents and tell them 3 things you are grateful for.',
+        boc_key:'What Are You GRATEFUL For',
+        dur:'To work on gratitude today, we will be encouraging each other when breaking boards or performing our forms. When someone encourages you, turn around and say thank you to them.',
+        dur_key:'Saying Thank You = GRATITUDE',
+        eoc:'Your parents are the ones you should show the most gratitude towards. They make sure you have what you need for school, class and at home. This week, show your gratitude and say thank you for everything they do.',
+        eoc_key:'Gratitude Towards PARENTS'},
+      {w:7,
+        boc:'A leader has a high level of humility. You must have humility in order to increase your Self-Esteem. This means we must realize we don\'t know everything. We learn from our parents and mentors so it\'s important to listen to them.',
+        boc_key:'Learn From Others = HUMILITY',
+        dur:'Belt promotion is right around the corner so today, we will help each other by giving feedback. Show humility by accepting what they say and realize they are trying to help.',
+        dur_key:'Humility Towards CLASSMATES',
+        eoc:'Humility is a great pillar to work on at home. When your parents help you with something you don\'t know, be humble and say, "thank you." It\'s important to appreciate their knowledge and experience.',
+        eoc_key:'Show Humility To Your PARENTS'},
+      {w:8,
+        boc:'Let\'s finish the cycle by talking about forgiveness. Forgiveness is not letting yourself have negative feelings toward someone that made a mistake, including yourself.',
+        boc_key:'Forgive YOURSELF',
+        dur:'Accidents happen in class from time-to-time. You might get hit a little hard in sparring or bump into someone during a drill. Show forgiveness to your classmates by keeping a positive attitude towards them.',
+        dur_key:'Forgive OTHERS',
+        eoc:'Everyone makes mistakes. To help keep someone from developing negative feelings towards you, you need to ask for forgiveness. When you make a mistake at home, it shows a high level of Self-Esteem when you say you are sorry and ask for forgiveness.',
+        eoc_key:'Ask For FORGIVENESS'}
+    ]
+  },
+  communication:{
+    title:'Communication', tagline:'Is The Link Between The World And Me', color:'#d97706',
+    weeks:[
+      {w:1,
+        boc:'This cycle, we will be learning about Communication. Communication is the link between the world and me. So, today we will be working on how we look, and I want to see you look like a leader!',
+        boc_key:'Communication Is The LINK Between The World And Me',
+        dur:'Leaders take pride in how they look. This means you should always make sure your uniform is clean and your belt is tied properly.',
+        dur_key:'Look Like A LEADER',
+        eoc:'Today, we talked about how we look! You do this at home by taking care of your personal hygiene. Showering and brushing your teeth everyday are just two examples and are things your parents shouldn\'t have to tell you to do.',
+        eoc_key:'Personal Hygiene Is YOUR Responsibility'},
+      {w:2,
+        boc:'This week, we will continue to focus on how we look. Remember, you will be less likely to get picked on by bullies if you look confident. Communicate confidence by standing up straight and making eye contact.',
+        boc_key:'Stand TALL & Make Eye CONTACT',
+        dur:'Remember at the beginning of class when we talked about looking confident? When you perform your self-defense in class, show me that confidence by responding quickly and yelling loudly.',
+        dur_key:'Perform With CONFIDENCE',
+        eoc:'Communication is the link between you and your parents. They will appreciate you more if you use proper eye contact and body language when speaking to them.',
+        eoc_key:'PROPER Communication With Parents'},
+      {w:3,
+        boc:'This is the first week of focusing on listening! One of the best ways to show you\'re listening in class is by giving a confident response such as, "Yes sir/ma\'am!" Let\'s see who has the best Communication today.',
+        boc_key:'Answering Up = LISTENING',
+        dur:'We all have our own inner voice. Today, use your inner voice to tell yourself you can do it and that you are the best. Apply this when you\'re breaking your boards.',
+        dur_key:'Listen To Your POSITIVE Thoughts',
+        eoc:'Listening is probably the best level of Communication you can have with your parents. Focus on listening to what they say this week and do what they ask.',
+        eoc_key:'Listen To Your PARENTS'},
+      {w:4,
+        boc:'We will practice good Communication today by listening well and reacting immediately to the commands. Let\'s practice… "Everyone, set!"',
+        boc_key:'Listen And REACT',
+        dur:'Earlier, we discussed doing things immediately. If we create focus with eye contact, your listening skills will improve. Let\'s apply that while we are sparring. Every time I say break; you stop immediately.',
+        dur_key:'React IMMEDIATELY',
+        eoc:'Last week, we focused on listening to your parents. This week, we will add listening to our siblings. Without arguing and screaming, you should listen to each other first and then Communicate properly.',
+        eoc_key:'PROPER Communication With Siblings'},
+      {w:5,
+        boc:'Speaking is probably the most common way we Communicate, and it starts with speaking to ourselves. Today, let\'s tell ourselves "yes I can" to any challenge we have. This will create a habit of telling yourself positive things.',
+        boc_key:'Say POSITIVE Things To Yourself',
+        dur:'During board breaking, you will have an inner challenge. You will tell yourself things like, "this is going to hurt," or "I may not be strong enough." You can overcome these thoughts by telling yourself you can do it.',
+        dur_key:'Tell Yourself YOU CAN DO IT',
+        eoc:'This week, your goal is to use the proper tone of voice when you are speaking to your parents. A soft, respectful voice is the best way to Communicate with them.',
+        eoc_key:'Speak To Your Parents In A PROPER TONE'},
+      {w:6,
+        boc:'Today, we are working with one of my favorite Communication levels — Talk. Before we start, let\'s go ahead and say a confident "hello" to every parent.',
+        boc_key:'Greet Everyone With CONFIDENCE',
+        dur:'We will work on Communication today by focusing on the words we use with each other. When someone is going to perform, let\'s work on encouraging them.',
+        dur_key:'Use ENCOURAGING Words',
+        eoc:'Congratulations on earning your stripe this week! Another way to continue growing at home is by using proper words with our parents. Saying things like "please," "thank you" and "you are welcome."',
+        eoc_key:'Use Your MANNERS'},
+      {w:7,
+        boc:'We are almost done with the cycle of Communication! Over the next 2 weeks, we will be working on how we LEAD. The best leaders lead by example. Today, I want to see who\'s going to lead the class by being a role model.',
+        boc_key:'Lead By EXAMPLE',
+        dur:'Leading is probably the best way we will show Communication in class. Let\'s see who sounds like a leader by responding to every command in class.',
+        dur_key:'Respond Like A LEADER',
+        eoc:'We have been talking about leading this entire class. That means you should be able to go home and be the leader for your siblings and friends by listening to your parents and not talking back.',
+        eoc_key:'Be A ROLE MODEL For Others'},
+      {w:8,
+        boc:'Congratulations to all of you! This is the last week of the Communication cycle. Let\'s recap… You worked on how you look, listen, talk and finally lead. Remember, leaders take ACTION. Are you a leader?',
+        boc_key:'Leaders Take ACTION',
+        dur:'As you know, we are having belt promotion next week. Leaders will shine during testing by being role models. Who will be a role model during this final week and possibly earn an invitation to the leadership class?',
+        dur_key:'Leaders Earn REWARDS',
+        eoc:'Be a leader this week and take action at home by taking care of things before your parents ask, such as cleaning your room, doing the dishes or anything you think will be helpful to your parents.',
+        eoc_key:'Leaders Help Without Being ASKED'}
+    ]
+  },
+  belief:{
+    title:'Belief', tagline:'Is YES I Can!', color:'#0891b2',
+    weeks:[
+      {w:1,
+        boc:'Everything starts with Believing in ourselves. This cycle starts us off with a "Yes I Can" attitude.',
+        boc_key:'Belief Is YES I Can!',
+        dur:'Have a positive attitude towards new challenges this cycle. Let\'s Believe in ourselves so that we can overcome these challenges.',
+        dur_key:'Have A POSITIVE Attitude',
+        eoc:'Today, we discussed having Belief in ourselves. This is important — but it is more important to know that your parents Believe in you too.',
+        eoc_key:'Your PARENTS Believe In You'},
+      {w:2,
+        boc:'Belief is "Yes I can." Today, we will use the first pillar — trust. Trust starts out with our self so let\'s trust ourselves to accomplish our goals in class.',
+        boc_key:'Trust YOURSELF',
+        dur:'The instructors are going to challenge you today. You need to trust that they are only going to ask you to do what they Believe you can do.',
+        dur_key:'Trust Your INSTRUCTORS',
+        eoc:'Earlier, we talked about trusting the instructors. At home, you need to trust your parents. They will always do what\'s best for you even when you don\'t agree with it.',
+        eoc_key:'Trust Your PARENTS'},
+      {w:3,
+        boc:'The second pillar of Belief is consistency. Today, you should challenge yourself to train your best throughout the whole class.',
+        boc_key:'Train CONSISTENTLY Throughout Class',
+        dur:'Students that have Belief in themselves create a consistency of doing it the right way every time. If you want to pass your stripe test this week, you must stay consistent with your training.',
+        dur_key:'Consistency Leads To SUCCESS',
+        eoc:'At home, our parents teach us to create consistency with our chores. Developing these habits will help you to apply them to all things in life.',
+        eoc_key:'Consistency Creates GOOD Habits'},
+      {w:4,
+        boc:'Show your Belief in others by encouraging them throughout class today. Motivate them to train at their best.',
+        boc_key:'ENCOURAGE Others',
+        dur:'Visualize earning your black belt while you train today. Keep that goal in mind, but realize it\'s something you will need others to help you and encourage you to achieve.',
+        dur_key:'Welcome Encouragement From OTHERS',
+        eoc:'When you get home, share 3 dreams or goals you have with your parents. They will encourage and help you accomplish those dreams.',
+        eoc_key:'Share Your GOALS With Your Parents'},
+      {w:5,
+        boc:'Another level of Belief is Belief in society! I Believe we can improve society one black belt at a time. Who\'s going to be a black belt?',
+        boc_key:'Black Belts Make Society BETTER',
+        dur:'To start this week, let\'s take last week\'s dream of becoming a black belt and create a vision. If you train hard and do your best in class, your vision will become reality.',
+        dur_key:'Turn Vision Into REALITY',
+        eoc:'Parents, we ask that this week you help our leaders create a vision or a detailed path to accomplish the dreams they shared with you last week.',
+        eoc_key:'Parents Help With VISION'},
+      {w:6,
+        boc:'Let\'s create a much stronger society by showing Belief in each other this week.',
+        boc_key:'Believe In EACH OTHER',
+        dur:'Let\'s use determination today to earn your second black stripe. Even if you don\'t break your board the first time — we don\'t quit! The only way we are going to succeed in class is by having determination.',
+        dur_key:'DETERMINATION Leads To Success',
+        eoc:'At home, we show Belief by having the determination to never quit on the tasks that our parents are asking us to do. Be determined to do your best the first time they ask.',
+        eoc_key:'DETERMINATION To Complete Tasks'},
+      {w:7,
+        boc:'Let\'s show Belief in the universe by the rule of attraction! If you are great in class and at home, you will attract others to have the same Belief that they should do the same.',
+        boc_key:'Attract Others With Your ACTIONS',
+        dur:'Today\'s class will be about showing courage. If you demonstrate the courage to perform in front of your fellow students and parents, you will inspire others to do the same.',
+        dur_key:'Your COURAGE Will Inspire Others',
+        eoc:'Show courage at home by telling your parents everything good and bad that happens in school. They will be able to help you learn important lessons from these events.',
+        eoc_key:'SHARE With Your Parents'},
+      {w:8,
+        boc:'One of the best ways to show Belief in the universe is with the law of cause and effect. Today, let\'s put in our best work in class so we can receive the best reward possible!',
+        boc_key:'Give Your BEST, Get Rewarded',
+        dur:'This has been a great cycle and you have had the opportunity to learn a lot. However, as a leader, a great way to show humility is to remember that there is always more to learn and room to improve.',
+        dur_key:'HUMILITY = There Is Always More To Learn',
+        eoc:'When responding to your parents at home, don\'t say things like "Mom, I already know that." Instead say, "Thank you for reminding me." This shows humility and that you are open to learning from them.',
+        eoc_key:'"THANK YOU" Instead Of "I Know"'}
+    ]
+  }
+};
+
 const LVLUP_GOALS_FIELDS = {
   membership:[
     {id:'currentMembership',label:'Current membership # as of 1st day of month',type:'number'},
@@ -2714,6 +3084,7 @@ state.scorecardTab = 'weekly';   // 'weekly' | 'performance'
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
 state.devTab        = 'instructor'; // 'instructor' | 'gymdesk'
 state.gdActiveModule = null;
+state.matChatWeek   = null; // null = auto (current cycle week)
 state.gdQuizAnswers  = {};
 state.gdQuizSubmitted = false;
 state.gdQuizScore    = undefined;
@@ -2873,7 +3244,7 @@ function confirmSignOff(){
   fbSet(empPath(state.tasksLoc)+'/weekly_signoff/'+weekKey,{initials,ts:Date.now()});
   state.modalTask=null;render();
 }
-function setTasksLoc(locId){state.tasksLoc=locId;listenTasks();}
+function setTasksLoc(locId){state.tasksLoc=locId;state.matChatWeek=null;listenTasks();}
 function changeTasksDate(delta){
   const d=new Date(state.tasksDate+'T12:00:00');d.setDate(d.getDate()+delta);
   state.tasksDate=d.toISOString().split('T')[0];listenTasks();
@@ -3012,6 +3383,7 @@ function renderTasksPage(){
     const monthLabel=new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
     html+=renderTaskSection('monthly','Monthly Tasks — '+monthLabel,monthlyTasks,monthlyData,customMonthly);
   }
+  if(!isFrontDesk(loc)) html+=renderMatChatSection();
   if(isGoNinja(loc)){
     html+='<div class="cycle-week-nav">';
     for(let w=1;w<=8;w++){
@@ -3080,6 +3452,66 @@ function renderCycleSection(section,title,tasks,completionData){
     html+=renderTaskItem(section,t,completionData[t.id]);
   });
   html+='</div></div>';return html;
+}
+
+function setMatChatWeek(w){ state.matChatWeek=w; render(); }
+
+function renderMatChatSection(){
+  const c = getCurrentCycleInfo();
+  const lifeSkill = c ? (c.lifeSkill||'').toLowerCase().trim() : '';
+  const chat = MAT_CHATS[lifeSkill];
+  const currentWeek = c ? (c.weekNum||1) : 1;
+  const selectedWeek = state.matChatWeek !== null ? state.matChatWeek : currentWeek;
+  const collapsed = state.collapsedSections['mat_chat'];
+
+  let html = '<div class="task-section">';
+  // Header
+  const title = chat ? '📣 Mat Chat — ' + chat.title : '📣 Mat Chat';
+  const pillLabel = chat ? 'Wk ' + selectedWeek + '/8' : '';
+  const pillCls = 'partial';
+  html += '<div class="task-section-header" onclick="toggleSection(\'mat_chat\')"><h3><span class="chevron '+(collapsed?'':'open')+'">&#9654;</span>'+title+'</h3>' + (pillLabel ? '<span class="progress-pill '+pillCls+'">'+pillLabel+'</span>' : '') + '</div>';
+  html += '<div class="task-list '+(collapsed?'collapsed':'')+'">';
+
+  if (!chat) {
+    html += '<div style="padding:16px 20px;color:var(--gray-400);font-size:13px;font-style:italic;">No mat chat found for this cycle\'s life skill. Make sure the life skill is set in cycle settings.</div>';
+    html += '</div></div>';
+    return html;
+  }
+
+  // Tagline
+  html += '<div style="padding:10px 20px 4px;font-size:12px;font-weight:700;color:'+chat.color+';letter-spacing:0.02em;text-transform:uppercase;">' + esc(chat.title) + ' — ' + esc(chat.tagline) + '</div>';
+
+  // Week selector
+  html += '<div style="display:flex;gap:4px;flex-wrap:wrap;padding:8px 20px 12px;">';
+  for (let w = 1; w <= 8; w++) {
+    const isCurrent = w === currentWeek;
+    const isSelected = w === selectedWeek;
+    const bg = isSelected ? chat.color : isCurrent ? chat.color+'22' : 'var(--gray-100)';
+    const color = isSelected ? '#fff' : isCurrent ? chat.color : 'var(--gray-600)';
+    const fw = isSelected || isCurrent ? '700' : '500';
+    html += '<button onclick="setMatChatWeek('+w+')" style="padding:4px 10px;border-radius:999px;border:none;font-size:12px;font-weight:'+fw+';cursor:pointer;background:'+bg+';color:'+color+';transition:all 0.15s;">Wk '+w+(isCurrent?' ●':'')+'</button>';
+  }
+  html += '</div>';
+
+  // Content for selected week
+  const wData = chat.weeks.find(x => x.w === selectedWeek);
+  if (!wData) { html += '<div style="padding:12px 20px;color:var(--gray-400);font-size:13px;">No content for this week.</div></div></div>'; return html; }
+
+  const sections = [
+    { label: '🏁 Beginning of Class', body: wData.boc, key: wData.boc_key },
+    { label: '⚔️ During Class',       body: wData.dur, key: wData.dur_key },
+    { label: '🏠 End of Class',        body: wData.eoc, key: wData.eoc_key },
+  ];
+  sections.forEach(s => {
+    html += '<div style="padding:12px 20px;border-bottom:1px solid var(--gray-100);">';
+    html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:var(--gray-500);margin-bottom:5px;">'+s.label+'</div>';
+    html += '<div style="font-size:13px;color:var(--gray-700);line-height:1.6;margin-bottom:6px;">'+esc(s.body)+'</div>';
+    html += '<div style="font-size:13px;font-weight:800;color:'+chat.color+';font-style:italic;">"'+esc(s.key)+'"</div>';
+    html += '</div>';
+  });
+
+  html += '</div></div>';
+  return html;
 }
 
 function renderCycleChecklistSection(empId,locData){
