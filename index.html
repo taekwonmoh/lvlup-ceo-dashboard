@@ -3210,19 +3210,12 @@ function listenGoals(){
 }
 
 /*  -  -  Task Completion  -  -  */
-function showInitialsModal(section,taskId){state.modalTask={section,taskId};render();}
-function confirmTask(){
-  const input=document.getElementById('initialsInput');if(!input)return;
-  const initials=input.value.trim().toUpperCase();
-  if(!initials){input.style.borderColor='var(--red)';return;}
-  const m=state.modalTask,dateKey=state.tasksDate;
-  const weekKey=getTaskWeekKey(dateKey),ts=Date.now();
-  const monthKey=getTaskMonthKey();
-  const cycleKey=getCycleChecklistKey();
-  const sectionPath=m.section==='cycle_checklist'?'cycle_checklist':m.section==='cycle'?'cycle':m.section==='weekly'?'weekly':m.section==='monthly'?'monthly':'daily';
-  const sectionKey=m.section==='cycle_checklist'?cycleKey:m.section==='monthly'?monthKey:m.section==='cycle'||m.section==='weekly'?weekKey:dateKey;
-  fbSet(empPath(state.tasksLoc)+'/'+sectionPath+'/'+sectionKey+'/'+m.taskId,{initials,ts});
-  state.modalTask=null;render();
+function completeTask(section,taskId){
+  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),ts=Date.now();
+  const monthKey=getTaskMonthKey(),cycleKey=getCycleChecklistKey();
+  const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
+  const sKey=section==='cycle_checklist'?cycleKey:section==='monthly'?monthKey:section==='cycle'||section==='weekly'?weekKey:dateKey;
+  fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,{ts});
 }
 function undoTask(section,taskId){
   const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
@@ -3555,18 +3548,15 @@ function renderCycleChecklistSection(empId,locData){
   return html;
 }
 function renderTaskItem(section,task,doneData,isCustom,locked){
-  const isDone=!!doneData,initials=doneData?doneData.initials:'';
-  const ts=doneData?doneData.ts:0;
-  const timeStr=ts?new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
+  const isDone=!!doneData;
   let cls='task-item'+(isDone?' done':'')+(locked?' locked':'');
   let html='<div class="'+cls+'">';
   if(isDone){
-    html+='<div class="task-check checked"'+(locked?'':' onclick="undoTask(\''+section+'\',\''+task.id+'\')"')+'>'+esc(initials)+'</div>';
+    html+='<div class="task-check checked"'+(locked?'':' onclick="undoTask(\''+section+'\',\''+task.id+'\')" title="Click to undo"')+'>✓</div>';
   }else{
-    html+='<div class="task-check"'+(locked?'':' onclick="showInitialsModal(\''+section+'\',\''+task.id+'\')" title="Click to complete"')+'></div>';
+    html+='<div class="task-check"'+(locked?'':' onclick="completeTask(\''+section+'\',\''+task.id+'\')" title="Click to complete"')+'></div>';
   }
   html+='<span class="task-text">'+esc(task.text)+'</span>';
-  if(isDone){html+='<span class="task-initials">'+esc(initials)+'</span><span class="task-time">'+timeStr+'</span>';}
   if(isCustom&&!locked){html+='<button onclick="deleteCustomTask(\''+section+'\',\''+task.id+'\')" title="Remove task" style="background:none;border:none;cursor:pointer;color:var(--gray-300);font-size:14px;padding:0 4px;line-height:1;flex-shrink:0;" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--gray-300)\'">✕</button>';}
   html+='</div>';return html;
 }
@@ -3578,7 +3568,7 @@ function renderInitialsModal(){
   if(m&&m.section==='_signoff'){
     return '<div class="modal-overlay" onclick="cancelModal()"><div class="modal-box" onclick="event.stopPropagation()"><h3>Sign Off This Week</h3><p>By signing off you confirm all required tasks were completed this week. This will lock the week.</p><input id="initialsInput" maxlength="4" placeholder="e.g. MM" autofocus onkeydown="if(event.key===\'Enter\')confirmSignOff()" /><div class="modal-actions"><button class="btn-cancel" onclick="cancelModal()">Cancel</button><button class="btn-confirm" onclick="confirmSignOff()">Sign Off</button></div></div></div>';
   }
-  return '<div class="modal-overlay" onclick="cancelModal()"><div class="modal-box" onclick="event.stopPropagation()"><h3>Complete Task</h3><p>Enter your initials to mark as done</p><input id="initialsInput" maxlength="4" placeholder="e.g. MM" autofocus onkeydown="if(event.key===\'Enter\')confirmTask()" /><div class="modal-actions"><button class="btn-cancel" onclick="cancelModal()">Cancel</button><button class="btn-confirm" onclick="confirmTask()">Complete</button></div></div></div>';
+  return '';
 }
 /*  -  -  Render Monthly Goals Page  -  -  */
 function renderMonthlyGoalsPage(){
