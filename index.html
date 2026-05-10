@@ -3086,8 +3086,10 @@ state.goalsData = {};
 state.modalTask = null;
 state.scorecardTab = 'weekly';   // 'weekly' | 'performance'
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
-state.devTab        = 'instructor'; // 'instructor' | 'gymdesk'
+state.devTab        = 'instructor'; // 'instructor' | 'gymdesk' | 'playbooks'
 state.gdActiveModule = null;
+state.pbRole        = null; // null | 'instructor' | 'sales' | 'frontdesk'
+state.pbOpen        = null; // null | playbook id string
 state.matChatWeek   = null; // null = auto (current cycle week)
 state.gdQuizAnswers  = {};
 state.gdQuizSubmitted = false;
@@ -3892,6 +3894,425 @@ function renderL10Page() {
   return html;
 }
 
+/*  -  -  Playbooks / SOPs  -  -  */
+const LVLUP_PLAYBOOKS = [
+  {
+    id:'walkin',role:'instructor',category:'New Student',icon:'🚶',
+    title:'Walk-In → Enrollment → Retained',
+    tagline:'From first handshake to 3-class member',
+    checklist:[
+      'Greet within 5 seconds — use their name as soon as you have it',
+      'Ask 2 discovery questions before showing anything',
+      'Give a focused 3-minute tour (mat, awards, life skill board)',
+      'Get them into a class — observe or participate',
+      'Have a 1-on-1 conversation immediately after class',
+      'Book their next class before they leave — not "we\'ll follow up"',
+      'Text follow-up within 24 hours — reference something specific',
+      'Check in personally before or after Class #2',
+      'Lock in Class #3 — this is the retention threshold',
+    ],
+    steps:[
+      {
+        title:'The First 5 Seconds',
+        detail:'The moment someone walks in is the most important moment. They\'re deciding whether this is a place where they belong. Your energy, eye contact, and movement toward them sets that tone immediately. Stop what you\'re doing. Move toward them. Smile.',
+        points:['Hey! Welcome in — have you been here before?','Great to see you — who are you here with today?'],
+        avoid:['Letting them stand at the door waiting','Shouting from across the room','"Can I help you?" — too passive, too retail']
+      },
+      {
+        title:'The Discovery (2–3 minutes)',
+        detail:'Before you show them anything, understand what brought them in. This shapes everything about how you present the school. Two questions minimum. Listen more than you talk.',
+        points:['What made you decide to check us out today?','Have you or your kid done martial arts before?','What\'s the main thing you\'re hoping to get out of it?'],
+        avoid:['Launching into the tour before you understand their goal','Talking about price or schedules this early']
+      },
+      {
+        title:'The Tour (3–5 minutes)',
+        detail:'Keep it tight. Focus on the mat, the student achievement boards, the life skill displays. Show them the culture — not the bathroom. Tell stories, don\'t list features.',
+        points:['This is where all the magic happens','Every kid in here started exactly where yours is about to','You can see we take [discipline / respect / belief] seriously here'],
+        avoid:['Reading from a script','Making it feel like a sales presentation','Touring every room in the building']
+      },
+      {
+        title:'Get Them Into a Class',
+        detail:'Involvement creates ownership. If it\'s a child, get them on the mat. If it\'s an adult, invite them to try a move. If class is in session, have them observe from a seat — not standing in a doorway. Involvement beats observation every time.',
+        points:['Jump in — we\'ll take care of you','Watch how the instructor connects with each student one-on-one'],
+        avoid:['Leaving them alone to watch','Talking about membership while class is happening','Letting them watch from a distance with no context']
+      },
+      {
+        title:'The Post-Class Conversation',
+        detail:'This is your enrollment window. Wait until the energy is still high — right after class ends. Ask how they felt. Use their own words back at them. Then connect what they said to what membership makes possible.',
+        points:['What did [kid\'s name] think?','I could tell they were really [natural / focused / having fun]','Here\'s exactly how we\'d get started with them...'],
+        avoid:['Hard sell language','Pressuring on the spot','Giving pricing before they\'ve expressed interest']
+      },
+      {
+        title:'Book Before They Leave',
+        detail:'Do not let them leave without a date on the calendar. "We\'ll follow up" has near-zero conversion. A booked class does. Pull out your phone or the iPad and put it in front of them right now.',
+        points:['Let\'s get you on the schedule right now — what days work best?','I have [day] and [day] open this week — which one works?'],
+        avoid:['"Just let us know when you want to come back"','Handing them a brochure instead of booking','Saying you\'ll email the schedule']
+      },
+      {
+        title:'24-Hour Follow-Up',
+        detail:'Text or call within 24 hours. Reference something specific from their visit — the student\'s name, something they said, a moment from class. Generic messages get ignored.',
+        points:['Hey [parent]! It was great meeting [kid] today. They were a natural on the mat. We have [day] open — want me to hold that spot?'],
+        avoid:['Waiting more than 24 hours','Generic "just checking in" messages','Email only']
+      },
+      {
+        title:'Class #2 — Check In',
+        detail:'Before or after class #2, have a 2-minute conversation. Are they connecting? Any concerns? This is where you catch problems before they ghost you.',
+        points:['How are they feeling about it?','Any questions come up since last time?','I\'ve been keeping an eye on [name] — they\'re going to do great'],
+        avoid:['Assuming everything is fine because they showed up','Skipping this conversation when you\'re busy']
+      },
+      {
+        title:'Lock In Class #3 — The Retention Threshold',
+        detail:'Students who attend 3 classes are significantly more likely to enroll long-term. Treat Class #3 as the milestone. Make it a priority to book it explicitly — don\'t let it just happen.',
+        points:['Let\'s get that third class locked in — after that they\'ll really have a feel for it','After 3 classes most of our students say they can\'t imagine not coming'],
+        avoid:['Assuming they\'ll self-schedule','Waiting for them to ask about enrollment']
+      },
+    ]
+  },
+  {
+    id:'lead_nurture',role:'sales',category:'New Student',icon:'📞',
+    title:'Lead Nurturing — Inquiry to Booked Trial',
+    tagline:'Every inquiry gets a response in 15 minutes or less',
+    checklist:[
+      'Respond to every inquiry within 15 minutes during business hours',
+      'Ask 2 qualifying questions before pitching anything',
+      'Goal of first conversation: a booked trial — not "send more info"',
+      'Log the lead in GymDesk immediately after the conversation',
+      'No-show to trial? Call within 1 hour with a rebook offer',
+      'If no response after booking: follow up at 24h and 48h',
+      'After trial: hand off to instructor with 3 key pieces of context',
+      'If no enrollment after trial: follow up at 48h',
+    ],
+    steps:[
+      {
+        title:'Respond in 15 Minutes',
+        detail:'Speed is the single biggest factor in lead conversion. After 1 hour, your odds drop dramatically. During business hours, 15 minutes is the maximum. If someone reaches out at night, respond first thing in the morning.',
+        points:['Hey [name]! Thanks for reaching out about [school]. I\'d love to chat — are you free for a quick call today?','Great question — let me grab a few details and I can point you in the right direction'],
+        avoid:['Sending a wall of information about class schedules','Asking them to fill out a form before you\'ve talked','Responding only by email when they texted']
+      },
+      {
+        title:'Two Questions Before Anything Else',
+        detail:'Before you talk about classes, pricing, or schedules — understand who it\'s for and what outcome they want. These two answers shape your entire pitch.',
+        points:['Is this for yourself or your child?','What\'s the main thing you\'re hoping martial arts will help with?'],
+        avoid:['Jumping straight into what classes you offer','Giving pricing before you understand their situation']
+      },
+      {
+        title:'Book the Trial — Not "Send Info"',
+        detail:'The goal of every first conversation is one thing: a booked trial class. Not a brochure. Not a link to the website. A date on the calendar. Everything else is a consolation prize.',
+        points:['The best way to know if it\'s a fit is to come see it — we have [day] and [day] open this week. Which works better?','I can hold a spot for you right now — what time of day is easiest?'],
+        avoid:['"I\'ll send you our schedule and you can pick what works"','Giving pricing before they\'ve seen the school','Letting them say "I\'ll think about it" without offering a specific date']
+      },
+      {
+        title:'Log in GymDesk Immediately',
+        detail:'Every lead gets entered in GymDesk within 10 minutes of the conversation. Name, contact, source, what they\'re looking for, trial date booked. No exceptions. If it\'s not in GymDesk, it doesn\'t exist.',
+        points:['Source field: where did they come from? (Facebook, walk-in, referral, event)'],
+        avoid:['Keeping leads in your head or in texts','Logging at the end of the day — you\'ll forget details']
+      },
+      {
+        title:'No-Response Follow-Up Sequence',
+        detail:'If they expressed interest but haven\'t booked or responded, use this sequence. Stop at 3 attempts — pursuing harder damages trust.',
+        points:['Day 1: "Hey [name], just wanted to make sure you got my message — we have spots this week if you\'d like to come check it out"','Day 3: "We have [event / special class] coming up — would love to have [kid] come experience it"','Day 7: Final reach-out. If no response, mark as cold in GymDesk but don\'t delete'],
+        avoid:['More than 3 follow-ups on the same channel','Being apologetic in your follow-ups ("sorry to bother you")','Mass messaging multiple cold leads with the same text']
+      },
+      {
+        title:'No-Show Recovery',
+        detail:'If they booked a trial and didn\'t show, call within 1 hour. Don\'t assume they\'re gone — life happens. A quick, warm call almost always gets a rebook.',
+        points:['Hey! Just wanted to make sure everything\'s okay — we had you on the schedule for today. No worries at all — want to find another time this week?'],
+        avoid:['Waiting until the next day','Sending a passive "we missed you" email','Making them feel guilty for not showing']
+      },
+      {
+        title:'Handoff to Instructor',
+        detail:'Before a trial class, give the instructor 3 things: student name, age, and what the parent said they want out of it. This lets the instructor personalize the experience and mention it during class. A 30-second handoff changes the trial.',
+        points:['Text the instructor: "Trial today — [name], age [X]. Parent said they want help with [focus]. Give them some extra love."'],
+        avoid:['Handing off with no context','Assuming the instructor saw the GymDesk entry']
+      },
+      {
+        title:'48-Hour Post-Trial Follow-Up',
+        detail:'If they haven\'t enrolled after the trial, follow up at 48 hours. Reference the trial specifically. Give them a clear next step.',
+        points:['Hey [name]! How did [kid] feel about the class? I\'d love to get them back on the mat — I can set up a membership today and have them in class [day]. Want me to get that going?'],
+        avoid:['Waiting more than 48 hours','Generic follow-up that could apply to anyone','Asking "did you have any questions?" — too passive']
+      },
+    ]
+  },
+  {
+    id:'event_enrollment',role:'instructor',category:'New Student',icon:'🎪',
+    title:'In-House Event Enrollment',
+    tagline:'Turn every event into a pipeline of new members',
+    checklist:[
+      'Pre-assign roles: one runs the event, one works the room',
+      'Have a sign-in sheet ready — tied to a raffle or giveaway',
+      'Capture name + phone for every new face',
+      'Have an event-exclusive offer ready (not your standard rate)',
+      'Book trials on the spot — not "we\'ll follow up"',
+      'Enter all contacts into GymDesk as leads within 24 hours (source = event name)',
+      'Follow up all new contacts within 48 hours',
+    ],
+    steps:[
+      {
+        title:'Pre-Event Role Assignment',
+        detail:'Before the event starts: one person runs the activity, one person works the room — meeting parents, answering questions, building relationships. If you only have one person, working the room comes first. The event is the context, not the product.',
+        points:['Who\'s running the activity?','Who\'s specifically responsible for conversations with new people?'],
+        avoid:['Everyone focused on running the event with no one focused on enrollment','Assuming people will ask questions on their own']
+      },
+      {
+        title:'Capture Every New Face',
+        detail:'Every person who walks in and isn\'t already a member should give you their name and phone number. Make it natural — tie it to something at the event. Never ask at the end when energy is low.',
+        points:['We\'re doing a fun raffle at the end — just sign in here and you\'re automatically entered','We\'re putting together a follow-up schedule for interested families — what\'s the best number for you?'],
+        avoid:['Only collecting info at the end','Business cards — they get lost','Collecting email without phone']
+      },
+      {
+        title:'The Event-Exclusive Offer',
+        detail:'Have something only available at this event — a discounted first month, a waived enrollment fee, a free uniform. It creates urgency without pressure. Standard pricing kills event momentum.',
+        points:['We have a special for families who sign up today — [offer]','This is only available for people who came to [event] — I can hold it for you until [date]'],
+        avoid:['Quoting your standard rates','Saying "I\'ll have someone call you about pricing"','Pressure tactics — the offer creates urgency, your job is just to present it clearly']
+      },
+      {
+        title:'Book Trials at the Event',
+        detail:'Warm leads go cold within hours. If they\'re excited right now, put it on the calendar right now. Have your scheduling tool or phone ready.',
+        points:['We have a class [day] and [day] this week — want me to put you on the list right now?','I can hold a trial spot for you for the next 48 hours — want to grab one?'],
+        avoid:['Leaving it to a follow-up call','Taking their number and saying "we\'ll reach out"']
+      },
+      {
+        title:'GymDesk Entry Within 24 Hours',
+        detail:'Every contact from the event gets entered as a lead in GymDesk. Source field = the event name. This keeps your pipeline clean and lets you track which events produce enrollments.',
+        points:['Source: [Event Name] — [Date]'],
+        avoid:['Waiting more than 24 hours — names get fuzzy fast','Leaving contacts in your phone without logging them']
+      },
+      {
+        title:'48-Hour Follow-Up',
+        detail:'For anyone who didn\'t book at the event, follow up within 48 hours while you\'re still fresh in their mind. Keep it warm and specific.',
+        points:['Hey [name]! It was so great having you at [event]. [Kid\'s name] was awesome — we\'d love to have them in class. We have [day] open this week — want to give it a try?'],
+        avoid:['Generic "thanks for coming" messages','Waiting more than 48 hours','Sending the same message to everyone from the event']
+      },
+    ]
+  },
+  {
+    id:'opening',role:'all',category:'Opening & Closing',icon:'🌅',
+    title:'Opening Procedures',
+    tagline:'Set the tone before the first student arrives',
+    checklist:[
+      'Arrive 15 minutes before first class — not on time',
+      'Unlock and disarm alarm',
+      'Lights on — all areas including bathrooms',
+      'Turn on TV — verify announcements are current (message @jam in #LVLUPHQ if anything is outdated)',
+      'Mat check — sweep for debris',
+      'Bathroom check — paper, soap, clean mirror, no trash overflow',
+      'Front desk ready — iPad charged, pens, sign-in sheet',
+      'Review today\'s class roster',
+      'Check GymDesk for any billing flags',
+      'Update whiteboard/mirror with today\'s schedule and life skill',
+    ],
+    steps:[
+      {
+        title:'Arrive 15 Minutes Early — Not On Time',
+        detail:'Students and parents arrive before class starts. If you\'re unlocking the door at start time, you\'ve already failed the first impression. 15 minutes early is the minimum. It also gives you time to catch problems before they become visible to families.',
+        points:['If something is broken, you want to know before parents see it, not after'],
+        avoid:['Arriving at exactly the start time','Assuming everything is fine because it was fine yesterday']
+      },
+      {
+        title:'Full Facility Walk-Through',
+        detail:'Every light on. Walk every room — mat area, lobby, bathrooms, storage. Look for anything out of place: puddles, trash, broken equipment, burned-out lights. Take 3 minutes — it\'s worth it.',
+        points:['Temperature check — is it comfortable for class?','Check the mat surface for anything that could cause injury'],
+        avoid:['Only checking the area you\'re teaching in','Skipping the bathroom check']
+      },
+      {
+        title:'TV & Announcements',
+        detail:'Turn on the TV display and check that announcements are current. Outdated promos and past event dates undermine credibility with parents who are reading while they wait. If anything needs updating, message @jam in #LVLUPHQ before the first class starts — not after.',
+        points:['Is the life skill displayed correctly?','Are any upcoming events listed accurately?'],
+        avoid:['Assuming it\'s fine from yesterday','Waiting until after class to flag outdated content']
+      },
+      {
+        title:'Bathroom Check — Every Single Day',
+        detail:'Paper towels, toilet paper, soap dispensers. Clean mirror. No trash overflow. This is not optional. Parents notice bathrooms and they reflect the school\'s standards. A dirty bathroom communicates that details don\'t matter here.',
+        points:['A clean bathroom is a marketing tool — parents talk about it'],
+        avoid:['Delegating this without checking','Skipping the check when you\'re in a rush']
+      },
+      {
+        title:'Roster Review',
+        detail:'Know who\'s coming before they walk in. This lets you greet students by name, notice who has been absent, and flag anyone with a billing issue so it\'s not a surprise mid-class. Two minutes of prep prevents awkward conversations in front of parents.',
+        points:['Who hasn\'t been in lately?','Any new students today?','Any billing flags to be aware of?'],
+        avoid:['Looking at the roster after class starts','Being surprised by a billing issue in front of a student']
+      },
+      {
+        title:'GymDesk Billing Check',
+        detail:'Scan for any failed payments or past-due accounts before the first class. Front desk handles it — but the instructor should know who\'s flagged so there\'s no miscommunication on the mat.',
+        points:['Flag to front desk, not to the student directly'],
+        avoid:['Confronting a student or parent about billing before class','Ignoring billing flags and hoping someone else handles it']
+      },
+    ]
+  },
+  {
+    id:'closing',role:'all',category:'Opening & Closing',icon:'🌙',
+    title:'Closing Procedures',
+    tagline:'End strong — the last impression is the one they remember',
+    checklist:[
+      'Dismiss last class on time',
+      'Connect with every parent who waited — 30 seconds minimum, say something specific',
+      'Sweep mats',
+      'Spray mop mats — photo to #LVLUPHQ',
+      'Bathroom check',
+      'Shut down TV',
+      'Check all doors and windows',
+      'Set alarm',
+      'Turn off all lights',
+      'Submit EOS report via Slack before leaving the building',
+    ],
+    steps:[
+      {
+        title:'Dismiss On Time',
+        detail:'Ending class on time shows respect for families\' schedules. Running 5 minutes over every day trains parents to be frustrated — and to leave early to avoid being trapped. If you need more time, start your close earlier.',
+        points:['Parents who waited are ready to go — honor that'],
+        avoid:['Running over "just a few minutes" repeatedly','Dismissing and then pulling students back for one more thing']
+      },
+      {
+        title:'Parent Touch Point — Every Family, Every Class',
+        detail:'Every parent who waited gets at least 30 seconds from the instructor. Not a wave. Not a nod. A specific, personal comment about their child. This is your single most powerful retention tool. Parents who feel seen stay.',
+        points:['[Name] really nailed their technique today','I\'m watching [name] grow as a leader in this class','[Name] helped another student today — did they tell you?'],
+        avoid:['"They did great!" — too generic','Only approaching parents when there\'s a problem to discuss','Rushing to close up before families have cleared out']
+      },
+      {
+        title:'Mat Cleaning',
+        detail:'Sweep first to remove debris, then spray mop. Don\'t skip the sweep — mopping over debris just spreads it. Take a photo of the clean mat and post to #LVLUPHQ.',
+        points:['Photo to #LVLUPHQ — this is accountability and documentation'],
+        avoid:['Mopping without sweeping first','Skipping the photo — it\'s a 10-second habit that builds trust']
+      },
+      {
+        title:'Full Facility Lockdown',
+        detail:'Physical walk-through of every room. Every light off. Every door locked — check the back door specifically, it gets missed. Windows closed and latched. Alarm set. Do not do this from memory — walk it.',
+        points:['Check the back door specifically — it\'s the most commonly missed','Alarm set? Confirm the beep.'],
+        avoid:['Locking up from the front without checking the back','Trusting someone else did it without confirming']
+      },
+      {
+        title:'EOS Report — Before You Leave',
+        detail:'Submit your end-of-session report via Slack before you leave the building. Not from your car. Not later tonight. In the building, before you lock up. If you\'re running late, this still doesn\'t wait.',
+        points:['In the building → EOS report → then lock up and leave'],
+        avoid:['Submitting from the parking lot','Doing it the next morning','Skipping it "just this once"']
+      },
+    ]
+  },
+  {
+    id:'belt_test',role:'instructor',category:'Belt Testing & Events',icon:'🥋',
+    title:'Belt Test Day',
+    tagline:'Every student walks out feeling like a champion',
+    checklist:[
+      '48 hours out: review roster — flag any student who isn\'t ready',
+      '48 hours out: call parents of borderline students personally',
+      'Arrive 30 minutes early on test day',
+      'Room set up before any student arrives — chairs, table, belts organized',
+      'Brief assistant instructors on their role before doors open',
+      'Run a high-energy warm-up that builds confidence',
+      'Evaluate consistently — same standard for every student',
+      'Every student gets a public acknowledgment after their test',
+      'Every family gets a personal word from the instructor',
+      'Photos posted to #LVLUPHQ',
+      'Any student who didn\'t pass gets a written plan before you leave',
+    ],
+    steps:[
+      {
+        title:'48-Hour Pre-Test Review',
+        detail:'Pull the testing roster two days before. For each student, ask three questions: Have they attended enough classes? Do they know the required material? Are there any behavioral concerns? Students who aren\'t ready should not test — but their parents need to know 48 hours before, not the morning of.',
+        points:['Calling a parent 48 hours out: "We want [name] to test when they\'re at their absolute best. I think one more cycle will make a huge difference — here\'s what we\'re going to work on together..."'],
+        avoid:['Passing students who aren\'t ready to avoid an uncomfortable conversation','Notifying parents the morning of the test','Assuming a student is ready because they attended']
+      },
+      {
+        title:'30-Minute Early Arrival',
+        detail:'Set the room before anyone arrives. Chairs for parents — enough for everyone, positioned so they can see clearly. Belts and certificates organized by student in order of testing. Evaluator table set. Music queued. When the first family walks in, everything looks intentional and professional.',
+        points:['Enough chairs? Count students, multiply by 1.5 for parent pairs','Belts organized in testing order — no scrambling mid-ceremony'],
+        avoid:['Setting up while students are arriving','Having to search for a belt or certificate during the ceremony']
+      },
+      {
+        title:'Brief Your Team',
+        detail:'Every assistant instructor knows their role before any student walks in. Who runs warm-up. Who evaluates. Who manages the waiting area. Who handles the ceremony. Who takes photos. Assign it explicitly — don\'t assume.',
+        points:['Quick 5-minute team meeting before doors open'],
+        avoid:['Figuring out roles on the fly','Assuming everyone knows what to do from last time']
+      },
+      {
+        title:'The Warm-Up — Build Energy, Not Nerves',
+        detail:'Belt test day should feel special from the first command. Higher energy, louder calls, more encouragement. Students feed off your energy. Your job in warm-up is to make every student feel like a champion before they ever get evaluated.',
+        points:['Louder music, bigger energy','Name students who are doing well out loud during warm-up'],
+        avoid:['A flat, routine warm-up','Talking about how important the test is — it adds pressure, not confidence']
+      },
+      {
+        title:'Consistent Evaluation',
+        detail:'Every student is evaluated on the same criteria with the same standard. No favorites. No lowering the bar because a parent is watching or because you feel bad. Students know when standards slip — and so do parents. If you pass students who aren\'t ready, you devalue every belt in the room.',
+        points:['Use the same evaluation criteria every time — write it down if you haven\'t'],
+        avoid:['Passing a student to avoid a difficult parent conversation','Different standards for different students','Letting a student\'s effort substitute for their performance']
+      },
+      {
+        title:'The Ceremony — Take Your Time',
+        detail:'Each student who passes gets their moment. Called by name. Belt tied properly. Parents watching and taking photos. Don\'t rush this. This is the payoff for weeks of work and the moment families remember. Connect the belt to the life skill.',
+        points:['This belt represents [life skill] — and [name] has shown us what that means every single class','Let parents come up for photos — invite it explicitly'],
+        avoid:['Rushing through the ceremony because you\'re behind schedule','Generic ceremony language — use the student\'s name and something specific']
+      },
+      {
+        title:'Personal Parent Contact — Every Family',
+        detail:'After the ceremony, make contact with every single family. One specific, genuine comment per student. This is a peak emotional moment — parents who feel seen here become long-term members who refer their friends.',
+        points:['Did you see [name]\'s face when they got their belt?','I am so proud of how far they\'ve come this cycle','[Name] is becoming a real leader in this class — watch for it'],
+        avoid:['General comments that could apply to any student','Skipping families who are rushing out','Only talking to parents whose kids are your favorites']
+      },
+      {
+        title:'Document & Follow Up',
+        detail:'Before you leave: post photos to #LVLUPHQ. Log any students who didn\'t pass with a specific plan for next cycle. A student who didn\'t pass but has a clear path forward stays enrolled. A student who didn\'t pass and hears nothing quits.',
+        points:['For students who didn\'t pass — call the parent within 48 hours with a specific plan: "Here\'s exactly what we\'re going to work on this cycle"'],
+        avoid:['Assuming a student who didn\'t pass will figure it out on their own','Waiting more than 48 hours for the follow-up call']
+      },
+    ]
+  },
+  {
+    id:'at_risk',role:'instructor',category:'Student Retention',icon:'🚨',
+    title:'At-Risk Student Outreach',
+    tagline:'Every student who drifts gets a lifeline within 48 hours',
+    checklist:[
+      'Every Monday: pull attendance — flag anyone with 2+ missed classes',
+      'Flag any regular student missing this week who was here last week',
+      'Reach out within 48 hours of missed class — text first',
+      'Reference something specific (their name, their kid\'s name, a real detail)',
+      'Offer something concrete — a specific make-up class time',
+      'No response after 2 attempts? Escalate to Sales Director',
+      'Log every outreach attempt in GymDesk with date and message',
+    ],
+    steps:[
+      {
+        title:'Weekly Attendance Review — Every Monday',
+        detail:'Pull your attendance report every Monday before anything else. Flag any student who has missed 2 or more classes in the past two weeks. This is your at-risk list. Catching a pattern at 2 missed classes is recoverable. Catching it at 6 is usually too late.',
+        points:['Also flag anyone who was regular and suddenly stopped — one miss from a regular student is a yellow flag'],
+        avoid:['Waiting until a student has been gone a month to notice','Reviewing attendance at the end of the week when follow-up is rushed']
+      },
+      {
+        title:'The 48-Hour Rule',
+        detail:'If a regular student misses a class without warning, reach out within 48 hours. Not a week later. Research consistently shows students who miss without contact are significantly more likely to quit. 48 hours is the window.',
+        points:['Text first — it\'s the lowest-friction channel','Hey [parent]! Missed [kid] in class [day] — everything okay? We have [day] and [day] open this week if you want to make it up.'],
+        avoid:['Waiting for them to reach out','Sending a generic mass message to all absent students','Email only']
+      },
+      {
+        title:'Make It Personal',
+        detail:'Generic messages get ignored. Reference the student\'s name, the specific class they missed, and something they were working toward. If you can\'t write something specific, that\'s a signal you need to know your students better.',
+        points:['[Name] was this close to their stripe — I\'d hate for them to miss the momentum','We had a great class [day] — [kid] would have loved it'],
+        avoid:['"We noticed you haven\'t been in lately"','"Just checking in!"','A message that could be copy-pasted to anyone']
+      },
+      {
+        title:'Offer Something Concrete',
+        detail:'Don\'t make them figure out how to come back — give them a specific path. A specific class time. A spot you\'re holding. Make it easy to say yes.',
+        points:['I saved a spot for [name] in Thursday\'s class — want me to hold it?','We have a smaller class on [day] that\'s perfect for getting back into the rhythm'],
+        avoid:['"Let us know when you\'re available"','Leaving the next step up to them']
+      },
+      {
+        title:'Two Attempts — Then Escalate',
+        detail:'If you\'ve reached out twice and gotten no response, pass it to the Sales Director (Sue K) for a different approach. A new voice, a different channel, or a different angle sometimes gets through when a familiar one doesn\'t.',
+        points:['Hand off with context: "I\'ve tried twice — here\'s what I said. Can you try a different angle?"'],
+        avoid:['More than 3 total attempts without a response — at that point give them space','Doing nothing after your second attempt']
+      },
+      {
+        title:'Log Everything in GymDesk',
+        detail:'Every outreach attempt goes in GymDesk: the date, what channel you used, and what you said. This protects you, shows the student they matter, and lets you track patterns. Which students go at-risk most? Which outreach works best? You can\'t know without data.',
+        points:['Log attempt 1 and 2 — and the escalation handoff to Sales Director'],
+        avoid:['Keeping outreach in your head or in texts','Logging only successful contacts']
+      },
+    ]
+  },
+];
+
+const GONINJA_PLAYBOOKS = []; // Coming in round 2
+
 /*  -  -  GymDesk Training Course  -  -  */
 const GYMDESK_MODULES = [
   { id: 'gd_checkin', title: 'Front Desk & Check-In', icon: '🖥️', desc: 'How to activate Front Desk Mode, check in members, and handle attendance.',
@@ -4148,7 +4569,15 @@ function gdSaveCompletion(empId){
   state.gdCompletionSaved=empId;
   render();
 }
-function setDevTab(t){ state.devTab=t; state.gdActiveModule=null; state.devActiveModule=null; render(); }
+function setDevTab(t){ state.devTab=t; state.gdActiveModule=null; state.devActiveModule=null; state.pbRole=null; state.pbOpen=null; render(); }
+function setPlaybookRole(r){ state.pbRole=r; state.pbOpen=null; render(); }
+function openPlaybook(id){ state.pbOpen=id; render(); }
+function closePlaybook(){ state.pbOpen=null; render(); }
+function backToPlaybookRoles(){ state.pbRole=null; state.pbOpen=null; render(); }
+function togglePbStep(id,idx){
+  const key='pb_step_'+id+'_'+idx;
+  state[key]=!state[key]; render();
+}
 
 function devSetModule(idx) { state.devActiveModule = idx; state.devQuizAnswers = {}; state.devQuizSubmitted = false; state.devQuizScore = undefined; state.devCompletionSaved = null; render(); }
 function devBackToMenu() { state.devActiveModule = null; render(); }
@@ -4318,6 +4747,175 @@ function renderWallPage(){
   return html;
 }
 
+function renderPlaybooksTab() {
+  const isLVLUP = (state.tasksLoc !== 'goninja');
+  const playbooks = isLVLUP ? LVLUP_PLAYBOOKS : GONINJA_PLAYBOOKS;
+  const brandColor = isLVLUP ? 'var(--accent)' : '#6d28d9';
+  const brandLabel = isLVLUP ? 'LVLUP' : 'Go Ninja';
+
+  const ROLES = isLVLUP
+    ? [
+        { id:'all',        label:'All Roles',          icon:'🏢' },
+        { id:'instructor', label:'Lead Instructor',    icon:'🥋' },
+        { id:'sales',      label:'Sales Director',     icon:'📞' },
+        { id:'frontdesk',  label:'Front Desk',         icon:'🖥️' },
+      ]
+    : [
+        { id:'all',        label:'All Roles',          icon:'🏢' },
+        { id:'instructor', label:'Instructor',         icon:'🥋' },
+        { id:'frontdesk',  label:'Front Desk',         icon:'🖥️' },
+      ];
+
+  let html = '';
+
+  // ─── Individual Playbook View ───
+  if (state.pbOpen) {
+    const pb = playbooks.find(p => p.id === state.pbOpen);
+    if (!pb) { state.pbOpen = null; return renderPlaybooksTab(); }
+
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">';
+    html += '<button onclick="closePlaybook()" style="background:var(--gray-100);border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-700)">← Back</button>';
+    html += '<div style="font-size:11px;color:var(--gray-400)">' + pb.icon + ' ' + esc(pb.category) + '</div>';
+    html += '</div>';
+
+    // Header card
+    html += '<div style="background:var(--card);border-radius:14px;padding:22px 24px;margin-bottom:14px;box-shadow:var(--shadow-md);border-left:4px solid ' + brandColor + '">';
+    html += '<div style="display:flex;align-items:flex-start;gap:14px">';
+    html += '<span style="font-size:36px;line-height:1">' + pb.icon + '</span>';
+    html += '<div style="flex:1">';
+    html += '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-400);margin-bottom:3px">' + esc(pb.category) + '</div>';
+    html += '<div style="font-size:20px;font-weight:800;color:var(--primary);line-height:1.2;margin-bottom:4px">' + esc(pb.title) + '</div>';
+    html += '<div style="font-size:13px;color:var(--gray-500)">' + esc(pb.tagline) + '</div>';
+    const roleLabel = ROLES.find(r => r.id === pb.role);
+    if (roleLabel) {
+      html += '<div style="margin-top:10px"><span style="background:var(--blue-light);color:var(--blue);font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px">' + roleLabel.icon + ' ' + esc(roleLabel.label) + '</span></div>';
+    }
+    html += '</div></div></div>';
+
+    // Quick Checklist
+    html += '<div style="background:var(--card);border-radius:12px;padding:18px 20px;margin-bottom:12px;box-shadow:var(--shadow)">';
+    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--gray-400);margin-bottom:12px">⚡ Quick Checklist</div>';
+    pb.checklist.forEach((item, i) => {
+      html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;' + (i < pb.checklist.length - 1 ? 'border-bottom:1px solid var(--gray-100)' : '') + '">';
+      html += '<div style="width:20px;height:20px;border-radius:50%;background:' + brandColor + ';color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">' + (i + 1) + '</div>';
+      html += '<div style="font-size:13px;color:var(--gray-700);line-height:1.4">' + esc(item) + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Steps
+    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--gray-400);margin:16px 0 10px">📋 Step-by-Step</div>';
+    pb.steps.forEach((step, si) => {
+      const stepKey = 'pb_step_' + pb.id + '_' + si;
+      const isOpen = !!state[stepKey];
+      html += '<div style="background:var(--card);border-radius:10px;margin-bottom:8px;box-shadow:var(--shadow);overflow:hidden">';
+      html += '<div onclick="togglePbStep(\'' + pb.id + '\',' + si + ')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;user-select:none">';
+      html += '<div style="display:flex;align-items:center;gap:10px">';
+      html += '<div style="width:22px;height:22px;border-radius:6px;background:' + brandColor + ';color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + (si + 1) + '</div>';
+      html += '<div style="font-size:13px;font-weight:700;color:var(--primary)">' + esc(step.title) + '</div>';
+      html += '</div>';
+      html += '<span style="font-size:16px;color:var(--gray-400);transition:transform 0.2s;transform:rotate(' + (isOpen ? '90' : '0') + 'deg)">›</span>';
+      html += '</div>';
+
+      if (isOpen) {
+        html += '<div style="padding:0 16px 16px;border-top:1px solid var(--gray-100)">';
+        // Detail paragraph
+        if (step.detail) {
+          html += '<p style="font-size:13px;color:var(--gray-600);line-height:1.6;margin:12px 0 10px">' + esc(step.detail) + '</p>';
+        }
+        // Talking points
+        if (step.points && step.points.length) {
+          html += '<div style="background:#f0fdf4;border-radius:8px;padding:12px 14px;margin-bottom:8px">';
+          html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#16a34a;margin-bottom:8px">💬 Talking Points</div>';
+          step.points.forEach(pt => {
+            html += '<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:6px">';
+            html += '<span style="color:#16a34a;margin-top:2px;font-size:12px">•</span>';
+            html += '<span style="font-size:12px;color:var(--gray-700);line-height:1.5">' + esc(pt) + '</span>';
+            html += '</div>';
+          });
+          html += '</div>';
+        }
+        // Avoid
+        if (step.avoid && step.avoid.length) {
+          html += '<div style="background:#fef2f2;border-radius:8px;padding:12px 14px">';
+          html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#ef4444;margin-bottom:8px">🚫 Avoid</div>';
+          step.avoid.forEach(a => {
+            html += '<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:6px">';
+            html += '<span style="color:#ef4444;margin-top:2px;font-size:12px">✕</span>';
+            html += '<span style="font-size:12px;color:var(--gray-700);line-height:1.5">' + esc(a) + '</span>';
+            html += '</div>';
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+
+    return html;
+  }
+
+  // ─── Playbook List View ───
+  const roleFilter = state.pbRole;
+  const filtered = roleFilter && roleFilter !== 'all'
+    ? playbooks.filter(p => p.role === roleFilter || p.role === 'all')
+    : playbooks;
+
+  // Hero header
+  html += '<div style="background:var(--card);border-radius:14px;padding:20px 24px;margin-bottom:14px;box-shadow:var(--shadow)">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
+  html += '<div>';
+  html += '<div style="font-size:18px;font-weight:800;color:var(--primary)">📖 ' + brandLabel + ' Playbooks</div>';
+  html += '<div style="font-size:12px;color:var(--gray-500);margin-top:3px">SOPs & checklists for every key situation</div>';
+  html += '</div>';
+  html += '<div style="font-size:11px;color:var(--gray-400);font-style:italic">' + playbooks.length + ' playbooks</div>';
+  html += '</div></div>';
+
+  if (playbooks.length === 0) {
+    html += '<div style="background:var(--card);border-radius:12px;padding:40px;text-align:center;box-shadow:var(--shadow)">';
+    html += '<div style="font-size:32px;margin-bottom:12px">🚧</div>';
+    html += '<div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:6px">Coming Soon</div>';
+    html += '<div style="font-size:12px;color:var(--gray-500)">Go Ninja playbooks are being built. Check back soon!</div>';
+    html += '</div>';
+    return html;
+  }
+
+  // Role filter pills
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
+  ROLES.forEach(r => {
+    const active = (!roleFilter && r.id === 'all') || roleFilter === r.id;
+    const count = r.id === 'all' ? playbooks.length : playbooks.filter(p => p.role === r.id || p.role === 'all').length;
+    html += '<button onclick="setPlaybookRole(\'' + r.id + '\')" style="padding:6px 14px;border-radius:20px;border:1.5px solid ' + (active ? brandColor : 'var(--gray-200)') + ';background:' + (active ? brandColor : '#fff') + ';color:' + (active ? '#fff' : 'var(--gray-600)') + ';font-size:12px;font-weight:700;cursor:pointer">';
+    html += r.icon + ' ' + r.label + ' <span style="opacity:0.7;font-weight:400">(' + count + ')</span></button>';
+  });
+  html += '</div>';
+
+  // Group by category
+  const categories = [...new Set(filtered.map(p => p.category))];
+  categories.forEach(cat => {
+    const catPbs = filtered.filter(p => p.category === cat);
+    html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-400);margin:14px 0 8px;padding-left:2px">' + cat + '</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:4px">';
+    catPbs.forEach(pb => {
+      const roleInfo = ROLES.find(r => r.id === pb.role);
+      html += '<div onclick="openPlaybook(\'' + pb.id + '\')" style="background:var(--card);border-radius:12px;padding:16px 18px;cursor:pointer;box-shadow:var(--shadow);border:1.5px solid var(--gray-200);transition:all 0.15s;border-top:3px solid ' + brandColor + '" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 16px rgba(0,0,0,0.1)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'var(--shadow)\'">';
+      html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
+      html += '<span style="font-size:24px">' + pb.icon + '</span>';
+      if (roleInfo && roleInfo.id !== 'all') {
+        html += '<span style="font-size:10px;background:var(--gray-100);color:var(--gray-500);padding:2px 8px;border-radius:999px;font-weight:600">' + roleInfo.icon + ' ' + roleInfo.label + '</span>';
+      }
+      html += '</div>';
+      html += '<div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:4px;line-height:1.3">' + esc(pb.title) + '</div>';
+      html += '<div style="font-size:11px;color:var(--gray-500);line-height:1.4;margin-bottom:10px">' + esc(pb.tagline) + '</div>';
+      html += '<div style="font-size:11px;color:var(--gray-400)">' + pb.checklist.length + ' steps · ' + pb.steps.length + ' detail sections</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+
+  return html;
+}
+
 function renderDevelopmentPage() {
   const completions = (state.devCourse && state.devCourse.completions) || {};
   const gdCompletions = (state.gdCourse && state.gdCourse.completions) || {};
@@ -4477,6 +5075,22 @@ function renderDevelopmentPage() {
     return html;
   }
 
+  // ── Playbooks tab ──
+  if (state.devTab === 'playbooks') {
+    let html = '';
+    html += '<div class="section" style="padding:20px 24px 16px">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">';
+    html += '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">📚 Resources — Playbooks & SOPs</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">Role-based systems for every key situation</div></div>';
+    html += '<div style="display:flex;gap:6px">';
+    [['instructor','🥋 Instructor Dev'],['gymdesk','🖥️ GymDesk'],['playbooks','📖 Playbooks']].forEach(([t,lbl]) => {
+      const active = state.devTab === t;
+      html += '<button onclick="setDevTab(\'' + t + '\')" style="padding:7px 14px;border-radius:20px;border:1.5px solid ' + (active ? 'var(--accent)' : 'var(--gray-200)') + ';background:' + (active ? 'var(--accent)' : '#fff') + ';color:' + (active ? '#fff' : 'var(--gray-600)') + ';font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
+    });
+    html += '</div></div></div>';
+    html += renderPlaybooksTab();
+    return html;
+  }
+
   // ── Landing page ──
   const tab = state.devTab || 'instructor';
   const modules = tab === 'gymdesk' ? GYMDESK_MODULES : DEV_MODULES;
@@ -4490,10 +5104,9 @@ function renderDevelopmentPage() {
   html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">';
   html += '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">📚 Resources — Staff Training</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">Complete modules and save your progress</div></div>';
   html += '<div style="display:flex;gap:6px">';
-  ['instructor','gymdesk'].forEach(t => {
+  [['instructor','🥋 Instructor Dev'],['gymdesk','🖥️ GymDesk'],['playbooks','📖 Playbooks']].forEach(([t,lbl]) => {
     const active = tab === t;
-    const lbl = t === 'gymdesk' ? '🖥️ GymDesk' : '🥋 Instructor Dev';
-    html += '<button onclick="setDevTab(\'' + t + '\')" style="padding:7px 16px;border-radius:20px;border:1.5px solid ' + (active ? 'var(--blue)' : 'var(--gray-200)') + ';background:' + (active ? 'var(--blue)' : '#fff') + ';color:' + (active ? '#fff' : 'var(--gray-600)') + ';font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
+    html += '<button onclick="setDevTab(\'' + t + '\')" style="padding:7px 14px;border-radius:20px;border:1.5px solid ' + (active ? 'var(--blue)' : 'var(--gray-200)') + ';background:' + (active ? 'var(--blue)' : '#fff') + ';color:' + (active ? '#fff' : 'var(--gray-600)') + ';font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
   });
   html += '</div></div></div>';
 
