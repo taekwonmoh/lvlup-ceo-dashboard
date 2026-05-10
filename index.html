@@ -3090,6 +3090,8 @@ state.devTab        = 'instructor'; // 'instructor' | 'gymdesk' | 'playbooks'
 state.gdActiveModule = null;
 state.pbRole        = null; // null | 'instructor' | 'sales' | 'frontdesk'
 state.pbOpen        = null; // null | playbook id string
+state.pbView        = 'playbooks'; // 'playbooks' | 'policy'
+state.pbPolicyOpen  = null; // null | policy section id
 state.matChatWeek   = null; // null = auto (current cycle week)
 state.gdQuizAnswers  = {};
 state.gdQuizSubmitted = false;
@@ -4309,9 +4311,907 @@ const LVLUP_PLAYBOOKS = [
       },
     ]
   },
+
+  // ── CLASS MANAGEMENT ──
+  { id:'core_class', role:'instructor', category:'Class Management', icon:'🥊', title:'Running a Core Class', tagline:'Consistent, energetic, structured — every time.',
+    checklist:[
+      'Pull class roster 15 min before class',
+      'Set up floor for the technique of the day',
+      'Greet every student at the door by name',
+      'Take attendance (verbal or card mark)',
+      'Open: bow in, creed, warm-up',
+      'Technique block: review + new material + drilling',
+      'Activity or game that reinforces the technique',
+      'Cool-down, life skill message, bow out',
+      'Mark attendance cards and update system',
+    ],
+    steps:[
+      { title:'Pre-Class Prep (15 min before)',
+        detail:'Pull the class roster from GymDesk or the dashboard. Know who\'s expected. Flag any new students or students returning from a break — give them extra attention at the door.',
+        points:['Set up any pads, bags, or props for the day\'s technique','Know the life skill theme for the cycle and weave it in','If a new student is expected, have an intro plan ready'],
+        avoid:['Walking in with no plan','Starting class without knowing student names'] },
+      { title:'Door Greeting',
+        detail:'Stand at the door and personally greet every student as they arrive. Use their name. Your energy at the door sets the tone for the whole class.',
+        points:['Call them by name every time — "Hey Jake! Great to see you, go line up!"','Make eye contact with parents — a quick smile and nod goes a long way'],
+        avoid:['Being on your phone when students arrive','Not knowing a student\'s name after their 2nd class'] },
+      { title:'Opening Sequence',
+        detail:'Line students up by rank. Bow in. Recite the creed. 4–5 minute warm-up: jumping jacks, high knees, stretches. Keep it moving.',
+        points:['Use the creed to reinforce the life skill of the cycle','Keep warm-up to 5 min max — get to the technique fast'],
+        avoid:['Long, slow warm-ups that kill energy','Starting late'] },
+      { title:'Technique Block',
+        detail:'Spend 15–20 minutes on the core technique. Start with a 2-min review of last session, then introduce the new material. Break it into steps: demonstrate → students drill → circulate and correct.',
+        points:['Teach in chunks: show → do → correct → repeat','Circulate and give specific praise: "Nice chamber on that kick, Jake"','"Try it this way" beats "That\'s wrong" every time'],
+        avoid:['Talking more than drilling','Letting students goof off during partner work','Skipping corrections because you\'re in a rush'] },
+      { title:'Activity / Game',
+        detail:'End the technique block with a 5–10 minute game that reinforces the skill. Relay races with kicks, point sparring, tag games with technique requirements.',
+        points:['The game should directly connect to the technique taught','Keep score — students engage harder with stakes','Celebrate the winner and acknowledge everyone\'s effort'],
+        avoid:['Games that have nothing to do with what you taught','Games that run longer than 10 minutes'] },
+      { title:'Close & Bow Out',
+        detail:'Bring students to a line. 2-minute cool-down stretch. Quick life skill message (30 seconds). Shoutout if warranted. Bow out.',
+        points:['"What did we work on today?" — get students to recap before you tell them','Give one specific compliment to the group or an individual','Parents watching: speak up so they can hear the close'],
+        avoid:['Rushing the close because you\'re behind schedule','Skipping the message — it\'s part of what families pay for'] },
+      { title:'Post-Class',
+        detail:'Mark attendance cards or update the digital system. Flag any concerns (behavior, injury, missing gear) in Slack or to your supervisor.',
+        points:['Cards should be marked within 5 minutes of class ending','If a student was absent, check if they need outreach (stoplight system)'],
+        avoid:['Letting card marking pile up across multiple days','Forgetting to flag behavioral incidents'] },
+    ]
+  },
+
+  { id:'adp_class', role:'instructor', category:'Class Management', icon:'💪', title:'Running an ADP Class', tagline:'Adult energy — technique-first, respect the experience.',
+    checklist:[
+      'Note any new adults or returners on roster',
+      'Warm-up: lower impact, joint mobility focus (7–8 min)',
+      'Technique deep dive — explain the why, not just the what',
+      'Partner drilling with controlled contact',
+      'Self-defense application or forms work',
+      'Cool-down: 4–5 min stretch',
+      'Quick group debrief — what\'s one takeaway?',
+      'Mark attendance',
+    ],
+    steps:[
+      { title:'Mindset for Adult Classes',
+        detail:'Adults are here voluntarily, often after a long day. They want a real workout and to learn — and they want to feel respected. Treat them as partners in learning, not as children.',
+        points:['Explain the why behind every technique — adults retain better with context','Be direct with corrections — adults appreciate honesty over sugarcoating','Acknowledge physical limitations without making it awkward'],
+        avoid:['Baby-talking or over-encouraging every small thing','Rushing through material without explanation','High-pressure energy that makes adults feel unsafe or judged'] },
+      { title:'Warm-Up',
+        detail:'Adults need more joint prep than kids. Spend 7–8 minutes on mobility: shoulder circles, hip rotation, ankle rolls, light kicks. Never skip the warm-up.',
+        points:['Ask if anyone has injuries or pain before starting','Offer modifications — chair balance, reduced range of motion'],
+        avoid:['High-impact plyometrics at the top of class without prep','Skipping warm-up when class is running a few minutes late'] },
+      { title:'Technique Instruction',
+        detail:'Adults can handle more detail. Break technique into mechanics: stance, chamber, execution, retraction. Explain when and why they\'d use it.',
+        points:['"The reason we chamber the knee here is to generate hip rotation for more power"','Invite questions — adults learn through dialogue'],
+        avoid:['Moving too fast through material','Repeating the same drill for 20 min without variation'] },
+      { title:'Partner Work',
+        detail:'Pair by size and experience level when possible. Establish a tap-out signal at the start of any contact drill. Remind partners they\'re responsible for each other\'s safety.',
+        points:['"Control and communication over speed and power"','Check in with pairs — are they both comfortable with the drill?'],
+        avoid:['Pairing large size or strength mismatches without awareness','Letting egos turn controlled drilling into competition'] },
+      { title:'Close & Debrief',
+        detail:'End with a 4–5 minute stretch. Quick round: "What\'s one thing you\'re taking home tonight?" Adults love the community check-in — don\'t skip it.',
+        points:['Mention upcoming events, belt tests, or cycle milestones','Ask if anyone has questions about their training progress'],
+        avoid:['Ending abruptly without any debrief','Being on your phone while students are stretching and talking'] },
+    ]
+  },
+
+  { id:'legacy_class', role:'instructor', category:'Class Management', icon:'🏅', title:'Running a Legacy Class', tagline:'Mature students — safe, meaningful, confidence-building.',
+    checklist:[
+      'Personal check-in with each student as they arrive',
+      'Extended warm-up: joint mobility and balance work (10 min)',
+      'Forms review — one section at a time, broken into sequences',
+      'Self-defense combos appropriate to ability level',
+      'Balance exercises and cool-down (longer than other classes)',
+      'Social time after class — this is part of the program',
+      'Mark attendance',
+    ],
+    steps:[
+      { title:'Setting the Tone',
+        detail:'Legacy students (typically 55+) are coming for movement, community, and mental sharpness. They are not a slow adult class — honor their experience and dignity.',
+        points:['Learn every Legacy student\'s name and something personal about them','Celebrate consistency and effort over performance','Let them move at their own pace — never pressure speed or range'],
+        avoid:['Treating them like a beginner kid class','Comparing their performance to younger students','Rushing through content'] },
+      { title:'Warm-Up & Mobility',
+        detail:'Legacy warm-up should be 10+ minutes. Seated or standing joint circles, balance exercises using the wall, light marching in place. A chair should always be available for balance support.',
+        points:['Know your students\' limitations — ask at intake and update as needed','Never push flexibility beyond their comfort zone'],
+        avoid:['Any jumping or high-impact movement','Skipping warm-up because class is running behind'] },
+      { title:'Forms & Technique',
+        detail:'Legacy students love forms — they are meditative and rewarding. Break each form into 3–4 move sequences. Repeat until smooth before adding more. Connect the technique to practical self-defense — it helps retention.',
+        points:['Use a verbal cadence: "step, chamber, punch, retract" — it helps muscle memory','Repetition is a feature, not a bug — they want to feel mastery'],
+        avoid:['Teaching too much new material in one session','Moving on before the class is ready'] },
+      { title:'Social Close',
+        detail:'Legacy students often stay 10–15 minutes after class for community time. Encourage and participate in this — it\'s a core part of the value they receive.',
+        points:['Remember personal details: grandkids, health updates, upcoming travel','This community is why they renew year after year'],
+        avoid:['Rushing them out the door','Being distracted or on your phone during social time'] },
+    ]
+  },
+
+  { id:'private_lesson', role:'instructor', category:'Class Management', icon:'🎯', title:'Private Lessons', tagline:'Personalized progress — maximize every minute.',
+    checklist:[
+      'Confirm lesson 24 hrs in advance (text or call)',
+      'Review student\'s current rank and last session notes',
+      'Prepare 2–3 specific focus areas for the session',
+      'Start on time — private time is premium time',
+      'Review from last session, introduce new skill, apply it',
+      'End with clear homework and next session plan',
+      'Log session notes immediately after',
+    ],
+    steps:[
+      { title:'Confirm & Prepare',
+        detail:'Reach out the day before to confirm. Review your notes from the last session. Have a clear plan: 1 review topic + 1 new skill + 1 application drill. Privates should never feel improvised.',
+        points:['Ask the student: "Anything specific you want to work on?"','Have a backup plan if they show up tired or sore'],
+        avoid:['Winging it','Showing up without reviewing what you covered last time'] },
+      { title:'Opening Check-In (2–3 min)',
+        detail:'Start by asking how they\'ve been practicing. What felt good? What felt hard? This guides your focus and shows you genuinely care.',
+        points:['"Did you get a chance to practice the front kick combination this week?"','Adjust your session plan based on their feedback'],
+        avoid:['Jumping straight into technique without any check-in'] },
+      { title:'Skill Work',
+        detail:'Spend 80% of the session on focused skill development. Drill one technique from multiple angles: static → moving → partner/target → scenario.',
+        points:['Film technique if they have a phone — visual feedback is powerful','Use pads or targets when possible — feedback is faster and more engaging'],
+        avoid:['Jumping between too many topics in one session','Teaching the same way you would in a group class'] },
+      { title:'Close & Assign Homework',
+        detail:'Last 5 minutes: summarize what you covered. Give 1–2 specific practice assignments for home. Confirm next session date and time.',
+        points:['"Between now and next time, practice this combination 10 reps per side, every day"','Write homework on a card if the student tends to forget'],
+        avoid:['Giving too much homework — one clear focus beats five vague ones','Canceling or no-showing without 12 hours notice'] },
+      { title:'Log Your Session',
+        detail:'Within 5 minutes of ending, log the session: what you covered, what the student struggled with, homework assigned. This is what separates great instructors from good ones.',
+        points:['Use GymDesk notes or a dedicated notes app','Review logs before every session so you\'re never repeating yourself'],
+        avoid:['Trusting memory alone — it fails, always'] },
+    ]
+  },
+
+  { id:'stripe_test', role:'instructor', category:'Class Management', icon:'⭐', title:'Conducting Stripe Tests', tagline:'Fair, consistent, motivating evaluations every time.',
+    checklist:[
+      'Pull list of stripe-eligible students from attendance records',
+      'Have supplies ready: stripes, card punch or marker',
+      'Brief students at the start of class — testing happens today',
+      'Evaluate each student (technique + attitude + effort)',
+      'Award stripes with a ceremony — call name, lead class clap',
+      'Record all awards in GymDesk',
+      'Post results in #LVLUPHQ',
+    ],
+    steps:[
+      { title:'Who Qualifies?',
+        detail:'Stripe eligibility is based on attendance minimum plus demonstrated readiness. Pull the attendance report and flag students who have hit the threshold. Flag anyone who missed a prior test for makeup.',
+        points:['Check with other instructors — they may know of students who are ready or not ready','First stripes can be awarded more liberally to build early momentum'],
+        avoid:['Testing students who haven\'t met the attendance minimum','Overlooking a student who is clearly ready'] },
+      { title:'Building Excitement',
+        detail:'Tell students at the start of class that testing will happen at the end. Don\'t announce who specifically — let the surprise build. Run a great class first, then reward.',
+        points:['Make references during class: "This is exactly what we\'ll be looking for today"','Energy in the room is higher on test days — use it'],
+        avoid:['Announcing testing and then running a flat class','Surprising students with a test when they had zero preparation'] },
+      { title:'The Evaluation',
+        detail:'Call students individually or in small groups by rank. Have them demonstrate 2–3 techniques from their curriculum. Look for correct form, focus, and genuine effort — not perfection.',
+        points:['"Show me your front kick. Good — now step into it. Nice."','Encourage even when they struggle — give a path forward, not a wall'],
+        avoid:['Public harsh corrections during testing','Comparing students to each other out loud'] },
+      { title:'The Award Ceremony',
+        detail:'Call the student forward. State their name clearly. Announce what they earned and one specific reason. Apply the stripe or hand them their updated card. Lead the class in a clap.',
+        points:['Use their full name: "Class, let\'s congratulate Emma Rodriguez on earning her second stripe!"','If parents are watching, speak clearly so they can hear every word'],
+        avoid:['Handing stripes out casually without a moment','Forgetting to record the award in the system'] },
+      { title:'Record & Report',
+        detail:'After class, log all stripe awards in GymDesk. Post a brief update in #LVLUPHQ: "Stripe test complete — X students tested at [location]. Great class!"',
+        points:['If a student was close but didn\'t qualify, note it so you can target their development','Parents often ask — make sure records are current before they do'],
+        avoid:['Not logging until days later','Forgetting students who earned a stripe but left before the ceremony'] },
+    ]
+  },
+
+  { id:'attendance_cards', role:'instructor', category:'Class Management', icon:'📋', title:'Marking Attendance Cards', tagline:'Accurate records every class — no exceptions.',
+    checklist:[
+      'Cards pulled or roster loaded before class starts',
+      'Mark each attending student during or immediately after class',
+      'Note absences on roster for outreach follow-up',
+      'Update digital attendance in GymDesk within 1 hour',
+      'Flag students approaching stripe eligibility',
+    ],
+    steps:[
+      { title:'Before Class',
+        detail:'Have cards pulled or roster loaded before students arrive. Don\'t scramble for them while class is running.',
+        points:['Keep cards in a consistent location — folder at the mat entrance','New students: create their card or profile before the next class'],
+        avoid:['Starting class without knowing who to mark'] },
+      { title:'Marking During or After Class',
+        detail:'Mark attendance as students arrive or do one pass at the end. For physical cards: one dot or punch per class attended, with the date. For digital: log in GymDesk within one hour of class ending.',
+        points:['Track total attendance vs. stripe threshold on the physical card','If using both physical and digital, reconcile weekly'],
+        avoid:['Waiting until the next day to mark attendance','Marking students who weren\'t actually present'] },
+      { title:'Handling Absences',
+        detail:'When a student is absent, note it. Two missed classes in a row = move to Yellow on the stoplight + initiate outreach.',
+        points:['One absence: note it, watch. Two in a row: yellow flag + outreach','Missed class does not mean bad student — it means they need connection'],
+        avoid:['Ignoring absences because "they\'ll probably be back"','Waiting for the student to reach out first'] },
+      { title:'End of Week Wrap-Up',
+        detail:'At week\'s end, reconcile cards with the digital system. Flag students who are 1–2 classes from stripe eligibility so you can target them with encouragement.',
+        points:['Post in #LVLUPHQ: "X students close to stripe eligibility this week"'],
+        avoid:['Letting card marking fall more than 1 week behind'] },
+    ]
+  },
+
+  // ── EVENTS & PARTIES ──
+  { id:'birthday_party', role:'frontdesk', category:'Events & Parties', icon:'🎂', title:'Birthday Party — Full Lifecycle', tagline:'Book it, plan it, run it, wow them.',
+    checklist:[
+      'Capture inquiry: name, date, age, estimated headcount',
+      'Share party packages and pricing',
+      'Confirm booking — collect deposit, send written confirmation',
+      'Add to Homebase schedule (minimum 2 weeks out)',
+      'Send party prep info to family (1 week before)',
+      'Day-of: set up party room 30 min before start',
+      'Run structured class (30 min) + party time (30–45 min)',
+      'Take photos during class and party',
+      'Post a photo to #LVLUPHQ',
+      'Follow up within 48 hrs: thank-you + free trial offer',
+    ],
+    steps:[
+      { title:'Handling the Initial Inquiry',
+        detail:'When a parent asks about parties, get the key info: desired date, child\'s age, expected number of kids. Present the package(s) clearly. Have pricing and availability ready.',
+        points:['Have a one-sheet or photo of the party room ready to show or send','"We do private parties for groups of X+ kids — 30 minutes of guided martial arts followed by party time in our room"','Quote pricing confidently — don\'t say "I think it\'s around..."'],
+        avoid:['Saying "I\'m not sure what we offer" — know your packages cold','Quoting different prices than the posted rate'] },
+      { title:'Securing the Booking',
+        detail:'Collect a deposit to hold the date. Complete or send the party booking form: contact info, date, time, headcount, preferences. Send a written confirmation by text or email.',
+        points:['Deposit is non-refundable within [X] days of the party — state this clearly','Confirmation should include: date, time, arrival time, what to bring'],
+        avoid:['Holding a date without a deposit','Failing to get a written confirmation to the family'] },
+      { title:'Adding to Homebase',
+        detail:'Once booked, add the party to Homebase as a scheduled event. Assign 1 lead instructor + 1 helper. Note: minimum 2 weeks advance scheduling. Check how many parties are already booked in the cycle — respect the cycle maximum.',
+        points:['Maximum parties per cycle: confirm this number with your manager','Note headcount so you can prep the right amount of space and supplies'],
+        avoid:['Double-booking a party time slot','Forgetting to assign staff in Homebase'] },
+      { title:'Pre-Party Family Communication',
+        detail:'One week before, send the family: arrival time (10 min early), what kids should wear (comfortable clothes), what to bring (cake? decorations?). Confirm the headcount.',
+        points:['Ask if any kids have allergies or special needs','Remind them of your food/outside catering policy'],
+        avoid:['Surprising families with policies on the day of the party'] },
+      { title:'Day-Of Setup & Execution',
+        detail:'Arrive 30 min early. Set up the party room (tables, tablecloths, trash bags). Confirm mats are clean and dry. Lead instructor runs a 25–30 min structured class: kicks, blocks, basic self-defense, board break demo. Then transition to party time.',
+        points:['Board breaks are a crowd-pleaser — plan for it every party','Get the birthday child in front for photos during the class portion','Smile and match the energy of the room — you\'re the host'],
+        avoid:['Starting the class late — families have tight schedules','Letting the party run significantly past the booked end time'] },
+      { title:'Follow-Up & Enrollment',
+        detail:'Within 48 hours, send the family a thank-you message with 1–2 photos from the event. Include a free trial offer for any of the attending kids.',
+        points:['"If any of the kids want to try a free class, here\'s how to book — we\'d love to have them!"','Reference the child\'s name: "We had so much fun celebrating [Name]!"','This is a real enrollment funnel — treat it seriously'],
+        avoid:['Generic thank-you with no follow-up offer','Waiting more than 48 hours to reach out'] },
+    ]
+  },
+
+  { id:'classroom_visit', role:'instructor', category:'Events & Parties', icon:'🏫', title:'Classroom Visits', tagline:'Bring the dojo to them — make it memorable.',
+    checklist:[
+      'Confirm: date, time, school, teacher name, number of students',
+      'Prepare 20–25 min demo + participation activity',
+      'Pack: uniform, 2 boards for demo break, trial flyers (one per student + extras)',
+      'Arrive 10 min early — introduce yourself to teacher',
+      'Demo: kicks + board break. Activity: teach 2–3 moves',
+      'Distribute trial flyers, collect sign-up sheet if possible',
+      'Follow up with teacher and leads within 48 hrs',
+    ],
+    steps:[
+      { title:'Coordinating the Visit',
+        detail:'Confirm all logistics in writing: date, time block (usually 20–30 min), grade level, number of students. Send a confirmation email 48 hours before.',
+        points:['Ask the teacher: "Is there a theme you\'d like me to connect to?" — builds rapport and partnership','Keep flyers in your car year-round for opportunistic visits'],
+        avoid:['Showing up without a confirmed arrival time','Bringing more equipment than the classroom can handle'] },
+      { title:'Running the Visit',
+        detail:'Start with a 2-minute intro: who you are, what martial arts teaches. Demo a kick + board break. Then stand kids up and teach 2–3 simple moves together. End with energy.',
+        points:['"Everyone stand up — I\'m going to teach you the ninja stance!"','Connect each technique to a value: "This punch teaches us to push through hard things"','Board break at the end = the memory they take home'],
+        avoid:['Going over your allotted time','Passive demo with no participation — they forget it within an hour'] },
+      { title:'Collecting Leads',
+        detail:'Distribute a trial class flyer to every student (even extras for siblings). If the teacher allows, pass around a sign-up sheet for a free trial class.',
+        points:['Log every name from the sign-up sheet as a lead and follow up within 48 hours','Send a digital version of the flyer to the teacher to forward to parents'],
+        avoid:['Leaving without distributing flyers','Letting leads sit in your car for a week'] },
+    ]
+  },
+
+  // ── FACILITY & OPERATIONS ──
+  { id:'mop_mats', role:'all', category:'Facility & Operations', icon:'🧹', title:'Mopping the Mats', tagline:'Clean mats = healthy students = no liability.',
+    checklist:[
+      'Gather: mop, bucket, approved mat cleaner, clean mop head',
+      'Dilute cleaner per label (usually 1–2 oz per gallon)',
+      'Dry-sweep mats first to remove debris',
+      'Wet mop in sections from back to front',
+      'Allow 10–15 min dry time before use',
+      'Inspect for sticky spots or missed areas',
+      'Post photo to #LVLUPHQ when done',
+    ],
+    steps:[
+      { title:'Supplies & Dilution',
+        detail:'Use only the approved mat sanitizer from the supply closet. Follow the dilution ratio on the label. Never use straight bleach on puzzle mats — it degrades the foam over time.',
+        points:['Change mop water if it gets visibly dirty mid-job','Use a clean mop head — a dirty mop just spreads contamination'],
+        avoid:['Too little cleaner (not sanitizing) or too much (leaves sticky residue)','Using unapproved or unknown cleaning products'] },
+      { title:'Dry Pass First',
+        detail:'Before wet mopping, sweep the mats with a dry mop or push broom to remove dirt, hair, and debris. Mopping over debris just moves it around.',
+        points:['Hit the edges and corners — that\'s where debris concentrates','Spot-treat visible stains before the wet pass'],
+        avoid:['Skipping the dry pass when you\'re in a rush'] },
+      { title:'Wet Mop Technique',
+        detail:'Work in sections from the far end toward the entrance so you\'re never stepping on clean wet mats. Use overlapping S-pattern strokes. Moderate pressure — you\'re sanitizing, not scrubbing.',
+        points:['Don\'t over-saturate — soggy mats take longer to dry and are a slip hazard','Pay extra attention to the center and takedown zones (highest contact)'],
+        avoid:['Mopping yourself into a corner','Leaving pools or puddles'] },
+      { title:'Dry Time & Inspection',
+        detail:'Mats must be fully dry before any student is on them — typically 10–15 minutes. Run a fan to speed it up. Walk the surface and feel for sticky spots — wipe and re-dry if found.',
+        points:['Put a "Wet Mat — Do Not Use" sign or cone while drying','Fan on high cuts dry time to 5–7 min'],
+        avoid:['Letting students on damp mats — serious fall risk','Assuming it\'s dry without physically checking'] },
+    ]
+  },
+
+  { id:'clean_bathrooms', role:'all', category:'Facility & Operations', icon:'🚽', title:'Cleaning Bathrooms', tagline:'Spotless bathrooms reflect a professional school.',
+    checklist:[
+      'Gloves on. Gather: toilet cleaner, all-purpose spray, glass cleaner, paper towels, mop or Swiffer',
+      'Apply toilet bowl cleaner under rim, let sit',
+      'Spray and wipe all surfaces: sink, counter, mirror, door handle, light switch',
+      'Scrub toilet (under rim, bowl, seat top and bottom, tank, base)',
+      'Mop or Swiffer the floor from back to front',
+      'Restock: paper towels, toilet paper, soap',
+      'Take 2 photos: toilet area close-up + overall room',
+      'Post both photos to #LVLUPHQ',
+    ],
+    steps:[
+      { title:'Supplies & Safety',
+        detail:'Always wear gloves. Gather everything before you start — don\'t make supply runs mid-clean. Check stock levels while you have everything out and note what needs restocking.',
+        points:['Replace the trash bag every single clean','Never use the same cloth or paper on the toilet and the sink'],
+        avoid:['Cleaning without gloves','Starting the clean without all supplies in hand'] },
+      { title:'Toilet First',
+        detail:'Apply bowl cleaner under the rim and let it sit (2–3 min) while you clean other surfaces. Come back and scrub: under the rim, inside the bowl. Then wipe the seat (top + bottom), lid, tank, and base of the toilet.',
+        points:['Get the hinge area of the seat — grime collects there','Wipe the flusher handle — it\'s the most touched surface in the room'],
+        avoid:['Flushing without scrubbing first','Missing the base of the toilet and the floor immediately around it'] },
+      { title:'Sink, Counter & Mirror',
+        detail:'Spray and wipe the counter and sink with all-purpose cleaner. Scrub the faucet and handles. Use glass cleaner on the mirror — wipe in circles or top-to-bottom to avoid streaks.',
+        points:['Check the soap dispenser — refill if under 25%','Wipe door handle and light switch every single clean'],
+        avoid:['Missing the underside of the faucet','Leaving streaks on the mirror'] },
+      { title:'Floor & Restock',
+        detail:'Mop or Swiffer from the back wall toward the door. Get corners and around the toilet base. Let dry. Restock paper towels, toilet paper, and soap.',
+        points:['Quick sweep before mopping on heavy traffic days'],
+        avoid:['Mopping without sweeping first when there\'s visible debris'] },
+      { title:'Photo & Post',
+        detail:'Take 2 photos: one close-up of the toilet/sink area, one showing the overall bathroom from the doorway. Post both to #LVLUPHQ with a timestamp.',
+        points:['Caption: "Bathrooms clean ✅ [time]"','Make sure lighting is good — a dark blurry photo doesn\'t prove anything'],
+        avoid:['Posting only one photo','Posting a blurry or dark photo'] },
+    ]
+  },
+
+  { id:'mat_dots', role:'instructor', category:'Facility & Operations', icon:'⚫', title:'Removing & Replacing Mat Dots (Set Points)', tagline:'Properly configured floor — every single class.',
+    checklist:[
+      'Inspect mats Monday during opening — note worn or missing dots',
+      'Gather replacement dots + hair dryer or heat gun',
+      'Warm old dot with heat, peel cleanly from one edge',
+      'Clean spot with isopropyl alcohol, let dry 30 seconds',
+      'Peel new dot backing, align carefully, press firmly 30 sec',
+      'Check alignment with surrounding dots',
+      'Walk full floor — any other spots need attention?',
+    ],
+    steps:[
+      { title:'When to Replace',
+        detail:'Replace dots when they are: peeling at edges, completely missing, no longer adhering, or faded beyond recognition. Don\'t wait — a half-stuck dot is a trip hazard.',
+        points:['Weekly visual inspection during Monday opening','High-traffic zones (center mat, takedown areas) wear faster'],
+        avoid:['Leaving a partially-detached dot — it\'ll come loose mid-class','Assuming someone else will handle it'] },
+      { title:'Removing Old Dots',
+        detail:'Use a hair dryer or heat gun on low for 20–30 seconds to warm the adhesive. Peel from one edge, slowly and evenly. If adhesive residue remains, clean it with isopropyl alcohol on a cloth.',
+        points:['Let the surface cool before applying a new dot','Warm adhesive peels clean — cold adhesive tears and leaves residue'],
+        avoid:['Using a razor blade or sharp tool — it damages the mat surface','Applying a new dot on top of old adhesive residue — it won\'t bond properly'] },
+      { title:'Applying New Dots',
+        detail:'Clean the spot with isopropyl alcohol. Wait 30 seconds for it to dry. Peel the backing. Align the new dot carefully — check against surrounding dots before committing. Press firmly with even pressure across the full dot for 30 seconds.',
+        points:['In cold rooms, warm the new dot slightly with the heat gun before applying — improves adhesion','Step back and check alignment from a few feet away'],
+        avoid:['Placing on a wet or dirty surface','Repositioning after the adhesive contacts the mat — it won\'t re-stick cleanly'] },
+    ]
+  },
+
+  { id:'tv_announcements', role:'frontdesk', category:'Facility & Operations', icon:'📺', title:'Turning On TV Announcements', tagline:'The first thing families see — make it count.',
+    checklist:[
+      'Turn on TV (remote stored at front desk)',
+      'Switch to correct input/source for the announcement system',
+      'Confirm the slideshow is running and looping',
+      'Watch it cycle through once — check for outdated content',
+      'If anything needs updating, message @jam in #LVLUPHQ with specifics',
+      'If system is down, message @jam with a photo of the error',
+    ],
+    steps:[
+      { title:'Powering On',
+        detail:'The remote is at the front desk. Turn on the TV and switch to the correct HDMI input (labeled on the setup guide near the remote). The correct source will show the announcement slideshow.',
+        points:['If the TV doesn\'t respond to the remote, check batteries or plug in directly','Note which input number works and keep that written near the remote'],
+        avoid:['Switching inputs randomly and losing your place','Leaving it on a streaming service or cable screen'] },
+      { title:'Checking the Slides',
+        detail:'Once running, watch it cycle through at least once. Confirm: dates are current, no outdated events, pricing is accurate, and the current life skill is shown.',
+        points:['Screenshot any outdated slide and send to @jam in #LVLUPHQ with the specific issue','Do not try to edit slides yourself unless you\'ve been trained on the system'],
+        avoid:['Assuming the slides are always up to date — they need regular checking'] },
+      { title:'If the System Is Down',
+        detail:'If frozen or showing an error: unplug the device for 30 seconds and plug back in. If that doesn\'t resolve it within 2 minutes, message @jam with a photo of the screen.',
+        points:['Don\'t spend more than 5 minutes troubleshooting solo — message for help','If unresolvable, turn the TV off rather than leave a frozen error screen visible'],
+        avoid:['Leaving an error screen visible to arriving families','Spending 20 minutes on tech troubleshooting when students need to be greeted'] },
+    ]
+  },
+
+  { id:'update_signage', role:'frontdesk', category:'Facility & Operations', icon:'🪧', title:'Updating In-School Signage', tagline:'Fresh signage = professional school = marketing that runs itself.',
+    checklist:[
+      'Identify what needs updating: event, cycle change, promotion',
+      'Create or print new signage (Canva brand template)',
+      'Laminate if applicable',
+      'Remove old signage completely — never layer over it',
+      'Install new signage at eye level',
+      'Photo every sign in its installed location',
+      'Post all photos to #LVLUPHQ',
+    ],
+    steps:[
+      { title:'What Signage Exists',
+        detail:'Common locations: front window, lobby bulletin board, bathroom/locker area, mat entrance, retail display. Do a full walkthrough to see what\'s current and what\'s stale before printing anything new.',
+        points:['Event signs come down the day after the event — no exceptions','Outdated signs actively undermine your school\'s professionalism'],
+        avoid:['Printing new signs before removing the old ones'] },
+      { title:'Creating & Printing',
+        detail:'Use the Canva brand template (link in #LVLUPHQ resources). Update text for the current event or promotion. Match the school\'s colors, fonts, and logo. Print on the office printer or order prints for large format.',
+        points:['If you\'re unsure about a design, share in #LVLUPHQ before printing','Brand consistency matters — don\'t improvise fonts or colors'],
+        avoid:['Plain white paper with no formatting — it looks unprofessional','Free-styling a design that doesn\'t match the school brand'] },
+      { title:'Installing & Photographing',
+        detail:'Remove old signage fully. Clean surface if needed. Install at adult eye level in lobby, child eye level in kids\' areas. Take one photo of each sign in its actual installed location — not on the desk.',
+        points:['Use flash if the lighting is poor','Post all photos together: "Signage updated ✅"','Make sure signs are straight — use a level app if needed'],
+        avoid:['Photographing on the desk instead of installed','Posting without confirming all locations are covered'] },
+    ]
+  },
+
+  // ── STUDENT RECORDS ──
+  { id:'student_dashboard', role:'frontdesk', category:'Student Records', icon:'🚦', title:'Student Stoplight & Roster Management', tagline:'Green = growing. Yellow = needs attention. Red = act now.',
+    checklist:[
+      '🟢 Green — active, attending, engaged',
+      '🟡 Yellow — missed 2+ classes, limited contact, needs outreach',
+      '🔴 Red — likely to cancel, escalate immediately to sales/owner',
+      'Update status whenever attendance or communication changes',
+      'Monthly: sync roster with GymDesk active enrollments',
+      'Add new enrollments within their first week',
+      'Remove or archive cancelled members',
+    ],
+    steps:[
+      { title:'The Stoplight System',
+        detail:'Green, yellow, red tells your team the health of every student relationship at a glance. The goal is to catch yellow students before they go red. The system only works if it\'s accurate.',
+        points:['Every student should have a current status — no blanks','When in doubt, default to yellow — better to over-flag than miss someone'],
+        avoid:['Leaving everyone on green because updating is tedious','Marking red without first attempting yellow-stage outreach'] },
+      { title:'When to Move to Yellow',
+        detail:'Move to yellow when: a student misses 2+ classes in a row without communication, an instructor flags a concern, the student mentions a scheduling issue.',
+        points:['When you move to yellow, add a note: date and specific reason','Check attendance records every week — don\'t wait for someone to notice'],
+        avoid:['Moving to yellow just because of one absence during a known busy period'] },
+      { title:'When to Move to Red',
+        detail:'Move to red when: a student calls or texts to cancel, they haven\'t responded to yellow-stage outreach in 2 weeks, or an instructor flags them as disconnected.',
+        points:['Red = immediate action — assign to Sales Director or owner for retention call','Log the date moved to red and all prior outreach attempts'],
+        avoid:['Letting a student sit on red for weeks without action','Canceling from the system before a retention call is attempted'] },
+      { title:'Monthly Roster Sync',
+        detail:'At the start of each month, pull active enrollments from GymDesk. Compare to the dashboard roster. Add new enrollments, remove cancelled members, refresh stale statuses.',
+        points:['New enrollments should appear in the dashboard within their first week','Post in #LVLUPHQ: "Roster sync done — X active students"'],
+        avoid:['Letting the roster fall multiple months out of date'] },
+    ]
+  },
+
+  { id:'student_of_cycle', role:'instructor', category:'Student Records', icon:'🏆', title:'Student of the Cycle', tagline:'Recognize excellence — inspire the whole school.',
+    checklist:[
+      'Week 6: begin observing standout students across all classes',
+      'Week 7: share candidate list with team in #LVLUPHQ',
+      'Criteria: attitude, improvement, effort, community spirit',
+      'Week 8: final decision + notify parent privately before announcement',
+      'Announce in class — state the student\'s name and the specific reason',
+      'Post in #LVLUPHQ with name and reason',
+      'Social media post (with written parent permission)',
+      'Mark cycle checklist item as complete',
+    ],
+    steps:[
+      { title:'Observation Period — Weeks 6 & 7',
+        detail:'Start paying close attention around Week 6. You\'re looking for the life skill of the cycle in action: who is embodying it consistently, showing improvement, and lifting others?',
+        points:['Consider ALL rank levels — a brand new white belt with outstanding attitude can and should win','Jot down 3–5 names with specific behaviors, not just impressions'],
+        avoid:['Defaulting to the highest-ranking student — this award is about character','Picking based on tenure rather than current-cycle performance'] },
+      { title:'Team Discussion — Week 7',
+        detail:'Share your candidates in #LVLUPHQ or a team huddle. Get input from every instructor who interacts with the candidates. Narrow to one.',
+        points:['If there\'s genuine debate, either opinion is valid — use consensus','Consider if a student won recently — spread the recognition across the community'],
+        avoid:['Making the decision alone without other instructors\' input'] },
+      { title:'The Announcement — Week 8',
+        detail:'Notify the parent privately BEFORE class so they can be present or prepare to celebrate. Announce during the biggest class of the week. State the student\'s name, then the specific reason — not a vague "they\'re just a great student."',
+        points:['Have a certificate, trophy, or physical recognition item ready','Take a photo immediately after the announcement','Lead the class in a genuine celebration'],
+        avoid:['Announcing without parental heads-up','Vague reasoning: be specific about what they did and why it matters'] },
+      { title:'Post-Announcement',
+        detail:'Post in #LVLUPHQ: student name + reason. Create a social post with written parent permission. Update any physical Student of the Cycle board. Mark the cycle checklist task as complete.',
+        points:['Social caption should mention the life skill of the current cycle','Tag the family if they consent and are on the platform'],
+        avoid:['Posting student info or photos online without confirmed written parent permission'] },
+    ]
+  },
+
+  // ── GYMDESK SYSTEMS ──
+  { id:'retail_fulfillment', role:'frontdesk', category:'GymDesk Systems', icon:'🛒', title:'Fulfilling Retail Orders', tagline:'Fast, accurate fulfillment keeps customers happy.',
+    checklist:[
+      'Check GymDesk notifications or POS history for unfulfilled orders',
+      'Pull item from inventory — verify size, color, type',
+      'Package neatly with receipt',
+      'Mark order as fulfilled in GymDesk',
+      'Notify the customer (call, text, or in-person)',
+      'Flag any low-stock items in #LVLUPHQ',
+    ],
+    steps:[
+      { title:'Checking for Orders',
+        detail:'At the start of every shift, check GymDesk notifications and the POS order history for any unfulfilled retail orders. An order pending more than 24 hours is urgent.',
+        points:['Set a habit: check at open and check at midday','If you find a stale order, note when it came in and prioritize it'],
+        avoid:['Assuming someone else checked'] },
+      { title:'Pulling & Verifying Inventory',
+        detail:'Go to physical storage. Pull the exact item — verify size, color, and type match the order. If the item is out of stock, do not substitute without contacting the customer first.',
+        points:['If low stock: flag immediately in #LVLUPHQ so a reorder can happen','If out of stock: contact the customer the same day — offer alternatives or a refund'],
+        avoid:['Substituting without telling the customer','Ignoring an out-of-stock and letting the order sit'] },
+      { title:'Packaging & Marking Fulfilled',
+        detail:'Package neatly in a school bag or wrap. Include a receipt. Mark as fulfilled in GymDesk. Place at the front desk with the customer\'s name on it or hand it over directly.',
+        points:['A branded sticker or small thank-you note makes a real impression','If shipping, confirm address and use the school\'s preferred method'],
+        avoid:['Leaving packages in an unmarked pile','Forgetting to mark fulfilled in GymDesk — the order will look open forever'] },
+      { title:'Notifying the Customer',
+        detail:'For pre-paid or advance orders, text or call the customer: "Hi [Name], your [item] from LVLUP Martial Arts is ready for pickup! We\'re open [hours]. See you soon!"',
+        points:['Short, friendly, with hours included is all you need'],
+        avoid:['Assuming they\'ll just show up without being notified'] },
+    ]
+  },
+
+  { id:'customer_order', role:'frontdesk', category:'GymDesk Systems', icon:'💳', title:'Placing a Customer Order via GymDesk', tagline:'Process purchases confidently and accurately every time.',
+    checklist:[
+      'Find customer in GymDesk — verify it\'s the right profile',
+      'Go to their profile → Point of Sale',
+      'Add items — verify size, quantity, and price',
+      'Apply any discounts or promo codes',
+      'Read the total aloud to the customer before processing',
+      'Process payment (card, cash, or account credit)',
+      'Issue receipt — always',
+    ],
+    steps:[
+      { title:'Finding the Customer',
+        detail:'Search by name in GymDesk. If multiple matches exist, verify with photo or address. Never process a sale on an unconfirmed account.',
+        points:['Walk-in guests who aren\'t in the system: use guest sale in POS','New students: create their profile first if they don\'t have one'],
+        avoid:['Processing on an unverified account','Skipping the name verification when you\'re in a rush'] },
+      { title:'Building the Cart',
+        detail:'Navigate to Point of Sale from the customer profile. Add each item — verify description, size, and price match exactly what the customer wants. Apply discounts or promo codes at this stage.',
+        points:['Unsure about sizing? Look up the size chart before adding to cart','Ask explicitly: "Is this the right size and color for you?"'],
+        avoid:['Adding items without confirming specifics with the customer','Forgetting to apply a discount the customer mentions'] },
+      { title:'Confirm Total & Process',
+        detail:'Say the total out loud before charging: "Your total is $X — does that sound right?" Then process payment: swipe/tap for cards, count change for cash, confirm balance for account credit.',
+        points:['Always confirm before charging','Issue a receipt every time — printed or emailed'],
+        avoid:['Processing without confirming the total','Skipping the receipt'] },
+    ]
+  },
+
+  { id:'upgrade_membership', role:'frontdesk', category:'GymDesk Systems', icon:'⬆️', title:'Upgrading a Student\'s Membership', tagline:'Handle upgrades with confidence and enthusiasm.',
+    checklist:[
+      'Pull up the student\'s profile in GymDesk',
+      'Note current plan name, rate, and billing date',
+      'Walk student/family through what the new plan includes',
+      'Explain the billing change and effective date',
+      'Process the plan change in GymDesk',
+      'Confirm new billing with the student',
+      'Update notes in their profile',
+    ],
+    steps:[
+      { title:'Confirm Current Plan',
+        detail:'Pull up the student\'s profile → billing/membership tab. Note their current plan name, monthly rate, and next billing date. This is your baseline.',
+        points:['For multi-member family accounts, confirm which member\'s plan you\'re changing'],
+        avoid:['Making changes without reviewing the current plan first','Confusing a parent\'s billing with a child\'s'] },
+      { title:'Present the Upgrade',
+        detail:'Walk them through what\'s different about the new plan. Be specific: more classes per week, priority scheduling, private lesson credit. Lead with value, then price.',
+        points:['"Your current plan gives you X classes/week. The [upgrade] adds Y and Z for just $[amount] more per month"','Focus on what they gain, not just what it costs'],
+        avoid:['Leading with the price increase before benefits','Using plan codes or jargon the family doesn\'t recognize'] },
+      { title:'Process the Change',
+        detail:'In GymDesk, navigate to the student\'s membership settings. Select the new plan. GymDesk will show the proration or next billing change. Get verbal confirmation before saving.',
+        points:['If upgrading mid-cycle, clarify whether the difference bills now or at the next cycle','Read back the new plan and new rate before clicking save'],
+        avoid:['Processing without verbal confirmation','Accidentally selecting the wrong plan tier'] },
+      { title:'Confirm & Celebrate',
+        detail:'After processing, show the student the new plan on screen. Confirm new rate and next billing date. Print or email confirmation. Make them feel great about the decision.',
+        points:['"Welcome to [plan name] — you\'re going to love it!"','Add a note to their profile: "Upgraded from [X] to [Y] on [date]"'],
+        avoid:['Being cold or transactional — an upgrade is a trust moment, not just a transaction'] },
+    ]
+  },
+
+  // ── HOMEBASE SYSTEMS ──
+  { id:'clock_in', role:'all', category:'Homebase Systems', icon:'⏱️', title:'Clocking In & Out via Homebase', tagline:'Clock in on time. Clock out before you leave. No exceptions.',
+    checklist:[
+      'Open Homebase app or front desk tablet',
+      'Find your name, tap Clock In',
+      'Confirm your role if prompted',
+      'Verify the time shown is correct',
+      'At end of shift: tap Clock Out before leaving',
+    ],
+    steps:[
+      { title:'Clocking In',
+        detail:'Open the Homebase app. Your name appears on the scheduled employee list. Tap your name → select your role → tap Clock In. Clock in within 5 minutes of your scheduled start.',
+        points:['If your name isn\'t on the list, you may not be scheduled — check with a manager before clocking in','Homebase tracks your location — make sure you\'re at the school'],
+        avoid:['Having a coworker clock you in','Clocking in early for extra pay without manager approval'] },
+      { title:'Clocking Out',
+        detail:'At end of shift: open Homebase, tap your name, tap Clock Out. Do this before you physically leave the building. Do not clock out early and continue working.',
+        points:['If you forgot to clock out and have left, message your manager immediately — they can correct it'],
+        avoid:['Forgetting to clock out — it creates payroll problems and flags for your manager'] },
+      { title:'App or System Issues',
+        detail:'If Homebase is down or you\'re having app trouble, write your exact start and end times and notify your manager the same day. They can manually enter your hours.',
+        points:['Screenshot any app error as documentation'],
+        avoid:['Just hoping the hours sort themselves out without reporting the issue'] },
+    ]
+  },
+
+  { id:'time_off', role:'all', category:'Homebase Systems', icon:'🌴', title:'Requesting Time Off or Finding Shift Cover', tagline:'Plan ahead, communicate early, find your cover.',
+    checklist:[
+      'Submit time off request in Homebase as early as possible (2+ weeks ideal)',
+      'Wait for approval before treating it as confirmed',
+      'If you need shift cover: post in Homebase or #LVLUPHQ with specifics',
+      'Confirm cover directly — don\'t just post and disappear',
+      'Notify manager once cover is confirmed',
+      'Do NOT swap shifts without manager awareness',
+    ],
+    steps:[
+      { title:'Submitting Time Off',
+        detail:'Homebase app → Schedule → Time Off Requests → New Request. Enter dates and reason. Submit. You\'ll get an app notification when it\'s approved or declined.',
+        points:['Submit at least 2 weeks in advance for regular days off','For emergencies: call or text the manager directly — don\'t only submit in the app'],
+        avoid:['Assuming a submitted request is automatically approved','Telling families you won\'t be in before your request is actually approved'] },
+      { title:'Finding Shift Cover',
+        detail:'Post in Homebase shift swap or in #LVLUPHQ: "Need cover for [day/time] — [specific class or duty]. Anyone available?" Get a direct yes — not just a like on the message.',
+        points:['Find cover first, then notify your manager','Be specific about what the shift involves: "Tuesday 4–7pm — Core class + front desk"'],
+        avoid:['Dropping a shift without confirmed cover','Assuming someone will figure it out if you just don\'t show up'] },
+      { title:'Completing the Handoff',
+        detail:'Once you have confirmed cover, message your manager directly: "[Name] is covering my [day/time] shift. I\'ve confirmed with them." The Homebase swap notification alone is not sufficient.',
+        points:['If you can\'t find cover within 24 hours of the shift, tell your manager immediately — it becomes a joint problem to solve'],
+        avoid:['Ghosting the shift with zero communication'] },
+    ]
+  },
+
+  { id:'add_homebase_event', role:'frontdesk', category:'Homebase Systems', icon:'📅', title:'Adding a Class or Event in Homebase', tagline:'Schedule correctly so staff are prepared and pay is accurate.',
+    checklist:[
+      'Log into Homebase (app or web)',
+      'Go to Schedule → correct week and location',
+      'Add shift: assign employee, role, start and end time',
+      'For recurring classes: set as repeating shift',
+      'Publish changes so employees receive notifications',
+      'For last-minute adds: call or text the employee directly',
+    ],
+    steps:[
+      { title:'Accessing the Schedule',
+        detail:'Log in at app.joinhomebase.com or via the app. Navigate to Schedule. Select the correct week and, critically, the correct location (LVLUP vs. Go Ninja).',
+        points:['Double-check you\'re in the right location before editing anything'],
+        avoid:['Editing the wrong location\'s schedule — it affects the wrong staff'] },
+      { title:'Adding a Shift',
+        detail:'Click the "+" on the target day and time. Select the employee. Assign their role. Set precise start and end times. Add notes if relevant (e.g., "Cover for Bryan — Core Class"). Toggle "Repeat" for recurring classes.',
+        points:['Always assign a specific employee — open shifts should be the exception, not the rule','If adding cover for another employee, note it in the shift description'],
+        avoid:['Adding a shift without assigning an employee for a class that needs coverage'] },
+      { title:'Publishing',
+        detail:'After adding or editing shifts, click Publish. Employees receive an app notification. For same-day changes, call or text the employee directly — app notifications can be missed.',
+        points:['Publish promptly — employees plan their lives around the schedule'],
+        avoid:['Editing the schedule without publishing — employees won\'t see the changes'] },
+    ]
+  },
+
+  // ── DASHBOARD & TECH ──
+  { id:'add_dashboard_event', role:'frontdesk', category:'Dashboard & Tech', icon:'🗓️', title:'Adding an Event to the Dashboard', tagline:'Events added here show automatically on the members site.',
+    checklist:[
+      'Open CEO Dashboard → Events tab',
+      'Fill in: Event Name, Date, Type, Location, Start Time',
+      'Add optional link (sign-up page, info, etc.)',
+      'Click Add Event',
+      'Confirm event appears in the list',
+      'Check members site (lvlupma.com/members) to verify it displays',
+    ],
+    steps:[
+      { title:'Navigating to Events',
+        detail:'Open the CEO Dashboard. Click the "Events" tab in the top navigation. You\'ll see a list of upcoming events and an add form at the top.',
+        points:['Make sure you\'re in the right location context if the dashboard separates LVLUP and Go Ninja'],
+        avoid:['Adding a Go Ninja event to LVLUP — it will show on the wrong members site'] },
+      { title:'Filling the Form',
+        detail:'Event Name: clear and concise — "Tiger Belt Test" not "BT". Date: use the date picker. Type: select from the dropdown. Location. Start Time: fill it in — it shows on the members site so families know when to arrive.',
+        points:['If the event has an end time, fill that in too for multi-hour events','Link field: add a registration or info URL if there is one'],
+        avoid:['Vague event names','Leaving the start time blank — families need to know when to show up'] },
+      { title:'Verify on Members Site',
+        detail:'After clicking Add Event, it should appear in the list immediately. Go to lvlupma.com/members and confirm the event shows in the upcoming events section.',
+        points:['If it doesn\'t appear within 30 seconds, refresh the page','If the event is weeks away, scroll the calendar forward to find it'],
+        avoid:['Assuming it published without checking the members site'] },
+    ]
+  },
+
+  // ── COMMUNICATIONS ──
+  { id:'social_media', role:'all', category:'Communications', icon:'📱', title:'Social Media Posting Guidelines', tagline:'Every post represents the school — make it professional and personal.',
+    checklist:[
+      'Post minimum 2x per week (weekly task)',
+      'Content: student wins, action shots, life skill quotes, event promos, behind-the-scenes',
+      'No blurry, dark, or unflattering photos',
+      'Get parent permission before tagging students by name or face',
+      'Caption: hook → 2–3 sentences → call to action',
+      'Use approved school hashtags (listed in Step 4)',
+      'Post screenshot to #LVLUPHQ after publishing',
+    ],
+    steps:[
+      { title:'What to Post',
+        detail:'Best content: student achievement moments (belt promotions, stripe tests), action photos from class, life skill quotes with school branding, event announcements, and authentic behind-the-scenes moments.',
+        points:['Authentic beats polished — real moments outperform stock photos every time','Variety is key — don\'t post the same type of content back-to-back'],
+        avoid:['Controversial or political topics','Reposting competitor content','Posting with no clear point or value to the viewer'] },
+      { title:'Photo & Video Quality',
+        detail:'Good lighting (natural or bright indoor), clear focus, no blurry motion. Portrait for Instagram, landscape is fine for Facebook. Take 5–10 shots and pick the best 1–2.',
+        points:['Ask a colleague to photograph you teaching — action shots perform well','Check every photo before posting — does everyone in it look good?'],
+        avoid:['Dark or grainy images','Photos where students look unflattering','Images with visible watermarks from other platforms'] },
+      { title:'Writing the Caption',
+        detail:'Hook (line 1 stops the scroll) → body (2–4 sentences, conversational) → CTA ("Book a free trial at [link]" or "Tag someone who needs this!"). Use 1–3 emojis max. Keep it under 200 words.',
+        points:['"This is what determination looks like. 🥋 [Name] just earned their [belt] after 6 months of hard work and never missed a class. This is why we do what we do."'],
+        avoid:['Captions that are only hashtags with no actual text','Captions over 300 words — they get cut off'] },
+      { title:'Hashtags',
+        detail:'Use consistent, school-relevant tags. Core set: #LVLUPMartialArts #GoNinjaMartialArts #MartialArtsKids #Waunakee #EastMadison #KidsMartialArts #FamilyKarate. Add event-specific tags as relevant.',
+        points:['5–10 hashtags is the sweet spot','Put hashtags at the end of the caption or in the first comment on Instagram'],
+        avoid:['Generic irrelevant tags like #love #instagood','More than 20 hashtags — it looks desperate and harms reach'] },
+      { title:'Before You Post Checklist',
+        detail:'Photo quality ✓ | Caption complete ✓ | Student permission if tagging ✓ | School handle in caption or tag ✓ | Hashtags added ✓. Post, take a screenshot, share to #LVLUPHQ.',
+        points:['Stories = timely and informal. Feed posts = permanent and branded. Know which you\'re doing.'],
+        avoid:['Posting and not sharing to #LVLUPHQ — the team can\'t engage if they don\'t know it\'s live'] },
+    ]
+  },
+
+  { id:'student_outreach', role:'all', category:'Communications', icon:'📬', title:'Student Outreach (Postcards & Loom Videos)', tagline:'Personal contact turns at-risk students into loyalists.',
+    checklist:[
+      'Identify targets: Yellow stoplight + milestone moments',
+      '2 outreach touchpoints per week (postcard or Loom video)',
+      'Postcards: handwritten, personal, mailed same day',
+      'Loom: personalized 60–90 sec video, sent by text or email',
+      'Log every attempt in GymDesk or #LVLUPHQ',
+      'No response in 5 days? Try a different channel',
+    ],
+    steps:[
+      { title:'Who Gets Outreach',
+        detail:'Priority 1: Yellow stoplight students (missed 2+ classes, limited contact). Priority 2: Milestone moments — stripe earned, birthday month, 1-year anniversary, belt promotion.',
+        points:['Check the stoplight weekly and assign outreach targets','Milestone outreach is positive — it\'s not just for at-risk situations'],
+        avoid:['Generic mass outreach — it reads as spam','Only reaching out when someone is on the verge of quitting'] },
+      { title:'Sending a Postcard',
+        detail:'Grab a school postcard. Write a handwritten personal note — use the student\'s name and reference something specific: "We missed you at Thursday\'s class — hope you\'re doing great!" Sign with your name. Address from GymDesk. Stamp and mail same day.',
+        points:['Handwritten always beats printed — it signals real effort','Positive and warm tone — never guilt-inducing','Students keep postcards for months'],
+        avoid:['Printing a form letter on a postcard','Sending without a stamp or return address'] },
+      { title:'Recording a Loom Video',
+        detail:'Open Loom app or loom.com. Record 60–90 seconds. Stand in front of a clean background — mat, school logo, or solid wall. Use the student\'s name and reference something specific about their training.',
+        points:['"Hey [Name]! It\'s [Your Name] from LVLUP. We haven\'t seen you in a couple weeks and I wanted to check in. You were making real progress on your [technique] — I\'d love to see you back. No pressure, just wanted you to know we\'re thinking about you."','Casual and warm beats scripted every time','Send the Loom link via text or email'],
+        avoid:['Reading from a script word for word','Recording in a noisy background','Videos longer than 90 seconds — nobody finishes them'] },
+      { title:'Logging Outreach',
+        detail:'After every attempt, log it: student name, date, method, message summary. Use GymDesk profile notes or a message in #LVLUPHQ. Two unanswered attempts = escalate to a phone call.',
+        points:['Context in your log matters — "sent postcard saying X" beats "sent postcard"'],
+        avoid:['Logging "done" without any specifics — useless for follow-up'] },
+    ]
+  },
+
+  { id:'email_tigers', role:'frontdesk', category:'Communications', icon:'🐯', title:'Email: Tigers Moving Up to Beginners', tagline:'Celebrate the milestone, make the transition seamless.',
+    checklist:[
+      'Confirm readiness with lead instructor first',
+      'Send email within 3 days of confirmed move-up',
+      'Include: new class days/times, what to expect, any gear or uniform changes',
+      'Follow up by phone if no response within 5 business days',
+    ],
+    steps:[
+      { title:'When to Send',
+        detail:'Send when the lead instructor confirms a Tiger is ready to advance to the Beginners (Little Ninjas / Kids) program. Do not send before instructor sign-off.',
+        points:['Belt award events are a natural trigger — check with the instructor at every test'],
+        avoid:['Sending before the instructor has confirmed readiness'] },
+      { title:'Email Template',
+        detail:'Personalize all fields in brackets. Subject: 🎉 [First Name] is Ready to Level Up!',
+        points:[
+          'Hi [Parent Name],',
+          'Exciting news — [Student First Name]\'s instructors have been watching their progress and feel that [he/she/they] is ready to take a big step: moving up from our Tiger program into the Beginners class!',
+          'This is a huge milestone and we\'re so proud of [First Name]\'s effort and growth.',
+          '🥋 What changes:',
+          '• New class: [Class Name] — [Days] at [Times]',
+          '• [Any uniform or gear changes]',
+          'Your first Beginners class is included — just show up at the new time and we\'ll take care of the rest!',
+          'If you have questions, reply here or call us at [Phone].',
+          'We can\'t wait to see [First Name] on the big mat! 🙌',
+          '[Your Name] | [School Name] | [Phone]',
+        ],
+        avoid:['Sending without personalizing name and class details','Treating this as a billing notice — it should feel like a celebration'] },
+      { title:'Follow-Up',
+        detail:'No response in 5 business days? Make a personal phone call. Some parents miss emails, and this transition is too important to let slide.',
+        points:['Note in GymDesk when the email was sent and when you followed up'],
+        avoid:['Assuming silence means they got the email and are happy'] },
+    ]
+  },
+
+  { id:'email_yellow_belt', role:'frontdesk', category:'Communications', icon:'🥋', title:'Email: Yellow Belts → Intermediate + Sparring Gear', tagline:'Celebrate the belt, prepare them for what\'s next.',
+    checklist:[
+      'Confirm yellow belt award in GymDesk (pull weekly report)',
+      'Send email within 3 days of award',
+      'Include: sparring program explanation, full gear list, where to buy',
+      'Offer to help with sizing in person',
+      'Follow up on gear in 3 weeks if student arrives without it',
+    ],
+    steps:[
+      { title:'When to Send',
+        detail:'Send when a student advances to Yellow Belt and transitions toward the Intermediate class and sparring program. Run a weekly belt award report in GymDesk to make sure none slip through.',
+        points:['Belt promotions create excitement — capitalize on that energy within 3 days'],
+        avoid:['Waiting more than a week — the excitement fades fast'] },
+      { title:'Email Template',
+        detail:'Personalize all bracketed fields. Subject: 🥋 [First Name] Earned Their Yellow Belt — Here\'s What\'s Next!',
+        points:[
+          'Hi [Parent Name],',
+          'Huge congratulations to [Student First Name] on earning their Yellow Belt! This is a major milestone and we couldn\'t be more proud of the effort and dedication [he/she/they] has shown.',
+          'With Yellow Belt comes an exciting next chapter: the Intermediate program, which includes sparring — one of the most fun and confidence-building parts of martial arts!',
+          '🛡️ Sparring Gear Required:',
+          '• Headgear  • Mouth guard  • Chest protector  • Forearm/hand pads  • Shin/instep pads',
+          'We carry gear packages right here at the school — stop by the front desk and we\'ll help you choose the right size. We also have a gear list at [link] if you prefer to shop online.',
+          '📅 New Class Info:',
+          '• Intermediate class: [Days] at [Times]',
+          '• First available date: [Date]',
+          'If you have questions about gear, sizing, or the new program, reply here or stop by — we love talking about this stuff!',
+          'Congratulations again to [First Name] — we\'re so excited for this chapter! 🙌',
+          '[Your Name] | [School Name] | [Phone]',
+        ],
+        avoid:['Leaving out the gear list — families need specifics to take action','Using jargon without explaining what it means'] },
+      { title:'Gear Follow-Up (3 Weeks)',
+        detail:'If the student shows up without sparring gear after 3 weeks, check in with the parent warmly: "Hey, just wanted to make sure [Name] has everything they need for class — can we help with sizing when you\'re next in?"',
+        points:['Never let a student participate in sparring contact drills without proper protective gear'],
+        avoid:['Being pushy or making the family feel guilty — offer to help, not pressure'] },
+    ]
+  },
 ];
 
 const GONINJA_PLAYBOOKS = []; // Coming in round 2
+
+/*  -  -  Policy Book  -  -  */
+const LVLUP_POLICY = [
+  { id:'conduct', icon:'🤝', title:'Professional Conduct',
+    sections:[
+      { heading:'Attitude Standards',
+        body:'You represent LVLUP/Go Ninja every moment you are in the building. That means: positive energy on the floor regardless of your personal day, respectful communication with students, parents, and teammates, and a genuine commitment to the mission. Negativity, gossip, or complaining about the school in front of students or parents is a serious conduct issue.',
+        bullets:['Greet every student and parent by name when you know it','Default to "yes" and "let me find out" — never "that\'s not my job"','Resolve team disagreements privately, never in front of students or families'] },
+      { heading:'Professionalism with Parents',
+        body:'Parents are trusting you with their children and their money. They deserve to feel confident in the school every time they interact with staff. If a parent raises a concern, listen fully before responding, never get defensive, and escalate to the owner for anything beyond a simple answer.',
+        bullets:['Never argue with a parent in front of students','If you don\'t know the answer: "Great question — let me get the right answer for you and follow up today"','Billing disputes always go to the owner — do not try to resolve them yourself'] },
+      { heading:'Conflict Resolution',
+        body:'Conflict between team members should be addressed privately and directly. If you have an issue with a colleague, bring it to them first. If unresolved, escalate to the manager. Public conflict or undermining a colleague in front of students is a terminable offense.',
+        bullets:['Direct conversation first','Manager escalation second','Never air grievances in #LVLUPHQ or in front of students/families'] },
+    ]
+  },
+  { id:'appearance', icon:'👕', title:'Appearance & Attire',
+    sections:[
+      { heading:'Uniform Policy',
+        body:'Instructors teach in a clean, school-issued uniform or approved school t-shirt and athletic pants. Front desk staff wear the school shirt or branded polo. Uniforms must be clean, pressed (or wrinkle-free), and in good repair at all times. No rips, fading, or stains.',
+        bullets:['Uniform tops: school-issued gi top, school t-shirt, or branded polo','Uniform bottoms: gi pants, solid black athletic pants, or approved school shorts — no jeans','Footwear: bare feet on the mat; clean sneakers for front desk staff','All uniforms must be washed between shifts — no exceptions'] },
+      { heading:'Personal Grooming',
+        body:'Staff are expected to present a clean, professional appearance. Hair should be neat and out of the face while teaching. Beards and facial hair should be groomed. Nails should be trimmed for safety during any mat work.',
+        bullets:['Hair tied back during any mat instruction','Trimmed nails required for contact training','Deodorant is required — close physical proximity with students makes this non-negotiable','Avoid heavy perfume or cologne in close-contact teaching environments'] },
+      { heading:'Jewelry & Accessories',
+        body:'During mat instruction: no rings, watches, dangling earrings, or bracelets that could catch or injure a student. Stud earrings and medical ID bracelets are acceptable.',
+        bullets:['Rings off before getting on the mat','Dangling earrings not permitted during instruction','Taping over jewelry is not an acceptable substitute for removing it'] },
+    ]
+  },
+  { id:'communication', icon:'💬', title:'Communication Standards',
+    sections:[
+      { heading:'With Students',
+        body:'Language with students must always be positive, encouraging, and age-appropriate. No sarcasm with children. No yelling at or shaming a student. Corrections are delivered privately when possible, and always with a path forward: "Try it this way" instead of "That\'s wrong."',
+        bullets:['Use students\' names constantly','Never single out a student for embarrassment in front of the class','Celebrate publicly — correct privately'] },
+      { heading:'With Parents',
+        body:'Be warm, professional, and concise. When parents ask about their child\'s progress, be honest and specific. If a parent is frustrated, listen fully before responding. Never promise something you can\'t deliver.',
+        bullets:['Always have something positive to say about every student — even the challenging ones','Do not discuss another family\'s private information with other parents'] },
+      { heading:'Internal Communication (Slack)',
+        body:'#LVLUPHQ is the team\'s primary communication channel. Posts should be relevant, positive, and professional. Use threads to keep conversations organized. Sensitive issues (HR, billing disputes, personal conflicts) are never handled in Slack — use direct communication.',
+        bullets:['Required check-ins and photo posts belong in #LVLUPHQ','Avoid venting or complaining in any shared channel','Respond to direct messages from management within the same business day'] },
+      { heading:'Response Times',
+        body:'Messages from management should be acknowledged within 4 hours during your workday. Task-related Slack posts (attendance updates, photo check-ins) should be completed and posted by end of shift.',
+        bullets:['If you\'re going to be unavailable for more than 4 hours during scheduled work time, notify your manager proactively'],
+        avoid:['Leaving management messages unread without acknowledgment'] },
+    ]
+  },
+  { id:'attendance', icon:'⏰', title:'Attendance & Punctuality',
+    sections:[
+      { heading:'Arriving on Time',
+        body:'Staff must arrive at least 10 minutes before their shift begins. For instructors, this means 10–15 minutes before class to prepare the floor, pull rosters, and greet early arrivals. Arriving to teach a class at the start time is late.',
+        bullets:['Clock in when you arrive (using Homebase)','Being on time is a baseline professional standard, not something to celebrate','Consistent lateness is a performance issue'] },
+      { heading:'Notifying of Absence',
+        body:'If you are going to be absent or late, notify your manager as early as possible — ideally before the day starts. For same-day emergencies, text or call directly — do not rely solely on Homebase notifications.',
+        bullets:['Find your own cover before notifying the manager if time allows (see Shift Cover playbook)','Do not no-call / no-show. This is grounds for immediate termination.'] },
+      { heading:'Dependability Standard',
+        body:'LVLUP / Go Ninja classes depend on consistent staffing. When you are absent without cover, a class of students and parents is directly affected. Your reliability is directly tied to the school\'s reputation.',
+        bullets:['Track your own schedule — not management\'s job to remind you','If you have a pattern of last-minute cancellations, address it proactively with your manager'] },
+    ]
+  },
+  { id:'student_interaction', icon:'🛡️', title:'Student Interaction & Safety',
+    sections:[
+      { heading:'Physical Contact Policy',
+        body:'Physical contact during instruction must be technique-specific, necessary, and appropriate to the student\'s age. Always use the minimum contact needed to make a correction. For children, prefer verbal and visual instruction over physical guidance. Ask before touching: "Can I adjust your stance?"',
+        bullets:['Physical corrections to adult students: verbal first, physical only with clear permission','With minors: use verbal cues and demonstrations before any physical correction','Never restrain a student out of frustration or as discipline'] },
+      { heading:'One-on-One Situations',
+        body:'Staff should never be alone in a closed room with a minor student. If a private lesson or conversation is needed, it should occur in a visible area of the school or with another staff member present.',
+        bullets:['Private lessons for minors: door open, or visible through window','If a student needs a difficult conversation, ensure another adult is present or nearby'] },
+      { heading:'Mandated Reporting',
+        body:'If you observe or suspect abuse, neglect, or any situation that raises a safety concern for a student, you are required to report it to the school owner immediately. Do not attempt to investigate yourself.',
+        bullets:['When in doubt, report — it\'s always better to escalate','This is a legal and ethical obligation, not optional'] },
+    ]
+  },
+  { id:'social_media_policy', icon:'📲', title:'Social Media Policy',
+    sections:[
+      { heading:'Representing the School',
+        body:'Any public social media post that references LVLUP, Go Ninja, martial arts instruction, or your role as a staff member reflects on the school. Content that is offensive, politically divisive, or professionally embarrassing can be grounds for disciplinary action.',
+        bullets:['You are always an ambassador — even on your personal accounts','Never post negative commentary about the school, students, or parents — even vaguely'],},
+      { heading:'Posting Students Online',
+        body:'Never post photos or videos of students without written parent permission. LVLUP maintains a media consent form. Before posting any student content on official school channels, confirm the family has signed and consented.',
+        bullets:['No student photos without confirmed consent','Even if a parent seems fine with it verbally, written consent is required for any public post','Never post student full names along with personally identifiable details (school, address, etc.)'] },
+      { heading:'Official School Accounts',
+        body:'Only designated staff post to official school social media accounts. Access credentials are shared via the school\'s password manager, not texted or emailed in plain text. If you need access to post, request it from the manager.',
+        bullets:['Do not share login credentials with non-staff','Log out of school accounts on shared devices after posting'] },
+    ]
+  },
+  { id:'confidentiality', icon:'🔒', title:'Confidentiality & Privacy',
+    sections:[
+      { heading:'Student & Family Information',
+        body:'Student names, contact details, billing information, medical notes, and any information shared by families in confidence must remain confidential. This information is never shared with other students, other families, or outside parties.',
+        bullets:['No discussing one family\'s situation with another','Billing and financial details are private — do not discuss out loud at the front desk where others can hear'] },
+      { heading:'Internal Business Information',
+        body:'Revenue figures, staff salaries, internal performance issues, and business strategy are confidential. Sharing these externally — including on social media or to other martial arts schools — is a violation of your employment agreement.',
+        bullets:['Business metrics stay inside the team','Staff compensation is private — do not discuss your pay or ask about others\''] },
+    ]
+  },
+];
+
 
 /*  -  -  GymDesk Training Course  -  -  */
 const GYMDESK_MODULES = [
@@ -4578,6 +5478,9 @@ function togglePbStep(id,idx){
   const key='pb_step_'+id+'_'+idx;
   state[key]=!state[key]; render();
 }
+function setPbView(v){ state.pbView=v; state.pbRole=null; state.pbOpen=null; state.pbPolicyOpen=null; render(); }
+function openPolicy(id){ state.pbPolicyOpen = state.pbPolicyOpen===id ? null : id; render(); }
+function togglePolicySection(pid,idx){ const k='pol_'+pid+'_'+idx; state[k]=!state[k]; render(); }
 
 function devSetModule(idx) { state.devActiveModule = idx; state.devQuizAnswers = {}; state.devQuizSubmitted = false; state.devQuizScore = undefined; state.devCompletionSaved = null; render(); }
 function devBackToMenu() { state.devActiveModule = null; render(); }
@@ -4852,6 +5755,67 @@ function renderPlaybooksTab() {
       html += '</div>';
     });
 
+    return html;
+  }
+
+  // ─── View switcher (Playbooks vs Policy Book) ───
+  const pbView = state.pbView || 'playbooks';
+  html += '<div style="display:flex;gap:6px;margin-bottom:14px">';
+  [['playbooks','📖 Playbooks'],['policy','📜 Policy Book']].forEach(([v,lbl]) => {
+    const active = pbView === v;
+    html += '<button onclick="setPbView(\'' + v + '\')" style="padding:7px 16px;border-radius:20px;border:1.5px solid ' + (active ? brandColor : 'var(--gray-200)') + ';background:' + (active ? brandColor : '#fff') + ';color:' + (active ? '#fff' : 'var(--gray-600)') + ';font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
+  });
+  html += '</div>';
+
+  // ─── Policy Book View ───
+  if (pbView === 'policy') {
+    const policy = isLVLUP ? LVLUP_POLICY : [];
+    if (!policy.length) {
+      html += '<div style="background:var(--card);border-radius:12px;padding:40px;text-align:center;box-shadow:var(--shadow)"><div style="font-size:32px;margin-bottom:12px">🚧</div><div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:6px">Coming Soon</div><div style="font-size:12px;color:var(--gray-500)">Go Ninja policy book is being built.</div></div>';
+      return html;
+    }
+    html += '<div style="background:var(--card);border-radius:14px;padding:20px 24px;margin-bottom:16px;box-shadow:var(--shadow-md);border-left:4px solid #6d28d9">';
+    html += '<div style="font-size:18px;font-weight:800;color:var(--primary)">📜 ' + brandLabel + ' Policy Book</div>';
+    html += '<div style="font-size:12px;color:var(--gray-500);margin-top:4px">Conduct, appearance, communication standards, and more. Click any section to read.</div>';
+    html += '</div>';
+    policy.forEach(section => {
+      const isOpen = state.pbPolicyOpen === section.id;
+      html += '<div style="background:var(--card);border-radius:12px;margin-bottom:8px;box-shadow:var(--shadow);overflow:hidden">';
+      html += '<div onclick="openPolicy(\'' + section.id + '\')" style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;cursor:pointer;user-select:none">';
+      html += '<div style="display:flex;align-items:center;gap:12px">';
+      html += '<span style="font-size:22px">' + section.icon + '</span>';
+      html += '<div style="font-size:14px;font-weight:700;color:var(--primary)">' + esc(section.title) + '</div>';
+      html += '</div>';
+      html += '<span style="font-size:18px;color:var(--gray-400);transition:transform 0.2s;transform:rotate(' + (isOpen ? '90' : '0') + 'deg)">›</span>';
+      html += '</div>';
+      if (isOpen) {
+        html += '<div style="border-top:1px solid var(--gray-100)">';
+        section.sections.forEach((sub, si) => {
+          const subOpen = !!state['pol_' + section.id + '_' + si];
+          html += '<div style="border-bottom:1px solid var(--gray-50)">';
+          html += '<div onclick="togglePolicySection(\'' + section.id + '\',' + si + ')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px 12px 28px;cursor:pointer;user-select:none;background:' + (subOpen ? '#f9fafb' : '#fff') + '">';
+          html += '<div style="font-size:13px;font-weight:600;color:var(--gray-700)">' + esc(sub.heading) + '</div>';
+          html += '<span style="font-size:14px;color:var(--gray-400)">' + (subOpen ? '▾' : '▸') + '</span>';
+          html += '</div>';
+          if (subOpen) {
+            html += '<div style="padding:4px 20px 16px 28px">';
+            html += '<p style="font-size:13px;color:var(--gray-600);line-height:1.7;margin-bottom:' + (sub.bullets ? '10px' : '0') + '">' + esc(sub.body) + '</p>';
+            if (sub.bullets) {
+              sub.bullets.forEach(b => {
+                html += '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;padding-left:4px">';
+                html += '<span style="color:#6d28d9;flex-shrink:0;margin-top:2px">•</span>';
+                html += '<span style="font-size:12px;color:var(--gray-700);line-height:1.5">' + esc(b) + '</span>';
+                html += '</div>';
+              });
+            }
+            html += '</div>';
+          }
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+    });
     return html;
   }
 
