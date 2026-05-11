@@ -871,8 +871,8 @@ const LVLUP_CYCLE_CHECKLIST = [
   {id:'cc_w6_tigers',   week:6, text:'Reach out to Tigers about moving up to the beginners class'},
   {id:'cc_w6_sparring', week:6, text:'Contact current yellow belts about purchasing sparring gear'},
   {id:'cc_w8_sotc',     week:8, text:'Identify and announce the Student of the Cycle — post to #LVLUPHQ'},
-  {id:'cc_bday',        week:0, text:'Run a minimum of 2 birthday parties this cycle'},
-  {id:'cc_upgrades',    week:0, text:'Upgrade 2 students to AD or Legacy — list their names'},
+  {id:'cc_bday',        week:0, text:'Run a minimum of 2 birthday parties this cycle',  playbook:'birthday_party'},
+  {id:'cc_upgrades',    week:0, text:'Upgrade 2 students to AD or Legacy — list their names', hasNotes:true},
 ];
 const FRONTDESK_CYCLE_CHECKLIST = []; // TBD
 
@@ -3221,6 +3221,22 @@ function completeTask(section,taskId){
   const sKey=section==='cycle_checklist'?cycleKey:section==='monthly'?monthKey:section==='cycle'||section==='weekly'?weekKey:dateKey;
   fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,{ts});
 }
+function completeTaskWithNotes(section,taskId){
+  const el=document.getElementById('notes_'+section+'_'+taskId);
+  const notes=(el?el.value.trim():'');
+  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),ts=Date.now();
+  const monthKey=getTaskMonthKey(),cycleKey=getCycleChecklistKey();
+  const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
+  const sKey=section==='cycle_checklist'?cycleKey:section==='monthly'?monthKey:section==='cycle'||section==='weekly'?weekKey:dateKey;
+  const payload={ts};
+  if(notes)payload.notes=notes;
+  fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,payload);
+}
+function openTaskPlaybook(pbId){
+  state.tab='development';state.devTab='playbooks';state.pbView='playbooks';
+  state.pbRole=null;state.pbOpen=pbId;render();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
 function undoTask(section,taskId){
   const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
   const cycleKey=getCycleChecklistKey();
@@ -3553,15 +3569,34 @@ function renderCycleChecklistSection(empId,locData){
 }
 function renderTaskItem(section,task,doneData,isCustom,locked){
   const isDone=!!doneData;
+  const hasNotes=!!task.hasNotes;
+  const hasPlaybook=!!task.playbook;
   let cls='task-item'+(isDone?' done':'')+(locked?' locked':'');
-  let html='<div class="'+cls+'">';
+  // For hasNotes tasks, use a block layout to accommodate the text input
+  const blockStyle=hasNotes?'flex-direction:column;align-items:stretch;gap:8px':'';
+  let html='<div class="'+cls+'"'+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
+  // Top row: checkbox + text + extras
+  html+='<div style="display:flex;align-items:flex-start;gap:10px">';
   if(isDone){
     html+='<div class="task-check checked"'+(locked?'':' onclick="undoTask(\''+section+'\',\''+task.id+'\')" title="Click to undo"')+'>✓</div>';
   }else{
-    html+='<div class="task-check"'+(locked?'':' onclick="completeTask(\''+section+'\',\''+task.id+'\')" title="Click to complete"')+'></div>';
+    const completeFn=hasNotes?'completeTaskWithNotes(\''+section+'\',\''+task.id+'\')':'completeTask(\''+section+'\',\''+task.id+'\')';
+    html+='<div class="task-check"'+(locked?'':' onclick="'+completeFn+'" title="Click to complete"')+'></div>';
   }
-  html+='<span class="task-text">'+esc(task.text)+'</span>';
+  html+='<span class="task-text" style="flex:1">'+esc(task.text)+'</span>';
+  if(hasPlaybook&&!locked){
+    html+='<button onclick="openTaskPlaybook(\''+task.playbook+'\')" title="Open playbook" style="background:var(--blue-light);border:none;border-radius:6px;cursor:pointer;color:var(--blue);font-size:10px;font-weight:700;padding:3px 8px;white-space:nowrap;flex-shrink:0">📖 Playbook</button>';
+  }
   if(isCustom&&!locked){html+='<button onclick="deleteCustomTask(\''+section+'\',\''+task.id+'\')" title="Remove task" style="background:none;border:none;cursor:pointer;color:var(--gray-300);font-size:14px;padding:0 4px;line-height:1;flex-shrink:0;" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--gray-300)\'">✕</button>';}
+  html+='</div>';
+  // Notes field / saved notes
+  if(hasNotes){
+    if(isDone&&doneData.notes){
+      html+='<div style="margin-left:34px;font-size:12px;color:var(--gray-500);font-style:italic;padding:6px 10px;background:var(--gray-50);border-radius:6px;border-left:2px solid var(--gray-300)">'+esc(doneData.notes)+'</div>';
+    } else if(!isDone&&!locked){
+      html+='<div style="margin-left:34px"><input id="notes_'+section+'_'+task.id+'" type="text" placeholder="Enter student names..." style="width:100%;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" onkeydown="if(event.key===\'Enter\')completeTaskWithNotes(\''+section+'\',\''+task.id+'\')" /></div>';
+    }
+  }
   html+='</div>';return html;
 }
 function renderInitialsModal(){
@@ -4521,6 +4556,8 @@ const LVLUP_PLAYBOOKS = [
   // ── EVENTS & PARTIES ──
   { id:'birthday_party', role:'frontdesk', category:'Events & Parties', icon:'🎂', title:'Birthday Party — Full Lifecycle', tagline:'Book it, plan it, run it, wow them.',
     checklist:[
+      'Run GymDesk birthday report — current month + next 3 months',
+      'Send party booking email to upcoming birthday families',
       'Capture inquiry: name, date, age, estimated headcount',
       'Share party packages and pricing',
       'Confirm booking — collect deposit, send written confirmation',
@@ -4533,6 +4570,16 @@ const LVLUP_PLAYBOOKS = [
       'Follow up within 48 hrs: thank-you + free trial offer',
     ],
     steps:[
+      { title:'Proactive Booking — Birthday Outreach',
+        detail:'Don\'t wait for families to come to you. Every cycle, run a birthday report in GymDesk to find students with birthdays in the current month and the next 3 months. Send each family a personalized email with available party dates and a booking link.',
+        points:[
+          'GymDesk → Reports → Student Birthday Report → filter by date range (current month + 3 months out)',
+          'Export or scroll the list — note each student\'s name, birthday, and parent contact',
+          'Send a personalized email to each family: "Hey [Parent]! [Name]\'s birthday is coming up — we\'d love to host the party here! Here are our open dates: [dates]. Reply to claim a spot or book at [link]."',
+          'Log each outreach attempt so you know who has responded',
+          'Goal: 2 parties booked per cycle — start outreach early (Week 1–2)',
+        ],
+        avoid:['Waiting until families ask — proactive outreach is what gets you to 2 parties/cycle','Sending a generic blast without the student\'s name'] },
       { title:'Handling the Initial Inquiry',
         detail:'When a parent asks about parties, get the key info: desired date, child\'s age, expected number of kids. Present the package(s) clearly. Have pricing and availability ready.',
         points:['Have a one-sheet or photo of the party room ready to show or send','"We do private parties for groups of X+ kids — 30 minutes of guided martial arts followed by party time in our room"','Quote pricing confidently — don\'t say "I think it\'s around..."'],
