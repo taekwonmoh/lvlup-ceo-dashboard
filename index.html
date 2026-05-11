@@ -304,6 +304,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cycle-week-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 .cycle-week-btn:not(.active):hover{background:var(--blue-light)}
 .task-item.locked{opacity:0.55;pointer-events:none}
+.drag-handle{cursor:grab;color:var(--gray-300);font-size:15px;flex-shrink:0;user-select:none;padding-right:2px;line-height:1;transition:color .15s}
+.drag-handle:hover{color:var(--gray-500)}
+.drag-handle:active{cursor:grabbing}
+.task-item.sortable-ghost{opacity:0.35;background:var(--blue-light)!important;border-radius:8px}
+.task-item.sortable-chosen{background:var(--gray-50)!important;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.l10-table tr.sortable-ghost td{background:var(--blue-light)!important;opacity:0.4}
+.l10-table tr.sortable-chosen td{background:#f0f9ff!important}
+.l10-table .drag-col{width:28px;padding:4px 4px!important;text-align:center}
+.l10-table .drag-col .drag-handle{font-size:14px;display:inline-block;padding:0}
 .task-item.day-off{background:#f0fdf4}
 .task-item.day-off .task-text{color:var(--gray-400);text-decoration:line-through}
 .bonus-tracker{background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px}
@@ -536,6 +545,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .wl-stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-top:2px}
     </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
 <body>
 <div class="conn-status offline" id="connStatus">Connecting...</div>
@@ -1505,6 +1515,11 @@ function listenAll() {
   l10Ref.on('value', snap => { state.l10 = snap.val() || {}; render(); });
   activeListeners.push({ ref: l10Ref, event: 'value' });
 
+  // Task order (drag-and-drop reordering)
+  const taskOrderRef = fbRef('task_order');
+  taskOrderRef.on('value', snap => { state.taskOrder = snap.val() || {}; render(); });
+  activeListeners.push({ ref: taskOrderRef, event: 'value' });
+
   // Watch list
   const wlRef = fbRef('watchlist');
   wlRef.on('value', snap => { state.watchlist = snap.val() || {}; render(); });
@@ -1689,6 +1704,66 @@ function seedIfEmpty() {
 }
 
 /*  -  -  Render  -  -  */
+/* ── Drag-and-drop (Sortable.js) ──────────────────────────────── */
+let _sortInstances = [];
+
+function applyTaskOrder(empId, section, tasks) {
+  const saved = (state.taskOrder[empId] || {})[section];
+  if (!saved || !saved.length) return tasks;
+  const orderMap = {};
+  saved.forEach((id, i) => { orderMap[id] = i; });
+  return [...tasks].sort((a, b) => {
+    const ia = orderMap[a.id] !== undefined ? orderMap[a.id] : 9999;
+    const ib = orderMap[b.id] !== undefined ? orderMap[b.id] : 9999;
+    return ia - ib;
+  });
+}
+
+function initSortable() {
+  _sortInstances.forEach(s => { try { s.destroy(); } catch(e){} });
+  _sortInstances = [];
+  if (typeof Sortable === 'undefined') return;
+
+  // ── Task lists ──
+  document.querySelectorAll('[data-sort-tasks]').forEach(el => {
+    if (el.dataset.sortLocked === 'true') return;
+    const inst = Sortable.create(el, {
+      animation: 150,
+      handle: '.drag-handle',
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      onEnd(evt) {
+        if (evt.oldIndex === evt.newIndex) return;
+        const empId  = el.dataset.sortEmp;
+        const section = el.dataset.sortTasks;
+        const newOrder = Array.from(el.querySelectorAll('[data-task-id]')).map(n => n.dataset.taskId);
+        fbSet('task_order/' + empId + '/' + section, newOrder);
+      }
+    });
+    _sortInstances.push(inst);
+  });
+
+  // ── L10 table bodies ──
+  document.querySelectorAll('[data-sort-l10]').forEach(el => {
+    const inst = Sortable.create(el, {
+      animation: 150,
+      handle: '.drag-handle',
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      onEnd(evt) {
+        if (evt.oldIndex === evt.newIndex) return;
+        const weekKey  = el.dataset.sortWeek;
+        const section  = el.dataset.sortL10;
+        const origData = (state.l10[weekKey] || {})[section] || [];
+        const rows     = el.querySelectorAll('tr[data-row-idx]');
+        const newArr   = Array.from(rows).map(r => origData[parseInt(r.dataset.rowIdx)]).filter(Boolean);
+        fbSet('l10/' + weekKey + '/' + section, newArr.length ? newArr : null);
+      }
+    });
+    _sortInstances.push(inst);
+  });
+}
+
 function render() {
   const app = document.getElementById('app');
   // Backward-compat: old links to removed tabs redirect into merged pages
@@ -1709,6 +1784,7 @@ function render() {
      s === 'development' ? renderDevelopmentPage() :
      s === 'feedback'    ? renderFeedbackPage() : '');
   if (s === 'scorecard' && state.scorecardTab === 'performance') initKPICharts();
+  requestAnimationFrame(initSortable);
 }
 
 function renderHeader() {
@@ -3117,6 +3193,7 @@ state.scorecardTab = 'weekly';   // 'weekly' | 'performance'
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
 state.devTab        = 'instructor'; // 'instructor' | 'gymdesk' | 'playbooks'
 state.gdActiveModule = null;
+state.taskOrder     = {}; // Firebase: task_order/{empId}/{section} = [id,id,...]
 state.pbRole        = null; // null | 'instructor' | 'sales' | 'frontdesk'
 state.pbOpen        = null; // null | playbook id string
 state.pbView        = 'playbooks'; // 'playbooks' | 'policy'
@@ -3454,15 +3531,18 @@ function renderTasksPage(){
 }
 function renderTaskSection(section,title,tasks,completionData,customTasksObj,locked){
   const key=section,collapsed=state.collapsedSections[key];
+  const empId=state.tasksLoc;
   const customArr=Object.entries(customTasksObj||{}).map(([id,v])=>({id,text:v.text,custom:true}));
-  const allTasks=[...tasks,...customArr];
+  // Apply saved drag order to the main task list
+  const orderedTasks=applyTaskOrder(empId,section,tasks);
+  const allTasks=[...orderedTasks,...customArr];
   const completed=allTasks.filter(t=>completionData[t.id]).length,total=allTasks.length;
   const pillCls=completed===total&&total>0?'complete':completed>0?'partial':'empty';
   let html='<div class="task-section">';
   const lockBadge=locked?'<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:999px;margin-left:8px;">🔒 Locked</span>':'';
   html+='<div class="task-section-header" onclick="toggleSection(\''+key+'\')"><h3><span class="chevron '+(collapsed?'':'open')+'">&#9654;</span>'+title+lockBadge+'</h3><span class="progress-pill '+pillCls+'">'+completed+'/'+total+'</span></div>';
-  html+='<div class="task-list '+(collapsed?'collapsed':'')+'">';
-  tasks.forEach(t=>{html+=renderTaskItem(section,t,completionData[t.id],false,locked);});
+  html+='<div class="task-list '+(collapsed?'collapsed':'')+'" data-sort-tasks="'+section+'" data-sort-emp="'+empId+'" data-sort-locked="'+(locked?'true':'false')+'">';
+  orderedTasks.forEach(t=>{html+=renderTaskItem(section,t,completionData[t.id],false,locked);});
   if(customArr.length>0){
     html+='<div class="task-cat">Added</div>';
     customArr.forEach(t=>{html+=renderTaskItem(section,t,completionData[t.id],true,locked);});
@@ -3600,7 +3680,10 @@ function renderCycleChecklistSection(empId,locData){
       else if(isPast)badge=' <span style="font-size:10px;background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:999px;margin-left:6px;">Past</span>';
       else if(isFuture)badge=' <span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:999px;margin-left:6px;">Upcoming</span>';
       html+='<div class="task-cat">'+weekLabel+badge+'</div>';
-      byWeek[w].forEach(t=>{ html+=renderTaskItem('cycle_checklist',t,doneData[t.id]); });
+      html+='<div data-sort-tasks="cycle_checklist_w'+w+'" data-sort-emp="'+empId+'" data-sort-locked="false">';
+      const orderedGroup=applyTaskOrder(empId,'cycle_checklist_w'+w,byWeek[w]);
+      orderedGroup.forEach(t=>{ html+=renderTaskItem('cycle_checklist',t,doneData[t.id]); });
+      html+='</div>';
     });
   }
   html+='</div></div>';
@@ -3611,11 +3694,11 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   const hasNotes=!!task.hasNotes;
   const hasPlaybook=!!task.playbook;
   let cls='task-item'+(isDone?' done':'')+(locked?' locked':'');
-  // For hasNotes tasks, use a block layout to accommodate the text input
   const blockStyle=hasNotes?'flex-direction:column;align-items:stretch;gap:8px':'';
-  let html='<div class="'+cls+'"'+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
-  // Top row: checkbox + text + extras
+  let html='<div class="'+cls+'" data-task-id="'+task.id+'"'+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
+  // Top row: drag handle + checkbox + text + extras
   html+='<div style="display:flex;align-items:flex-start;gap:10px">';
+  if(!locked&&!isCustom){html+='<span class="drag-handle" title="Drag to reorder">⠿</span>';}
   if(isDone){
     html+='<div class="task-check checked"'+(locked?'':' onclick="undoTask(\''+section+'\',\''+task.id+'\')" title="Click to undo"')+'>✓</div>';
   }else{
@@ -3923,10 +4006,10 @@ function renderL10Page() {
   // 4. Customer / Employee Headlines (5 min)
   html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">4</span>Customer / Employee Headlines</h3><span class="l10-duration">5 min</span></div>';
   const headlines = Array.isArray(data.headlines) ? data.headlines : [];
-  html += '<table class="l10-table"><thead><tr><th>Good / Bad</th><th>Headline</th><th class="del-col"></th></tr></thead><tbody>';
+  html += '<table class="l10-table"><thead><tr><th class="drag-col"></th><th>Good / Bad</th><th>Headline</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="headlines" data-sort-week="' + weekKey + '">';
   headlines.forEach((h, i) => {
     if (!h) return;
-    html += '<tr><td style="width:100px"><select onchange="updateL10Field(\'' + weekKey + '\',\'headlines\',' + i + ',\'type\',this.value)"><option value="">--</option><option value="good"' + (h.type === 'good' ? ' selected' : '') + '>Good</option><option value="bad"' + (h.type === 'bad' ? ' selected' : '') + '>Bad</option></select></td>';
+    html += '<tr data-row-idx="' + i + '"><td class="drag-col"><span class="drag-handle" title="Drag to reorder">\u283f</span></td><td style="width:100px"><select onchange="updateL10Field(\'' + weekKey + '\',\'headlines\',' + i + ',\'type\',this.value)"><option value="">--</option><option value="good"' + (h.type === 'good' ? ' selected' : '') + '>Good</option><option value="bad"' + (h.type === 'bad' ? ' selected' : '') + '>Bad</option></select></td>';
     html += '<td><input value="' + esc(h.text || '') + '" placeholder="Headline..." onchange="updateL10Field(\'' + weekKey + '\',\'headlines\',' + i + ',\'text\',this.value)" /></td>';
     html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'headlines\',' + i + ')">\u00d7</button></td></tr>';
   });
@@ -3936,11 +4019,11 @@ function renderL10Page() {
   // 5. To-Do List (5 min)
   html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">5</span>To-Do List</h3><span class="l10-duration">5 min</span></div>';
   const todos = Array.isArray(data.todos) ? data.todos : [];
-  html += '<table class="l10-table"><thead><tr><th class="who-col">Who</th><th>To-Do</th><th class="status-col">Done / Not Done</th><th class="del-col"></th></tr></thead><tbody>';
+  html += '<table class="l10-table"><thead><tr><th class="drag-col"></th><th class="who-col">Who</th><th>To-Do</th><th class="status-col">Done / Not Done</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="todos" data-sort-week="' + weekKey + '">';
   todos.forEach((t, i) => {
     if (!t) return;
     const statusCls = t.status === 'done' ? 'l10-status-done' : t.status === 'notdone' ? 'l10-status-notdone' : '';
-    html += '<tr><td class="who-col"><input value="' + esc(t.who || '') + '" placeholder="Name..." onchange="updateL10Field(\'' + weekKey + '\',\'todos\',' + i + ',\'who\',this.value)" /></td>';
+    html += '<tr data-row-idx="' + i + '"><td class="drag-col"><span class="drag-handle" title="Drag to reorder">\u283f</span></td><td class="who-col"><input value="' + esc(t.who || '') + '" placeholder="Name..." onchange="updateL10Field(\'' + weekKey + '\',\'todos\',' + i + ',\'who\',this.value)" /></td>';
     html += '<td><input value="' + esc(t.task || '') + '" placeholder="Task description..." onchange="updateL10Field(\'' + weekKey + '\',\'todos\',' + i + ',\'task\',this.value)" /></td>';
     html += '<td class="status-col"><select class="' + statusCls + '" onchange="updateL10Field(\'' + weekKey + '\',\'todos\',' + i + ',\'status\',this.value)"><option value="">--</option><option value="done"' + (t.status === 'done' ? ' selected' : '') + '>Done</option><option value="notdone"' + (t.status === 'notdone' ? ' selected' : '') + '>Not Done</option></select></td>';
     html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'todos\',' + i + ')">\u00d7</button></td></tr>';
@@ -3952,10 +4035,10 @@ function renderL10Page() {
   html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">6</span>Issues List</h3><span class="l10-duration">60 min</span></div>';
   html += '<div style="padding:8px 20px 0;font-size:12px;color:var(--gray-400);font-weight:600">IDS: Identify, Discuss, Solve</div>';
   const issues = Array.isArray(data.issues) ? data.issues : [];
-  html += '<table class="l10-table"><thead><tr><th class="priority-col">Priority</th><th>Issue</th><th class="del-col"></th></tr></thead><tbody>';
+  html += '<table class="l10-table"><thead><tr><th class="drag-col"></th><th class="priority-col">Priority</th><th>Issue</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="issues" data-sort-week="' + weekKey + '">';
   issues.forEach((is, i) => {
     if (!is) return;
-    html += '<tr><td class="priority-col"><input value="' + esc(is.priority || '') + '" placeholder="#" style="width:50px;text-align:center" onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'priority\',this.value)" /></td>';
+    html += '<tr data-row-idx="' + i + '"><td class="drag-col"><span class="drag-handle" title="Drag to reorder">\u283f</span></td><td class="priority-col"><input value="' + esc(is.priority || '') + '" placeholder="#" style="width:50px;text-align:center" onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'priority\',this.value)" /></td>';
     html += '<td><input value="' + esc(is.issue || '') + '" placeholder="Issue description..." onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'issue\',this.value)" /></td>';
     html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'issues\',' + i + ')">\u00d7</button></td></tr>';
   });
