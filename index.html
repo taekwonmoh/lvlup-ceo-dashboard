@@ -3325,24 +3325,34 @@ function renderTasksPage(){
   // Bonus tracker
   const now=new Date(),bmYear=now.getFullYear(),bmMonth=now.getMonth()+1;
   const monthWeeks=getMonthWeekKeys(bmYear,bmMonth);
-  const signedCount=monthWeeks.filter(wk=>locSignoffs[wk]).length;
-  const eligible=signedCount>=4;
+  // Month-specific overrides: some months have fewer countable weeks (e.g. system launch month)
+  const BONUS_MONTH_REQUIRED={'2026-05':3};
+  const monthKey2=bmYear+'-'+String(bmMonth).padStart(2,'0');
+  const weeksRequired=BONUS_MONTH_REQUIRED[monthKey2]||4;
+  // Exempt weeks: weeks that don't count toward the requirement (system not yet active)
+  const BONUS_EXEMPT_WEEKS={'2026-05':0}; // week index (0-based) to mark as exempt
+  const exemptIdx=BONUS_EXEMPT_WEEKS[monthKey2];
+  const countableWeeks=monthWeeks.filter((_,i)=>i!==exemptIdx);
+  const signedCount=countableWeeks.filter(wk=>locSignoffs[wk]).length;
+  const eligible=signedCount>=weeksRequired;
   if(emp.bonus){
     html+='<div class="bonus-tracker">';
     html+='<div style="display:flex;justify-content:space-between;align-items:center;">';
     html+='<div style="font-weight:800;font-size:14px;color:var(--primary);">🏆 Bonus Tracker — '+now.toLocaleDateString('en-US',{month:'long',year:'numeric'})+'</div>';
-    html+='<div style="font-size:13px;font-weight:700;color:'+(eligible?'var(--green)':signedCount===0?'var(--gray-400)':'var(--orange)')+';">'+signedCount+'/4 weeks signed off</div>';
+    html+='<div style="font-size:13px;font-weight:700;color:'+(eligible?'var(--green)':signedCount===0?'var(--gray-400)':'var(--orange)')+';">'+signedCount+'/'+weeksRequired+' weeks signed off</div>';
     html+='</div>';
     html+='<div class="bonus-week-row">';
     monthWeeks.forEach((wk,i)=>{
       const mon=getWeekMonday(wk),sun=getWeekSunday(wk);
       const fmt=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
       const isCur=wk===weekKey,isPast=isWeekLocked(wk),isSigned=!!locSignoffs[wk];
-      let cls='bonus-week-card '+(isSigned?'signed':isPast&&!isSigned?'failed':isCur?'current':'future');
-      let statusIcon=isSigned?'✅':isPast&&!isSigned?'❌':isCur?'⏳':'🔜';
+      const isExempt=exemptIdx!==undefined&&i===exemptIdx;
+      let cls='bonus-week-card '+(isExempt?'future':isSigned?'signed':isPast&&!isSigned?'failed':isCur?'current':'future');
+      let statusIcon=isExempt?'—':isSigned?'✅':isPast&&!isSigned?'❌':isCur?'⏳':'🔜';
       let label='Week '+(i+1);
-      html+='<div class="'+cls+'"><div class="bwc-label">'+label+'</div><div class="bwc-status">'+statusIcon+'</div><div class="bwc-dates">'+fmt(mon)+' – '+fmt(sun)+'</div>';
-      if(isSigned){html+='<div style="font-size:10px;color:var(--green);font-weight:600;margin-top:2px;">Signed: '+esc(locSignoffs[wk].initials)+'</div>';}
+      html+='<div class="'+cls+'"><div class="bwc-label">'+label+'</div><div class="bwc-status" style="'+(isExempt?'font-size:18px;font-weight:700;color:var(--gray-300)':'')+'">'+statusIcon+'</div><div class="bwc-dates">'+fmt(mon)+' – '+fmt(sun)+'</div>';
+      if(isSigned&&!isExempt){html+='<div style="font-size:10px;color:var(--green);font-weight:600;margin-top:2px;">Signed: '+esc(locSignoffs[wk].initials)+'</div>';}
+      if(isExempt){html+='<div style="font-size:9px;color:var(--gray-400);font-weight:600;margin-top:2px;text-transform:uppercase;letter-spacing:0.5px">Exempt</div>';}
       html+='</div>';
     });
     if(monthWeeks.length<4){
@@ -3352,7 +3362,7 @@ function renderTasksPage(){
     }
     html+='</div>';
     if(eligible){html+='<div style="margin-top:10px;padding:8px 12px;background:var(--green-light);border-radius:8px;font-size:13px;font-weight:700;color:var(--green);">🎉 Eligible for this month\'s bonus!</div>';}
-    else{html+='<div style="margin-top:10px;padding:8px 12px;background:var(--orange-light);border-radius:8px;font-size:13px;color:#92400e;">Need '+(4-signedCount)+' more signed week'+(4-signedCount!==1?'s':'')+' to qualify for bonus this month.</div>';}
+    else{html+='<div style="margin-top:10px;padding:8px 12px;background:var(--orange-light);border-radius:8px;font-size:13px;color:#92400e;">Need '+(weeksRequired-signedCount)+' more signed week'+(weeksRequired-signedCount!==1?'s':'')+' to qualify for bonus this month.</div>';}
     html+='</div>';
   } else {
     html+='<div style="margin-top:4px;margin-bottom:4px;padding:12px 16px;background:var(--gray-50);border-radius:12px;border:1.5px dashed var(--gray-200);font-size:13px;color:var(--gray-500);font-weight:600;">⏸ Part-time — not currently eligible for bonus</div>';
