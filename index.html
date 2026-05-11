@@ -716,8 +716,23 @@ const GONINJA_WEEKLY_REC = [
 ];
 const LVLUP_MONTHLY = [];
 // Front desk managers (Sue K, Mario S) — tasks TBD
-const FRONTDESK_DAILY   = [];
-const FRONTDESK_WEEKLY  = [];
+const FRONTDESK_DAILY = [
+  {id:'fd_tv',          text:'Turn on TV announcements — message @jam in #LVLUPHQ if anything needs updating'},
+  {id:'fd_rosters',     text:'Review class rosters — note new students and post in your location channel about anyone starting today'},
+  {id:'fd_retail',      text:'Check GymDesk for pending retail orders — fulfill and notify customers'},
+  {id:'fd_stoplight',   text:'Review student stoplight — update any statuses that changed since yesterday'},
+  {id:'fd_eos',         text:'Post EOS report at clockout'},
+];
+const FRONTDESK_WEEKLY = [
+  {id:'fd_homebase_sched', text:'Monday — Review Homebase schedule to confirm proper class coverage'},
+  {id:'fd_roster_sync',    text:'Sync student roster with GymDesk — add new enrollments, update statuses'},
+  {id:'fd_bday_report',    text:'Run GymDesk birthday report (current + next 3 months) — send party outreach emails to upcoming birthday families'},
+  {id:'fd_tiger_emails',   text:'Send Tigers move-up emails for any students confirmed ready by lead instructor'},
+  {id:'fd_yb_emails',      text:'Send Yellow Belt emails for any new yellow belts confirmed by lead instructor'},
+  {id:'fd_supplies',       text:'Check front desk supplies — restock if low, message #inventory'},
+  {id:'fd_signage',        text:'Check all signage — replace anything outdated, post photos to #LVLUPHQ'},
+  {id:'fd_social',         text:'2 social media posts this week — share screenshots to #LVLUPHQ'},
+];
 const FRONTDESK_MONTHLY = [];
 const GONINJA_MONTHLY = [
   {id:'event_promo',text:'Event promotion (3 weeks prior to upcoming events)'},
@@ -874,7 +889,21 @@ const LVLUP_CYCLE_CHECKLIST = [
   {id:'cc_bday',        week:0, text:'Run a minimum of 2 birthday parties this cycle',  playbook:'birthday_party'},
   {id:'cc_upgrades',    week:0, text:'Upgrade 2 students to AD or Legacy — list their names', hasNotes:true},
 ];
-const FRONTDESK_CYCLE_CHECKLIST = []; // TBD
+const FRONTDESK_CYCLE_CHECKLIST = [
+  // ── Ongoing (any time this cycle) ──
+  {id:'fd_cc_parties',   week:0, text:'Book a minimum of 2 birthday parties this cycle', playbook:'birthday_party'},
+  {id:'fd_cc_events',    week:0, text:'Add all upcoming cycle events to the dashboard so they display on the members site', playbook:'add_dashboard_event'},
+  // ── Week 1 ──
+  {id:'fd_cc_signage',   week:1, text:'Update signage for the new cycle — life skill, promotions, and any new events'},
+  {id:'fd_cc_bday_blast', week:1, text:'Run birthday report + send party outreach emails for current and next 3 months', playbook:'birthday_party'},
+  {id:'fd_cc_roster',    week:1, text:'Full roster sync — confirm all active students are in the dashboard and statuses are current'},
+  // ── Week 4 ──
+  {id:'fd_cc_tigers',    week:4, text:'Review Tiger class — send move-up emails for any students confirmed ready by instructor', playbook:'email_tigers'},
+  // ── Week 6 ──
+  {id:'fd_cc_yb',        week:6, text:'Review Yellow Belt students — send gear + program emails for any new yellow belts', playbook:'email_yellow_belt'},
+  // ── Week 8 ──
+  {id:'fd_cc_sotc_input', week:8, text:'Share Student of the Cycle input with lead instructor — which students stood out this cycle?'},
+];
 
 /* ── Mat Chat Scripts (ATA Legacy Pro) ── */
 const MAT_CHATS = {
