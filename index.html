@@ -3405,7 +3405,8 @@ function renderTasksPage(){
   const cycleData=(locData.cycle||{})[weekKey]||{};
   const monthKey=getTaskMonthKey();
   const monthlyData=(locData.monthly||{})[monthKey]||{};
-  const dailyTasks=getDailyTasks(loc),weeklyRec=getWeeklyRec(loc),monthlyTasks=getMonthlyTasks(loc);
+  const isSaturday=new Date(dateKey+'T12:00:00').getDay()===6;
+  const dailyTasks=getDailyTasks(loc).filter(t=>!(isSaturday&&t.id==='spray_mats')),weeklyRec=getWeeklyRec(loc),monthlyTasks=getMonthlyTasks(loc);
   const cycleDefs=getCycleTasks(loc),cycleWeek=state.tasksCycleWeek;
   const cw=cycleDefs[cycleWeek]||{name:'',tasks:[]};
   // Date label
