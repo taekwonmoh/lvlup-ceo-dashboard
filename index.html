@@ -3386,7 +3386,8 @@ function unlockWithPin(){
   const pin=input.value.trim();
   const empId=state.tasksLoc;
   const stored=state.taskPins[empId]||'0000';
-  if(pin===stored){ state.unlockedEmp=empId; state.pinError=false; }
+  const master=state.taskPins['_master']||'';
+  if(pin===stored||( master&&pin===master)){ state.unlockedEmp=empId; state.pinError=false; }
   else { state.pinError=true; }
   render();
 }
