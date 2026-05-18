@@ -3528,11 +3528,10 @@ function renderTasksPage(){
       }
     }
     html+='</div>';
-    if(eligible){html+='<div style="margin-top:10px;padding:8px 12px;background:var(--green-light);border-radius:8px;font-size:13px;font-weight:700;color:var(--green);">🎉 Eligible for this month\'s bonus!</div>';}
-    else{html+='<div style="margin-top:10px;padding:8px 12px;background:var(--orange-light);border-radius:8px;font-size:13px;color:#92400e;">Need '+(weeksRequired-signedCount)+' more signed week'+(weeksRequired-signedCount!==1?'s':'')+' to qualify for bonus this month.</div>';}
+    html+='<div style="margin-top:10px;padding:8px 12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500);">Bonus (0–5%) is determined by leadership review of task completion and hours.</div>';
     html+='</div>';
   } else {
-    html+='<div style="margin-top:4px;margin-bottom:4px;padding:12px 16px;background:var(--gray-50);border-radius:12px;border:1.5px dashed var(--gray-200);font-size:13px;color:var(--gray-500);font-weight:600;">⏸ Part-time — not currently eligible for bonus</div>';
+    html+='<div style="margin-top:4px;margin-bottom:4px;padding:12px 16px;background:var(--gray-50);border-radius:12px;border:1.5px dashed var(--gray-200);font-size:13px;color:var(--gray-500);font-weight:600;">⏸ Part-time</div>';
   }
 
   html+='<div class="date-nav">';
@@ -3563,13 +3562,13 @@ function renderTasksPage(){
   if(emp.bonus){
     if(!weekLocked&&!authLocked){
       html+='<div style="margin-top:8px;padding:16px 20px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;gap:12px;">';
-      html+='<div><div style="font-weight:700;font-size:14px;">Ready to sign off this week?</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px;">Sign off confirms all tasks are complete. The week will be locked and count toward your bonus.</div></div>';
+      html+='<div><div style="font-weight:700;font-size:14px;">Ready to sign off this week?</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px;">Sign off confirms all tasks are complete for this week. The week will be locked.</div></div>';
       html+='<button onclick="showSignOffModal()" style="padding:10px 20px;background:var(--green);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;">✅ Sign Off Week</button>';
       html+='</div>';
     }else if(locSignoffs[weekKey]){
       html+='<div style="margin-top:8px;padding:12px 20px;background:var(--green-light);border-radius:12px;font-size:13px;font-weight:700;color:var(--green);">✅ Week signed off by '+esc(locSignoffs[weekKey].initials)+' — counts toward bonus</div>';
     }else{
-      html+='<div style="margin-top:8px;padding:12px 20px;background:var(--red-light);border-radius:12px;font-size:13px;font-weight:700;color:var(--red);">🔒 This week is locked. It was not signed off and will not count toward bonus.</div>';
+      html+='<div style="margin-top:8px;padding:12px 20px;background:var(--red-light);border-radius:12px;font-size:13px;font-weight:700;color:var(--red);">🔒 This week is locked. It was not signed off.</div>';
     }
   }
   const customMonthly=(locData['custom_monthly']||{})[monthKey]||{};
