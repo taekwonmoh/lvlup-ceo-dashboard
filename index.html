@@ -1520,6 +1520,11 @@ function listenAll() {
   taskOrderRef.on('value', snap => { state.taskOrder = snap.val() || {}; render(); });
   activeListeners.push({ ref: taskOrderRef, event: 'value' });
 
+  // Task PIN locks
+  const pinsRef = fbRef('task_pins');
+  pinsRef.on('value', snap => { state.taskPins = snap.val() || {}; render(); });
+  activeListeners.push({ ref: pinsRef, event: 'value' });
+
   // Watch list
   const wlRef = fbRef('watchlist');
   wlRef.on('value', snap => { state.watchlist = snap.val() || {}; render(); });
@@ -3185,6 +3190,10 @@ state.tasksDate = new Date().toISOString().split('T')[0];
 state.tasksCycleWeek = 1;
 state.tasksData = {};
 state.collapsedSections = {};
+state.unlockedEmp  = null;   // empId currently authenticated, or null
+state.pinError     = false;
+state.taskPins     = {};     // {empId: '1234'} loaded from Firebase
+state.pinChanging  = false;  // show change-PIN input when true
 state.goalsLoc = 'waunakee';
 state.goalsMonth = getMonthKey();
 state.goalsData = {};
@@ -3367,7 +3376,31 @@ function confirmSignOff(){
   fbSet(empPath(state.tasksLoc)+'/weekly_signoff/'+weekKey,{initials,ts:Date.now()});
   state.modalTask=null;render();
 }
-function setTasksLoc(locId){state.tasksLoc=locId;state.matChatWeek=null;listenTasks();}
+function setTasksLoc(locId){
+  if(locId!==state.tasksLoc){ state.unlockedEmp=null; state.pinError=false; state.pinChanging=false; }
+  state.tasksLoc=locId; state.matChatWeek=null; listenTasks();
+}
+function unlockWithPin(){
+  const input=document.getElementById('pinInput');
+  if(!input)return;
+  const pin=input.value.trim();
+  const empId=state.tasksLoc;
+  const stored=state.taskPins[empId]||'0000';
+  if(pin===stored){ state.unlockedEmp=empId; state.pinError=false; }
+  else { state.pinError=true; }
+  render();
+}
+function lockTasksEmp(){ state.unlockedEmp=null; state.pinError=false; state.pinChanging=false; render(); }
+function startPinChange(){ state.pinChanging=true; render(); }
+function cancelPinChange(){ state.pinChanging=false; render(); }
+function savePinChange(){
+  const input=document.getElementById('pinNewInput');
+  if(!input)return;
+  const pin=input.value.trim();
+  if(pin.length<4){alert('PIN must be at least 4 digits.');return;}
+  fbSet('task_pins/'+state.unlockedEmp,pin);
+  state.pinChanging=false; render();
+}
 function changeTasksDate(delta){
   const d=new Date(state.tasksDate+'T12:00:00');d.setDate(d.getDate()+delta);
   state.tasksDate=d.toISOString().split('T')[0];listenTasks();
@@ -3424,6 +3457,32 @@ function renderTasksPage(){
     html+='<button class="loc-btn '+cls+'" onclick="setTasksLoc(\''+e.id+'\')" title="'+e.label+'">'+e.name+'</button>';
   });
   html+='</div>';
+
+  // ── PIN lock banner ──
+  const authLocked = state.unlockedEmp !== loc;
+  if(authLocked){
+    html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:#1e293b;border-radius:12px;margin-bottom:10px;flex-wrap:wrap;">';
+    html+='<span style="font-size:16px;">🔒</span>';
+    html+='<span style="font-size:13px;font-weight:600;color:#e2e8f0;flex:1;">Viewing '+esc(emp?emp.name:loc)+'\'s tasks — enter PIN to make changes</span>';
+    html+='<input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" onkeydown="if(event.key===\'Enter\')unlockWithPin()" style="width:90px;padding:7px 10px;border-radius:8px;border:1.5px solid '+(state.pinError?'#ef4444':'#475569')+';background:#0f172a;color:#f1f5f9;font-size:14px;font-weight:700;letter-spacing:4px;text-align:center;outline:none" />';
+    html+='<button onclick="unlockWithPin()" style="padding:7px 14px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Unlock</button>';
+    if(state.pinError) html+='<span style="font-size:12px;color:#ef4444;font-weight:600;">Incorrect PIN</span>';
+    html+='</div>';
+  }else{
+    // Unlocked — show lock button + optional change PIN
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#f0fdf4;border-radius:10px;margin-bottom:10px;border:1.5px solid var(--green);">';
+    html+='<span style="font-size:13px;font-weight:700;color:var(--green);flex:1;">🔓 Unlocked — '+esc(emp?emp.name:loc)+'\'s tasks</span>';
+    if(state.pinChanging){
+      html+='<input id="pinNewInput" type="password" inputmode="numeric" maxlength="6" placeholder="New PIN" style="width:100px;padding:5px 8px;border-radius:7px;border:1.5px solid var(--gray-300);font-size:13px;letter-spacing:3px;text-align:center;outline:none" />';
+      html+='<button onclick="savePinChange()" style="padding:5px 12px;background:var(--green);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Save</button>';
+      html+='<button onclick="cancelPinChange()" style="padding:5px 10px;background:transparent;color:var(--gray-500);border:1px solid var(--gray-200);border-radius:7px;font-size:12px;cursor:pointer;">Cancel</button>';
+    }else{
+      html+='<button onclick="startPinChange()" style="padding:5px 12px;background:transparent;color:var(--gray-500);border:1px solid var(--gray-200);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;">Change PIN</button>';
+    }
+    html+='<button onclick="lockTasksEmp()" style="padding:5px 12px;background:var(--gray-100);color:var(--gray-600);border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">🔒 Lock</button>';
+    html+='</div>';
+  }
+
   const locSignoffs=locData.weekly_signoff||{};
   const locDnw=locData.did_not_work||{};
   const weekLocked=isWeekLocked(weekKey)||!!locSignoffs[weekKey];
@@ -3489,8 +3548,9 @@ function renderTasksPage(){
     if(dayOff){
       dnwBar='<div style="display:flex;align-items:center;gap:10px;padding:10px 20px;background:#f0fdf4;border-radius:10px;margin-bottom:8px;border:1.5px solid var(--green);">';
       dnwBar+='<span style="font-size:20px;">😴</span><span style="font-weight:700;font-size:13px;color:var(--green);flex:1;">Day off marked by '+esc(locDnw[dateKey].initials)+'</span>';
-      dnwBar+='<button onclick="undoDidNotWork(\''+dateKey+'\')" style="font-size:12px;padding:4px 10px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;cursor:pointer;color:var(--gray-600);">Undo</button></div>';
-    }else{
+      if(!authLocked) dnwBar+='<button onclick="undoDidNotWork(\''+dateKey+'\')" style="font-size:12px;padding:4px 10px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;cursor:pointer;color:var(--gray-600);">Undo</button>';
+      dnwBar+='</div>';
+    }else if(!authLocked){
       dnwBar='<div style="display:flex;justify-content:flex-end;margin-bottom:6px;">';
       dnwBar+='<button onclick="markDidNotWork()" style="font-size:12px;padding:6px 14px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;color:var(--gray-600);font-weight:600;">😴 Did not work today</button></div>';
     }
@@ -3501,7 +3561,7 @@ function renderTasksPage(){
 
   // Week sign-off button (bonus-eligible staff only)
   if(emp.bonus){
-    if(!weekLocked){
+    if(!weekLocked&&!authLocked){
       html+='<div style="margin-top:8px;padding:16px 20px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;gap:12px;">';
       html+='<div><div style="font-weight:700;font-size:14px;">Ready to sign off this week?</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px;">Sign off confirms all tasks are complete. The week will be locked and count toward your bonus.</div></div>';
       html+='<button onclick="showSignOffModal()" style="padding:10px 20px;background:var(--green);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;">✅ Sign Off Week</button>';
@@ -3531,6 +3591,7 @@ function renderTasksPage(){
   return html;
 }
 function renderTaskSection(section,title,tasks,completionData,customTasksObj,locked){
+  locked = locked || (state.unlockedEmp !== state.tasksLoc);
   const key=section,collapsed=state.collapsedSections[key];
   const empId=state.tasksLoc;
   const customArr=Object.entries(customTasksObj||{}).map(([id,v])=>({id,text:v.text,custom:true}));
@@ -3691,6 +3752,7 @@ function renderCycleChecklistSection(empId,locData){
   return html;
 }
 function renderTaskItem(section,task,doneData,isCustom,locked){
+  locked = locked || (state.unlockedEmp !== state.tasksLoc);
   const isDone=!!doneData;
   const hasNotes=!!task.hasNotes;
   const hasPlaybook=!!task.playbook;
