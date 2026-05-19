@@ -1581,6 +1581,13 @@ function updateScorecard(locId, personId, metricId, weekIdx, val) {
   const weekKey = getWeekKey(state.weekOffset - weekIdx);
   fbDebounce('scorecard/weekly/' + weekKey + '/' + locId + '/' + personId + '/' + metricId, val);
 }
+function updateScorecardSimple(locId, metricId, val) {
+  const weekKey = getWeekKey(state.weekOffset);
+  fbDebounce('scorecard/weekly/' + weekKey + '/' + locId + '/' + metricId, val === '' ? null : val);
+}
+function updateScorecardGoal(locId, metricId, val) {
+  fbDebounce('scorecard/goals/' + locId + '/' + metricId, val === '' ? null : val);
+}
 
 function updateMonthly(locId, metricId, val) {
   const monthKey = getMonthKey();
@@ -2132,15 +2139,12 @@ function renderScorecardPage() {
     return subNav + renderPerformancePage();
   }
 
-  const monthKey = getMonthKey();
-  // state.scorecard.monthly is already the current month's data (keyed by locId, not month)
+  // KPI cards (monthly revenue)
   const monthData = state.scorecard.monthly || {};
-
-  // KPI cards from monthly data
   let kpiHtml = '<div class="kpi-grid">';
   LOCATIONS.forEach(loc => {
     const locData = monthData[loc.id] || {};
-if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
+    if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
     const rev = parseFloat(locData.revenue) || 0;
     const curMonthIdx = new Date().getMonth();
     const curMonthShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][curMonthIdx];
@@ -2159,115 +2163,81 @@ if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
   });
   kpiHtml += '</div>';
 
-  // Weekly scorecard table
+  // Week navigation
   const weekLabel = getWeekLabel(state.weekOffset);
   const weekData = state.scorecard.weekly || {};
   const goalsData = state.scorecard.goals || {};
 
-  let tableHtml = '<div class="section">' +
-    '<div class="section-header"><h2>Weekly Scorecard</h2>' +
-    '<div class="week-nav"><button onclick="changeWeek(-1)">&larr;</button>' +
-    '<span class="week-label">' + weekLabel + '</span>' +
-    '<button onclick="changeWeek(1)">&rarr;</button></div></div>' +
-    '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>' +
-    '<th>Who</th><th>Measurable</th><th>Goal</th><th>This Week</th>' +
-    '</tr></thead><tbody>';
+  let html = subNav + kpiHtml;
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:0 2px;">';
+  html += '<button onclick="changeWeek(-1)" style="padding:7px 16px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">&larr; Prev Week</button>';
+  html += '<span style="font-weight:700;font-size:15px;color:var(--primary);">' + weekLabel + '</span>';
+  html += '<button onclick="changeWeek(1)" style="padding:7px 16px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">Next Week &rarr;</button>';
+  html += '</div>';
 
+  // One card per location
   LOCATIONS.forEach(loc => {
-    tableHtml += '<tr class="loc-header"><td colspan="4">' + loc.name + '</td></tr>';
-    const people = SCORECARD_PEOPLE[loc.id] || [];
-    const locWeek = (weekData[loc.id] || {});
-    // Gather all entered values for this location+week (used for auto-calcs)
-    const locVals = {};
-    people.forEach(p => { Object.assign(locVals, locWeek[p.id] || {}); });
+    const isGoNinja = loc.id === 'goninjaW' || loc.id === 'goninjaV';
+    const metrics = isGoNinja ? GONINJA_METRICS : WEEKLY_METRICS;
+    const locWeekData = weekData[loc.id] || {};
+    const locGoals = goalsData[loc.id] || {};
+    const leads = parseFloat(locWeekData.leads) || 0;
+    const trials = parseFloat(locWeekData.trials) || 0;
 
-    people.forEach(person => {
-      const allMetrics = (loc.id === 'goninjaW' || loc.id === 'goninjaV') ? GONINJA_METRICS : WEEKLY_METRICS;
-      const metricsForPerson = person.metrics ? allMetrics.filter(m => person.metrics.includes(m.id)) : allMetrics;
-      metricsForPerson.forEach(metric => {
-        const personWeek = locWeek[person.id] || {};
-        let rawVal = personWeek[metric.id];
+    const goalInStyle = 'width:54px;text-align:center;border:1px solid var(--gray-200);border-radius:6px;padding:3px 5px;font-size:12px;background:var(--gray-50);color:var(--gray-600);';
+    const weekInStyle = 'width:64px;text-align:center;border:1px solid var(--gray-200);border-radius:6px;padding:5px 6px;font-size:15px;font-weight:700;';
 
-        // Auto-calculate Lead to Trial % from leads + trials already entered
-        if (metric.id === 'leadToTrial') {
-          const leads  = parseFloat(locVals.leads)  || 0;
-          const trials = parseFloat(locVals.trials) || 0;
-          rawVal = leads > 0 ? trials / leads : (rawVal !== undefined ? rawVal : 0);
+    html += '<div class="section" style="margin-bottom:16px;">';
+    html += '<div class="section-header"><h2>' + esc(loc.name) + '</h2></div>';
+    html += '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr>';
+    html += '<th style="text-align:left;">Metric</th>';
+    html += '<th style="text-align:center;width:22%;">Goal</th>';
+    html += '<th style="text-align:center;width:30%;">This Week</th>';
+    html += '</tr></thead><tbody>';
+
+    metrics.forEach(metric => {
+      const rawVal  = locWeekData[metric.id];
+      const rawGoal = locGoals[metric.id];
+      const numVal  = parseFloat(rawVal)  || 0;
+      const goalNum = parseFloat(rawGoal) || 0;
+
+      // Lead → Trial % is auto-calculated from leads + trials
+      if (metric.id === 'leadToTrial') {
+        const ltPct = leads > 0 ? (trials / leads * 100).toFixed(0) + '%' : '—';
+        let ltColor = '';
+        if (leads > 0 && rawGoal !== undefined && rawGoal !== '') {
+          ltColor = (trials / leads) >= goalNum ? 'color:#10b981;' : 'color:#ef4444;';
         }
+        html += '<tr>';
+        html += '<td>' + esc(metric.label) + ' <span style="font-size:10px;background:var(--gray-100);color:var(--gray-500);padding:1px 6px;border-radius:999px;font-weight:600;">auto</span></td>';
+        html += '<td style="text-align:center;"><input style="' + goalInStyle + '" value="' + esc(rawGoal !== undefined && rawGoal !== '' ? String(rawGoal) : '') + '" placeholder="—" onchange="updateScorecardGoal(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td>';
+        html += '<td style="text-align:center;font-weight:700;font-size:15px;' + ltColor + '">' + ltPct + '</td>';
+        html += '</tr>';
+        return;
+      }
 
-        const numVal  = parseFloat(rawVal) || 0;
-        const rawGoal = (goalsData[loc.id] || {})[person.id]?.[metric.id];
+      // Color code value vs goal
+      let valColor = '';
+      if (rawGoal !== undefined && rawGoal !== '' && numVal > 0) {
+        valColor = metric.id === 'attrition'
+          ? (numVal <= goalNum ? '#10b981' : '#ef4444')
+          : (numVal >= goalNum ? '#10b981' : '#ef4444');
+      }
+      const inputBg = valColor === '#10b981' ? '#f0fdf4' : valColor === '#ef4444' ? '#fef2f2' : '#fff';
+      const colorStyle = valColor ? 'color:' + valColor + ';border-color:' + valColor + '33;background:' + inputBg + ';' : '';
+      const goalLabel = metric.id === 'attrition' && rawGoal !== undefined && rawGoal !== '' ? '≤' + rawGoal : (rawGoal !== undefined && rawGoal !== '' ? String(rawGoal) : '');
 
-        // Attrition: stored as a head-count but goal may be stored as a monthly rate (<0.1).
-        // Convert rate goal → weekly count using live total members for a fair comparison.
-        let goalNum = parseFloat(rawGoal) || 0;
-        let goalDisplay = '';
-        if (rawGoal !== undefined && rawGoal !== null) {
-          if (metric.id === 'attrition' && goalNum < 1) {
-            // Goal stored as monthly rate → show rate + equivalent quit count
-            const rateGoal = goalNum; // e.g. 0.03
-            const totalMem = parseFloat((state.kpis[loc.id] || {}).totalMembers) || 0;
-            const monthlyCount = totalMem > 0 ? +(rateGoal * totalMem).toFixed(1) : 0;
-            goalNum = monthlyCount > 0 ? monthlyCount : rateGoal;
-            goalDisplay = (rateGoal * 100).toFixed(0) + '%'
-              + (monthlyCount > 0 ? ' (≤' + Math.ceil(monthlyCount) + ' quits)' : '');
-          } else if (metric.pct) {
-            goalDisplay = (goalNum * 100).toFixed(1) + '%';
-          } else {
-            goalDisplay = String(rawGoal);
-          }
-        }
-
-        // Display value
-        let displayVal, inputVal;
-        if (metric.id === 'leadToTrial') {
-          displayVal = numVal > 0 ? (numVal * 100).toFixed(0) + '%' : '0%';
-          inputVal   = null; // read-only — auto-calculated
-        } else if (metric.id === 'attrition') {
-          // User enters quit count; auto-calculate % from total members
-          const totalMem = parseFloat((state.kpis[loc.id] || {}).totalMembers) || 0;
-          const rate = totalMem > 0 && numVal > 0 ? (numVal / totalMem * 100).toFixed(1) : null;
-          displayVal = (numVal > 0 ? numVal : '0') + (rate !== null ? ' (' + rate + '%)' : '');
-          inputVal   = rawVal !== undefined && rawVal !== '' ? rawVal : 0;
-        } else if (metric.pct) {
-          displayVal = (numVal * 100).toFixed(1) + '%';
-          inputVal   = rawVal !== undefined && rawVal !== '' ? rawVal : 0;
-        } else {
-          displayVal = numVal;
-          inputVal   = rawVal !== undefined && rawVal !== '' ? rawVal : 0;
-        }
-
-        // Color: attrition lower-is-better; everything else higher-is-better
-        let valColor = '';
-        if (rawGoal !== undefined && rawGoal !== null) {
-          if (metric.id === 'attrition') {
-            valColor = (numVal === 0 || numVal <= goalNum) ? 'color:#10b981' : 'color:#ef4444';
-          } else if (metric.id === 'leadToTrial') {
-            valColor = numVal >= goalNum ? 'color:#10b981' : (numVal > 0 ? 'color:#ef4444' : '');
-          } else {
-            valColor = numVal >= goalNum ? 'color:#10b981' : (numVal > 0 ? 'color:#ef4444' : '');
-          }
-        }
-
-        const cellStyle = valColor + ';font-weight:600';
-        if (inputVal === null) {
-          // Auto-calculated — read-only display
-          tableHtml += '<tr><td>' + person.name + '</td><td>' + metric.label + '</td>' +
-            '<td>' + goalDisplay + '</td>' +
-            '<td style="' + cellStyle + '">' + displayVal + '</td></tr>';
-        } else {
-          tableHtml += '<tr><td>' + person.name + '</td><td>' + metric.label + '</td>' +
-            '<td>' + goalDisplay + '</td>' +
-            '<td style="' + cellStyle + '"><input style="' + cellStyle + ';background:transparent;border:none;width:60px;text-align:center" value="' + esc(String(inputVal)) + '" onchange="updateScorecard(\'' + loc.id + '\',\'' + person.id + '\',\'' + metric.id + '\',0,this.value)" /></td></tr>';
-        }
-      });
+      html += '<tr>';
+      html += '<td>' + esc(metric.label) + '</td>';
+      html += '<td style="text-align:center;"><input style="' + goalInStyle + '" value="' + esc(goalLabel) + '" placeholder="—" onchange="updateScorecardGoal(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td>';
+      html += '<td style="text-align:center;"><input style="' + weekInStyle + colorStyle + '" value="' + esc(rawVal !== undefined && rawVal !== '' ? String(rawVal) : '') + '" placeholder="—" onchange="updateScorecardSimple(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td>';
+      html += '</tr>';
     });
+
+    html += '</tbody></table></div></div>';
   });
 
-  tableHtml += '</tbody></table></div></div>';
-
-  // Monthly revenue/members table
-  return subNav + kpiHtml + tableHtml;
+  return html;
 }
 
 /*  -  -  KPIs Page (Monthly KPIs for 3 LVLUP locations)  -  -  */
