@@ -665,12 +665,12 @@ const SCORECARD_PEOPLE = {
   goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
 };
 const TASK_EMPLOYEES = [
+  { id: 'mirandaS', name: 'Go Ninja',       loc: 'goninjaW', label: 'Go Ninja',   bonus: true  },
   { id: 'bryanG',   name: 'LVLUP Waunakee', loc: 'waunakee', label: 'Waunakee',   bonus: true  },
   { id: 'nikkiB',   name: 'LVLUP EastMad',  loc: 'eastmad',  label: 'E. Madison', bonus: true  },
   { id: 'joeyZ',    name: 'LVLUP Verona',   loc: 'verona',   label: 'Verona',     bonus: true  },
   { id: 'sueK',     name: 'FD Waunakee',    loc: 'waunakee', label: 'Waunakee',   bonus: true  },
   { id: 'andyR',    name: 'FD EastMad',     loc: 'eastmad',  label: 'E. Madison', bonus: false },
-  { id: 'mirandaS', name: 'Go Ninja',       loc: 'goninjaW', label: 'Go Ninja',   bonus: true  },
   { id: 'marioS',   name: 'FD Verona',      loc: 'verona',   label: 'Verona',     bonus: false },
 ];
 
@@ -3201,7 +3201,7 @@ function updateConnStatus(online) {
 /*  -  -  Init  -  -  */
 
 /*  -  -  Tasks Hub State  -  -  */
-state.tasksLoc = 'bryanG';
+state.tasksLoc = 'mirandaS';
 state.tasksDate = new Date().toISOString().split('T')[0];
 state.tasksCycleWeek = 1;
 state.tasksData = {};
