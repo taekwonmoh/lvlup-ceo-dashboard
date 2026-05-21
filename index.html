@@ -665,12 +665,12 @@ const SCORECARD_PEOPLE = {
   goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
 };
 const TASK_EMPLOYEES = [
-  { id: 'bryanG',   name: 'Bryan G',   loc: 'waunakee', label: 'Waunakee', bonus: true  },
-  { id: 'nikkiB',   name: 'Nikki B',   loc: 'eastmad',  label: 'E. Madison', bonus: true  },
-  { id: 'joeyZ',    name: 'Joey Z',    loc: 'verona',   label: 'Verona',   bonus: true  },
-  { id: 'sueK',     name: 'Sue K',     loc: 'waunakee', label: 'LVLUP',    bonus: true  },
-  { id: 'mirandaS', name: 'Miranda S', loc: 'goninjaW', label: 'Go Ninja', bonus: true  },
-  { id: 'marioS',   name: 'Mario S',   loc: 'verona',   label: 'Verona',   bonus: false },
+  { id: 'bryanG',   name: 'LVLUP Waunakee', loc: 'waunakee', label: 'Waunakee',   bonus: true  },
+  { id: 'nikkiB',   name: 'LVLUP EastMad',  loc: 'eastmad',  label: 'E. Madison', bonus: true  },
+  { id: 'joeyZ',    name: 'LVLUP Verona',   loc: 'verona',   label: 'Verona',     bonus: true  },
+  { id: 'sueK',     name: 'Sue K',          loc: 'waunakee', label: 'LVLUP',      bonus: true  },
+  { id: 'mirandaS', name: 'Go Ninja',       loc: 'goninjaW', label: 'Go Ninja',   bonus: true  },
+  { id: 'marioS',   name: 'Mario S',        loc: 'verona',   label: 'Verona',     bonus: false },
 ];
 
 /*  -  -  Team Wall  -  -  */
@@ -684,46 +684,96 @@ const WALL_TYPES = [
 ];
 
 /*  -  -  Task Definitions  -  -  */
-const LVLUP_DAILY = [
-  {id:'bathrooms',       text:'Spot check and freshen up bathrooms'},
-  {id:'tv_announcements',text:'Turn on TV announcements — message @jam in #LVLUPHQ if anything needs updating'},
-  {id:'class_rosters',   text:'Review class rosters — new students and class counts. Post in your location channel about any new students starting today.'},
-  {id:'retail',          text:'Fulfill retail orders'},
-  {id:'stoplight',       text:'Update stoplight report + send 2 postcards or video messages'},
-  {id:'spray_mats',      text:'Spray mop floors'},
-  {id:'eos_report',      text:'Post EOS report at clockout'},
+// ── Per-employee daily task lists ──────────────────────────────────────────
+const BRYAN_DAILY = [
+  {id:'b_opening',   text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
+  {id:'b_retail',    text:'Fulfill Retail Orders: Process and package any pending merchandise sales.'},
+  {id:'b_stoplight', text:'Update Stoplight Report: Send 2 postcards or video messages to maintain member touchpoints.'},
+  {id:'b_closing',   text:'Closing Routine & Venue Check: Spot check/freshen up the men\'s bathroom, straighten the training floor, review rosters, update location Slack regarding new students, and submit the EOS report.'},
 ];
-const GONINJA_DAILY = [
-  {id:'clock',      text:'Clock in/out'},
-  {id:'eos',        text:'EOS report submitted via Slack'},
-  {id:'party_room', text:'Party room cleaned up — post photo to #LVLUPHQ'},
-  {id:'whiteboard', text:'Whiteboard schedule updated — post photo to #LVLUPHQ'},
-  {id:'spot_clean', text:'Spot clean / mop if needed'},
+const NIKKI_DAILY = [
+  {id:'n_opening',   text:'Opening Routine: Turn on TV announcements and ensure the EMAD facility is ready for students.'},
+  {id:'n_retail',    text:'Fulfill Retail Orders: Process and package any pending merchandise sales.'},
+  {id:'n_stoplight', text:'Update Stoplight Report: Send 2 postcards or video messages to maintain EMAD member touchpoints.'},
+  {id:'n_closing',   text:'Closing Routine: Spot check/freshen up EMAD bathrooms, review rosters, update location Slack, and submit the EOS report.'},
 ];
-const LVLUP_WEEKLY_REC = [
-  {id:'bathroom_photos',    text:'Bathroom photos (post in #LVLUPHQ) — 1 of toilets + 2 showing overall cleanliness'},
-  {id:'mirror_board',       text:'Update announcements on mirror/board + post photo to #LVLUPHQ'},
-  {id:'fb_shoutout',        text:'Post 1 shoutout or promo on Facebook members group — share screenshot to #LVLUPHQ'},
-  {id:'social_posts',       text:'2 social media posts this week — share to #LVLUPHQ'},
-  {id:'wet_mop',            text:'Wet mop mats + post photo to #LVLUPHQ'},
-  {id:'dots',               text:'Check dots and replace as needed'},
-  {id:'supplies',           text:'Check supplies and message #inventory'},
-  {id:'ad_invites',         text:'Invite 2 students to try AD class — post their names to #LVLUPHQ'},
-  {id:'lifelinks',          text:'Review LifeLinks and award belt clips — post to #LVLUPHQ'},
-  {id:'signage',            text:'Update signage + take photos of all signage (post to #LVLUPHQ)'},
-  {id:'instructor_station', text:'Clean instructor station + take photo (post to #LVLUPHQ)'},
-  {id:'homebase_schedule',  text:'Monday — Check Homebase schedule to ensure proper coverage of classes and assistants'},
-  {id:'attendance_numbers', text:'Check attendance numbers'},
+const JOEY_DAILY = [
+  {id:'j_tv',        cat:'Pre-Class Admin', text:'Turn on TV announcements (message @jam in #LVLUPHQ if anything needs updating).'},
+  {id:'j_retail',    cat:'Pre-Class Admin', text:'Check GymDesk for pending retail orders (fulfill and notify customers).'},
+  {id:'j_stoplight', cat:'Pre-Class Admin', text:'Review student stoplight report and send your 2 postcards or video messages.'},
+  {id:'j_rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students/class counts, check attendance numbers, and post in your location channel about anyone starting today.'},
+  {id:'j_spray',     cat:'Closing & EOS',   text:'Spray mop the training floors.'},
+  {id:'j_bathrooms', cat:'Closing & EOS',   text:'Spot check and freshen up the bathrooms.'},
+  {id:'j_eos',       cat:'Closing & EOS',   text:'Post your EOS report in Slack at clockout.'},
 ];
-const GONINJA_WEEKLY_REC = [
-  {id:'social',         text:'Social media post — share to #LVLUPHQ'},
-  {id:'desk',           text:'Clean and organize desk + post photo to #LVLUPHQ'},
-  {id:'party_reset',    text:'Reset party room for birthday parties (Friday) — post photo to #LVLUPHQ'},
-  {id:'schedule',       text:'Schedule (Mondays) — post photo to #LVLUPHQ'},
-  {id:'mop_mats',       text:'Mop mats / sanitize obstacles — post photo to #LVLUPHQ'},
-  {id:'dust',           text:'Dust trim and cabinets'},
-  {id:'party_supplies', text:'Check party supplies inventory — message #LVLUPHQ if anything needs restocking'},
+const MIRANDA_DAILY = [
+  {id:'m_opening',  text:'Opening Routine: Clock in and prep the Waunakee GoNinja facility for daily operations.'},
+  {id:'m_board',    text:'Whiteboard & Flow Management: Update the whiteboard schedule OR the Summer Camp Daily Flow + post a photo to #LVLUPHQ.'},
+  {id:'m_floor',    text:'Floor Maintenance: Spot clean / mop training areas if needed.'},
+  {id:'m_closing',  text:'Closing Routine & Girl\'s Bathroom Refresh: Wipe down sinks/counters, sweep floor, empty trash, check soap/paper towels, ensure the front desk is organized, and submit the EOS report via Slack.'},
 ];
+// ── Per-employee weekly task lists ─────────────────────────────────────────
+const BRYAN_WEEKLY = [
+  {id:'b_saturday',         text:'Saturday Morning Standards: Arrive a minimum of 30 minutes before the first class to prep the facility and greet early students.'},
+  {id:'b_instructor_audit', text:'Instructor Station Audit: Deep clean the instructor station, organize all gear, and post a verification photo to #LVLUPHQ.'},
+  {id:'b_mirror_detail',    text:'Training Floor & Mirror Detail: Dust/wipe down the training area mirrors and ensure all floor equipment is perfectly organized.'},
+  {id:'b_homebase',         text:'Monday Schedule Check: Verify the Homebase schedule to ensure proper coverage of classes and assistants.'},
+  {id:'b_bathroom_photos',  text:'Bathroom Photo Verification: Post 1 photo of toilets + 1 showing overall cleanliness to #LVLUPHQ.'},
+  {id:'b_announcements',    text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
+  {id:'b_facebook',         text:'Facebook Engagement: Post 1 shoutout or promo on Facebook members group + share screenshot to #LVLUPHQ.'},
+  {id:'b_social',           text:'Social Media Growth: Complete 2 social media posts this week + share links to #LVLUPHQ.'},
+  {id:'b_mop_mats',         text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
+  {id:'b_dots',             text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
+  {id:'b_supplies',         text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
+  {id:'b_ad_invites',       text:'Program Growth: Invite 2 students to try the AD class + post names to #LVLUPHQ.'},
+  {id:'b_lifelinks',        text:'Student Milestones: Review LifeLinks, award belt clips + post to #LVLUPHQ.'},
+  {id:'b_signage',          text:'Signage Audit: Update facility signage + take photos of all signage for #LVLUPHQ.'},
+];
+const NIKKI_WEEKLY = [
+  {id:'n_homebase',        text:'Monday Schedule Check: Verify the Homebase schedule to ensure proper coverage of classes and assistants.'},
+  {id:'n_bathroom_photos', text:'Bathroom Photo Verification: Post 1 photo of toilets + 1 showing overall cleanliness to #LVLUPHQ.'},
+  {id:'n_announcements',   text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
+  {id:'n_facebook',        text:'Facebook Engagement: Post 1 shoutout or promo on Facebook members group + share screenshot to #LVLUPHQ.'},
+  {id:'n_social',          text:'Social Media Growth: Complete 2 social media posts this week + share links to #LVLUPHQ.'},
+  {id:'n_mop_mats',        text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
+  {id:'n_dots',            text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
+  {id:'n_supplies',        text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
+  {id:'n_ad_invites',      text:'Program Growth: Invite 2 students to try the AD class + post names to #LVLUPHQ.'},
+  {id:'n_lifelinks',       text:'Student Milestones: Review LifeLinks, award belt clips + post to #LVLUPHQ.'},
+  {id:'n_signage',         text:'Signage Audit: Update facility signage + take photos of all signage for #LVLUPHQ.'},
+  {id:'n_instructor_stn',  text:'Instructor Station: Clean instructor station + take photo for #LVLUPHQ.'},
+];
+const JOEY_WEEKLY = [
+  {id:'j_homebase',        text:'Monday Schedule Check: Review the Homebase schedule to confirm proper class coverage for the week.'},
+  {id:'j_bathroom_photos', text:'Bathroom Photo Verification: Post 1 photo of toilets + 1 showing overall cleanliness to #LVLUPHQ.'},
+  {id:'j_announcements',   text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
+  {id:'j_facebook',        text:'Facebook Engagement: Post 1 shoutout or promo on the Facebook members group + share a screenshot to #LVLUPHQ.'},
+  {id:'j_social',          text:'Social Media Growth: Complete 2 social media posts this week + share screenshots to #LVLUPHQ.'},
+  {id:'j_mop_mats',        text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
+  {id:'j_dots',            text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
+  {id:'j_supplies',        text:'Inventory Control: Check front desk/facility supplies and message #inventory with restocking needs.'},
+  {id:'j_ad_invites',      text:'Program Growth: Invite 2 students to try the AD class + post their names to #LVLUPHQ.'},
+  {id:'j_lifelinks',       text:'Student Milestones: Review LifeLinks and award belt clips + post to #LVLUPHQ.'},
+  {id:'j_signage',         text:'Signage Audit: Update facility signage + take photos of all signage for #LVLUPHQ.'},
+  {id:'j_instructor_stn',  text:'Instructor Station Deep Clean: Clean instructor station + take photo for #LVLUPHQ.'},
+];
+const MIRANDA_WEEKLY = [
+  {id:'m_homebase',       text:'Monday Schedule Check: Confirm GoNinja scheduling and post the verification photo to #LVLUPHQ.'},
+  {id:'m_party_reset',    text:'Friday Event Prep: Reset the party room for weekend birthday parties + post verification photo to #LVLUPHQ.'},
+  {id:'m_party_cleanup',  text:'Party Room Breakdown: Clean up the party room post-event + post photo to #LVLUPHQ.'},
+  {id:'m_social',         text:'Social Media Growth: Execute weekly social media post + share to #LVLUPHQ.'},
+  {id:'m_mop_mats',       text:'Mat Maintenance: Mop mats and sanitize obstacles + post photo to #LVLUPHQ.'},
+  {id:'m_dust',           text:'Facility Inspection: Dust all facility trim and cabinets.'},
+  {id:'m_party_supplies', text:'Inventory Control: Check party supplies inventory and message #LVLUPHQ if items are running low.'},
+];
+// ── Routing maps (fallback to legacy shared arrays if no per-emp entry) ───
+const EMP_DAILY  = {bryanG:BRYAN_DAILY, nikkiB:NIKKI_DAILY, joeyZ:JOEY_DAILY, mirandaS:MIRANDA_DAILY};
+const EMP_WEEKLY = {bryanG:BRYAN_WEEKLY,nikkiB:NIKKI_WEEKLY,joeyZ:JOEY_WEEKLY,mirandaS:MIRANDA_WEEKLY};
+// Legacy shared arrays kept as fallback ────────────────────────────────────
+const LVLUP_DAILY = BRYAN_DAILY;
+const LVLUP_WEEKLY_REC = BRYAN_WEEKLY;
+const GONINJA_DAILY = MIRANDA_DAILY;
+const GONINJA_WEEKLY_REC = MIRANDA_WEEKLY;
 const LVLUP_MONTHLY = [];
 // Front desk managers (Sue K, Mario S) — tasks TBD
 const FRONTDESK_DAILY = [
@@ -3186,8 +3236,8 @@ function isGoNinja(empOrLocId){
 function getEmpById(empId){return TASK_EMPLOYEES.find(e=>e.id===empId)||TASK_EMPLOYEES[0];}
 const FRONTDESK_EMP_IDS = new Set(['sueK','marioS']);
 function isFrontDesk(empId){return FRONTDESK_EMP_IDS.has(empId);}
-function getDailyTasks(empId){return isGoNinja(empId)?GONINJA_DAILY:isFrontDesk(empId)?FRONTDESK_DAILY:LVLUP_DAILY;}
-function getWeeklyRec(empId){return isGoNinja(empId)?GONINJA_WEEKLY_REC:isFrontDesk(empId)?FRONTDESK_WEEKLY:LVLUP_WEEKLY_REC;}
+function getDailyTasks(empId){return EMP_DAILY[empId]||(isFrontDesk(empId)?FRONTDESK_DAILY:LVLUP_DAILY);}
+function getWeeklyRec(empId){return EMP_WEEKLY[empId]||(isFrontDesk(empId)?FRONTDESK_WEEKLY:LVLUP_WEEKLY_REC);}
 function getMonthlyTasks(empId){return isGoNinja(empId)?GONINJA_MONTHLY:isFrontDesk(empId)?FRONTDESK_MONTHLY:LVLUP_MONTHLY;}
 function getCycleTasks(locId){return isGoNinja(locId)?GONINJA_CYCLE:LVLUP_CYCLE;}
 function getCycleChecklist(empId){return isFrontDesk(empId)?FRONTDESK_CYCLE_CHECKLIST:LVLUP_CYCLE_CHECKLIST;}
@@ -3279,6 +3329,9 @@ function listenTasks(){
   const signoffRef=fbRef(base+'/weekly_signoff');
   signoffRef.on('value',snap=>{if(!state.tasksData[emp])state.tasksData[emp]={};state.tasksData[emp].weekly_signoff=snap.val()||{};render();});
   activeListeners.push({ref:signoffRef,event:'value'});
+  const exLogRef=fbRef(base+'/exception_log/'+dateKey);
+  exLogRef.on('value',snap=>{if(!state.tasksData[emp])state.tasksData[emp]={};if(!state.tasksData[emp].exception_log)state.tasksData[emp].exception_log={};state.tasksData[emp].exception_log[dateKey]=snap.val()||'';render();});
+  activeListeners.push({ref:exLogRef,event:'value'});
 }
 function listenGoals(){
   const loc=state.goalsLoc,mk=state.goalsMonth;
@@ -3340,6 +3393,9 @@ function confirmSignOff(){
 function setTasksLoc(locId){
   state.tasksLoc=locId; state.matChatWeek=null; listenTasks();
 }
+function saveExceptionLog(val){
+  fbDebounce(empPath(state.tasksLoc)+'/exception_log/'+state.tasksDate, val.trim()||null);
+}
 function changeTasksDate(delta){
   const d=new Date(state.tasksDate+'T12:00:00');d.setDate(d.getDate()+delta);
   state.tasksDate=d.toISOString().split('T')[0];listenTasks();
@@ -3378,7 +3434,7 @@ function renderTasksPage(){
   const monthKey=getTaskMonthKey();
   const monthlyData=(locData.monthly||{})[monthKey]||{};
   const isSaturday=new Date(dateKey+'T12:00:00').getDay()===6;
-  const dailyTasks=getDailyTasks(loc).filter(t=>!(isSaturday&&t.id==='spray_mats')),weeklyRec=getWeeklyRec(loc),monthlyTasks=getMonthlyTasks(loc);
+  const dailyTasks=getDailyTasks(loc).filter(t=>!(isSaturday&&(t.id==='spray_mats'||t.id==='j_spray'))),weeklyRec=getWeeklyRec(loc),monthlyTasks=getMonthlyTasks(loc);
   const cycleDefs=getCycleTasks(loc),cycleWeek=state.tasksCycleWeek;
   const cw=cycleDefs[cycleWeek]||{name:'',tasks:[]};
   // Date label
@@ -3470,6 +3526,19 @@ function renderTasksPage(){
   }
   html+=dnwBar;
   html+=renderTaskSection('daily','Daily Checklist',dailyTasks,dayOff?{}:dailyData,customDaily,dailyLocked||dayOff);
+  // ── Daily Exception Log ──────────────────────────────────────────────────
+  if(!dayOff){
+    const exLog=((locData.exception_log)||{})[dateKey]||'';
+    if(dailyLocked){
+      if(exLog) html+='<div style="margin:4px 0 8px;padding:10px 16px;background:#fefce8;border-radius:10px;border:1.5px solid #fde68a;font-size:13px;color:#92400e;"><span style="font-weight:700;">📝 Exception Log:</span> '+esc(exLog)+'</div>';
+    }else{
+      html+='<div style="margin:4px 0 8px;padding:10px 16px;background:var(--gray-50);border-radius:10px;border:1px solid var(--gray-200);">';
+      html+='<div style="font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px;">📝 Daily Exception Log</div>';
+      html+='<div style="font-size:12px;color:var(--gray-400);margin-bottom:6px;">If any task above was left blank, add a one-sentence explanation before clocking out.</div>';
+      html+='<input id="exceptionLogInput" value="'+esc(exLog)+'" placeholder=\'e.g. "Skipped postcards today because of a 20-min parent meeting after the 6 PM class."\' maxlength="300" onchange="saveExceptionLog(this.value)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;outline:none;color:var(--gray-700);" />';
+      html+='</div>';
+    }
+  }
   html+=renderTaskSection('weekly','Weekly Recurring',weeklyRec,weeklyData,customWeekly,weekLocked);
 
   // Week sign-off button (bonus-eligible staff only)
@@ -3516,7 +3585,11 @@ function renderTaskSection(section,title,tasks,completionData,customTasksObj,loc
   const lockBadge=locked?'<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:999px;margin-left:8px;">🔒 Locked</span>':'';
   html+='<div class="task-section-header" onclick="toggleSection(\''+key+'\')"><h3><span class="chevron '+(collapsed?'':'open')+'">&#9654;</span>'+title+lockBadge+'</h3><span class="progress-pill '+pillCls+'">'+completed+'/'+total+'</span></div>';
   html+='<div class="task-list '+(collapsed?'collapsed':'')+'" data-sort-tasks="'+section+'" data-sort-emp="'+empId+'" data-sort-locked="'+(locked?'true':'false')+'">';
-  orderedTasks.forEach(t=>{html+=renderTaskItem(section,t,completionData[t.id],false,locked);});
+  let _lastCat='';
+  orderedTasks.forEach(t=>{
+    if(t.cat&&t.cat!==_lastCat){html+='<div class="task-cat">'+esc(t.cat)+'</div>';_lastCat=t.cat;}
+    html+=renderTaskItem(section,t,completionData[t.id],false,locked);
+  });
   if(customArr.length>0){
     html+='<div class="task-cat">Added</div>';
     customArr.forEach(t=>{html+=renderTaskItem(section,t,completionData[t.id],true,locked);});
