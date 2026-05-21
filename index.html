@@ -668,9 +668,10 @@ const TASK_EMPLOYEES = [
   { id: 'bryanG',   name: 'LVLUP Waunakee', loc: 'waunakee', label: 'Waunakee',   bonus: true  },
   { id: 'nikkiB',   name: 'LVLUP EastMad',  loc: 'eastmad',  label: 'E. Madison', bonus: true  },
   { id: 'joeyZ',    name: 'LVLUP Verona',   loc: 'verona',   label: 'Verona',     bonus: true  },
-  { id: 'sueK',     name: 'Sue K',          loc: 'waunakee', label: 'LVLUP',      bonus: true  },
+  { id: 'sueK',     name: 'FD Waunakee',    loc: 'waunakee', label: 'Waunakee',   bonus: true  },
+  { id: 'andyR',    name: 'FD EastMad',     loc: 'eastmad',  label: 'E. Madison', bonus: false },
   { id: 'mirandaS', name: 'Go Ninja',       loc: 'goninjaW', label: 'Go Ninja',   bonus: true  },
-  { id: 'marioS',   name: 'Mario S',        loc: 'verona',   label: 'Verona',     bonus: false },
+  { id: 'marioS',   name: 'FD Verona',      loc: 'verona',   label: 'Verona',     bonus: false },
 ];
 
 /*  -  -  Team Wall  -  -  */
@@ -3234,7 +3235,7 @@ function isGoNinja(empOrLocId){
   return empOrLocId==='goninjaW'||empOrLocId==='goninjaV';
 }
 function getEmpById(empId){return TASK_EMPLOYEES.find(e=>e.id===empId)||TASK_EMPLOYEES[0];}
-const FRONTDESK_EMP_IDS = new Set(['sueK','marioS']);
+const FRONTDESK_EMP_IDS = new Set(['sueK','andyR','marioS']);
 function isFrontDesk(empId){return FRONTDESK_EMP_IDS.has(empId);}
 function getDailyTasks(empId){return EMP_DAILY[empId]||(isFrontDesk(empId)?FRONTDESK_DAILY:LVLUP_DAILY);}
 function getWeeklyRec(empId){return EMP_WEEKLY[empId]||(isFrontDesk(empId)?FRONTDESK_WEEKLY:LVLUP_WEEKLY_REC);}
@@ -3524,8 +3525,12 @@ function renderTasksPage(){
       dnwBar+='<button onclick="markDidNotWork()" style="font-size:12px;padding:6px 14px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;color:var(--gray-600);font-weight:600;">😴 Did not work today</button></div>';
     }
   }
+  const isFD=isFrontDesk(loc);
+  if(isFD&&!dayOff&&!dailyLocked){
+    html+='<div style="margin-bottom:8px;padding:10px 16px;background:#eff6ff;border-radius:10px;border:1px solid #bfdbfe;font-size:12px;color:#1e40af;">Complete tasks in order during front desk downtime — tasks carry over between shifts, so pick up wherever you left off.</div>';
+  }
   html+=dnwBar;
-  html+=renderTaskSection('daily','Daily Checklist',dailyTasks,dayOff?{}:dailyData,customDaily,dailyLocked||dayOff);
+  html+=renderTaskSection('daily',isFD?'⬇️ Priority Queue':'Daily Checklist',dailyTasks,dayOff?{}:dailyData,customDaily,dailyLocked||dayOff);
   // ── Daily Exception Log ──────────────────────────────────────────────────
   if(!dayOff){
     const exLog=((locData.exception_log)||{})[dateKey]||'';
@@ -3539,7 +3544,7 @@ function renderTasksPage(){
       html+='</div>';
     }
   }
-  html+=renderTaskSection('weekly','Weekly Recurring',weeklyRec,weeklyData,customWeekly,weekLocked);
+  html+=renderTaskSection('weekly',isFD?'Recurring Tasks':'Weekly Recurring',weeklyRec,weeklyData,customWeekly,weekLocked);
 
   // Week sign-off button (bonus-eligible staff only)
   if(emp.bonus){
