@@ -781,11 +781,9 @@ const GONINJA_WEEKLY_REC = MIRANDA_WEEKLY;
 const LVLUP_MONTHLY = [];
 // Front desk managers (Sue K, Mario S) — tasks TBD
 const FRONTDESK_DAILY = [
-  {id:'fd_tv',          text:'Turn on TV announcements — message @jam in #LVLUPHQ if anything needs updating'},
   {id:'fd_messages',    text:'Check and respond to all parent messages, emails, and missed calls — log any action items that need follow-up'},
   {id:'fd_rosters',     text:'Review class rosters — note new students and post in your location channel about anyone starting today'},
   {id:'fd_retail',      text:'Check GymDesk for pending retail orders — fulfill and notify customers'},
-  {id:'fd_stoplight',   text:'Review student stoplight — update any statuses that changed since yesterday'},
   {id:'fd_complaints',  text:'Log and follow up on any open parent concerns or complaints — note resolution in GymDesk'},
   {id:'fd_eos',         text:'Post EOS report at clockout'},
 ];
@@ -794,7 +792,6 @@ const FRONTDESK_WEEKLY = [
   {id:'fd_roster_sync',     text:'Sync student roster with GymDesk — add new enrollments, update statuses'},
   {id:'fd_memberships',     text:'Process any membership changes, pauses, or cancellations in GymDesk — confirm changes are reflected accurately'},
   {id:'fd_payments',        text:'Check GymDesk for overdue or failed payments — flag any outstanding accounts to the lead instructor'},
-  {id:'fd_bday_report',     text:'Run GymDesk birthday report (current + next 3 months) — send party outreach emails to upcoming birthday families'},
   {id:'fd_tiger_emails',    text:'Send Tigers move-up emails for any students confirmed ready by lead instructor'},
   {id:'fd_yb_emails',       text:'Send Yellow Belt emails for any new yellow belts confirmed by lead instructor'},
   {id:'fd_supplies',        text:'Check front desk supplies — restock if low, message #inventory'},
@@ -946,7 +943,6 @@ const GONINJA_CYCLE = {
 
 // LVLUP instructor cycle checklist — one list per cycle, grouped by week
 const LVLUP_CYCLE_CHECKLIST = [
-  {id:'cc_w1_roster',   week:1, text:'Update student roster in the "Students" section'},
   {id:'cc_w2_retain',   week:2, text:'Plan and post a retention event'},
   {id:'cc_w3_attn',     week:3, text:'Check up on students with low attendance or missing stripes'},
   {id:'cc_w4_revenue',  week:4, text:'Plan and post a revenue / new members event'},
@@ -964,7 +960,6 @@ const FRONTDESK_CYCLE_CHECKLIST = [
   // ── Week 1 ──
   {id:'fd_cc_signage',   week:1, text:'Prep & print all new cycle signage — life skill, promotions, and upcoming events. Organize and hand off to lead instructor for hanging.'},
   {id:'fd_cc_bday_blast', week:1, text:'Run birthday report + send party outreach emails for current and next 3 months', playbook:'birthday_party'},
-  {id:'fd_cc_roster',    week:1, text:'Full roster sync — confirm all active students are in the dashboard and statuses are current'},
   // ── Week 4 ──
   {id:'fd_cc_tigers',    week:4, text:'Review Tiger class — send move-up emails for any students confirmed ready by instructor', playbook:'email_tigers'},
   // ── Week 6 ──
