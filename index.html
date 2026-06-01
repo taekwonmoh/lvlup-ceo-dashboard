@@ -244,14 +244,163 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .mem-table input:hover { border-color: var(--gray-300); }
 .mem-table input:focus { outline: none; border-color: var(--accent); background: #fff; }
 
-/* Responsive */
+/* ── Responsive / Mobile ──────────────────────────────────── */
+
+/* Scrollable table wrapper — applied inline via JS render */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
 @media (max-width: 768px) {
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .sc-table { font-size: 12px; }
-  .sc-table input { width: 60px; }
-  .header { flex-direction: column; align-items: flex-start; }
-  .nav-tabs { overflow-x: auto; }
+  /* Outer shell */
+  .app { padding: 12px 10px; }
+  .conn-status { font-size: 10px; padding: 4px 9px; top: 6px; right: 8px; }
+
+  /* Header */
+  .header { flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 16px; }
+  .header h1 { font-size: 17px; padding-right: 72px; /* prevent overlap with fixed conn-status badge */ }
+
+  /* Nav tabs — horizontal scroll strip */
+  .nav-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 3px;
+    width: 100%;
+  }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tab { padding: 7px 10px; font-size: 12px; }
+
+  /* KPI cards — 2 across then 1 on very small */
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .kpi-value { font-size: 22px; }
+
+  /* KPI charts — single column */
+  .kpi-charts-grid { grid-template-columns: 1fr; }
+
+  /* Section cards */
+  .section-header { padding: 12px 14px; }
+  .section-header h2 { font-size: 14px; }
+
+  /* Tables — horizontal scroll */
+  .sc-table, .fin-table, .mem-table, .l10-table, .kpi-detail-table { font-size: 12px; }
+  .sc-table input { width: 58px; }
+  .fin-table input { width: 80px; }
+  .mem-table input { width: 58px; }
+  .kpi-input { width: 52px; }
+
+  /* Home hero */
+  .home-hero { padding: 20px 18px; border-radius: 12px; }
+  .home-hero h2 { font-size: 20px; }
+  .home-hero .home-motto { font-size: 13px; }
+  .home-test-info { gap: 10px; }
+  .home-test-chip { padding: 8px 12px; font-size: 12px; }
+  .home-test-chip .chip-value { font-size: 14px; }
+
+  /* Home grid is already 1-col at 900px */
+  .home-card-body { padding: 12px 14px; }
+  .home-card-header { padding: 12px 14px; }
+
+  /* Goal hero */
+  .goal-hero { padding: 16px; gap: 14px; }
+  .goal-hero-amount { font-size: 1.8rem; }
+  .goal-grid { grid-template-columns: repeat(3, 1fr); padding: 14px; gap: 8px; }
+
+  /* Calendar grid */
+  .cal-cell { min-height: 52px; padding: 3px 4px; }
+  .cal-day { font-size: 11px; }
+  .cal-evt { font-size: 9px; padding: 1px 3px; }
+  .cal-nav-label { font-size: 1rem; min-width: 140px; }
+  .cal-hdr { font-size: 10px; padding: 6px 0; }
+
+  /* Event list — stack date above name on mobile */
+  .cal-list-item { flex-wrap: wrap; gap: 6px; padding: 10px 12px; align-items: flex-start; }
+  .cal-list-date { min-width: 0; width: 100%; font-size: 11px; }
+  .cal-list-name { font-size: 13px; width: 100%; flex: none; }
+  .cal-list-link { font-size: 11px; }
+
+  /* Events add form — stack on mobile */
+  .evt-add-form { flex-direction: column; }
+  .evt-add-form input[type="text"],
+  .evt-add-form input[type="date"],
+  .evt-add-form input[type="url"],
+  .evt-add-form select { width: 100%; min-width: 0; }
+  .evt-add-btn { width: 100%; }
+
+  /* Tasks hub — employee selector scrolls horizontally instead of wrapping */
+  .loc-selector {
+    gap: 3px;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .loc-selector::-webkit-scrollbar { display: none; }
+  .loc-btn { padding: 7px 10px; font-size: 12px; flex-shrink: 0; }
+  .task-section-header { padding: 12px 14px; }
+  .task-item { padding: 10px 14px; gap: 10px; }
+  .task-text { font-size: 12.5px; }
+  .date-nav button { padding: 5px 10px; font-size: 12px; }
+  .date-label { font-size: 13px; }
+  .cycle-week-nav { gap: 3px; }
+  .cycle-week-btn { padding: 5px 9px; font-size: 11px; }
+
+  /* Bonus tracker */
+  .bonus-week-card { min-width: 88px; padding: 8px 10px; }
+  .bonus-week-card .bwc-status { font-size: 16px; }
+
+  /* Scorecard week nav */
+  .week-nav button { padding: 5px 10px; font-size: 12px; }
+  .week-label { font-size: 12px; }
+
+  /* L10 */
+  .l10-week-tabs { gap: 3px; }
+  .l10-week-tab { padding: 6px 10px; font-size: 11px; }
+  .l10-add-btn { margin: 8px 14px; }
+  .l10-table .who-col { width: 100px; }
+  .l10-table .status-col { width: 90px; }
+  .l10-table .priority-col { width: 64px; }
+  .l10-header-bar { gap: 8px; }
+
+  /* Watch list */
+  .wl-card-body { padding: 12px 14px; gap: 10px; }
+  .wl-name { font-size: 13px; }
+  .wl-actions { flex-direction: column; gap: 4px; }
+  .wl-action-btn { font-size: 11px; padding: 5px 8px; }
+  .wl-note { padding: 0 14px 10px 52px; }
+  .wl-add-form { flex-direction: column; }
+  .wl-add-form input, .wl-add-form select { width: 100%; }
+  .wl-add-form .wl-add-submit { width: 100%; }
+
+  /* Goals form */
+  .goals-row { flex-wrap: wrap; }
+  .goals-input { width: 100%; }
+
+  /* Month selector */
+  .month-selector { gap: 3px; }
+  .month-btn { padding: 5px 8px; font-size: 10px; }
+
+  /* Core values */
+  .cv-strip { grid-template-columns: 1fr 1fr; }
+  .cv-quiz-choices { grid-template-columns: 1fr 1fr; }
+
+  /* Modal */
+  .modal-box { min-width: 260px; margin: 0 16px; padding: 20px; }
 }
+
+@media (max-width: 420px) {
+  .app { padding: 8px; }
+  .kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpi-value { font-size: 20px; }
+  .kpi-card { padding: 14px 12px; }
+  .goal-grid { grid-template-columns: repeat(2, 1fr); }
+  .nav-tab { padding: 6px 8px; font-size: 11px; }
+  .home-hero { padding: 16px 14px; }
+  .home-hero h2 { font-size: 17px; }
+  .loc-btn { padding: 6px 8px; font-size: 11px; }
+  .bonus-week-card { min-width: 76px; }
+  .cal-cell { min-height: 40px; }
+  .cal-hdr { font-size: 9px; letter-spacing: 0; }
+}
+
 .hidden { display: none; }
 
 /* KPI Charts */
@@ -4065,20 +4214,20 @@ function renderL10Page() {
   // 4. Customer / Employee Headlines (5 min)
   html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">4</span>Customer / Employee Headlines</h3><span class="l10-duration">5 min</span></div>';
   const headlines = Array.isArray(data.headlines) ? data.headlines : [];
-  html += '<table class="l10-table"><thead><tr><th class="drag-col"></th><th>Good / Bad</th><th>Headline</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="headlines" data-sort-week="' + weekKey + '">';
+  html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="l10-table"><thead><tr><th class="drag-col"></th><th>Good / Bad</th><th>Headline</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="headlines" data-sort-week="' + weekKey + '">';
   headlines.forEach((h, i) => {
     if (!h) return;
     html += '<tr data-row-idx="' + i + '"><td class="drag-col"><span class="drag-handle" title="Drag to reorder">\u283f</span></td><td style="width:100px"><select onchange="updateL10Field(\'' + weekKey + '\',\'headlines\',' + i + ',\'type\',this.value)"><option value="">--</option><option value="good"' + (h.type === 'good' ? ' selected' : '') + '>Good</option><option value="bad"' + (h.type === 'bad' ? ' selected' : '') + '>Bad</option></select></td>';
     html += '<td><input value="' + esc(h.text || '') + '" placeholder="Headline..." onchange="updateL10Field(\'' + weekKey + '\',\'headlines\',' + i + ',\'text\',this.value)" /></td>';
     html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'headlines\',' + i + ')">\u00d7</button></td></tr>';
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'headlines\')">+ Add Headline</button></div>';
 
   // 5. To-Do List (5 min)
   html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">5</span>To-Do List</h3><span class="l10-duration">5 min</span></div>';
   const todos = Array.isArray(data.todos) ? data.todos : [];
-  html += '<table class="l10-table"><thead><tr><th class="drag-col"></th><th class="who-col">Who</th><th>To-Do</th><th class="status-col">Done / Not Done</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="todos" data-sort-week="' + weekKey + '">';
+  html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="l10-table"><thead><tr><th class="drag-col"></th><th class="who-col">Who</th><th>To-Do</th><th class="status-col">Done / Not Done</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="todos" data-sort-week="' + weekKey + '">';
   todos.forEach((t, i) => {
     if (!t) return;
     const statusCls = t.status === 'done' ? 'l10-status-done' : t.status === 'notdone' ? 'l10-status-notdone' : '';
@@ -4087,21 +4236,21 @@ function renderL10Page() {
     html += '<td class="status-col"><select class="' + statusCls + '" onchange="updateL10Field(\'' + weekKey + '\',\'todos\',' + i + ',\'status\',this.value)"><option value="">--</option><option value="done"' + (t.status === 'done' ? ' selected' : '') + '>Done</option><option value="notdone"' + (t.status === 'notdone' ? ' selected' : '') + '>Not Done</option></select></td>';
     html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'todos\',' + i + ')">\u00d7</button></td></tr>';
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'todos\')">+ Add To-Do</button></div>';
 
   // 6. Issues List (IDS - 60 min)
   html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">6</span>Issues List</h3><span class="l10-duration">60 min</span></div>';
   html += '<div style="padding:8px 20px 0;font-size:12px;color:var(--gray-400);font-weight:600">IDS: Identify, Discuss, Solve</div>';
   const issues = Array.isArray(data.issues) ? data.issues : [];
-  html += '<table class="l10-table"><thead><tr><th class="drag-col"></th><th class="priority-col">Priority</th><th>Issue</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="issues" data-sort-week="' + weekKey + '">';
+  html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="l10-table"><thead><tr><th class="drag-col"></th><th class="priority-col">Priority</th><th>Issue</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="issues" data-sort-week="' + weekKey + '">';
   issues.forEach((is, i) => {
     if (!is) return;
     html += '<tr data-row-idx="' + i + '"><td class="drag-col"><span class="drag-handle" title="Drag to reorder">\u283f</span></td><td class="priority-col"><input value="' + esc(is.priority || '') + '" placeholder="#" style="width:50px;text-align:center" onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'priority\',this.value)" /></td>';
     html += '<td><input value="' + esc(is.issue || '') + '" placeholder="Issue description..." onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'issue\',this.value)" /></td>';
     html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'issues\',' + i + ')">\u00d7</button></td></tr>';
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'issues\')">+ Add Issue</button></div>';
 
   // 7. Conclude (5 min)
