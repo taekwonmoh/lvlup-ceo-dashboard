@@ -384,6 +384,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
   /* Modal */
   .modal-box { min-width: 260px; margin: 0 16px; padding: 20px; }
+
+  /* History view */
+  .history-nav { gap: 6px; }
+  .history-nav-label { font-size: 13px; }
+  .hvt-btn { padding: 5px 9px; font-size: 11px; }
+  .h-cell-btn { width: 38px; height: 25px; font-size: 10px; }
+  .h-hm-sq { width: 16px; height: 16px; }
+  .h-legend { gap: 5px 10px; padding: 8px 12px; }
+  .h-legend-item { font-size: 10px; }
 }
 
 @media (max-width: 420px) {
@@ -457,6 +466,64 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .drag-handle{cursor:grab;color:var(--gray-300);font-size:15px;flex-shrink:0;user-select:none;padding-right:2px;line-height:1;transition:color .15s}
 .drag-handle:hover{color:var(--gray-500)}
 .drag-handle:active{cursor:grabbing}
+
+/* ── History View ──────────────────────────────────────────── */
+.history-nav{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.history-nav-label{font-size:14px;font-weight:700;color:var(--gray-700);flex:1;text-align:center;min-width:140px}
+.history-view-toggle{display:flex;gap:2px;background:var(--gray-100);border-radius:8px;padding:3px}
+.hvt-btn{padding:5px 13px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-500);transition:all .15s}
+.hvt-btn.active{background:#fff;color:var(--primary);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+/* shared card wrap */
+.h-grid-wrap,.h-hm-wrap{background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px}
+.h-grid-scroll,.h-hm-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* week grid table */
+.h-grid{border-collapse:collapse;width:100%;min-width:520px}
+.h-grid th{padding:7px 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-500);background:var(--gray-50);border-bottom:2px solid var(--gray-100);text-align:center;white-space:nowrap}
+.h-grid th:first-child{text-align:left;padding-left:14px;min-width:110px}
+.h-grid td{padding:5px 5px;text-align:center;border-bottom:1px solid var(--gray-50);vertical-align:middle}
+.h-grid td:first-child{text-align:left;padding:5px 14px;font-size:12px;font-weight:600;color:var(--gray-700);background:var(--gray-50);white-space:nowrap}
+.h-grid tr:last-child td{border-bottom:none}
+/* cell buttons */
+.h-cell-btn{width:46px;height:28px;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;transition:opacity .15s,transform .1s;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.h-cell-btn:hover:not(.future):not(.loading){opacity:.75;transform:scale(1.06)}
+.h-cell-btn.pct-100{background:#16a34a;color:#fff}
+.h-cell-btn.pct-75{background:#4ade80;color:#14532d}
+.h-cell-btn.pct-50{background:#fde047;color:#713f12}
+.h-cell-btn.pct-low{background:#f87171;color:#7f1d1d}
+.h-cell-btn.pct-0{background:var(--gray-200);color:var(--gray-500)}
+.h-cell-btn.day-off{background:#93c5fd;color:#1e3a5f}
+.h-cell-btn.future{background:transparent;border:1.5px dashed var(--gray-200);color:var(--gray-300);cursor:default;pointer-events:none}
+.h-cell-btn.loading{background:var(--gray-100);color:var(--gray-400);animation:h-pulse 1.3s ease-in-out infinite}
+@keyframes h-pulse{0%,100%{opacity:.3}50%{opacity:.85}}
+/* sign-off badge */
+.h-signoff-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;white-space:nowrap}
+.h-signoff-badge.signed{background:#dcfce7;color:#15803d}
+.h-signoff-badge.unsigned{background:var(--gray-100);color:var(--gray-400)}
+.h-signoff-badge.loading{background:var(--gray-100);color:var(--gray-300);animation:h-pulse 1.3s ease-in-out infinite}
+/* legend */
+.h-legend{display:flex;flex-wrap:wrap;gap:7px 14px;padding:10px 14px;border-top:1px solid var(--gray-100);background:var(--gray-50)}
+.h-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gray-500);font-weight:500}
+.h-legend-sq{width:13px;height:13px;border-radius:3px;flex-shrink:0}
+/* month heatmap table */
+.h-hm-grid{border-collapse:collapse;width:100%;min-width:640px}
+.h-hm-grid th{padding:6px 3px;font-size:10px;font-weight:700;color:var(--gray-400);background:var(--gray-50);border-bottom:2px solid var(--gray-100);text-align:center;white-space:nowrap}
+.h-hm-grid th:first-child{text-align:left;padding-left:14px;min-width:110px}
+.h-hm-grid td{padding:3px 2px;text-align:center;border-bottom:1px solid var(--gray-50)}
+.h-hm-grid td:first-child{text-align:left;padding:3px 14px;font-size:12px;font-weight:600;color:var(--gray-700);background:var(--gray-50);white-space:nowrap}
+.h-hm-grid tr:last-child td{border-bottom:none}
+/* heatmap squares */
+.h-hm-sq{width:20px;height:20px;border-radius:3px;display:inline-block;transition:transform .1s,opacity .1s;vertical-align:middle}
+.h-hm-sq.clickable{cursor:pointer}
+.h-hm-sq.clickable:hover{transform:scale(1.25);opacity:.85}
+.h-hm-sq.pct-100{background:#16a34a}
+.h-hm-sq.pct-75{background:#4ade80}
+.h-hm-sq.pct-50{background:#fde047}
+.h-hm-sq.pct-low{background:#f87171}
+.h-hm-sq.pct-0{background:var(--gray-300)}
+.h-hm-sq.day-off{background:#93c5fd}
+.h-hm-sq.future{background:transparent;border:1.5px dashed var(--gray-200);cursor:default}
+.h-hm-sq.loading{background:var(--gray-100);animation:h-pulse 1.3s ease-in-out infinite}
+.h-hm-sq.no-day{background:transparent;cursor:default;border:none}
 .task-item.sortable-ghost{opacity:0.35;background:var(--blue-light)!important;border-radius:8px}
 .task-item.sortable-chosen{background:var(--gray-50)!important;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .l10-table tr.sortable-ghost td{background:var(--blue-light)!important;opacity:0.4}
@@ -3384,6 +3451,13 @@ state.gdCourse       = {};
 state.wall         = {};
 state.wallPostType = 'win';
 state.wallPostEmp  = TASK_EMPLOYEES[0].id;
+state.tasksTab         = 'sheets'; // 'sheets' | 'history'
+state.historyView      = 'week';   // 'week' | 'month'
+state.historyWeekOff   = 0;        // 0 = current week, -1 = last, etc.
+state.historyMonthYear = new Date().getFullYear();
+state.historyMonthNum  = new Date().getMonth()+1;
+state.historyData      = {};       // empId+'|'+dateKey → {done,total,dayOff}|'loading'|undefined
+state.historySigns     = {};       // empId+'|'+weekKey → {signed,initials}|'loading'|undefined
 
 function isGoNinja(empOrLocId){
   const emp=TASK_EMPLOYEES.find(e=>e.id===empOrLocId);
@@ -3581,6 +3655,219 @@ function updateGoalField(field,val){
     if(tot)tot.value=fmt;
   }
 
+/*  -  -  History View Helpers  -  -  */
+function hMondayOf(weekOff){
+  const now=new Date();
+  const dow=now.getDay()||7; // Mon=1…Sun=7
+  const mon=new Date(now);
+  mon.setHours(12,0,0,0);
+  mon.setDate(now.getDate()-(dow-1)+(weekOff*7));
+  return mon;
+}
+function hWeekDays(weekOff){
+  const mon=hMondayOf(weekOff);
+  return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d.toISOString().split('T')[0];});
+}
+function hMonthDays(year,month){
+  const last=new Date(year,month,0).getDate();
+  return Array.from({length:last},(_,i)=>year+'-'+String(month).padStart(2,'0')+'-'+String(i+1).padStart(2,'0'));
+}
+function hIsFuture(dateKey){return dateKey>new Date().toISOString().split('T')[0];}
+function hPctClass(info){
+  if(info===undefined||info==='loading')return 'loading';
+  if(info===null)return 'pct-0';
+  if(info.dayOff)return 'day-off';
+  if(info.total===0)return 'pct-0';
+  const p=info.done/info.total;
+  if(p>=1)return 'pct-100';
+  if(p>=0.75)return 'pct-75';
+  if(p>=0.5)return 'pct-50';
+  if(p>0)return 'pct-low';
+  return 'pct-0';
+}
+function hPctLabel(info){
+  if(info===undefined||info==='loading')return '…';
+  if(info===null)return '0%';
+  if(info.dayOff)return 'Off';
+  if(info.total===0)return '—';
+  return Math.round(info.done/info.total*100)+'%';
+}
+function loadHistoryDate(empId,dateKey){
+  const key=empId+'|'+dateKey;
+  if(state.historyData[key]!==undefined)return;
+  state.historyData[key]='loading';
+  const isSat=new Date(dateKey+'T12:00:00').getDay()===6;
+  const tasks=getDailyTasks(empId).filter(t=>!(isSat&&(t.id==='spray_mats'||t.id==='j_spray')));
+  const total=tasks.length;
+  Promise.all([
+    fbRef(empPath(empId)+'/daily/'+dateKey).once('value'),
+    fbRef(empPath(empId)+'/did_not_work/'+dateKey).once('value')
+  ]).then(([dailySnap,dnwSnap])=>{
+    const dayOff=!!dnwSnap.val();
+    let done=0;
+    if(!dayOff){const dd=dailySnap.val()||{};tasks.forEach(t=>{if(dd[t.id])done++;});}
+    state.historyData[key]={done,total,dayOff};
+    render();
+  }).catch(()=>{state.historyData[key]=null;render();});
+}
+function loadHistorySign(empId,weekKey){
+  const key=empId+'|'+weekKey;
+  if(state.historySigns[key]!==undefined)return;
+  state.historySigns[key]='loading';
+  fbRef(empPath(empId)+'/weekly_signoff/'+weekKey).once('value').then(snap=>{
+    const v=snap.val();
+    state.historySigns[key]=v?{signed:true,initials:v.initials||''}:{signed:false};
+    render();
+  }).catch(()=>{state.historySigns[key]={signed:false};render();});
+}
+function loadHistoryWeekData(weekOff){
+  const days=hWeekDays(weekOff);
+  const weekKey=getTaskWeekKey(days[0]);
+  const todayKey=new Date().toISOString().split('T')[0];
+  TASK_EMPLOYEES.forEach(emp=>{
+    days.forEach(dk=>{if(dk<=todayKey)loadHistoryDate(emp.id,dk);});
+    loadHistorySign(emp.id,weekKey);
+  });
+}
+function loadHistoryMonthData(year,month){
+  const days=hMonthDays(year,month);
+  const todayKey=new Date().toISOString().split('T')[0];
+  TASK_EMPLOYEES.forEach(emp=>{days.forEach(dk=>{if(dk<=todayKey)loadHistoryDate(emp.id,dk);});});
+}
+function jumpToHistory(empId,dateKey){
+  state.tasksTab='sheets';state.tasksLoc=empId;state.tasksDate=dateKey;state.matChatWeek=null;listenTasks();
+}
+function histWeekPrev(){state.historyWeekOff--;render();}
+function histWeekNext(){if(state.historyWeekOff<0){state.historyWeekOff++;render();}}
+function histMonthPrev(){
+  const d=new Date(state.historyMonthYear,state.historyMonthNum-2,1);
+  state.historyMonthYear=d.getFullYear();state.historyMonthNum=d.getMonth()+1;render();
+}
+function histMonthNext(){
+  const now=new Date();
+  if(state.historyMonthYear>now.getFullYear()||(state.historyMonthYear===now.getFullYear()&&state.historyMonthNum>=now.getMonth()+1))return;
+  const d=new Date(state.historyMonthYear,state.historyMonthNum,1);
+  state.historyMonthYear=d.getFullYear();state.historyMonthNum=d.getMonth()+1;render();
+}
+
+function renderHistorySection(){
+  const view=state.historyView;
+  let html='<div class="history-nav">';
+  html+='<div class="history-view-toggle">';
+  html+='<button class="hvt-btn'+(view==='week'?' active':'')+'" onclick="state.historyView=\'week\';render()">📅 Week Grid</button>';
+  html+='<button class="hvt-btn'+(view==='month'?' active':'')+'" onclick="state.historyView=\'month\';render()">🗓 Month Map</button>';
+  html+='</div></div>';
+  return html+(view==='week'?renderHistoryWeekGrid():renderHistoryMonthHeatmap());
+}
+
+function renderHistoryWeekGrid(){
+  const off=state.historyWeekOff;
+  const days=hWeekDays(off);
+  const weekKey=getTaskWeekKey(days[0]);
+  const mon=hMondayOf(off);
+  const fmt=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const sun=new Date(mon);sun.setDate(mon.getDate()+6);
+  const todayKey=new Date().toISOString().split('T')[0];
+  loadHistoryWeekData(off);
+
+  let html='<div class="history-nav" style="margin-bottom:12px">';
+  html+='<button onclick="histWeekPrev()" style="background:var(--card);border:1px solid var(--gray-200);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--gray-700)">← Prev</button>';
+  html+='<div class="history-nav-label">Week of '+fmt(mon)+' – '+fmt(sun)+'</div>';
+  html+='<button onclick="histWeekNext()" style="background:var(--card);border:1px solid var(--gray-200);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:'+(off<0?'var(--gray-700)':'var(--gray-300)')+'">Next →</button>';
+  html+='</div>';
+
+  html+='<div class="h-grid-wrap"><div class="h-grid-scroll"><table class="h-grid"><thead><tr>';
+  const DAY_NAMES=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  html+='<th>Staff</th>';
+  days.forEach((dk,i)=>{
+    const dayNum=new Date(dk+'T12:00:00').getDate();
+    const isToday=dk===todayKey;
+    html+='<th style="'+(isToday?'color:var(--accent)':'')+'">' +DAY_NAMES[i]+'<br><span style="font-size:12px;font-weight:800;text-transform:none;letter-spacing:0">'+dayNum+'</span></th>';
+  });
+  html+='<th>Sign-off</th></tr></thead><tbody>';
+
+  TASK_EMPLOYEES.forEach(emp=>{
+    const gn=isGoNinja(emp.id);
+    html+='<tr><td style="'+(gn?'':'color:var(--primary)')+'">'+esc(emp.name)+'</td>';
+    days.forEach(dk=>{
+      if(hIsFuture(dk)){
+        html+='<td><button class="h-cell-btn future" title="Future">—</button></td>';
+      } else {
+        const key=emp.id+'|'+dk;
+        const info=state.historyData[key];
+        const cls=hPctClass(info);
+        const lbl=hPctLabel(info);
+        const clickable=cls!=='loading';
+        html+='<td><button class="h-cell-btn '+cls+'" '+(clickable?'onclick="jumpToHistory(\''+emp.id+'\',\''+dk+'\')"':'')+' title="'+esc(emp.name)+' • '+dk+'">'+lbl+'</button></td>';
+      }
+    });
+    // Sign-off
+    const signKey=emp.id+'|'+weekKey;
+    const si=state.historySigns[signKey];
+    let badge='';
+    if(si===undefined||si==='loading'){badge='<span class="h-signoff-badge loading">…</span>';}
+    else if(si.signed){badge='<span class="h-signoff-badge signed">✓ '+esc(si.initials)+'</span>';}
+    else{badge='<span class="h-signoff-badge unsigned">—</span>';}
+    html+='<td style="text-align:center">'+badge+'</td></tr>';
+  });
+
+  html+='</tbody></table></div>';
+  html+='<div class="h-legend">';
+  [{bg:'#16a34a',l:'100%'},{bg:'#4ade80',l:'75–99%'},{bg:'#fde047',l:'50–74%'},{bg:'#f87171',l:'1–49%'},{bg:'var(--gray-200)',l:'0%'},{bg:'#93c5fd',l:'Day Off'}]
+    .forEach(x=>html+='<div class="h-legend-item"><div class="h-legend-sq" style="background:'+x.bg+'"></div>'+x.l+'</div>');
+  html+='</div></div>';
+  return html;
+}
+
+function renderHistoryMonthHeatmap(){
+  const yr=state.historyMonthYear,mn=state.historyMonthNum;
+  const monthLabel=new Date(yr,mn-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const days=hMonthDays(yr,mn);
+  const todayKey=new Date().toISOString().split('T')[0];
+  const now=new Date();
+  const isMaxMonth=yr===now.getFullYear()&&mn===now.getMonth()+1;
+  loadHistoryMonthData(yr,mn);
+
+  let html='<div class="history-nav" style="margin-bottom:12px">';
+  html+='<button onclick="histMonthPrev()" style="background:var(--card);border:1px solid var(--gray-200);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--gray-700)">← Prev</button>';
+  html+='<div class="history-nav-label">'+esc(monthLabel)+'</div>';
+  html+='<button onclick="histMonthNext()" style="background:var(--card);border:1px solid var(--gray-200);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:'+(isMaxMonth?'var(--gray-300)':'var(--gray-700)')+'">Next →</button>';
+  html+='</div>';
+
+  html+='<div class="h-hm-wrap"><div class="h-hm-scroll"><table class="h-hm-grid"><thead><tr>';
+  html+='<th>Staff</th>';
+  days.forEach(dk=>{
+    const dayNum=new Date(dk+'T12:00:00').getDate();
+    const isToday=dk===todayKey;
+    html+='<th style="'+(isToday?'color:var(--accent)':'')+'">'+dayNum+'</th>';
+  });
+  html+='</tr></thead><tbody>';
+
+  TASK_EMPLOYEES.forEach(emp=>{
+    html+='<tr><td>'+esc(emp.name)+'</td>';
+    days.forEach(dk=>{
+      if(hIsFuture(dk)){
+        html+='<td><div class="h-hm-sq future" title="Future"></div></td>';
+      } else {
+        const key=emp.id+'|'+dk;
+        const info=state.historyData[key];
+        const cls=hPctClass(info);
+        const lbl=hPctLabel(info);
+        const clickable=cls!=='loading';
+        html+='<td><div class="h-hm-sq '+cls+(clickable?' clickable':'')+'" title="'+esc(emp.name)+' • '+dk+': '+lbl+'" '+(clickable?'onclick="jumpToHistory(\''+emp.id+'\',\''+dk+'\')"':'')+' style="cursor:'+(clickable?'pointer':'default')+'"></div></td>';
+      }
+    });
+    html+='</tr>';
+  });
+
+  html+='</tbody></table></div>';
+  html+='<div class="h-legend">';
+  [{bg:'#16a34a',l:'100%'},{bg:'#4ade80',l:'75–99%'},{bg:'#fde047',l:'50–74%'},{bg:'#f87171',l:'1–49%'},{bg:'var(--gray-300)',l:'0%'},{bg:'#93c5fd',l:'Day Off'}]
+    .forEach(x=>html+='<div class="h-legend-item"><div class="h-legend-sq" style="background:'+x.bg+'"></div>'+x.l+'</div>');
+  html+='</div></div>';
+  return html;
+}
+
 /*  -  -  Render Tasks Page  -  -  */
 function renderTasksPage(){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
@@ -3603,12 +3890,14 @@ function renderTasksPage(){
   const emp=getEmpById(loc);
   let html='<div class="loc-selector">';
   TASK_EMPLOYEES.forEach(e=>{
-    const isActive=e.id===loc;
+    const isActive=e.id===loc&&state.tasksTab==='sheets';
     const gn=e.loc==='goninjaW'||e.loc==='goninjaV';
     const cls=isActive?(gn?'active':'active lvlup'):'';
-    html+='<button class="loc-btn '+cls+'" onclick="setTasksLoc(\''+e.id+'\')" title="'+e.label+'">'+e.name+'</button>';
+    html+='<button class="loc-btn '+cls+'" onclick="state.tasksTab=\'sheets\';setTasksLoc(\''+e.id+'\')" title="'+e.label+'">'+e.name+'</button>';
   });
+  html+='<button class="loc-btn'+(state.tasksTab==='history'?' active':'')+'" onclick="state.tasksTab=\'history\';render()" style="margin-left:auto;flex-shrink:0;'+(state.tasksTab==='history'?'background:var(--accent);color:#fff':'')+'">📊 History</button>';
   html+='</div>';
+  if(state.tasksTab==='history'){html+=renderHistorySection();return html;}
 
   const locSignoffs=locData.weekly_signoff||{};
   const locDnw=locData.did_not_work||{};
