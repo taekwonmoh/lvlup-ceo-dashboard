@@ -1824,7 +1824,8 @@ function listenAll() {
   fbRosterMetaRef.on('value', snap => { state.feedback.rosterMeta = snap.val() || {}; render(); });
   activeListeners.push({ ref: fbRosterMetaRef, event: 'value' });
 
-  // Feedback tracking (monthly interactions) — re-listen when month changes
+  // Feedback tracking (persistent, year-round) — migrate old monthly data once, then listen
+  migrateFeedbackTrackingToAll();
   listenFeedbackTracking();
 }
 
@@ -1834,10 +1835,34 @@ function listenFeedbackTracking() {
     if (l._feedbackTracking) { l.ref.off(l.event); return false; }
     return true;
   });
-  const mk = getFeedbackMonthKey();
-  const ftRef = db.ref('feedbackTracking/' + mk);
+  // Tracking is now persistent (all year) — no monthly key
+  const ftRef = db.ref('feedbackTracking/all');
   ftRef.on('value', snap => { state.feedback.tracking = snap.val() || {}; render(); });
   activeListeners.push({ ref: ftRef, event: 'value', _feedbackTracking: true });
+}
+
+function migrateFeedbackTrackingToAll() {
+  // One-time migration: copy any existing monthly feedbackTracking/{YYYY-MM}/ data
+  // into the permanent feedbackTracking/all/ path so past checkmarks are preserved.
+  db.ref('feedbackTracking/all').once('value', snap => {
+    if (snap.val()) return; // already migrated — nothing to do
+    db.ref('feedbackTracking').once('value', snap2 => {
+      const root = snap2.val() || {};
+      const merged = {};
+      Object.entries(root).forEach(([key, data]) => {
+        if (!/^\d{4}-\d{2}$/.test(key)) return; // skip non-month keys
+        if (!data || typeof data !== 'object') return;
+        Object.entries(data).forEach(([studentKey, fields]) => {
+          if (!fields || typeof fields !== 'object') return;
+          if (!merged[studentKey]) merged[studentKey] = {};
+          Object.assign(merged[studentKey], fields);
+        });
+      });
+      if (Object.keys(merged).length > 0) {
+        db.ref('feedbackTracking/all').set(merged);
+      }
+    });
+  });
 }
 
 /*  -  -  Navigation  -  -  */
@@ -3944,7 +3969,7 @@ function renderTasksPage(){
       }
     }
     html+='</div>';
-    html+='<div style="margin-top:10px;padding:8px 12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500);">Bonus (0–5%) is determined by leadership review of task completion and hours.</div>';
+    html+='<div style="margin-top:10px;padding:8px 12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500);">Bonus (0–5%) is determined by leadership review of task completion, hours, monthly revenue, and student metrics.</div>';
     html+='</div>';
   } else {
     html+='<div style="margin-top:4px;margin-bottom:4px;padding:12px 16px;background:var(--gray-50);border-radius:12px;border:1.5px dashed var(--gray-200);font-size:13px;color:var(--gray-500);font-weight:600;">⏸ Part-time</div>';
@@ -6866,9 +6891,8 @@ function feedbackToggleInactive() {
 }
 
 function feedbackToggle(studentKey, field) {
-  const mk = getFeedbackMonthKey();
   const current = (state.feedback.tracking[studentKey] || {})[field];
-  db.ref('feedbackTracking/' + mk + '/' + studentKey + '/' + field).set(!current);
+  db.ref('feedbackTracking/all/' + studentKey + '/' + field).set(!current);
 }
 
 function feedbackSetStatus(studentKey, status) {
@@ -6995,8 +7019,7 @@ function feedbackOpenCycleFeedbackModal(studentKey) {
 }
 
 function feedbackSaveCycleFeedback(studentKey, value) {
-  const mk = getFeedbackMonthKey();
-  const path = 'feedbackTracking/' + mk + '/' + studentKey + '/instructorFeedback';
+  const path = 'feedbackTracking/all/' + studentKey + '/instructorFeedback';
   clearTimeout(debounceTimers[path]);
   debounceTimers[path] = setTimeout(() => {
     db.ref(path).set(value.trim() || null);
