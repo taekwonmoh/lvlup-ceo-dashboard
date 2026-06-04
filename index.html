@@ -525,6 +525,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .h-hm-sq.loading{background:var(--gray-100);animation:h-pulse 1.3s ease-in-out infinite}
 .h-hm-sq.no-day{background:transparent;cursor:default;border:none}
 
+/* ── First 90 Days ─────────────────────────────────────── */
+.onboarding-card{background:#fff;border-radius:10px;padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:box-shadow .15s}
+.onboarding-card:hover{box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.journey-bar-track{background:#e5e7eb;border-radius:999px;height:6px;overflow:hidden;margin-bottom:3px}
+.journey-bar-fill{height:6px;border-radius:999px;transition:width .4s}
+
 /* ── ACQ Metric Tooltips ───────────────────────────────── */
 .acq-tip{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;background:rgba(65,105,225,.13);color:#4169E1;border-radius:50%;font-size:9px;font-weight:900;cursor:help;position:relative;vertical-align:middle;margin-left:4px;line-height:1;user-select:none;flex-shrink:0}
 .acq-tip:hover{background:rgba(65,105,225,.22)}
@@ -849,7 +855,7 @@ let state = {
   devActiveModule: null,
   devQuizAnswers: {},
   devQuizSubmitted: false,
-  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'all', showInactive: false, selectedStudents: new Set(), expandedStudents: new Set(), logs: {}, logForm: null },
+  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'all', showInactive: false, selectedStudents: new Set(), expandedStudents: new Set(), logs: {}, logForm: null, onboardingCollapsed: false },
   acq: { pinLoaded: false, pin: null, unlocked: false, monthOffset: 0, data: {}, _listeningMk: null, pinError: false }
 };
 
@@ -7496,7 +7502,7 @@ function feedbackOpenSync(preselectedLoc) {
         <button onclick="document.getElementById('fbSyncModal').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa;padding:0 4px;">✕</button>
       </div>
       <p style="margin:0 0 4px;font-size:13px;color:#666;line-height:1.6;">
-        In GymDesk, run a <strong>Members report</strong>, select the <strong>First Name</strong> and <strong>Last Name</strong> columns, copy, and paste below. New students are added, missing students are marked inactive, and all historical data is preserved.
+        In GymDesk, run a <strong>Members report</strong>, select the <strong>First Name</strong>, <strong>Last Name</strong> (and optionally <strong>Enrollment Date</strong>) columns, copy, and paste below. New students are added, missing students are marked inactive, and all historical data is preserved. If enrollment date is included, it will auto-populate the First 90 Days tracker.
       </p>
 
       <div style="margin-bottom:14px;">
@@ -7508,7 +7514,7 @@ function feedbackOpenSync(preselectedLoc) {
 
       <div style="margin-bottom:12px;">
         <label style="font-size:12px;font-weight:700;color:#555;display:block;margin-bottom:5px;">PASTE STUDENT NAMES</label>
-        <textarea id="fbSyncText" placeholder="John Doe&#10;Jane Smith&#10;Alex Lee" style="width:100%;height:180px;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.6;" oninput="feedbackSyncPreview()"></textarea>
+        <textarea id="fbSyncText" placeholder="John Doe&#10;Jane Smith&#10;&#10;Or with enrollment date (tab-separated):&#10;John Doe	03/15/2026&#10;Jane Smith	04/01/2026" style="width:100%;height:180px;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.6;" oninput="feedbackSyncPreview()"></textarea>
       </div>
 
       <div id="fbSyncPreview" style="margin-bottom:16px;"></div>
@@ -7587,7 +7593,9 @@ function feedbackSyncPreview() {
   const confirmBtn = document.getElementById('fbSyncConfirmBtn');
   if (!previewEl || !confirmBtn) return;
 
-  const names = raw.split('\n').map(l => l.trim()).filter(looksLikeName);
+  const parsed = raw.split('\n').map(l => parseSyncLine(l.trim())).filter(p => looksLikeName(p.name));
+  const names = parsed.map(p => p.name);
+  const datesIncluded = parsed.some(p => p.date);
   if (!names.length) {
     previewEl.innerHTML = '';
     confirmBtn.disabled = true;
@@ -7622,6 +7630,9 @@ function feedbackSyncPreview() {
   html += stat(toReactivate.length, 'Reactivated', '#3b82f6', '🔄');
   html += stat(toDeactivate.length, 'Mark inactive', '#f59e0b', '⏸');
   html += '</div>';
+  if (datesIncluded) {
+    html += '<div style="margin-top:8px;padding:7px 10px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:12px;color:#15803d;font-weight:600;">🌱 Enrollment dates detected — new students will be added to the First 90 Days tracker.</div>';
+  }
 
   if (toDeactivate.length) {
     html += '<div style="margin-top:10px;padding:8px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;">';
@@ -7638,8 +7649,12 @@ function feedbackSyncPreview() {
 function feedbackSyncConfirm() {
   const raw = document.getElementById('fbSyncText').value;
   const loc = document.getElementById('fbSyncLoc').value;
-  const names = raw.split('\n').map(l => l.trim()).filter(looksLikeName);
+  const parsedLines = raw.split('\n').map(l => parseSyncLine(l.trim())).filter(p => looksLikeName(p.name));
+  const names = parsedLines.map(p => p.name);
   if (!names.length) return;
+  // Build lookup: name → parsed date (for new students)
+  const dateByName = {};
+  parsedLines.forEach(p => { if (p.date) dateByName[p.name.toLowerCase()] = p.date; });
 
   const normalizedNew = new Set(names.map(n => n.toLowerCase()));
   const existing = Object.entries(state.feedback.roster)
@@ -7673,7 +7688,10 @@ function feedbackSyncConfirm() {
   names.forEach(name => {
     if (!allExistingNames.has(name.toLowerCase())) {
       const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-      updates['feedbackRoster/' + key] = { name, location: loc, active: true, addedDate: mk };
+      const entry = { name, location: loc, active: true, addedDate: mk };
+      const sd = dateByName[name.toLowerCase()];
+      if (sd) entry.startDate = sd;
+      updates['feedbackRoster/' + key] = entry;
     }
   });
 
@@ -7699,6 +7717,114 @@ function feedbackAddStudent() {
   const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
   db.ref('feedbackRoster/' + key).set({ name, location: locEl.value, active: true, addedDate: mk });
   nameEl.value = '';
+}
+
+/* ── First 90 Days ──────────────────────────────────────── */
+function getDaysInJourney(startDate) {
+  if (!startDate) return null;
+  const start = new Date(startDate + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = Math.floor((today - start) / 86400000);
+  return d < 0 ? 0 : d;
+}
+function getJourneyPhase(days) {
+  if (days === null || days > 90) return null;
+  if (days <= 30) return { label: 'Onboarding',     color: '#15803d', bg: '#dcfce7', bar: '#22c55e' };
+  if (days <= 60) return { label: 'Building Habit', color: '#1d4ed8', bg: '#dbeafe', bar: '#3b82f6' };
+  if (days <= 80) return { label: 'Developing',     color: '#b45309', bg: '#fef3c7', bar: '#f59e0b' };
+  return               { label: 'Graduating Soon', color: '#b91c1c', bg: '#fee2e2', bar: '#ef4444' };
+}
+function feedbackSetStartDate(studentKey, dateStr) {
+  db.ref('feedbackRoster/' + studentKey + '/startDate').set(dateStr || null);
+  if (!dateStr) {
+    if (!state.feedback.roster[studentKey]) return;
+    state.feedback.roster[studentKey].startDate = null;
+  }
+}
+function parseSyncLine(line) {
+  // Split on tab — optional second column is enrollment date (MM/DD/YYYY or YYYY-MM-DD)
+  const parts = line.split('\t').map(p => p.trim());
+  const name = parts[0];
+  let date = null;
+  if (parts[1]) {
+    const m = parts[1].match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (m) date = m[3] + '-' + m[1].padStart(2,'0') + '-' + m[2].padStart(2,'0');
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(parts[1])) date = parts[1];
+  }
+  return { name, date };
+}
+
+function renderOnboardingSection(allStudents, locationFilter) {
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const list = allStudents
+    .filter(s => s.active !== false)
+    .map(s => ({ ...s, days: getDaysInJourney(s.startDate) }))
+    .filter(s => s.days !== null && s.days <= 90)
+    .sort((a, b) => b.days - a.days); // soonest to graduate first
+
+  const graduating = list.filter(s => s.days >= 80).length;
+  const collapsed = state.feedback.onboardingCollapsed;
+
+  let html = '<div style="background:linear-gradient(135deg,#f0fdf4,#d1fae5);border:1.5px solid #86efac;border-radius:13px;margin-bottom:16px;overflow:hidden;">';
+
+  // Header bar
+  html += '<div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="state.feedback.onboardingCollapsed=!state.feedback.onboardingCollapsed;render()">';
+  html += '<div style="display:flex;align-items:center;gap:10px;">';
+  html += '<span style="font-size:18px;">🌱</span>';
+  html += '<div>';
+  html += '<div style="font-size:13px;font-weight:800;color:#15803d;">First 90 Days</div>';
+  const subLabel = list.length === 0
+    ? 'No students tracked yet — set a start date to begin'
+    : list.length + ' student' + (list.length !== 1 ? 's' : '') + ' in onboarding'
+      + (graduating > 0 ? ' &nbsp;·&nbsp; <span style="color:#b91c1c;font-weight:700;">⚠ ' + graduating + ' graduating soon</span>' : '');
+  html += '<div style="font-size:11px;color:#16a34a;">' + subLabel + '</div>';
+  html += '</div></div>';
+  html += '<span style="color:#86efac;font-size:16px;transition:transform .2s;display:inline-block;transform:rotate(' + (collapsed ? '0' : '180') + 'deg);">▼</span>';
+  html += '</div>';
+
+  if (!collapsed) {
+    if (list.length === 0) {
+      html += '<div style="padding:10px 18px 14px;font-size:12px;color:#4ade80;font-style:italic;">Click the 🌱 button on any student row (expand ▶ then set date) or use the date field when syncing from GymDesk.</div>';
+    } else {
+      html += '<div style="padding:0 12px 10px;">';
+      list.forEach(s => {
+        const phase = getJourneyPhase(s.days);
+        const pct   = Math.min(100, Math.round(s.days / 90 * 100));
+        const left  = 90 - s.days;
+        const startFmt = new Date(s.startDate + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+        const isExpanded = state.feedback.expandedStudents.has(s.key);
+
+        html += '<div class="onboarding-card" style="border-left:3px solid ' + phase.bar + ';" onclick="feedbackToggleExpand(\'' + s.key + '\')">';
+        // Name
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-size:13px;font-weight:700;color:#1a1a2e;">' + esc(s.name) + '</div>';
+        html += '<div style="font-size:11px;color:#888;">Started ' + esc(startFmt);
+        if (locationFilter === 'all' && s.location) html += ' &nbsp;·&nbsp; ' + esc(LOC_LABELS[s.location] || s.location);
+        html += '</div></div>';
+        // Progress bar
+        html += '<div style="min-width:130px;">';
+        html += '<div class="journey-bar-track"><div class="journey-bar-fill" style="width:' + pct + '%;background:' + phase.bar + ';"></div></div>';
+        html += '<div style="display:flex;justify-content:space-between;">';
+        html += '<span style="font-size:10px;font-weight:700;color:' + phase.color + ';">Day ' + s.days + '</span>';
+        html += '<span style="font-size:10px;color:#aaa;">' + left + ' left</span>';
+        html += '</div></div>';
+        // Badge
+        html += '<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:' + phase.bg + ';color:' + phase.color + ';">' + esc(phase.label) + '</span>';
+        html += '</div>';
+
+        // Inline expand if open — reuse the same correspondence panel
+        if (isExpanded) {
+          const t = state.feedback.tracking[s.key] || {};
+          html += '<div style="margin:0 2px 6px;background:#f8f9ff;border-radius:0 0 10px 10px;padding:6px 14px 12px;border-left:3px solid ' + phase.bar + ';">';
+          html += renderStudentLogContent(s, locationFilter, false);
+          html += '</div>';
+        }
+      });
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+  return html;
 }
 
 /* ── Correspondence Log ──────────────────────────────────── */
@@ -7753,17 +7879,46 @@ function feedbackStartLogForm(studentKey) {
   render();
 }
 
-function renderStudentLogRow(s, locationFilter, isInactive) {
-  if (!state.feedback.expandedStudents.has(s.key)) return '';
-  const logs = state.feedback.logs[s.key];
-  const form = state.feedback.logForm;
+function renderStudentLogContent(s, locationFilter, isInactive) {
+  const logs  = state.feedback.logs[s.key];
+  const form  = state.feedback.logForm;
   const showForm = form && form.studentKey === s.key;
   const today = Date.now();
-
+  const skey  = s.key;
   let content = '';
 
+  /* ── Journey Start Date ── */
+  const days  = getDaysInJourney(s.startDate);
+  const phase = getJourneyPhase(days);
+  const sdEditId = 'sdEdit_' + skey;
+  content += '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px dashed #e8eaf0;">';
+  content += '<span style="font-size:14px;">🌱</span>';
+  content += '<span style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;">Journey Start</span>';
+  if (s.startDate) {
+    const fmt = new Date(s.startDate + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+    content += '<span style="font-size:12px;font-weight:600;color:#1a1a2e;">' + esc(fmt) + '</span>';
+    if (days !== null && days <= 90) {
+      content += '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:' + phase.bg + ';color:' + phase.color + ';">Day ' + days + ' of 90 · ' + esc(phase.label) + '</span>';
+    } else if (days !== null && days > 90) {
+      content += '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#f0fdf4;color:#15803d;">🎓 Completed ' + days + ' days</span>';
+    }
+    if (!isInactive) {
+      content += '<input type="date" id="' + sdEditId + '" value="' + esc(s.startDate) + '" style="padding:4px 7px;border:1px solid #dde1f0;border-radius:6px;font-size:11px;">';
+      content += '<button onclick="feedbackSetStartDate(\'' + skey + '\',document.getElementById(\'' + sdEditId + '\').value)" style="padding:3px 10px;background:#4169E1;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">Update</button>';
+      content += '<button onclick="if(confirm(\'Clear start date?\'))feedbackSetStartDate(\'' + skey + '\',null)" style="padding:3px 8px;background:none;border:1px solid #e0e3ed;border-radius:6px;font-size:11px;cursor:pointer;color:#aaa;">Clear</button>';
+    }
+  } else {
+    content += '<span style="font-size:12px;color:#bbb;font-style:italic;">Not set</span>';
+    if (!isInactive) {
+      content += '<input type="date" id="' + sdEditId + '" style="padding:4px 7px;border:1px solid #dde1f0;border-radius:6px;font-size:11px;">';
+      content += '<button onclick="const d=document.getElementById(\'' + sdEditId + '\').value;if(d)feedbackSetStartDate(\'' + skey + '\',d)" style="padding:3px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">Set Date</button>';
+    }
+  }
+  content += '</div>';
+
+  /* ── Correspondence log ── */
   if (logs === null) {
-    content = '<div style="color:#aaa;font-size:12px;padding:4px 0;">Loading…</div>';
+    content += '<div style="color:#aaa;font-size:12px;padding:4px 0;">Loading…</div>';
   } else {
     const entries = Object.entries(logs)
       .filter(([, v]) => v && v.type)
@@ -7772,32 +7927,26 @@ function renderStudentLogRow(s, locationFilter, isInactive) {
     if (entries.length === 0) {
       content += '<div style="color:#bbb;font-size:12px;font-style:italic;margin-bottom:10px;">No correspondence logged yet.</div>';
     } else {
-      // Warn if last contact was more than 30 days ago
-      const lastTs = entries[0][1].ts;
+      const lastTs    = entries[0][1].ts;
       const daysSince = Math.floor((today - lastTs) / 86400000);
       if (daysSince > 30) {
         content += '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:7px 12px;font-size:12px;color:#92400e;font-weight:600;margin-bottom:10px;">⚠️ Last contact was ' + daysSince + ' days ago</div>';
       }
-
       content += '<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">';
       entries.forEach(([key, e]) => {
         const li = CORR_TYPES[e.type] || { icon: '📋', label: e.type };
-        const dateStr = new Date(e.ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        const dateStr = new Date(e.ts).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
         const daysAgo = Math.floor((today - e.ts) / 86400000);
         const daysLabel = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : daysAgo + ' days ago';
-        const isRecent = daysAgo <= 7;
+        const isRecent  = daysAgo <= 7;
         content +=
           '<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:' + (isRecent ? '#f0fdf4' : '#f8f9fc') + ';border-radius:7px;border-left:3px solid ' + (isRecent ? '#4ade80' : '#e2e8f0') + ';">' +
           '<span style="font-size:15px;flex-shrink:0;">' + li.icon + '</span>' +
-          '<div style="flex:1;min-width:0;">' +
-            '<span style="font-size:12px;font-weight:700;color:#333;">' + li.label + '</span>' +
-            (e.note ? '<span style="font-size:11px;color:#666;margin-left:8px;">' + esc(e.note) + '</span>' : '') +
-          '</div>' +
-          '<div style="text-align:right;flex-shrink:0;">' +
-            '<div style="font-size:11px;font-weight:600;color:#555;">' + dateStr + '</div>' +
-            '<div style="font-size:10px;color:' + (daysAgo > 30 ? '#ef4444' : '#aaa') + ';">' + daysLabel + '</div>' +
-          '</div>' +
-          (!isInactive ? '<button onclick="feedbackDeleteLogEntry(\'' + s.key + '\',\'' + key + '\')" title="Remove" style="background:none;border:none;cursor:pointer;color:#e2e8f0;font-size:11px;padding:2px 5px;border-radius:4px;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#e2e8f0\'">✕</button>' : '') +
+          '<div style="flex:1;min-width:0;"><span style="font-size:12px;font-weight:700;color:#333;">' + li.label + '</span>' +
+          (e.note ? '<span style="font-size:11px;color:#666;margin-left:8px;">' + esc(e.note) + '</span>' : '') + '</div>' +
+          '<div style="text-align:right;flex-shrink:0;"><div style="font-size:11px;font-weight:600;color:#555;">' + dateStr + '</div>' +
+          '<div style="font-size:10px;color:' + (daysAgo > 30 ? '#ef4444' : '#aaa') + ';">' + daysLabel + '</div></div>' +
+          (!isInactive ? '<button onclick="feedbackDeleteLogEntry(\'' + skey + '\',\'' + key + '\')" title="Remove" style="background:none;border:none;cursor:pointer;color:#e2e8f0;font-size:11px;padding:2px 5px;border-radius:4px;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#e2e8f0\'">✕</button>' : '') +
           '</div>';
       });
       content += '</div>';
@@ -7805,7 +7954,7 @@ function renderStudentLogRow(s, locationFilter, isInactive) {
 
     if (!isInactive) {
       if (!showForm) {
-        content += '<button onclick="feedbackStartLogForm(\'' + s.key + '\')" style="padding:5px 12px;background:#f1f3f9;border:1px solid #ddd;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;color:#4169E1;">+ Log Correspondence</button>';
+        content += '<button onclick="feedbackStartLogForm(\'' + skey + '\')" style="padding:5px 12px;background:#f1f3f9;border:1px solid #ddd;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;color:#4169E1;">+ Log Correspondence</button>';
       } else {
         content +=
           '<div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;padding:10px 12px;background:#f0f4ff;border-radius:8px;border:1px solid #dbeafe;">' +
@@ -7816,17 +7965,21 @@ function renderStudentLogRow(s, locationFilter, isInactive) {
           '</select>' +
           '<input type="date" value="' + (form.date || new Date().toISOString().split('T')[0]) + '" onchange="state.feedback.logForm.date=this.value" style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
           '<input type="text" placeholder="Note (optional)" oninput="state.feedback.logForm.note=this.value" style="flex:1;min-width:120px;padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
-          '<button onclick="feedbackLogCorrespondence(\'' + s.key + '\')" style="padding:5px 12px;background:#4169E1;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save</button>' +
+          '<button onclick="feedbackLogCorrespondence(\'' + skey + '\')" style="padding:5px 12px;background:#4169E1;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save</button>' +
           '<button onclick="state.feedback.logForm=null;render()" style="padding:5px 10px;background:#f1f3f9;border:1px solid #ddd;border-radius:6px;font-size:12px;cursor:pointer;color:#888;">Cancel</button>' +
           '</div>';
       }
     }
   }
+  return content;
+}
 
+function renderStudentLogRow(s, locationFilter, isInactive) {
+  if (!state.feedback.expandedStudents.has(s.key)) return '';
   return '<tr style="background:#f8f9ff;">' +
     '<td colspan="20" style="padding:6px 20px 14px 44px;border-bottom:2px solid #e8eaf0;">' +
-    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#4169E1;margin-bottom:8px;">📋 Correspondence History — ' + esc(s.name) + '</div>' +
-    content +
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#4169E1;margin-bottom:10px;">📋 ' + esc(s.name) + '</div>' +
+    renderStudentLogContent(s, locationFilter, isInactive) +
     '</td></tr>';
 }
 
@@ -7958,6 +8111,8 @@ function renderFeedbackPage() {
         const hasNotes = !!(s.notes && s.notes.trim());
         const isSelected = sel.has(s.key);
         const isExpanded = state.feedback.expandedStudents.has(s.key);
+        const journeyDays = getDaysInJourney(s.startDate);
+        const journeyPhase = getJourneyPhase(journeyDays);
         rows += '<tr style="background:' + (isSelected && !isInactive ? 'rgba(124,58,237,0.06)' : rowBg) + ';outline:' + (isSelected && !isInactive ? '1px solid rgba(124,58,237,0.2)' : 'none') + ';">' +
           '<td style="text-align:center;padding:0 4px;width:28px;">' +
             '<button onclick="feedbackToggleExpand(\'' + s.key + '\')" title="Correspondence history" style="background:none;border:none;cursor:pointer;font-size:11px;color:#4169E1;padding:4px;border-radius:4px;line-height:1;opacity:' + (isInactive ? '0.3' : '0.7') + ';" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'' + (isInactive ? '0.3' : '0.7') + '\'">' + (isExpanded ? '▼' : '▶') + '</button>' +
@@ -7970,6 +8125,7 @@ function renderFeedbackPage() {
             '<span style="' + nameStyle + '">' + s.name + '</span>' +
             (isInactive ? ' <span style="font-size:10px;color:#bbb;font-weight:400;">inactive</span>' : '') +
             (hasNotes ? ' <span title="Has notes" style="display:inline-block;width:7px;height:7px;background:#4169E1;border-radius:50%;margin-left:5px;vertical-align:middle;flex-shrink:0;"></span>' : '') +
+            (journeyPhase ? ' <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:' + journeyPhase.bg + ';color:' + journeyPhase.color + ';">Day ' + journeyDays + '</span>' : '') +
           '</td>' +
           (locationFilter === 'all' ? '<td style="padding:10px 10px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
           INTERACTIONS.map(i => chk(s.key, i.field, !!t[i.field], isInactive)).join('') +
@@ -8062,6 +8218,9 @@ function renderFeedbackPage() {
         '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">💬 Feedback</div>' +
       '</div>' +
     '</div>' +
+
+    // ── First 90 Days tracker ──
+    renderOnboardingSection(byFilter, locationFilter) +
 
     // ── Quick-add + inactive toggle ──
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">' +
