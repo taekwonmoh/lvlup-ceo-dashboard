@@ -7754,7 +7754,14 @@ function feedbackSyncPreview() {
   html += stat(toDeactivate.length, 'Mark inactive', '#f59e0b', '⏸');
   html += '</div>';
   if (datesIncluded) {
-    html += '<div style="margin-top:8px;padding:7px 10px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:12px;color:#15803d;font-weight:600;">🌱 Enrollment dates detected — new students will be added to the First 90 Days tracker.</div>';
+    // Count existing students who will have their startDate set for the first time
+    const willGetDate = [...existingActive, ...existingInactive].filter(s => {
+      const sd = parsed.find(p => normName(p.name) === normName(s.name));
+      return sd && sd.date && !s.startDate;
+    }).length;
+    html += '<div style="margin-top:8px;padding:7px 10px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:12px;color:#15803d;font-weight:600;">🌱 Enrollment dates detected' +
+      (willGetDate > 0 ? ' — <strong>' + willGetDate + ' existing student' + (willGetDate !== 1 ? 's' : '') + '</strong> will be added to the First 90 Days tracker' : ' — new students will be tracked from their enrollment date') +
+      '.</div>';
   }
 
   if (toDeactivate.length) {
@@ -7807,11 +7814,15 @@ function feedbackSyncConfirm() {
     }
   });
 
-  // Fix any tab-corrupted names in existing students that match a CSV name
+  // For all existing students: populate startDate from CSV if not already set,
+  // and fix any tab-corrupted names
   existing.forEach(s => {
+    const sd = dateByName[normName(s.name)];
+    if (sd && !s.startDate) {
+      updates['feedbackRoster/' + s.key + '/startDate'] = sd;
+    }
     if (s.name && s.name.includes('\t')) {
-      const cleaned = s.name.trim().replace(/\s+/g, ' ');
-      updates['feedbackRoster/' + s.key + '/name'] = cleaned;
+      updates['feedbackRoster/' + s.key + '/name'] = s.name.trim().replace(/\s+/g, ' ');
     }
   });
 
