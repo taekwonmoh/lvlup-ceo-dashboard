@@ -7764,16 +7764,40 @@ function feedbackSyncPreview() {
       '.</div>';
   }
 
-  if (toDeactivate.length) {
+  // Safety check: if >25% of the existing active roster would be deactivated,
+  // block the sync and show a clear warning — this almost always means the CSV
+  // is incomplete, filtered, or the page needs a hard-refresh to pick up name fixes.
+  const deactivatePct = existingActive.length > 0 ? toDeactivate.length / existingActive.length : 0;
+  const dangerousSync = deactivatePct > 0.25 && toDeactivate.length >= 5;
+
+  if (dangerousSync) {
+    html += '<div style="margin-top:10px;padding:12px 14px;background:#fff1f2;border:2px solid #fca5a5;border-radius:10px;">' +
+      '<div style="font-size:13px;font-weight:800;color:#b91c1c;margin-bottom:6px;">⛔ Sync blocked — too many students would be marked inactive</div>' +
+      '<div style="font-size:12px;color:#7f1d1d;line-height:1.6;margin-bottom:8px;">' +
+        '<strong>' + toDeactivate.length + ' of ' + existingActive.length + ' active students</strong> (' + Math.round(deactivatePct * 100) + '%) would be deactivated. This usually means:<br>' +
+        '&nbsp; • The CSV is filtered (e.g. one class, not all active members)<br>' +
+        '&nbsp; • The page needs a hard-refresh — press <kbd style="background:#fee2e2;border:1px solid #fca5a5;border-radius:3px;padding:1px 5px;font-size:11px;">Ctrl+Shift+R</kbd> (Windows) or <kbd style="background:#fee2e2;border:1px solid #fca5a5;border-radius:3px;padding:1px 5px;font-size:11px;">Cmd+Shift+R</kbd> (Mac), then re-upload<br>' +
+        '&nbsp; • The CSV is for a different location than selected' +
+      '</div>' +
+      '<details style="font-size:11px;color:#b91c1c;cursor:pointer;">' +
+        '<summary style="font-weight:700;">Show students that would be deactivated (' + toDeactivate.length + ')</summary>' +
+        '<div style="margin-top:6px;color:#92400e;">' + toDeactivate.map(s => esc(s.name.replace(/\s+/g, ' '))).join(', ') + '</div>' +
+      '</details>' +
+    '</div>';
+    confirmBtn.disabled = true;
+    confirmBtn.style.opacity = '0.4';
+  } else if (toDeactivate.length) {
     html += '<div style="margin-top:10px;padding:8px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;">';
-    html += '<strong>Will be marked inactive:</strong> ' + toDeactivate.map(s => s.name).join(', ');
+    html += '<strong>Will be marked inactive:</strong> ' + toDeactivate.map(s => esc(s.name.replace(/\s+/g, ' '))).join(', ');
     html += '</div>';
   }
 
   html += '</div>';
   previewEl.innerHTML = html;
-  confirmBtn.disabled = false;
-  confirmBtn.style.opacity = '1';
+  if (!dangerousSync) {
+    confirmBtn.disabled = false;
+    confirmBtn.style.opacity = '1';
+  }
 }
 
 function feedbackSyncConfirm() {
