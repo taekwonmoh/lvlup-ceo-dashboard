@@ -7483,6 +7483,110 @@ function feedbackDeleteStudent(studentKey) {
 }
 
 /* ── Smart roster sync ── */
+/* ── GymDesk CSV Parser ──────────────────────────────────── */
+function parseCSVToRows(text) {
+  // RFC 4180 CSV parser — handles quoted fields, embedded commas, and multiline values
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i], nx = text[i + 1];
+    if (inQuotes) {
+      if (ch === '"' && nx === '"') { field += '"'; i++; }       // escaped quote
+      else if (ch === '"')           { inQuotes = false; }        // close quote
+      else                           { field += ch; }             // inner char
+    } else {
+      if      (ch === '"')  { inQuotes = true; }
+      else if (ch === ',')  { row.push(field); field = ''; }
+      else if (ch === '\r') { /* skip CR */ }
+      else if (ch === '\n') { row.push(field); field = ''; rows.push(row); row = []; }
+      else                  { field += ch; }
+    }
+  }
+  if (field !== '' || row.length > 0) { row.push(field); if (row.some(f => f.trim())) rows.push(row); }
+  return rows;
+}
+
+function parseGymDeskCSV(text) {
+  const rows = parseCSVToRows(text);
+  if (rows.length < 2) return { entries: [], warnings: [] };
+
+  const hdr = rows[0].map(h => h.trim().toLowerCase());
+  const col = name => hdr.findIndex(h => h === name || h.includes(name));
+
+  const iFirst  = col('first name');
+  const iLast   = col('last name');
+  const iJoined = col('joined');
+  const iStatus = col('status');
+
+  if (iFirst === -1 || iLast === -1) {
+    return { entries: [], warnings: ['Could not find "First Name" and "Last Name" columns. Make sure you exported the full Members report from GymDesk.'] };
+  }
+
+  const entries = [], warnings = [];
+  rows.slice(1).forEach((row, ri) => {
+    if (row.length <= Math.max(iFirst, iLast)) return;
+    // Only include Active members (if status column present)
+    if (iStatus !== -1 && row[iStatus] && row[iStatus].trim().toLowerCase() !== 'active') return;
+
+    const first = (row[iFirst] || '').trim();
+    const last  = (row[iLast]  || '').trim();
+    if (!first && !last) return;
+    const name = first + (last ? ' ' + last : '');
+
+    let date = null;
+    if (iJoined !== -1 && row[iJoined]) {
+      const raw = row[iJoined].trim();
+      const m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (m) date = m[3] + '-' + m[1].padStart(2,'0') + '-' + m[2].padStart(2,'0');
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) date = raw;
+    }
+    entries.push({ name, date });
+  });
+
+  return { entries, warnings };
+}
+
+function feedbackSyncParseCSV(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('fbCSVStatus');
+  if (statusEl) { statusEl.innerHTML = '⏳ Parsing…'; statusEl.style.color = '#888'; }
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const { entries, warnings } = parseGymDeskCSV(e.target.result);
+    const textarea = document.getElementById('fbSyncText');
+    if (!textarea) return;
+
+    if (entries.length === 0) {
+      if (statusEl) {
+        statusEl.innerHTML = '⚠️ ' + (warnings[0] || 'No active members found in this file.');
+        statusEl.style.color = '#b45309';
+      }
+      return;
+    }
+
+    // Populate the textarea with name + optional date (feeds existing sync flow)
+    textarea.value = entries
+      .map(p => p.name + (p.date ? '\t' + p.date : ''))
+      .join('\n');
+    feedbackSyncPreview();
+
+    const withDates = entries.filter(p => p.date).length;
+    if (statusEl) {
+      statusEl.innerHTML =
+        '✅ <strong>' + entries.length + ' active members</strong> parsed' +
+        (withDates ? ' · <strong>' + withDates + '</strong> with enrollment dates → First 90 Days tracker will auto-populate' : '') +
+        (warnings.length ? '<br><span style="color:#b45309;">⚠ ' + warnings.join(' ') + '</span>' : '');
+      statusEl.style.color = '#15803d';
+    }
+  };
+  reader.onerror = () => {
+    if (statusEl) { statusEl.innerHTML = '❌ Could not read file.'; statusEl.style.color = '#dc2626'; }
+  };
+  reader.readAsText(file);
+}
+
 function feedbackOpenSync(preselectedLoc) {
   const existing = document.getElementById('fbSyncModal');
   if (existing) existing.remove();
@@ -7497,24 +7601,33 @@ function feedbackOpenSync(preselectedLoc) {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;';
   modal.innerHTML = `
     <div style="background:#fff;border-radius:14px;padding:28px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.2);">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <h3 style="margin:0;font-size:16px;font-weight:800;color:#1a1a2e;">🔄 Sync Student Roster</h3>
         <button onclick="document.getElementById('fbSyncModal').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa;padding:0 4px;">✕</button>
       </div>
-      <p style="margin:0 0 4px;font-size:13px;color:#666;line-height:1.6;">
-        In GymDesk, run a <strong>Members report</strong>, select the <strong>First Name</strong>, <strong>Last Name</strong> (and optionally <strong>Enrollment Date</strong>) columns, copy, and paste below. New students are added, missing students are marked inactive, and all historical data is preserved. If enrollment date is included, it will auto-populate the First 90 Days tracker.
-      </p>
 
-      <div style="margin-bottom:14px;">
+      <div style="margin-bottom:16px;">
         <label style="font-size:12px;font-weight:700;color:#555;display:block;margin-bottom:5px;">LOCATION</label>
         <select id="fbSyncLoc" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-weight:600;" onchange="feedbackSyncPreview()">
           ${locOptions}
         </select>
       </div>
 
+      <!-- CSV Upload -->
+      <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:6px;">📂 OPTION 1 — Upload GymDesk CSV (recommended)</div>
+        <div style="font-size:12px;color:#555;margin-bottom:10px;line-height:1.5;">In GymDesk → <strong>Members</strong> → export full report as <strong>CSV</strong>. Automatically reads names, enrollment dates, and sets up the First 90 Days tracker.</div>
+        <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:#16a34a;color:#fff;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+          📂 Choose CSV File
+          <input type="file" accept=".csv,.CSV" onchange="feedbackSyncParseCSV(this)" style="display:none;">
+        </label>
+        <div id="fbCSVStatus" style="margin-top:8px;font-size:12px;"></div>
+      </div>
+
+      <!-- Manual paste -->
       <div style="margin-bottom:12px;">
-        <label style="font-size:12px;font-weight:700;color:#555;display:block;margin-bottom:5px;">PASTE STUDENT NAMES</label>
-        <textarea id="fbSyncText" placeholder="John Doe&#10;Jane Smith&#10;&#10;Or with enrollment date (tab-separated):&#10;John Doe	03/15/2026&#10;Jane Smith	04/01/2026" style="width:100%;height:180px;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.6;" oninput="feedbackSyncPreview()"></textarea>
+        <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;">✏️ OPTION 2 — Paste names manually</div>
+        <textarea id="fbSyncText" placeholder="John Doe&#10;Jane Smith&#10;&#10;Optional: include enrollment date (tab-separated):&#10;John Doe	03/15/2026&#10;Jane Smith	04/01/2026" style="width:100%;height:140px;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.6;" oninput="feedbackSyncPreview()"></textarea>
       </div>
 
       <div id="fbSyncPreview" style="margin-bottom:16px;"></div>
