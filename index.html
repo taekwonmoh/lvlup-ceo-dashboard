@@ -524,6 +524,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .h-hm-sq.future{background:transparent;border:1.5px dashed var(--gray-200);cursor:default}
 .h-hm-sq.loading{background:var(--gray-100);animation:h-pulse 1.3s ease-in-out infinite}
 .h-hm-sq.no-day{background:transparent;cursor:default;border:none}
+
+/* ── ACQ Metric Tooltips ───────────────────────────────── */
+.acq-tip{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;background:rgba(65,105,225,.13);color:#4169E1;border-radius:50%;font-size:9px;font-weight:900;cursor:help;position:relative;vertical-align:middle;margin-left:4px;line-height:1;user-select:none;flex-shrink:0}
+.acq-tip:hover{background:rgba(65,105,225,.22)}
+.acq-tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);background:#1e293b;color:#e2e8f0;padding:9px 12px;border-radius:8px;font-size:12px;font-weight:400;line-height:1.55;width:250px;text-align:left;text-transform:none;letter-spacing:0;z-index:300;box-shadow:0 4px 20px rgba(0,0,0,.4);pointer-events:none;white-space:normal;opacity:0;visibility:hidden;transition:opacity .15s,visibility .15s}
+.acq-tip:hover::after{opacity:1;visibility:visible}
+.acq-tip::before{content:'';position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1e293b;z-index:301;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .15s,visibility .15s}
+.acq-tip:hover::before{opacity:1;visibility:visible}
+/* flip tooltip below when near top of page */
+.acq-tip.tip-below::after{bottom:auto;top:calc(100% + 10px)}
+.acq-tip.tip-below::before{bottom:auto;top:calc(100% + 4px);border-top-color:transparent;border-bottom-color:#1e293b}
 .task-item.sortable-ghost{opacity:0.35;background:var(--blue-light)!important;border-radius:8px}
 .task-item.sortable-chosen{background:var(--gray-50)!important;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .l10-table tr.sortable-ghost td{background:var(--blue-light)!important;opacity:0.4}
@@ -8093,6 +8104,39 @@ function renderFeedbackPage() {
    ACQ SCALE DASHBOARD  — PIN-gated · private · ACQ.com framework
    ═══════════════════════════════════════════════════════════ */
 
+const ACQ_TIPS = {
+  mrr:          'Monthly Recurring Revenue. Total auto-pay (EFT) membership revenue collected this month. Count only recurring memberships — not drop-ins, retail, or one-time charges.',
+  grossRevenue: 'Total cash collected this month across all sources: EFT, drop-ins, merchandise, events, late fees. Pull directly from your payment processor or GymDesk revenue report.',
+  cogs:         'Cost of Goods Sold. Direct costs to deliver your service: instructor wages, facility rent & utilities, mat/equipment maintenance. Everything it takes to keep the mats open.',
+  opex:         'Operating Expenses. All other overhead above COGS: admin & sales staff pay, paid advertising, software subscriptions, insurance, and owner pay.',
+  headcount:    'Total employees on payroll this month. Count full-time as 1, part-time as 0.5. Used to calculate Revenue per Employee — a key efficiency metric.',
+  arr:          'Annual Recurring Revenue = MRR x 12. Your annualized run-rate. Hormozi milestone targets: $1M ARR (foundation), $3M (scaling), $10M+ (portfolio-ready).',
+  grossProfit:  'Gross Revenue minus COGS. What remains after paying to deliver your service, before overhead costs.',
+  grossMargin:  '(Gross Profit / Gross Revenue) x 100. Healthy service businesses target 40-65%+. Below 30% signals a cost structure problem — either COGS is too high or pricing too low.',
+  netProfit:    'Gross Profit minus OpEx. Your actual bottom-line profit before owner distributions and taxes. This is what the business truly earns.',
+  netMargin:    '(Net Profit / Gross Revenue) x 100. Hormozi benchmark: aim for 20%+ sustained net margin at scale. Under 10% = limited runway for reinvestment.',
+  revPerEmp:    'Gross Revenue divided by total headcount. Measures team efficiency. A healthy gym should target $8k-$15k per employee per month. Low = overstaffed or underpriced.',
+  leads:        'Total new people who expressed interest this month from this source — form fills, DMs, walk-ins, referral inquiries. Track each source separately for accurate CAC.',
+  trials:       'Leads who actually booked a free trial, intro class, or first session. Lead-to-Trial rate = Trials / Leads. Below 40% = your offer or booking friction needs work.',
+  showRate:     'Shows / Trials Booked. The % of booked trials who actually showed up. Target 70%+. Below 50% means your reminder sequence or qualification process needs work.',
+  closes:       'Trials who converted to a paid membership this month. This is your real new member count. Should match New Members in the Retention section.',
+  closeRate:    'Closes / Shows. Your sales conversion rate on the floor. Target 60%+. Below 40% = offer weakness, pricing issue, or sales skill gap.',
+  adSpend:      'Total paid advertising spend for this channel this month (Meta Ads, Google, etc.). Enter $0 for organic and referral rows — their CAC comes from time cost, not media spend.',
+  cac:          'Customer Acquisition Cost = Ad Spend / Closes. How much it costs to acquire one new member. Hormozi rule: your CAC must stay well below LTV / 3 to maintain a healthy ratio.',
+  atv:          'Average Transaction Value. The first payment amount when a new member joins. Include the enrollment fee + first month EFT. Raising ATV is the fastest lever on LTV.',
+  activeMembers:'Total paying active members at the end of this month. Pull the active member count directly from GymDesk. This is your baseline for all retention calculations.',
+  newMembers:   'Members who started their paid membership this month. Should match your total Closes from the Acquisition Funnel above. Use this to double-check funnel accuracy.',
+  cancellations:'Members who cancelled or did not renew this month. Your single most important number to minimize. One cancellation prevented is worth more than one new member acquired.',
+  reactivations:'Former members who returned and rejoined this month. Track separately — they convert at a much higher rate than cold leads and cost far less to win back.',
+  avgTenure:    'Average number of months a member stays before cancelling. Pull from GymDesk cohort reports or estimate from your longest-running members. Every extra month multiplies LTV.',
+  churnRate:    'Cancellations / Active Members x 100. Monthly churn rate. Hormozi benchmark: under 3% monthly is healthy. 5%+ is a retention emergency that must be fixed before scaling.',
+  avgEFT:       'Average EFT per Member = MRR / Active Members. Your average monthly revenue per paying member. Increase this by improving your offer stack, upsells, or pricing tier mix.',
+  ltv:          'Lifetime Value = Avg EFT x Avg Tenure. The most important number in your business. A $110/mo member who stays 18 months = $1,980 LTV. Doubling tenure doubles LTV.',
+  totalCAC:     'Blended CAC = Total Ad Spend / Total New Members (all sources combined). Your all-in average cost to acquire one member. Compare this against LTV to know if growth is profitable.',
+  ltvCac:       'LTV divided by CAC — the Hormozi Golden Ratio. 3:1 minimum to be viable. 5:1 is strong and scalable. 10:1+ means you should be investing heavily in growth. Below 2:1 = burning capital.',
+  nrr:          'Net Revenue Retention = ((Active - Cancels + Reactivations) / Active) x 100. Above 95% is healthy. Above 100% means your base is compounding even without new members.',
+};
+
 const ACQ_SOURCES = [
   { key: 'paid',     label: 'Paid',     icon: '💰', hasSpend: true  },
   { key: 'organic',  label: 'Organic',  icon: '🌱', hasSpend: false },
@@ -8292,10 +8336,11 @@ function renderAcqDashboard() {
     'oninput="acqSave(\'' + f + '\',this.value)" ' +
     'style="width:' + (w || 90) + 'px;border:1px solid #dde1f0;border-radius:7px;padding:5px 7px;font-size:13px;' +
     'font-weight:500;font-family:inherit;text-align:right;background:#fcfcff;color:#1a1a2e;">';
-  const kpi = (label, val, t, benchFn, note) => {
+  const T = k => ACQ_TIPS[k] ? '<span class="acq-tip" data-tip="' + esc(ACQ_TIPS[k]) + '">?</span>' : '';
+  const kpi = (label, val, t, benchFn, note, tipKey) => {
     const b = benchFn ? benchFn() : null;
     return '<div style="flex:1;min-width:120px;background:#fff;border:1px solid #dde1f0;border-radius:10px;padding:12px 14px;text-align:center;">' +
-      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:4px;">' + label + '</div>' +
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:2px;">' + label + (tipKey ? T(tipKey) : '') + '</div>' +
       '<div style="font-size:20px;font-weight:800;color:' + (b ? b.c : '#1a1a2e') + ';">' + fmt(val, t) + (b ? ' <span style="font-size:13px;">' + b.d + '</span>' : '') + '</div>' +
       (note ? '<div style="font-size:10px;color:#aaa;margin-top:2px;">' + note + '</div>' : '') +
       '</div>';
@@ -8327,13 +8372,13 @@ function renderAcqDashboard() {
   html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#475569;margin-bottom:12px;">ACQ Health Indicators</div>';
   html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
   [
-    { l: 'LTV : CAC',      v: ltvCac,     t: 'x', b: bLtvCac, note: 'Target ≥ 3×'  },
-    { l: 'Monthly Churn',  v: churnRate,  t: '%', b: bChurn,  note: 'Target < 3%'  },
-    { l: 'Gross Margin',   v: grossMargin,t: '%', b: bGrossM, note: 'Target ≥ 40%' },
-    { l: 'MRR Growth',     v: mrrGrowth,  t: 'g', b: bGrowth, note: 'vs prior month'},
+    { l: 'LTV : CAC',      v: ltvCac,     t: 'x', b: bLtvCac, note: 'Target ≥ 3×',   tip: 'ltvCac'      },
+    { l: 'Monthly Churn',  v: churnRate,  t: '%', b: bChurn,  note: 'Target < 3%',   tip: 'churnRate'   },
+    { l: 'Gross Margin',   v: grossMargin,t: '%', b: bGrossM, note: 'Target ≥ 40%',  tip: 'grossMargin' },
+    { l: 'MRR Growth',     v: mrrGrowth,  t: 'g', b: bGrowth, note: 'vs prior month', tip: 'mrr'        },
   ].forEach(x => {
     html += '<div style="flex:1;min-width:130px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:10px;padding:12px 14px;">' +
-      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin-bottom:4px;">' + x.l + '</div>' +
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin-bottom:4px;display:flex;align-items:center;gap:3px;">' + x.l + T(x.tip) + '</div>' +
       '<div style="font-size:22px;font-weight:800;color:' + x.b.c + ';">' + fmt(x.v, x.t) + ' ' + x.b.d + '</div>' +
       '<div style="font-size:10px;color:#475569;margin-top:3px;">' + x.note + '</div>' +
       '</div>';
@@ -8346,22 +8391,22 @@ function renderAcqDashboard() {
   html += '<div style="padding:16px 18px;">';
   html += '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;align-items:flex-end;">';
   [
-    { f: 'mrr',          l: 'MRR ($)'        },
-    { f: 'grossRevenue', l: 'Gross Revenue ($)'},
-    { f: 'cogs',         l: 'COGS ($)'        },
-    { f: 'opex',         l: 'OpEx ($)'        },
-    { f: 'headcount',    l: 'Headcount'       },
+    { f: 'mrr',          l: 'MRR ($)',          tip: 'mrr'          },
+    { f: 'grossRevenue', l: 'Gross Revenue ($)', tip: 'grossRevenue' },
+    { f: 'cogs',         l: 'COGS ($)',          tip: 'cogs'         },
+    { f: 'opex',         l: 'OpEx ($)',          tip: 'opex'         },
+    { f: 'headcount',    l: 'Headcount',         tip: 'headcount'    },
   ].forEach(x => {
-    html += '<div><div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">' + x.l + '</div>' + inp(x.f, v(x.f), 110) + '</div>';
+    html += '<div><div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:flex;align-items:center;gap:2px;">' + x.l + T(x.tip) + '</div>' + inp(x.f, v(x.f), 110) + '</div>';
   });
   html += '</div>';
   html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
-  html += kpi('ARR', arr, '$', null, 'MRR × 12');
-  html += kpi('Gross Profit', grossProfit, '$');
-  html += kpi('Gross Margin', grossMargin, '%', () => dot(grossMargin, 40, 25));
-  html += kpi('Net Profit', netProfit, '$');
-  html += kpi('Net Margin', netMargin, '%', () => dot(netMargin, 20, 10));
-  html += kpi('Rev / Employee', revPerEmp, '$');
+  html += kpi('ARR',           arr,        '$', null,                          'MRR × 12',    'arr');
+  html += kpi('Gross Profit',  grossProfit,'$', null,                          null,          'grossProfit');
+  html += kpi('Gross Margin',  grossMargin,'%', () => dot(grossMargin, 40, 25), null,         'grossMargin');
+  html += kpi('Net Profit',    netProfit,  '$', null,                          null,          'netProfit');
+  html += kpi('Net Margin',    netMargin,  '%', () => dot(netMargin, 20, 10),  null,          'netMargin');
+  html += kpi('Rev / Employee',revPerEmp,  '$', null,                          null,          'revPerEmp');
   html += '</div></div></div>';
 
   /* ── Acquisition Funnel ── */
@@ -8370,8 +8415,18 @@ function renderAcqDashboard() {
   html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">';
   html += '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:620px;">';
   html += '<thead><tr style="background:#f5f7ff;">';
-  ['Source','Leads','Trials','Show %','Closes','Close %','Ad Spend','CAC','ATV ($)'].forEach((h,i) =>
-    html += '<th style="padding:9px ' + (i===0?'14':'8') + 'px;text-align:' + (i===0?'left':'center') + ';font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#4169E1;border-bottom:2px solid #dde1f0;">' + h + '</th>');
+  [
+    { h: 'Source',   tip: null },
+    { h: 'Leads',    tip: 'leads'    },
+    { h: 'Trials',   tip: 'trials'   },
+    { h: 'Show %',   tip: 'showRate' },
+    { h: 'Closes',   tip: 'closes'   },
+    { h: 'Close %',  tip: 'closeRate'},
+    { h: 'Ad Spend', tip: 'adSpend'  },
+    { h: 'CAC',      tip: 'cac'      },
+    { h: 'ATV ($)',  tip: 'atv'      },
+  ].forEach((col, i) =>
+    html += '<th style="padding:9px ' + (i===0?'14':'8') + 'px;text-align:' + (i===0?'left':'center') + ';font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#4169E1;border-bottom:2px solid #dde1f0;">' + col.h + (col.tip ? T(col.tip) : '') + '</th>');
   html += '</tr></thead><tbody>';
 
   ACQ_SOURCES.forEach((src, idx) => {
@@ -8417,22 +8472,22 @@ function renderAcqDashboard() {
   html += '<div style="padding:16px 18px;">';
   html += '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;align-items:flex-end;">';
   [
-    { f: 'activeMembers', l: 'Active Members' },
-    { f: 'newMembers',    l: 'New Members'    },
-    { f: 'cancellations', l: 'Cancellations'  },
-    { f: 'reactivations', l: 'Reactivations'  },
-    { f: 'avgTenure',     l: 'Avg Tenure (mo)'},
+    { f: 'activeMembers', l: 'Active Members', tip: 'activeMembers' },
+    { f: 'newMembers',    l: 'New Members',    tip: 'newMembers'    },
+    { f: 'cancellations', l: 'Cancellations',  tip: 'cancellations' },
+    { f: 'reactivations', l: 'Reactivations',  tip: 'reactivations' },
+    { f: 'avgTenure',     l: 'Avg Tenure (mo)', tip: 'avgTenure'   },
   ].forEach(x => {
-    html += '<div><div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">' + x.l + '</div>' + inp(x.f, v(x.f), 100) + '</div>';
+    html += '<div><div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:flex;align-items:center;gap:2px;">' + x.l + T(x.tip) + '</div>' + inp(x.f, v(x.f), 100) + '</div>';
   });
   html += '</div>';
   html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
-  html += kpi('Monthly Churn',   churnRate, '%', () => dot(churnRate, 3, 5, false));
-  html += kpi('Avg EFT / Mo',    avgEFT,    '$');
-  html += kpi('LTV',             ltv,       '$');
-  html += kpi('Blended CAC',     totCAC,    '$');
-  html += kpi('LTV : CAC',       ltvCac,    'x', () => dot(ltvCac, 3, 2), 'Target ≥ 3×');
-  html += kpi('Net Revenue Ret', nrr,       '%', () => dot(nrr, 95, 90),  'Target ≥ 95%');
+  html += kpi('Monthly Churn',   churnRate, '%', () => dot(churnRate, 3, 5, false), null,          'churnRate');
+  html += kpi('Avg EFT / Mo',    avgEFT,    '$', null,                              null,          'avgEFT');
+  html += kpi('LTV',             ltv,       '$', null,                              null,          'ltv');
+  html += kpi('Blended CAC',     totCAC,    '$', null,                              null,          'totalCAC');
+  html += kpi('LTV : CAC',       ltvCac,    'x', () => dot(ltvCac, 3, 2),          'Target ≥ 3×', 'ltvCac');
+  html += kpi('Net Revenue Ret', nrr,       '%', () => dot(nrr, 95, 90),           'Target ≥ 95%','nrr');
   html += '</div></div></div>';
 
   /* ── Month Notes ── */
