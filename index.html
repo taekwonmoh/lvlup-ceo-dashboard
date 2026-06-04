@@ -1884,7 +1884,14 @@ function migrateFeedbackTrackingToAll() {
 }
 
 /*  -  -  Navigation  -  -  */
-function setSection(s) { state.activeSection = s; render(); }
+function setSection(s) {
+  state.activeSection = s;
+  // Remember last-visited sub-section per group so tabs restore correctly
+  if (['tasks','l10','events'].includes(s))                   state.opsSection     = s;
+  if (['scorecard','goals','acq','marketing'].includes(s))    state.growthSection  = s;
+  if (['development','rocks'].includes(s))                    state.developSection = s;
+  render();
+}
 function changeWeek(d) { state.weekOffset += d; listenAll(); }
 function changeScorecardMonth(d) { state.scMonthOffset += d; listenAll(); }
 
@@ -2088,6 +2095,71 @@ function initSortable() {
   });
 }
 
+/* ── Group page helpers ────────────────────────────────── */
+function renderGroupSubNav(tabs) {
+  const cur = state.activeSection;
+  let html = '<div class="loc-selector" style="margin-bottom:16px;">';
+  tabs.forEach(t => {
+    const active = cur === t.id;
+    html += '<button class="loc-btn ' + (active ? 'active lvlup' : '') + '" onclick="setSection(\'' + t.id + '\')">' + t.label + '</button>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderOpsPage() {
+  const s = state.activeSection;
+  const nav = renderGroupSubNav([
+    { id: 'tasks',  label: '✅ Tasks'   },
+    { id: 'l10',    label: '🤝 L10'     },
+    { id: 'events', label: '📅 Events'  },
+  ]);
+  if (s === 'l10')    return nav + renderL10Page();
+  if (s === 'events') return nav + renderEventsPage();
+  return nav + renderTasksPage();
+}
+
+function renderMembersPage() {
+  return renderFeedbackPage();
+}
+
+function renderGrowthPage() {
+  const s = state.activeSection;
+  const nav = renderGroupSubNav([
+    { id: 'scorecard',  label: '📊 Scorecard'  },
+    { id: 'goals',      label: '🎯 Goals'       },
+    { id: 'marketing',  label: '📱 Marketing'   },
+    { id: 'acq',        label: '📈 Scale'        },
+  ]);
+  if (s === 'goals')     return nav + renderGoalsPage();
+  if (s === 'marketing') return nav + renderMarketingPage();
+  if (s === 'acq')       return nav + renderAcqPage();
+  return nav + renderScorecardPage();
+}
+
+function renderDevelopPage() {
+  const s = state.activeSection;
+  const nav = renderGroupSubNav([
+    { id: 'development', label: '📚 Resources' },
+    { id: 'rocks',       label: '🪨 Rocks'     },
+  ]);
+  if (s === 'rocks') return nav + renderRocksPage();
+  return nav + renderDevelopmentPage();
+}
+
+function renderMarketingPage() {
+  return '<div class="page" style="max-width:800px;">' +
+    '<h2 style="margin:0 0 4px;font-size:18px;font-weight:800;color:#1a1a2e;">📱 Marketing</h2>' +
+    '<p style="margin:0 0 20px;font-size:13px;color:#888;">Social media content planning, campaign management, and project tracking.</p>' +
+    '<div style="background:#fff;border:1px solid #e0e3ed;border-radius:14px;padding:36px 28px;text-align:center;box-shadow:var(--shadow);">' +
+      '<div style="width:56px;height:56px;background:#f0f4ff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 14px;">📋</div>' +
+      '<h3 style="margin:0 0 6px;font-size:16px;font-weight:800;color:#1a1a2e;">Social Media Projects</h3>' +
+      '<p style="margin:0 0 22px;font-size:13px;color:#888;max-width:380px;margin-left:auto;margin-right:auto;line-height:1.6;">Content calendar, campaign planning, post scheduling, and creative briefs — tracked in Asana.</p>' +
+      '<a href="https://app.asana.com/1/1215361270408183/project/1215365592958652/board/1215365594244809" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;background:#4169E1;color:#fff;text-decoration:none;border-radius:10px;font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(65,105,225,.3);">Open Social Media Board <span style="font-size:16px;">→</span></a>' +
+    '</div>' +
+  '</div>';
+}
+
 function render() {
   const app = document.getElementById('app');
   // Backward-compat: old links to removed tabs redirect into merged pages
@@ -2096,39 +2168,41 @@ function render() {
   const s = state.activeSection;
 
   app.innerHTML = renderHeader() +
-    (s === 'home'        ? renderHomePage() :
-     s === 'wall'        ? renderWallPage() :
-     s === 'scorecard'   ? renderScorecardPage() :
-     s === 'rocks'       ? renderRocksPage() :
-     s === 'events'      ? renderEventsPage() :
-     s === 'goals'       ? renderGoalsPage() :
-     s === 'tasks'       ? renderTasksPage() :
-     s === 'l10'         ? renderL10Page() :
-     s === 'watchlist'   ? renderFeedbackPage() :
-     s === 'development' ? renderDevelopmentPage() :
-     s === 'feedback'    ? renderFeedbackPage() :
-     s === 'acq'         ? renderAcqPage()      : '');
+    (s === 'home'                                                              ? renderHomePage()    :
+     s === 'wall'                                                              ? renderWallPage()    :
+     ['tasks','l10','events'].includes(s)                                     ? renderOpsPage()     :
+     ['feedback','watchlist'].includes(s)                                     ? renderMembersPage() :
+     ['scorecard','goals','acq','marketing'].includes(s)                      ? renderGrowthPage()  :
+     ['development','rocks'].includes(s)                                      ? renderDevelopPage() :
+     '');
   if (s === 'scorecard' && state.scorecardTab === 'performance') initKPICharts();
   requestAnimationFrame(initSortable);
 }
 
 function renderHeader() {
-  const sections = [
-    { id: 'home',        label: '🏠 Home'        },
-    { id: 'scorecard',   label: '📊 Scorecard'   },
-    { id: 'tasks',       label: '✅ Tasks'        },
-    { id: 'rocks',       label: '🪨 Rocks'        },
-    { id: 'events',      label: '📅 Events'       },
-    { id: 'feedback',    label: '👥 Students'     },
-    { id: 'l10',         label: '🤝 L10'          },
-    { id: 'goals',       label: '🎯 Goals'        },
-    { id: 'development', label: '📚 Resources'    },
-    { id: 'acq',         label: '📈 Scale'        },
+  const cur = state.activeSection;
+  const getGroup = s => {
+    if (s === 'home') return 'home';
+    if (['tasks','l10','events'].includes(s))                  return 'ops';
+    if (['feedback','watchlist'].includes(s))                  return 'members';
+    if (['scorecard','goals','acq','marketing','performance','monthlyGoals'].includes(s)) return 'growth';
+    if (['development','rocks'].includes(s))                   return 'develop';
+    return null;
+  };
+  const activeGroup = getGroup(cur);
+  const tabs = [
+    { group: 'home',    label: '🏠 Home',     target: () => 'home' },
+    { group: 'ops',     label: '⚙️ Ops',      target: () => state.opsSection     || 'tasks'       },
+    { group: 'members', label: '👥 Members',  target: () => 'feedback'            },
+    { group: 'growth',  label: '📈 Growth',   target: () => state.growthSection  || 'scorecard'   },
+    { group: 'develop', label: '📚 Develop',  target: () => state.developSection || 'development' },
   ];
   return '<div class="header">' +
     '<h1><span style="font-family:Arial Black,sans-serif;font-weight:900;color:#4169E1;letter-spacing:-1px;font-size:1.4rem">LVLUP</span> <span style="color:#999;font-weight:300">/</span> <span style="font-family:Arial Black,sans-serif;font-weight:900;color:#e94560;letter-spacing:-0.5px;font-size:1.4rem">Go Ninja</span> <span>HQ Dashboard</span></h1>' +
     '<div class="nav-tabs">' +
-    sections.map(s => '<button class="nav-tab ' + (state.activeSection === s.id ? 'active' : '') + '" onclick="setSection(\'' + s.id + '\')">' + s.label + '</button>').join('') +
+    tabs.map(t =>
+      '<button class="nav-tab ' + (activeGroup === t.group ? 'active' : '') + '" onclick="setSection(\'' + t.target() + '\')">' + t.label + '</button>'
+    ).join('') +
     '</div></div>';
 }
 
@@ -3469,6 +3543,9 @@ function updateConnStatus(online) {
 /*  -  -  Init  -  -  */
 
 /*  -  -  Tasks Hub State  -  -  */
+state.opsSection     = 'tasks';
+state.growthSection  = 'scorecard';
+state.developSection = 'development';
 state.tasksLoc = 'mirandaS';
 state.tasksDate = new Date().toISOString().split('T')[0];
 state.tasksCycleWeek = 1;
@@ -6773,6 +6850,16 @@ function renderDevelopmentPage() {
   const tabLabel = tab === 'gymdesk' ? 'GymDesk Training' : 'Instructor Development';
 
   let html = '';
+
+  // Google Drive quick-access card
+  html += '<div style="background:#fff;border:1px solid #e0e3ed;border-radius:12px;box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">';
+  html += '<div style="width:42px;height:42px;background:#e8f0fe;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📁</div>';
+  html += '<div style="flex:1;min-width:0;">';
+  html += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;">LVLUP / Go Ninja Shared Drive</div>';
+  html += '<div style="font-size:12px;color:#888;margin-top:2px;">Team files, media, templates, and documents</div>';
+  html += '</div>';
+  html += '<a href="https://drive.google.com/drive/folders/1hcXzPSh5Efv7iPWPxj6FDlbVfgJgmSXU?usp=sharing" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;background:#4169E1;color:#fff;text-decoration:none;border-radius:8px;font-size:13px;font-weight:700;white-space:nowrap;flex-shrink:0;">Open Drive →</a>';
+  html += '</div>';
 
   // Hero + tab switcher
   html += '<div class="section" style="padding:20px 24px">';
