@@ -7613,22 +7613,29 @@ function feedbackOpenSync(preselectedLoc) {
         </select>
       </div>
 
+      <!-- Step-by-step GymDesk instructions -->
+      <div style="background:#f8f9ff;border:1px solid #dde1f0;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:800;color:#4169E1;margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px;">How to export from GymDesk</div>
+        <ol style="margin:0;padding-left:18px;font-size:13px;color:#444;line-height:1.8;">
+          <li>Log in to <strong>GymDesk</strong></li>
+          <li>Click <strong>Members</strong> in the left sidebar</li>
+          <li>At the top right, click <strong>Export</strong> → <strong>Export to CSV</strong></li>
+          <li>Save the downloaded <code style="background:#e8eaf0;padding:1px 5px;border-radius:4px;font-size:12px;">.csv</code> file to your computer</li>
+          <li>Upload it below — names, enrollment dates, and the First 90 Days tracker all populate automatically</li>
+        </ol>
+      </div>
+
       <!-- CSV Upload -->
-      <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:14px 16px;margin-bottom:14px;">
-        <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:6px;">📂 OPTION 1 — Upload GymDesk CSV (recommended)</div>
-        <div style="font-size:12px;color:#555;margin-bottom:10px;line-height:1.5;">In GymDesk → <strong>Members</strong> → export full report as <strong>CSV</strong>. Automatically reads names, enrollment dates, and sets up the First 90 Days tracker.</div>
-        <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:#16a34a;color:#fff;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
-          📂 Choose CSV File
+      <div style="margin-bottom:16px;">
+        <label style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:#4169E1;color:#fff;border-radius:9px;cursor:pointer;font-size:13px;font-weight:700;width:100%;justify-content:center;box-sizing:border-box;">
+          📂 Choose GymDesk CSV File
           <input type="file" accept=".csv,.CSV" onchange="feedbackSyncParseCSV(this)" style="display:none;">
         </label>
         <div id="fbCSVStatus" style="margin-top:8px;font-size:12px;"></div>
       </div>
 
-      <!-- Manual paste -->
-      <div style="margin-bottom:12px;">
-        <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;">✏️ OPTION 2 — Paste names manually</div>
-        <textarea id="fbSyncText" placeholder="John Doe&#10;Jane Smith&#10;&#10;Optional: include enrollment date (tab-separated):&#10;John Doe	03/15/2026&#10;Jane Smith	04/01/2026" style="width:100%;height:140px;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.6;" oninput="feedbackSyncPreview()"></textarea>
-      </div>
+      <!-- Hidden textarea — populated by CSV parser, drives existing preview/confirm flow -->
+      <textarea id="fbSyncText" style="display:none;" oninput="feedbackSyncPreview()"></textarea>
 
       <div id="fbSyncPreview" style="margin-bottom:16px;"></div>
 
@@ -7867,6 +7874,56 @@ function parseSyncLine(line) {
   return { name, date };
 }
 
+/* ── Journey Touchpoints ────────────────────────────────── */
+const JOURNEY_TOUCHPOINTS = [
+  {
+    id:     'welcome_postcard',
+    icon:   '📬',
+    label:  'Welcome Postcard',
+    desc:   'Send a personalized welcome postcard to their home address.',
+    window: [1, 14],
+    color:  '#2563eb',
+  },
+  {
+    id:     'loom_video',
+    icon:   '🎥',
+    label:  'Amazing Job Loom',
+    desc:   'Record a short Loom video calling out something specific they did great in class.',
+    window: [14, 35],
+    color:  '#7c3aed',
+  },
+  {
+    id:     'orange_belt',
+    icon:   '🥋',
+    label:  'Orange Belt Test',
+    desc:   'Invited and completed their first orange belt test — a huge milestone.',
+    window: [35, 65],
+    color:  '#d97706',
+  },
+  {
+    id:     'adp_upsell',
+    icon:   '⭐',
+    label:  'ADP Conversation',
+    desc:   'Had the Athlete Development Program conversation with the student\'s family.',
+    window: [60, 85],
+    color:  '#15803d',
+  },
+];
+
+function getTouchpointStatus(tp, days) {
+  const [start, end] = tp.window;
+  if (days < start)       return 'upcoming';
+  if (days >= start && days <= end) return 'due';
+  return 'overdue';
+}
+
+function feedbackToggleTouchpoint(studentKey, tpId) {
+  const s   = state.feedback.roster[studentKey] || {};
+  const cur = (s.touchpoints || {})[tpId];
+  const val = cur ? null : new Date().toISOString().split('T')[0];
+  db.ref('feedbackRoster/' + studentKey + '/touchpoints/' + tpId).set(val);
+}
+
 function renderOnboardingSection(allStudents, locationFilter) {
   const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
   const list = allStudents
@@ -7907,22 +7964,47 @@ function renderOnboardingSection(allStudents, locationFilter) {
         const startFmt = new Date(s.startDate + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
         const isExpanded = state.feedback.expandedStudents.has(s.key);
 
-        html += '<div class="onboarding-card" style="border-left:3px solid ' + phase.bar + ';" onclick="feedbackToggleExpand(\'' + s.key + '\')">';
-        // Name
+        // Touchpoint summary
+        const tps = s.touchpoints || {};
+        const tpDone = JOURNEY_TOUCHPOINTS.filter(tp => tps[tp.id]).length;
+        const tpDue  = JOURNEY_TOUCHPOINTS.filter(tp => !tps[tp.id] && getTouchpointStatus(tp, s.days) === 'due').length;
+        const tpOver = JOURNEY_TOUCHPOINTS.filter(tp => !tps[tp.id] && getTouchpointStatus(tp, s.days) === 'overdue').length;
+
+        html += '<div class="onboarding-card" style="border-left:3px solid ' + phase.bar + ';flex-wrap:wrap;cursor:pointer;" onclick="feedbackToggleExpand(\'' + s.key + '\')">';
+        // Row 1: name + progress + phase
+        html += '<div style="display:flex;align-items:center;gap:12px;width:100%;">';
         html += '<div style="flex:1;min-width:0;">';
         html += '<div style="font-size:13px;font-weight:700;color:#1a1a2e;">' + esc(s.name) + '</div>';
         html += '<div style="font-size:11px;color:#888;">Started ' + esc(startFmt);
         if (locationFilter === 'all' && s.location) html += ' &nbsp;·&nbsp; ' + esc(LOC_LABELS[s.location] || s.location);
         html += '</div></div>';
-        // Progress bar
-        html += '<div style="min-width:130px;">';
+        html += '<div style="min-width:120px;">';
         html += '<div class="journey-bar-track"><div class="journey-bar-fill" style="width:' + pct + '%;background:' + phase.bar + ';"></div></div>';
         html += '<div style="display:flex;justify-content:space-between;">';
         html += '<span style="font-size:10px;font-weight:700;color:' + phase.color + ';">Day ' + s.days + '</span>';
         html += '<span style="font-size:10px;color:#aaa;">' + left + ' left</span>';
         html += '</div></div>';
-        // Badge
         html += '<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:' + phase.bg + ';color:' + phase.color + ';">' + esc(phase.label) + '</span>';
+        html += '</div>';
+        // Row 2: touchpoint mini icons
+        html += '<div style="display:flex;align-items:center;gap:6px;width:100%;margin-top:8px;padding-top:8px;border-top:1px dashed #e8eaf0;" onclick="event.stopPropagation()">';
+        html += '<span style="font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.3px;margin-right:4px;">Touchpoints</span>';
+        JOURNEY_TOUCHPOINTS.forEach(tp => {
+          const done   = !!tps[tp.id];
+          const status = done ? 'done' : getTouchpointStatus(tp, s.days);
+          const bgMap  = { done:'#dcfce7', due:'#dbeafe', overdue:'#fee2e2', upcoming:'#f1f5f9' };
+          const clrMap = { done:'#15803d', due:'#1d4ed8', overdue:'#b91c1c', upcoming:'#94a3b8' };
+          const labelMap = { done:'✓ Done', due:'Due!', overdue:'Overdue', upcoming:'Soon' };
+          html += '<button onclick="feedbackToggleTouchpoint(\'' + s.key + '\',\'' + tp.id + '\')" ' +
+            'title="' + esc(tp.label) + (done ? ' — completed ' + tps[tp.id] : status === 'due' ? ' — due now' : status === 'overdue' ? ' — overdue' : '') + '" ' +
+            'style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;border:1px solid ' + clrMap[status] + '20;background:' + bgMap[status] + ';cursor:pointer;font-size:11px;font-weight:700;color:' + clrMap[status] + ';white-space:nowrap;">' +
+            tp.icon + ' ' + labelMap[status] +
+            '</button>';
+        });
+        if (tpOver > 0) {
+          html += '<span style="font-size:11px;color:#b91c1c;font-weight:700;margin-left:4px;">⚠ ' + tpOver + ' overdue</span>';
+        }
+        html += '</div>';
         html += '</div>';
 
         // Inline expand if open — reuse the same correspondence panel
@@ -8028,6 +8110,42 @@ function renderStudentLogContent(s, locationFilter, isInactive) {
     }
   }
   content += '</div>';
+
+  /* ── 90-Day Touchpoints ── */
+  if (days !== null) {
+    const tps = s.touchpoints || {};
+    content += '<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px dashed #e8eaf0;">';
+    content += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#4169E1;margin-bottom:8px;">🎯 90-Day Touchpoints</div>';
+    JOURNEY_TOUCHPOINTS.forEach(tp => {
+      const done   = !!tps[tp.id];
+      const status = done ? 'done' : getTouchpointStatus(tp, days);
+      const bgMap  = { done:'#f0fdf4', due:'#eff6ff', overdue:'#fff5f5', upcoming:'#f8f9fc' };
+      const clrMap = { done:'#15803d', due:'#1d4ed8', overdue:'#b91c1c', upcoming:'#94a3b8' };
+      const dotMap = { done:'#22c55e', due:'#3b82f6', overdue:'#ef4444', upcoming:'#e2e8f0' };
+      const labelMap = {
+        done:     '✓ Done',
+        due:      '⚡ Due now',
+        overdue:  '⚠ Overdue',
+        upcoming: 'Day ' + tp.window[0] + '–' + tp.window[1],
+      };
+      content +=
+        '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:' + bgMap[status] + ';border-radius:8px;border-left:3px solid ' + dotMap[status] + ';margin-bottom:5px;">' +
+        '<span style="font-size:16px;flex-shrink:0;">' + tp.icon + '</span>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:12px;font-weight:700;color:#1a1a2e;">' + esc(tp.label) + '</div>' +
+          '<div style="font-size:11px;color:#888;">' + esc(tp.desc) + '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' +
+          '<span style="font-size:10px;font-weight:700;color:' + clrMap[status] + ';white-space:nowrap;">' + labelMap[status] + (done ? ' · ' + tps[tp.id] : '') + '</span>' +
+          (!isInactive ? '<button onclick="feedbackToggleTouchpoint(\'' + skey + '\',\'' + tp.id + '\')" style="padding:3px 9px;border-radius:6px;border:1px solid ' + clrMap[status] + ';background:#fff;color:' + clrMap[status] + ';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">' + (done ? 'Undo' : 'Mark Done') + '</button>' : '') +
+        '</div>' +
+        '</div>';
+    });
+    const total = JOURNEY_TOUCHPOINTS.length;
+    const completed = JOURNEY_TOUCHPOINTS.filter(tp => tps[tp.id]).length;
+    content += '<div style="margin-top:8px;font-size:11px;color:#aaa;text-align:right;">' + completed + ' / ' + total + ' touchpoints complete</div>';
+    content += '</div>';
+  }
 
   /* ── Correspondence log ── */
   if (logs === null) {
