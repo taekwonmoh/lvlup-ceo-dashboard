@@ -884,6 +884,30 @@ const GONINJA_METRICS = [
   { id: 'bdayParties', label: 'Bday Parties' },
 ];
 
+/* Instructor board — Enrollments · Upgrades · Retention (owned by instructors) */
+const INSTRUCTOR_METRICS = [
+  { id: 'dayOneEnroll', label: 'Day-One Enrollments' },
+  { id: 'dayOneClose',  label: 'Day-One Close %', auto: true, pct: true },
+  { id: 'upgrades',     label: 'Upgrades' },
+  { id: 'attendance',   label: 'Attendance %', pct: true },
+  { id: 'touchpoints',  label: 'Onboarding Touchpoints Done' },
+  { id: 'saves',        label: 'At-Risk Saves' },
+  { id: 'attrition',    label: 'Attrition', invert: true },
+];
+
+/* Acquisition board — top of funnel (owned by Ivy / Sales & Marketing) */
+const ACQUISITION_METRICS = [
+  { id: 'leads',        label: 'Leads' },
+  { id: 'trials',       label: 'Trials Booked' },
+  { id: 'trialsShown',  label: 'Trials Shown' },
+  { id: 'leadToTrial',  label: 'Lead → Trial %', auto: true, pct: true },
+  { id: 'dayOneClose',  label: 'Trial → Enroll % (handoff)', auto: true, pct: true },
+];
+
+/* Locations split by board relevance */
+const LVLUP_LOC_IDS   = ['waunakee', 'eastmad', 'verona'];
+const GONINJA_LOC_IDS = ['goninjaW', 'goninjaV'];
+
 const MONTHLY_METRICS = [
   { id: 'grossRevenue', label: 'Gross Revenue', currency: true },
   { id: 'totalMembers', label: 'Total TKD Members' },
@@ -2509,25 +2533,58 @@ function formatTestDate(dateStr) {
 
 /*  -  -  Scorecard Page  -  -  */
 function renderScSubTabs() {
-  const tab = state.scorecardTab || 'weekly';
-  const tabs = [{ id:'weekly', label:'📋 Weekly' }, { id:'performance', label:'📈 KPIs & Financials' }];
+  const tab = state.scorecardTab || 'instructor';
+  const tabs = [{ id:'instructor', label:'🥋 Instructor' }, { id:'acquisition', label:'📣 Acquisition' }, { id:'performance', label:'📈 KPIs & Financials' }];
   return '<div style="display:flex;gap:4px;background:#fff;border-radius:10px;padding:3px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px;">' +
     tabs.map(t => '<button onclick="setScorecardTab(\'' + t.id + '\')" style="padding:7px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;' + (tab === t.id ? 'background:#1a1a2e;color:#fff;' : 'background:transparent;color:#6b7280;') + '">' + t.label + '</button>').join('') +
     '</div>';
 }
 
 function renderScorecardPage() {
+  if (state.scorecardTab === 'weekly') state.scorecardTab = 'instructor';   // migrate old saved tab
+  const tab = state.scorecardTab || 'instructor';
   const subNav = renderScSubTabs();
-  if ((state.scorecardTab || 'weekly') === 'performance') {
-    return subNav + renderPerformancePage();
-  }
+  if (tab === 'performance') return subNav + renderPerformancePage();
 
-  // KPI cards (monthly revenue)
+  const lvlupLocs   = LOCATIONS.filter(l => LVLUP_LOC_IDS.includes(l.id));
+  const goninjaLocs = LOCATIONS.filter(l => GONINJA_LOC_IDS.includes(l.id));
+
+  let html = subNav;
+  if (tab === 'acquisition') {
+    html += renderScBoardNote('📣', 'Acquisition', 'Owned by Ivy — Sales &amp; Marketing', '#0f3460');
+    html += renderRevenueKpiCards();
+    html += renderScWeekNav();
+    html += renderScoreboardTables(ACQUISITION_METRICS, lvlupLocs);
+    html += renderScoreboardTables(GONINJA_METRICS, goninjaLocs);
+  } else {
+    html += renderScBoardNote('🥋', 'Instructor', 'Owned by Instructors — Day-One Enrollments · Upgrades · Retention', '#e94560');
+    html += renderScWeekNav();
+    html += renderScoreboardTables(INSTRUCTOR_METRICS, lvlupLocs);
+  }
+  return html;
+}
+
+function renderScBoardNote(icon, title, subtitle, color) {
+  return '<div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--gray-200);border-left:4px solid ' + color + ';border-radius:10px;padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow);">' +
+    '<span style="font-size:22px;">' + icon + '</span>' +
+    '<div><div style="font-size:14px;font-weight:800;color:#1a1a2e;">' + title + ' Board</div>' +
+    '<div style="font-size:12px;color:#888;">' + subtitle + '</div></div></div>';
+}
+
+function renderScWeekNav() {
+  const weekLabel = getWeekLabel(state.weekOffset);
+  return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:0 2px;">' +
+    '<button onclick="changeWeek(-1)" style="padding:7px 16px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">&larr; Prev Week</button>' +
+    '<span style="font-weight:700;font-size:15px;color:var(--primary);">' + weekLabel + '</span>' +
+    '<button onclick="changeWeek(1)" style="padding:7px 16px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">Next Week &rarr;</button>' +
+    '</div>';
+}
+
+function renderRevenueKpiCards() {
   const monthData = state.scorecard.monthly || {};
   let kpiHtml = '<div class="kpi-grid">';
   LOCATIONS.forEach(loc => {
     const locData = monthData[loc.id] || {};
-    if(document.getElementById('chartNewMembers'))setTimeout(initKPICharts,50);
     const rev = parseFloat(locData.revenue) || 0;
     const curMonthIdx = new Date().getMonth();
     const curMonthShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][curMonthIdx];
@@ -2545,30 +2602,30 @@ function renderScorecardPage() {
       '</div>';
   });
   kpiHtml += '</div>';
+  return kpiHtml;
+}
 
-  // Week navigation
-  const weekLabel = getWeekLabel(state.weekOffset);
-  const weekData = state.scorecard.weekly || {};
+// Auto-metric value (returns a percentage 0-100, or null if not computable)
+function scAutoPct(metricId, locWeekData) {
+  const leads       = parseFloat(locWeekData.leads) || 0;
+  const trials      = parseFloat(locWeekData.trials) || 0;
+  const trialsShown = parseFloat(locWeekData.trialsShown) || trials;
+  const dayOneEnroll = parseFloat(locWeekData.dayOneEnroll) || 0;
+  if (metricId === 'leadToTrial') return leads > 0 ? (trials / leads) * 100 : null;
+  if (metricId === 'dayOneClose') return trialsShown > 0 ? (dayOneEnroll / trialsShown) * 100 : null;
+  return null;
+}
+
+function renderScoreboardTables(metrics, locs) {
+  const weekData  = state.scorecard.weekly || {};
   const goalsData = state.scorecard.goals || {};
+  const goalInStyle = 'width:54px;text-align:center;border:1px solid var(--gray-200);border-radius:6px;padding:3px 5px;font-size:12px;background:var(--gray-50);color:var(--gray-600);';
+  const weekInStyle = 'width:64px;text-align:center;border:1px solid var(--gray-200);border-radius:6px;padding:5px 6px;font-size:15px;font-weight:700;';
+  let html = '';
 
-  let html = subNav + kpiHtml;
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:0 2px;">';
-  html += '<button onclick="changeWeek(-1)" style="padding:7px 16px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">&larr; Prev Week</button>';
-  html += '<span style="font-weight:700;font-size:15px;color:var(--primary);">' + weekLabel + '</span>';
-  html += '<button onclick="changeWeek(1)" style="padding:7px 16px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">Next Week &rarr;</button>';
-  html += '</div>';
-
-  // One card per location
-  LOCATIONS.forEach(loc => {
-    const isGoNinja = loc.id === 'goninjaW' || loc.id === 'goninjaV';
-    const metrics = isGoNinja ? GONINJA_METRICS : WEEKLY_METRICS;
+  locs.forEach(loc => {
     const locWeekData = weekData[loc.id] || {};
     const locGoals = goalsData[loc.id] || {};
-    const leads = parseFloat(locWeekData.leads) || 0;
-    const trials = parseFloat(locWeekData.trials) || 0;
-
-    const goalInStyle = 'width:54px;text-align:center;border:1px solid var(--gray-200);border-radius:6px;padding:3px 5px;font-size:12px;background:var(--gray-50);color:var(--gray-600);';
-    const weekInStyle = 'width:64px;text-align:center;border:1px solid var(--gray-200);border-radius:6px;padding:5px 6px;font-size:15px;font-weight:700;';
 
     html += '<div class="section" style="margin-bottom:16px;">';
     html += '<div class="section-header"><h2>' + esc(loc.name) + '</h2></div>';
@@ -2584,31 +2641,32 @@ function renderScorecardPage() {
       const numVal  = parseFloat(rawVal)  || 0;
       const goalNum = parseFloat(rawGoal) || 0;
 
-      // Lead → Trial % is auto-calculated from leads + trials
-      if (metric.id === 'leadToTrial') {
-        const ltPct = leads > 0 ? (trials / leads * 100).toFixed(0) + '%' : '—';
-        let ltColor = '';
-        if (leads > 0 && rawGoal !== undefined && rawGoal !== '') {
-          ltColor = (trials / leads) >= goalNum ? 'color:#10b981;' : 'color:#ef4444;';
+      // Auto-calculated percentage metrics (read-only This Week)
+      if (metric.auto) {
+        const pctVal = scAutoPct(metric.id, locWeekData);
+        const pctStr = pctVal === null ? '—' : pctVal.toFixed(0) + '%';
+        let color = '';
+        if (pctVal !== null && rawGoal !== undefined && rawGoal !== '') {
+          color = pctVal >= goalNum ? 'color:#10b981;' : 'color:#ef4444;';
         }
         html += '<tr>';
         html += '<td>' + esc(metric.label) + ' <span style="font-size:10px;background:var(--gray-100);color:var(--gray-500);padding:1px 6px;border-radius:999px;font-weight:600;">auto</span></td>';
-        html += '<td style="text-align:center;"><input style="' + goalInStyle + '" value="' + esc(rawGoal !== undefined && rawGoal !== '' ? String(rawGoal) : '') + '" placeholder="—" onchange="updateScorecardGoal(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td>';
-        html += '<td style="text-align:center;font-weight:700;font-size:15px;' + ltColor + '">' + ltPct + '</td>';
+        html += '<td style="text-align:center;"><input style="' + goalInStyle + '" value="' + esc(rawGoal !== undefined && rawGoal !== '' ? String(rawGoal) : '') + '" placeholder="%" onchange="updateScorecardGoal(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td>';
+        html += '<td style="text-align:center;font-weight:700;font-size:15px;' + color + '">' + pctStr + '</td>';
         html += '</tr>';
         return;
       }
 
-      // Color code value vs goal
+      // Color code value vs goal (attrition: lower is better)
       let valColor = '';
       if (rawGoal !== undefined && rawGoal !== '' && numVal > 0) {
-        valColor = metric.id === 'attrition'
+        valColor = metric.invert
           ? (numVal <= goalNum ? '#10b981' : '#ef4444')
           : (numVal >= goalNum ? '#10b981' : '#ef4444');
       }
       const inputBg = valColor === '#10b981' ? '#f0fdf4' : valColor === '#ef4444' ? '#fef2f2' : '#fff';
       const colorStyle = valColor ? 'color:' + valColor + ';border-color:' + valColor + '33;background:' + inputBg + ';' : '';
-      const goalLabel = metric.id === 'attrition' && rawGoal !== undefined && rawGoal !== '' ? '≤' + rawGoal : (rawGoal !== undefined && rawGoal !== '' ? String(rawGoal) : '');
+      const goalLabel = metric.invert && rawGoal !== undefined && rawGoal !== '' ? '≤' + rawGoal : (rawGoal !== undefined && rawGoal !== '' ? String(rawGoal) : '');
 
       html += '<tr>';
       html += '<td>' + esc(metric.label) + '</td>';
@@ -3543,13 +3601,14 @@ state.growthSection  = 'scorecard';
 state.tasksLoc = 'mirandaS';
 state.tasksDate = new Date().toISOString().split('T')[0];
 state.tasksCycleWeek = 1;
+state.tasksCycleWeekManual = false;   // false = auto-track current cycle week; true once user picks a week
 state.tasksData = {};
 state.collapsedSections = {};
 state.goalsLoc = 'waunakee';
 state.goalsMonth = getMonthKey();
 state.goalsData = {};
 state.modalTask = null;
-state.scorecardTab = 'weekly';   // 'weekly' | 'performance'
+state.scorecardTab = 'instructor';   // 'instructor' | 'acquisition' | 'performance'
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
 state.devTab        = 'instructor'; // 'instructor' | 'gymdesk' | 'playbooks'
 state.gdActiveModule = null;
@@ -3642,12 +3701,12 @@ function listenTasks(){
   });activeListeners.push({ref:weeklyRef,event:'value'});
   const _isGN=isGoNinja(emp);
   const cycleKey=getCycleChecklistKey();
-  const cycleRef=_isGN?fbRef(base+'/cycle/'+weekKey):fbRef(base+'/cycle_checklist/'+cycleKey);
+  const cycleRef=_isGN?fbRef(base+'/cycle/'+cycleKey):fbRef(base+'/cycle_checklist/'+cycleKey);
   cycleRef.on('value',snap=>{
     if(!state.tasksData[emp])state.tasksData[emp]={};
     if(_isGN){
       if(!state.tasksData[emp].cycle)state.tasksData[emp].cycle={};
-      state.tasksData[emp].cycle[weekKey]=snap.val()||{};
+      state.tasksData[emp].cycle[cycleKey]=snap.val()||{};
     }else{
       if(!state.tasksData[emp].cycle_checklist)state.tasksData[emp].cycle_checklist={};
       state.tasksData[emp].cycle_checklist[cycleKey]=snap.val()||{};
@@ -3694,7 +3753,7 @@ function completeTask(section,taskId){
   const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),ts=Date.now();
   const monthKey=getTaskMonthKey(),cycleKey=getCycleChecklistKey();
   const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
-  const sKey=section==='cycle_checklist'?cycleKey:section==='monthly'?monthKey:section==='cycle'||section==='weekly'?weekKey:dateKey;
+  const sKey=section==='cycle_checklist'||section==='cycle'?cycleKey:section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
   fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,{ts});
 }
 function completeTaskWithNotes(section,taskId){
@@ -3703,7 +3762,7 @@ function completeTaskWithNotes(section,taskId){
   const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),ts=Date.now();
   const monthKey=getTaskMonthKey(),cycleKey=getCycleChecklistKey();
   const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
-  const sKey=section==='cycle_checklist'?cycleKey:section==='monthly'?monthKey:section==='cycle'||section==='weekly'?weekKey:dateKey;
+  const sKey=section==='cycle_checklist'||section==='cycle'?cycleKey:section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
   const payload={ts};
   if(notes)payload.notes=notes;
   fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,payload);
@@ -3717,7 +3776,7 @@ function undoTask(section,taskId){
   const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
   const cycleKey=getCycleChecklistKey();
   const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
-  const sKey=section==='cycle_checklist'?cycleKey:section==='monthly'?getTaskMonthKey():section==='weekly'||section==='cycle'?weekKey:dateKey;
+  const sKey=section==='cycle_checklist'||section==='cycle'?cycleKey:section==='monthly'?getTaskMonthKey():section==='weekly'?weekKey:dateKey;
   fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,null);
 }
 function cancelModal(){state.modalTask=null;render();}
@@ -3747,7 +3806,7 @@ function changeTasksDate(delta){
   const d=new Date(state.tasksDate+'T12:00:00');d.setDate(d.getDate()+delta);
   state.tasksDate=d.toISOString().split('T')[0];listenTasks();
 }
-function setTasksCycleWeek(w){state.tasksCycleWeek=w;render();}
+function setTasksCycleWeek(w){state.tasksCycleWeek=w;state.tasksCycleWeekManual=true;render();}
 function toggleSection(key){state.collapsedSections[key]=!state.collapsedSections[key];render();}
 function setGoalsLoc(locId){state.goalsLoc=locId;listenGoals();}
 function setGoalsMonth(mk){state.goalsMonth=mk;listenGoals();}
@@ -3990,12 +4049,17 @@ function renderTasksPage(){
   const locData=state.tasksData[loc]||{};
   const dailyData=(locData.daily||{})[dateKey]||{};
   const weeklyData=(locData.weekly||{})[weekKey]||{};
-  const cycleData=(locData.cycle||{})[weekKey]||{};
+  const cycleKey=getCycleChecklistKey();
+  const cycleData=(locData.cycle||{})[cycleKey]||{};
   const monthKey=getTaskMonthKey();
   const monthlyData=(locData.monthly||{})[monthKey]||{};
   const isSaturday=new Date(dateKey+'T12:00:00').getDay()===6;
   const dailyTasks=getDailyTasks(loc).filter(t=>!(isSaturday&&(t.id==='spray_mats'||t.id==='j_spray'))),weeklyRec=getWeeklyRec(loc),monthlyTasks=getMonthlyTasks(loc);
-  const cycleDefs=getCycleTasks(loc),cycleWeek=state.tasksCycleWeek;
+  const cycleDefs=getCycleTasks(loc);
+  const _cInfo=getCurrentCycleInfo();
+  const curCycleWeek=_cInfo?_cInfo.weekNum:1;
+  // Default the cycle-week selector to the current cycle week; keep manual selection if the user clicked one
+  const cycleWeek=state.tasksCycleWeekManual?state.tasksCycleWeek:curCycleWeek;
   const cw=cycleDefs[cycleWeek]||{name:'',tasks:[]};
   // Date label
   const dateObj=new Date(dateKey+'T12:00:00');
@@ -4128,7 +4192,8 @@ function renderTasksPage(){
   if(isGoNinja(loc)){
     html+='<div class="cycle-week-nav">';
     for(let w=1;w<=8;w++){
-      html+='<button class="cycle-week-btn '+(w===cycleWeek?'active':'')+'" onclick="setTasksCycleWeek('+w+')">Wk '+w+'</button>';
+      const isCur=w===curCycleWeek;
+      html+='<button class="cycle-week-btn '+(w===cycleWeek?'active':'')+'" onclick="setTasksCycleWeek('+w+')" title="'+(isCur?'Current week of the cycle':'')+'">Wk '+w+(isCur?' ●':'')+'</button>';
     }
     html+='</div>';
     html+=renderCycleSection('cycle','Week '+cycleWeek+': '+cw.name,cw.tasks,cycleData);
