@@ -838,7 +838,8 @@ let state = {
   devActiveModule: null,
   devQuizAnswers: {},
   devQuizSubmitted: false,
-  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'all', showInactive: false, selectedStudents: new Set(), expandedStudents: new Set(), logs: {}, logForm: null }
+  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'all', showInactive: false, selectedStudents: new Set(), expandedStudents: new Set(), logs: {}, logForm: null },
+  acq: { pinLoaded: false, pin: null, unlocked: false, monthOffset: 0, data: {}, _listeningMk: null, pinError: false }
 };
 
 let debounceTimers = {};
@@ -2088,7 +2089,8 @@ function render() {
      s === 'l10'         ? renderL10Page() :
      s === 'watchlist'   ? renderFeedbackPage() :
      s === 'development' ? renderDevelopmentPage() :
-     s === 'feedback'    ? renderFeedbackPage() : '');
+     s === 'feedback'    ? renderFeedbackPage() :
+     s === 'acq'         ? renderAcqPage()      : '');
   if (s === 'scorecard' && state.scorecardTab === 'performance') initKPICharts();
   requestAnimationFrame(initSortable);
 }
@@ -2104,6 +2106,7 @@ function renderHeader() {
     { id: 'l10',         label: '🤝 L10'          },
     { id: 'goals',       label: '🎯 Goals'        },
     { id: 'development', label: '📚 Resources'    },
+    { id: 'acq',         label: '📈 Scale'        },
   ];
   return '<div class="header">' +
     '<h1><span style="font-family:Arial Black,sans-serif;font-weight:900;color:#4169E1;letter-spacing:-1px;font-size:1.4rem">LVLUP</span> <span style="color:#999;font-weight:300">/</span> <span style="font-family:Arial Black,sans-serif;font-weight:900;color:#e94560;letter-spacing:-0.5px;font-size:1.4rem">Go Ninja</span> <span>HQ Dashboard</span></h1>' +
@@ -6825,11 +6828,14 @@ function renderDevelopmentPage() {
 
   async function init() {
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
+  // Restore ACQ session unlock from sessionStorage
+  if (sessionStorage && sessionStorage.getItem('acqUnlocked') === '1') state.acq.unlocked = true;
   seedIfEmpty();
   seedEMadGoals();
   listenAll();
-    listenTasks();
-    listenGoals();
+  listenTasks();
+  listenGoals();
+  listenAcqPin();
 }
 
 function seedEMadGoals() {
@@ -8081,6 +8087,361 @@ function renderFeedbackPage() {
     '<p style="font-size:12px;color:#aaa;margin-top:12px;text-align:center;">Interactions save automatically · Roster persists across months · Historical data is never deleted on sync</p>' +
 
   '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACQ SCALE DASHBOARD  — PIN-gated · private · ACQ.com framework
+   ═══════════════════════════════════════════════════════════ */
+
+const ACQ_SOURCES = [
+  { key: 'paid',     label: 'Paid',     icon: '💰', hasSpend: true  },
+  { key: 'organic',  label: 'Organic',  icon: '🌱', hasSpend: false },
+  { key: 'referral', label: 'Referral', icon: '🤝', hasSpend: false },
+  { key: 'cold',     label: 'Cold',     icon: '📞', hasSpend: true  },
+];
+
+function getAcqMonthKey() {
+  const d = new Date();
+  d.setMonth(d.getMonth() + state.acq.monthOffset);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function listenAcqPin() {
+  db.ref('acq/pin').on('value', snap => {
+    state.acq.pinLoaded = true;
+    state.acq.pin = snap.val();
+    render();
+  });
+}
+
+function listenAcqData() {
+  activeListeners = activeListeners.filter(l => {
+    if (l._acqData) { l.ref.off(l.event); return false; }
+    return true;
+  });
+  const mk = getAcqMonthKey();
+  state.acq._listeningMk = mk;
+  if (!state.acq.data[mk]) state.acq.data[mk] = {};
+  const ref = db.ref('acq/data/' + mk);
+  ref.on('value', snap => { state.acq.data[mk] = snap.val() || {}; render(); });
+  activeListeners.push({ ref, event: 'value', _acqData: true });
+  // Load prior month once (for MRR growth)
+  const pd = new Date(); pd.setMonth(pd.getMonth() + state.acq.monthOffset - 1);
+  const pmk = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0');
+  if (state.acq.data[pmk] === undefined) {
+    state.acq.data[pmk] = {};
+    db.ref('acq/data/' + pmk).once('value', snap => { state.acq.data[pmk] = snap.val() || {}; render(); });
+  }
+}
+
+function acqChangeMonth(delta) { state.acq.monthOffset += delta; listenAcqData(); }
+
+function acqSave(field, value) {
+  const mk = getAcqMonthKey();
+  clearTimeout(debounceTimers['acq_' + field]);
+  debounceTimers['acq_' + field] = setTimeout(() => {
+    const val = value === '' ? null : field === 'notes' ? value : (+value || null);
+    db.ref('acq/data/' + mk + '/' + field).set(val);
+    if (!state.acq.data[mk]) state.acq.data[mk] = {};
+    state.acq.data[mk][field] = val;
+  }, 600);
+}
+
+function acqTryUnlock() {
+  const el = document.getElementById('acqPinInput');
+  if (!el) return;
+  if (el.value === state.acq.pin) {
+    state.acq.unlocked = true; state.acq.pinError = false;
+    sessionStorage.setItem('acqUnlocked', '1');
+    listenAcqData(); render();
+  } else { state.acq.pinError = true; render(); }
+}
+
+function acqLock() {
+  state.acq.unlocked = false;
+  sessionStorage.removeItem('acqUnlocked');
+  render();
+}
+
+function acqConfirmSetPin() {
+  const p1 = document.getElementById('acqNewPin1'), p2 = document.getElementById('acqNewPin2');
+  if (!p1 || !p2) return;
+  const pin = p1.value.trim();
+  if (pin.length < 4) { p1.style.borderColor = '#ef4444'; return; }
+  if (pin !== p2.value.trim()) { p2.style.borderColor = '#ef4444'; return; }
+  db.ref('acq/pin').set(pin);
+  state.acq.pin = pin; state.acq.pinLoaded = true;
+  state.acq.unlocked = true;
+  sessionStorage.setItem('acqUnlocked', '1');
+  listenAcqData(); render();
+}
+
+function acqResetPin() {
+  if (!confirm('Reset your Scale Dashboard PIN? You will need to create a new one.')) return;
+  db.ref('acq/pin').set(null);
+  state.acq.pin = null; state.acq.unlocked = false;
+  sessionStorage.removeItem('acqUnlocked');
+  render();
+}
+
+/* ── Render entry point ─────────────────────────────────── */
+function renderAcqPage() {
+  if (!state.acq.pinLoaded) {
+    return '<div class="page" style="max-width:400px;margin:80px auto;text-align:center;color:#aaa;font-size:14px;">Loading…</div>';
+  }
+  if (!state.acq.pin) return renderAcqSetPin();
+  if (!state.acq.unlocked) return renderAcqLockScreen();
+  return renderAcqDashboard();
+}
+
+function renderAcqLockScreen() {
+  const err = state.acq.pinError;
+  return '<div style="max-width:320px;margin:80px auto;text-align:center;padding:0 20px;">' +
+    '<div style="font-size:52px;margin-bottom:16px;">🔒</div>' +
+    '<h2 style="font-size:20px;font-weight:800;color:#1a1a2e;margin:0 0 6px;">Scale Dashboard</h2>' +
+    '<p style="color:#aaa;font-size:12px;margin:0 0 24px;text-transform:uppercase;letter-spacing:.5px;">Private · ACQ.com Framework</p>' +
+    '<input id="acqPinInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" ' +
+      'onkeydown="if(event.key===\'Enter\')acqTryUnlock()" ' +
+      'autofocus ' +
+      'style="width:100%;padding:13px;font-size:22px;letter-spacing:8px;text-align:center;border:2px solid ' + (err ? '#ef4444' : '#e0e3ed') + ';border-radius:10px;font-family:inherit;margin-bottom:' + (err ? '6' : '14') + 'px;outline:none;box-sizing:border-box;">' +
+    (err ? '<div style="color:#ef4444;font-size:12px;font-weight:600;margin-bottom:10px;">Incorrect PIN — try again</div>' : '') +
+    '<button onclick="acqTryUnlock()" style="width:100%;padding:13px;background:#4169E1;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;">Unlock →</button>' +
+    '<button onclick="acqResetPin()" style="background:none;border:none;cursor:pointer;font-size:11px;color:#bbb;padding:4px;">Forgot PIN</button>' +
+    '</div>';
+}
+
+function renderAcqSetPin() {
+  return '<div style="max-width:320px;margin:80px auto;text-align:center;padding:0 20px;">' +
+    '<div style="font-size:52px;margin-bottom:16px;">🔐</div>' +
+    '<h2 style="font-size:20px;font-weight:800;color:#1a1a2e;margin:0 0 6px;">Set Your PIN</h2>' +
+    '<p style="color:#888;font-size:13px;margin:0 0 24px;">Create a 4–6 digit PIN to protect this dashboard.</p>' +
+    '<input id="acqNewPin1" type="password" inputmode="numeric" maxlength="6" placeholder="Create PIN" ' +
+      'style="width:100%;padding:13px;font-size:20px;letter-spacing:6px;text-align:center;border:2px solid #e0e3ed;border-radius:10px;font-family:inherit;margin-bottom:10px;outline:none;box-sizing:border-box;">' +
+    '<input id="acqNewPin2" type="password" inputmode="numeric" maxlength="6" placeholder="Confirm PIN" ' +
+      'onkeydown="if(event.key===\'Enter\')acqConfirmSetPin()" ' +
+      'style="width:100%;padding:13px;font-size:20px;letter-spacing:6px;text-align:center;border:2px solid #e0e3ed;border-radius:10px;font-family:inherit;margin-bottom:14px;outline:none;box-sizing:border-box;">' +
+    '<button onclick="acqConfirmSetPin()" style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Create PIN</button>' +
+    '</div>';
+}
+
+/* ── Main dashboard ─────────────────────────────────────── */
+function renderAcqDashboard() {
+  const mk = getAcqMonthKey();
+  if (state.acq._listeningMk !== mk) listenAcqData();
+  const d = state.acq.data[mk] || {};
+  const v = f => (d[f] !== undefined && d[f] !== null ? +d[f] : null);
+
+  const viewDate = new Date(); viewDate.setMonth(viewDate.getMonth() + state.acq.monthOffset);
+  const monthLabel = viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const isCurrent = state.acq.monthOffset === 0;
+
+  /* ── Computed: Financials ── */
+  const mrr = v('mrr'), grossRev = v('grossRevenue'), cogs = v('cogs'), opex = v('opex'), headcount = v('headcount');
+  const arr        = mrr !== null ? mrr * 12 : null;
+  const grossProfit = (grossRev !== null && cogs !== null) ? grossRev - cogs : null;
+  const grossMargin = (grossProfit !== null && grossRev) ? grossProfit / grossRev * 100 : null;
+  const netProfit   = (grossProfit !== null && opex !== null) ? grossProfit - opex : null;
+  const netMargin   = (netProfit !== null && grossRev) ? netProfit / grossRev * 100 : null;
+  const revPerEmp   = (grossRev !== null && headcount) ? grossRev / headcount : null;
+
+  /* ── Computed: Funnel ── */
+  let tLeads = 0, tTrials = 0, tShows = 0, tCloses = 0, tSpend = 0;
+  ACQ_SOURCES.forEach(s => {
+    tLeads  += v('f_' + s.key + '_leads')  || 0;
+    tTrials += v('f_' + s.key + '_trials') || 0;
+    tShows  += v('f_' + s.key + '_shows')  || 0;
+    tCloses += v('f_' + s.key + '_closes') || 0;
+    if (s.hasSpend) tSpend += v('f_' + s.key + '_spend') || 0;
+  });
+  const totShowRate  = tTrials  ? tShows  / tTrials  * 100 : null;
+  const totCloseRate = tShows   ? tCloses / tShows   * 100 : null;
+  const totCAC       = tCloses  ? tSpend  / tCloses        : null;
+
+  /* ── Computed: Retention ── */
+  const actMem = v('activeMembers'), newMem = v('newMembers'), cancel = v('cancellations');
+  const reactiv = v('reactivations'), avgTenure = v('avgTenure');
+  const avgEFT     = (mrr && actMem) ? mrr / actMem : v('avgEFT');
+  const churnRate  = (cancel !== null && actMem) ? cancel / actMem * 100 : null;
+  const ltv        = (avgEFT !== null && avgTenure) ? avgEFT * avgTenure : null;
+  const ltvCac     = (ltv && totCAC) ? ltv / totCAC : null;
+  const nrr        = (actMem && cancel !== null) ? ((actMem - cancel + (reactiv || 0)) / actMem * 100) : null;
+
+  /* ── MRR growth vs prior month ── */
+  const pd = new Date(); pd.setMonth(pd.getMonth() + state.acq.monthOffset - 1);
+  const pmk = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0');
+  const prevMrr = (state.acq.data[pmk] || {}).mrr !== undefined ? +(state.acq.data[pmk].mrr) : null;
+  const mrrGrowth = (mrr !== null && prevMrr) ? (mrr - prevMrr) / prevMrr * 100 : null;
+
+  /* ── Helpers ── */
+  const fmt = (n, t) => {
+    if (n === null || n === undefined || isNaN(n) || !isFinite(n)) return '—';
+    if (t === '$')  return '$' + Math.round(n).toLocaleString();
+    if (t === '%')  return (n >= 0 ? '' : '') + n.toFixed(1) + '%';
+    if (t === 'x')  return n.toFixed(1) + '×';
+    if (t === 'g')  return n >= 0 ? '+' + n.toFixed(1) + '%' : n.toFixed(1) + '%';
+    return Math.round(n).toLocaleString();
+  };
+  const dot = (n, g, y, hi = true) => {
+    if (n === null || isNaN(n) || !isFinite(n)) return { d: '⚪', c: '#94a3b8' };
+    const good = hi ? n >= g : n <= g;
+    const ok   = hi ? n >= y : n <= y;
+    return good ? { d: '🟢', c: '#16a34a' } : ok ? { d: '🟡', c: '#ca8a04' } : { d: '🔴', c: '#dc2626' };
+  };
+  const inp = (f, val, w) =>
+    '<input type="number" value="' + (val !== null && val !== undefined ? val : '') + '" ' +
+    'oninput="acqSave(\'' + f + '\',this.value)" ' +
+    'style="width:' + (w || 90) + 'px;border:1px solid #dde1f0;border-radius:7px;padding:5px 7px;font-size:13px;' +
+    'font-weight:500;font-family:inherit;text-align:right;background:#fcfcff;color:#1a1a2e;">';
+  const kpi = (label, val, t, benchFn, note) => {
+    const b = benchFn ? benchFn() : null;
+    return '<div style="flex:1;min-width:120px;background:#fff;border:1px solid #dde1f0;border-radius:10px;padding:12px 14px;text-align:center;">' +
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:4px;">' + label + '</div>' +
+      '<div style="font-size:20px;font-weight:800;color:' + (b ? b.c : '#1a1a2e') + ';">' + fmt(val, t) + (b ? ' <span style="font-size:13px;">' + b.d + '</span>' : '') + '</div>' +
+      (note ? '<div style="font-size:10px;color:#aaa;margin-top:2px;">' + note + '</div>' : '') +
+      '</div>';
+  };
+
+  let html = '<div class="page" style="max-width:920px;">';
+
+  /* ── Header ── */
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">' +
+    '<div>' +
+      '<h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">📈 Scale Dashboard</h2>' +
+      '<p style="margin:0;font-size:11px;color:#aaa;text-transform:uppercase;letter-spacing:.5px;">ACQ.com Framework · Private</p>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+      '<div style="display:flex;align-items:center;gap:2px;background:#f1f3f9;border-radius:10px;padding:3px;">' +
+        '<button onclick="acqChangeMonth(-1)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 10px;color:#4169E1;font-weight:700;border-radius:7px;">‹</button>' +
+        '<span style="font-size:13px;font-weight:700;color:#1a1a2e;min-width:120px;text-align:center;">' + monthLabel + '</span>' +
+        '<button onclick="if(!(' + isCurrent + '))acqChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 10px;color:' + (isCurrent ? '#ddd' : '#4169E1') + ';font-weight:700;border-radius:7px;">›</button>' +
+      '</div>' +
+      '<button onclick="acqLock()" style="padding:7px 12px;background:#f8f9fc;border:1px solid #dde1f0;border-radius:8px;font-size:12px;cursor:pointer;color:#888;">🔒 Lock</button>' +
+    '</div></div>';
+
+  /* ── Health Score panel ── */
+  const bLtvCac  = dot(ltvCac,   3, 2);
+  const bChurn   = dot(churnRate, 3, 5, false);
+  const bGrossM  = dot(grossMargin, 40, 25);
+  const bGrowth  = dot(mrrGrowth, 10, 5);
+  html += '<div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border-radius:14px;padding:18px 20px;margin-bottom:18px;">';
+  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#475569;margin-bottom:12px;">ACQ Health Indicators</div>';
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+  [
+    { l: 'LTV : CAC',      v: ltvCac,     t: 'x', b: bLtvCac, note: 'Target ≥ 3×'  },
+    { l: 'Monthly Churn',  v: churnRate,  t: '%', b: bChurn,  note: 'Target < 3%'  },
+    { l: 'Gross Margin',   v: grossMargin,t: '%', b: bGrossM, note: 'Target ≥ 40%' },
+    { l: 'MRR Growth',     v: mrrGrowth,  t: 'g', b: bGrowth, note: 'vs prior month'},
+  ].forEach(x => {
+    html += '<div style="flex:1;min-width:130px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:10px;padding:12px 14px;">' +
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin-bottom:4px;">' + x.l + '</div>' +
+      '<div style="font-size:22px;font-weight:800;color:' + x.b.c + ';">' + fmt(x.v, x.t) + ' ' + x.b.d + '</div>' +
+      '<div style="font-size:10px;color:#475569;margin-top:3px;">' + x.note + '</div>' +
+      '</div>';
+  });
+  html += '</div></div>';
+
+  /* ── Core Financials ── */
+  html += '<div style="background:#fff;border:1px solid #dde1f0;border-radius:12px;margin-bottom:14px;overflow:hidden;">';
+  html += '<div style="padding:11px 18px;background:#f8f9ff;border-bottom:1px solid #dde1f0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#1a1a2e;">💰 Core Financials</div>';
+  html += '<div style="padding:16px 18px;">';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;align-items:flex-end;">';
+  [
+    { f: 'mrr',          l: 'MRR ($)'        },
+    { f: 'grossRevenue', l: 'Gross Revenue ($)'},
+    { f: 'cogs',         l: 'COGS ($)'        },
+    { f: 'opex',         l: 'OpEx ($)'        },
+    { f: 'headcount',    l: 'Headcount'       },
+  ].forEach(x => {
+    html += '<div><div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">' + x.l + '</div>' + inp(x.f, v(x.f), 110) + '</div>';
+  });
+  html += '</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+  html += kpi('ARR', arr, '$', null, 'MRR × 12');
+  html += kpi('Gross Profit', grossProfit, '$');
+  html += kpi('Gross Margin', grossMargin, '%', () => dot(grossMargin, 40, 25));
+  html += kpi('Net Profit', netProfit, '$');
+  html += kpi('Net Margin', netMargin, '%', () => dot(netMargin, 20, 10));
+  html += kpi('Rev / Employee', revPerEmp, '$');
+  html += '</div></div></div>';
+
+  /* ── Acquisition Funnel ── */
+  html += '<div style="background:#fff;border:1px solid #dde1f0;border-radius:12px;margin-bottom:14px;overflow:hidden;">';
+  html += '<div style="padding:11px 18px;background:#f8f9ff;border-bottom:1px solid #dde1f0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#1a1a2e;">🎯 Acquisition Funnel</div>';
+  html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:620px;">';
+  html += '<thead><tr style="background:#f5f7ff;">';
+  ['Source','Leads','Trials','Show %','Closes','Close %','Ad Spend','CAC','ATV ($)'].forEach((h,i) =>
+    html += '<th style="padding:9px ' + (i===0?'14':'8') + 'px;text-align:' + (i===0?'left':'center') + ';font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#4169E1;border-bottom:2px solid #dde1f0;">' + h + '</th>');
+  html += '</tr></thead><tbody>';
+
+  ACQ_SOURCES.forEach((src, idx) => {
+    const fk = 'f_' + src.key;
+    const leads = v(fk+'_leads'), trials = v(fk+'_trials'), shows = v(fk+'_shows'), closes = v(fk+'_closes');
+    const spend = v(fk+'_spend'), atv = v(fk+'_atv');
+    const showRate  = (trials && shows !== null) ? shows  / trials * 100 : null;
+    const closeRate = (shows  && closes !== null) ? closes / shows  * 100 : null;
+    const cac       = (src.hasSpend && spend && closes) ? spend / closes : null;
+    const rBg = idx % 2 === 0 ? '#fff' : '#fafbff';
+    const pctColor = p => p === null ? '#aaa' : p >= 70 ? '#16a34a' : p >= 45 ? '#ca8a04' : '#dc2626';
+    html += '<tr style="background:' + rBg + ';border-bottom:1px solid #f0f2fb;">' +
+      '<td style="padding:8px 14px;font-weight:700;color:#1a1a2e;">' + src.icon + ' ' + src.label + '</td>' +
+      '<td style="padding:6px 8px;text-align:center;">' + inp(fk+'_leads',  leads,  68) + '</td>' +
+      '<td style="padding:6px 8px;text-align:center;">' + inp(fk+'_trials', trials, 68) + '</td>' +
+      '<td style="padding:6px 8px;text-align:center;font-weight:700;color:' + pctColor(showRate)  + ';">' + fmt(showRate,  '%') + '</td>' +
+      '<td style="padding:6px 8px;text-align:center;">' + inp(fk+'_closes', closes, 68) + '</td>' +
+      '<td style="padding:6px 8px;text-align:center;font-weight:700;color:' + pctColor(closeRate) + ';">' + fmt(closeRate, '%') + '</td>' +
+      '<td style="padding:6px 8px;text-align:center;">' + (src.hasSpend ? inp(fk+'_spend', spend, 80) : '<span style="color:#ddd;">—</span>') + '</td>' +
+      '<td style="padding:6px 8px;text-align:center;font-weight:700;color:#1a1a2e;">' + fmt(cac, '$') + '</td>' +
+      '<td style="padding:6px 8px;text-align:center;">' + inp(fk+'_atv', atv, 78) + '</td>' +
+      '</tr>';
+  });
+
+  const pctColor = p => p === null ? '#94a3b8' : p >= 70 ? '#16a34a' : p >= 45 ? '#ca8a04' : '#dc2626';
+  html += '<tr style="background:#f0f4ff;border-top:2px solid #4169E1;font-weight:800;">' +
+    '<td style="padding:9px 14px;color:#4169E1;">TOTAL</td>' +
+    '<td style="padding:9px 8px;text-align:center;color:#1a1a2e;">' + fmt(tLeads  || null, '#') + '</td>' +
+    '<td style="padding:9px 8px;text-align:center;color:#1a1a2e;">' + fmt(tTrials || null, '#') + '</td>' +
+    '<td style="padding:9px 8px;text-align:center;color:' + pctColor(totShowRate)  + ';">' + fmt(totShowRate,  '%') + '</td>' +
+    '<td style="padding:9px 8px;text-align:center;color:#1a1a2e;">' + fmt(tCloses || null, '#') + '</td>' +
+    '<td style="padding:9px 8px;text-align:center;color:' + pctColor(totCloseRate) + ';">' + fmt(totCloseRate, '%') + '</td>' +
+    '<td style="padding:9px 8px;text-align:center;color:#1a1a2e;">' + fmt(tSpend  || null, '$') + '</td>' +
+    '<td style="padding:9px 8px;text-align:center;color:#4169E1;">' + fmt(totCAC, '$') + '</td>' +
+    '<td style="padding:9px 8px;text-align:center;color:#94a3b8;">—</td>' +
+    '</tr>';
+
+  html += '</tbody></table></div></div>';
+
+  /* ── Retention & LTV ── */
+  html += '<div style="background:#fff;border:1px solid #dde1f0;border-radius:12px;margin-bottom:14px;overflow:hidden;">';
+  html += '<div style="padding:11px 18px;background:#f8f9ff;border-bottom:1px solid #dde1f0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#1a1a2e;">♻️ Retention &amp; LTV</div>';
+  html += '<div style="padding:16px 18px;">';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;align-items:flex-end;">';
+  [
+    { f: 'activeMembers', l: 'Active Members' },
+    { f: 'newMembers',    l: 'New Members'    },
+    { f: 'cancellations', l: 'Cancellations'  },
+    { f: 'reactivations', l: 'Reactivations'  },
+    { f: 'avgTenure',     l: 'Avg Tenure (mo)'},
+  ].forEach(x => {
+    html += '<div><div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">' + x.l + '</div>' + inp(x.f, v(x.f), 100) + '</div>';
+  });
+  html += '</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+  html += kpi('Monthly Churn',   churnRate, '%', () => dot(churnRate, 3, 5, false));
+  html += kpi('Avg EFT / Mo',    avgEFT,    '$');
+  html += kpi('LTV',             ltv,       '$');
+  html += kpi('Blended CAC',     totCAC,    '$');
+  html += kpi('LTV : CAC',       ltvCac,    'x', () => dot(ltvCac, 3, 2), 'Target ≥ 3×');
+  html += kpi('Net Revenue Ret', nrr,       '%', () => dot(nrr, 95, 90),  'Target ≥ 95%');
+  html += '</div></div></div>';
+
+  /* ── Month Notes ── */
+  html += '<div style="background:#fff;border:1px solid #dde1f0;border-radius:12px;margin-bottom:14px;overflow:hidden;">';
+  html += '<div style="padding:11px 18px;background:#f8f9ff;border-bottom:1px solid #dde1f0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#1a1a2e;">📝 Month Notes</div>';
+  html += '<div style="padding:14px 18px;"><textarea placeholder="Context, wins, bottlenecks, decisions for ' + monthLabel + '…" oninput="acqSave(\'notes\',this.value)" style="width:100%;min-height:80px;border:1px solid #dde1f0;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;color:#1a1a2e;">' + esc(d.notes || '') + '</textarea></div></div>';
+
+  html += '</div>';
+  return html;
 }
 
 init();
