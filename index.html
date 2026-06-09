@@ -3098,6 +3098,7 @@ function renderScorecardPage() {
     (scLoc === 'all' ? lvlupLocs : pickLvlup).forEach(l => html += renderInstructorDaily(l.id));
   }
   html += renderScWizard();
+  html += renderEnrollModal();
   return html;
 }
 
@@ -3126,6 +3127,55 @@ function scdDaysInMonth(){ const d = scdMonthDate(); return new Date(d.getFullYe
 function scdIsToday(day){ const d = scdMonthDate(); const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && day === t.getDate(); }
 function changeScdMonth(n){ state.scdMonthOffset = (state.scdMonthOffset || 0) + n; render(); }
 function scdUpdate(loc, day, metricId, value){ fbDebounce('scorecardDaily/' + loc + '/' + scdMonthKey() + '/' + day + '/' + metricId, value === '' ? null : value); }
+
+// Direct grid entry of an enrollment count → save, then prompt for the new student name(s)
+function scdEnrollChanged(loc, day, metricId, value){
+  scdUpdate(loc, day, metricId, value);
+  const mk = scdMonthKey();
+  // optimistic local update so the cell reflects the value immediately
+  state.scorecardDaily[loc] = state.scorecardDaily[loc] || {};
+  state.scorecardDaily[loc][mk] = state.scorecardDaily[loc][mk] || {};
+  state.scorecardDaily[loc][mk][day] = state.scorecardDaily[loc][mk][day] || {};
+  state.scorecardDaily[loc][mk][day][metricId] = value;
+  const n = parseInt(value) || 0;
+  if (n > 0) { state.enrollModal = { open:true, loc, day, mk, metricId, count:n, names:[] }; render(); setTimeout(() => { const f = document.getElementById('enrollName0'); if (f) f.focus(); }, 60); }
+  else render();
+}
+function enrollName(idx, v){ if (state.enrollModal) { state.enrollModal.names[idx] = v; } }
+function enrollModalClose(){ state.enrollModal = null; render(); }
+function enrollModalAdd(){
+  const em = state.enrollModal; if (!em) return;
+  const norm = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const roster = state.feedback.roster || {};
+  const seen = new Set(Object.values(roster).filter(r => r && r.active !== false).map(r => norm(r.name) + '|' + r.location));
+  const addedMk = getCurrentMonthKey();
+  const startDate = em.mk + '-' + String(em.day).padStart(2, '0');
+  (em.names || []).forEach(nm => {
+    const name = (nm || '').trim(); if (!name) return;
+    const k = norm(name) + '|' + em.loc; if (seen.has(k)) return; seen.add(k);
+    const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    db.ref('feedbackRoster/' + key).set({ name, location: em.loc, active: true, addedDate: addedMk, startDate });
+  });
+  state.enrollModal = null; render();
+}
+function renderEnrollModal(){
+  const em = state.enrollModal; if (!em || !em.open) return '';
+  const locName = (LOCATIONS.find(l => l.id === em.loc) || {}).name || em.loc;
+  const metricLabel = (INSTRUCTOR_DAILY_COLS.find(c => c.id === em.metricId) || {}).label || 'Enrollments';
+  let h = '<div class="modal-overlay" onclick="enrollModalClose()"><div class="modal-box" onclick="event.stopPropagation()" style="max-width:400px;text-align:left;">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:12px;font-weight:700;color:#888;">' + esc(locName) + ' · ' + esc(metricLabel) + '</div><button onclick="enrollModalClose()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#aaa;line-height:1;">×</button></div>';
+  h += '<h3 style="margin:0 0 4px;font-size:19px;font-weight:800;color:#1a1a2e;">✍️ Name your ' + em.count + ' new ' + (em.count === 1 ? 'student' : 'students') + '</h3>';
+  h += '<p style="margin:0 0 14px;font-size:13px;color:#888;line-height:1.5;">They\'ll be added to ' + esc(locName) + '\'s roster &amp; First-90-Days tracker.</p>';
+  for (let k = 0; k < em.count; k++) {
+    const nm = (em.names || [])[k] || '';
+    h += '<input id="enrollName' + k + '" type="text" value="' + esc(nm) + '" placeholder="New student #' + (k + 1) + ' name" oninput="enrollName(' + k + ',this.value)" onkeydown="if(event.key===\'Enter\')enrollModalAdd()" style="width:100%;box-sizing:border-box;padding:11px 12px;font-size:14px;border:1px solid #e0e3ed;border-radius:9px;font-family:inherit;margin-bottom:8px;outline:none;" />';
+  }
+  h += '<div style="display:flex;gap:10px;margin-top:6px;">';
+  h += '<button onclick="enrollModalClose()" style="flex:1;padding:12px;border:1px solid #ddd;border-radius:10px;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#555;">Skip for now</button>';
+  h += '<button onclick="enrollModalAdd()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#16a34a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">Add to Members</button>';
+  h += '</div></div></div>';
+  return h;
+}
 
 function renderScdMonthNav(){
   const monthLabel = scdMonthDate().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -3161,7 +3211,8 @@ function renderInstructorDaily(loc){
       const val = dd[c.id];
       if (c.snapshot) { if (val != null && val !== '') { chunkLast[c.id] = val; monthLast[c.id] = val; } }
       else { const n = parseFloat(val) || 0; monthT[c.id] += n; chunkT[c.id] += n; }
-      h += '<td style="padding:3px;text-align:center;"><input type="number" inputmode="numeric" value="' + (val != null && val !== '' ? esc(String(val)) : '') + '" onchange="scdUpdate(\'' + loc + '\',' + day + ',\'' + c.id + '\',this.value)" style="width:' + (c.currency ? '72' : '54') + 'px;text-align:center;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;"></td>';
+      const cellHandler = c.captureNames ? 'scdEnrollChanged' : 'scdUpdate';
+      h += '<td style="padding:3px;text-align:center;"><input type="number" inputmode="numeric" value="' + (val != null && val !== '' ? esc(String(val)) : '') + '" onchange="' + cellHandler + '(\'' + loc + '\',' + day + ',\'' + c.id + '\',this.value)" style="width:' + (c.currency ? '72' : '54') + 'px;text-align:center;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;"></td>';
     });
     h += '<td style="padding:3px;"><input value="' + esc(dd.notes || '') + '" onchange="scdUpdate(\'' + loc + '\',' + day + ',\'notes\',this.value)" style="width:100%;min-width:110px;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;box-sizing:border-box;"></td>';
     h += '</tr>';
@@ -4312,6 +4363,7 @@ state.scLoc        = 'waunakee';     // scoreboard location filter: gym id | 'al
 state.scWizard     = { open:false, loc:null, step:0 };  // guided nightly check-in
 state.scdMonthOffset = 0;            // instructor nightly grid month offset
 state.scorecardDaily = {};           // nightly instructor counts (Firebase-synced)
+state.enrollModal    = null;         // name-capture prompt for direct grid enrollment entry
 state.adLabTab     = 'playbook';     // Ad Creative: 'playbook' | 'tracker' | 'leaderboard'
 state.adLabFilter  = 'all';          // Hook bank avatar filter
 state.adCreative   = state.adCreative || {};
