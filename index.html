@@ -886,22 +886,22 @@ const GONINJA_METRICS = [
 
 /* Instructor board — Enrollments · Upgrades · Retention (owned by instructors) */
 const INSTRUCTOR_METRICS = [
-  { id: 'dayOneEnroll', label: 'Day-One Enrollments' },
-  { id: 'dayOneClose',  label: 'Day-One Close %', auto: true, pct: true },
-  { id: 'upgrades',     label: 'Upgrades' },
-  { id: 'attendance',   label: 'Attendance %', pct: true },
-  { id: 'touchpoints',  label: 'Onboarding Touchpoints Done' },
-  { id: 'saves',        label: 'At-Risk Saves' },
-  { id: 'attrition',    label: 'Attrition', invert: true },
+  { id: 'dayOneEnroll', label: 'Day-One Enrollments', hint: 'Kids who joined the same day they tried. From the GymDesk new-member report.' },
+  { id: 'dayOneClose',  label: 'Day-One Close %', auto: true, pct: true, hint: 'Auto: day-one enrollments ÷ trials shown.' },
+  { id: 'upgrades',     label: 'Upgrades', hint: 'Members who moved up a program (Leadership, Black Belt Club, ADP).' },
+  { id: 'attendance',   label: 'Attendance %', pct: true, hint: 'Share of your students who showed up this week.' },
+  { id: 'touchpoints',  label: 'Onboarding Touchpoints Done', hint: 'First-90-Days touchpoints you completed this week.' },
+  { id: 'saves',        label: 'At-Risk Saves', hint: 'At-risk kids you kept from quitting this week.' },
+  { id: 'attrition',    label: 'Attrition', invert: true, hint: 'Members who cancelled this week. Lower is better.' },
 ];
 
 /* Acquisition board — top of funnel (owned by Ivy / Sales & Marketing) */
 const ACQUISITION_METRICS = [
-  { id: 'leads',        label: 'Leads' },
-  { id: 'trials',       label: 'Trials Booked' },
-  { id: 'trialsShown',  label: 'Trials Shown' },
-  { id: 'leadToTrial',  label: 'Lead → Trial %', auto: true, pct: true },
-  { id: 'dayOneClose',  label: 'Trial → Enroll % (handoff)', auto: true, pct: true },
+  { id: 'leads',        label: 'Leads', hint: 'New people who inquired this week, across all sources.' },
+  { id: 'trials',       label: 'Trials Booked', hint: 'Free trial classes booked this week.' },
+  { id: 'trialsShown',  label: 'Trials Shown', hint: 'Booked trials who actually showed up.' },
+  { id: 'leadToTrial',  label: 'Lead → Trial %', auto: true, pct: true, hint: 'Auto: trials booked ÷ leads.' },
+  { id: 'dayOneClose',  label: 'Trial → Enroll % (handoff)', auto: true, pct: true, hint: 'Auto: day-one enrollments ÷ trials shown.' },
 ];
 
 /* Locations split by board relevance */
@@ -948,19 +948,19 @@ const WALL_TYPES = [
 const BRYAN_DAILY = [
   {id:'b_opening',   text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
   {id:'b_retail',    text:'Fulfill Retail Orders: Process and package any pending merchandise sales.'},
-  {id:'b_stoplight', text:'Update Stoplight Report: Send 2 postcards or video messages to maintain member touchpoints.'},
+  {id:'b_stoplight', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Send a minimum of 2 Loom videos to keep members connected — log how many you sent today.'},
   {id:'b_closing',   text:'Closing Routine & Venue Check: Spot check/freshen up the men\'s bathroom, straighten the training floor, review rosters, update location Slack regarding new students, and submit the EOS report.'},
 ];
 const NIKKI_DAILY = [
   {id:'n_opening',   text:'Opening Routine: Turn on TV announcements and ensure the EMAD facility is ready for students.'},
   {id:'n_retail',    text:'Fulfill Retail Orders: Process and package any pending merchandise sales.'},
-  {id:'n_stoplight', text:'Update Stoplight Report: Send 2 postcards or video messages to maintain EMAD member touchpoints.'},
+  {id:'n_stoplight', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Send a minimum of 2 Loom videos to keep EMAD members connected — log how many you sent today.'},
   {id:'n_closing',   text:'Closing Routine: Spot check/freshen up EMAD bathrooms, review rosters, update location Slack, and submit the EOS report.'},
 ];
 const JOEY_DAILY = [
   {id:'j_tv',        cat:'Pre-Class Admin', text:'Turn on TV announcements (message @jam in #LVLUPHQ if anything needs updating).'},
   {id:'j_retail',    cat:'Pre-Class Admin', text:'Check GymDesk for pending retail orders (fulfill and notify customers).'},
-  {id:'j_stoplight', cat:'Pre-Class Admin', text:'Review student stoplight report and send your 2 postcards or video messages.'},
+  {id:'j_stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Review the stoplight report, then send a minimum of 2 Loom videos — log how many you sent today.'},
   {id:'j_rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students/class counts, check attendance numbers, and post in your location channel about anyone starting today.'},
   {id:'j_spray',     cat:'Closing & EOS',   text:'Spray mop the training floors.'},
   {id:'j_bathrooms', cat:'Closing & EOS',   text:'Spot check and freshen up the bathrooms.'},
@@ -1196,7 +1196,7 @@ const LVLUP_CYCLE_CHECKLIST = [
   // ── Week 1 — Cycle Launch ──
   {id:'cc_w1_announce', week:1, text:'Announce the new cycle theme and life skill to all classes'},
   {id:'cc_w1_stoplight',week:1, text:'Reset stoplight report — run baseline Red/Yellow/Green for the new cycle'},
-  {id:'cc_w1_outreach', week:1, text:'Outreach to students who didn\'t test last cycle — postcards or video messages'},
+  {id:'cc_w1_outreach', week:1, playbook:'student_outreach', text:'Outreach to students who didn\'t test last cycle — send Loom videos'},
   {id:'cc_w1_bbt',      week:1, text:'Send black belt testing requirements to any students on track'},
   // ── Week 2 ──
   {id:'cc_w2_retain',   week:2, text:'Plan and post a retention event'},
@@ -3097,11 +3097,12 @@ function renderScBoardNote(icon, title, subtitle, color) {
 
 function renderScWeekNav() {
   const weekLabel = getWeekLabel(state.weekOffset);
-  return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:0 2px;">' +
+  return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding:0 2px;">' +
     '<button onclick="changeWeek(-1)" style="padding:7px 16px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">&larr; Prev Week</button>' +
     '<span style="font-weight:700;font-size:15px;color:var(--primary);">' + weekLabel + '</span>' +
     '<button onclick="changeWeek(1)" style="padding:7px 16px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">Next Week &rarr;</button>' +
-    '</div>';
+    '</div>' +
+    '<div style="text-align:center;font-size:11px;color:var(--gray-400);margin-bottom:14px;">📅 Update every Monday for the week that just ended · grey rows marked “auto” calculate themselves</div>';
 }
 
 function renderRevenueKpiCards() {
@@ -3174,7 +3175,7 @@ function renderScoreboardTables(metrics, locs) {
           color = pctVal >= goalNum ? 'color:#10b981;' : 'color:#ef4444;';
         }
         html += '<tr>';
-        html += '<td>' + esc(metric.label) + ' <span style="font-size:10px;background:var(--gray-100);color:var(--gray-500);padding:1px 6px;border-radius:999px;font-weight:600;">auto</span></td>';
+        html += '<td>' + esc(metric.label) + ' <span style="font-size:10px;background:var(--gray-100);color:var(--gray-500);padding:1px 6px;border-radius:999px;font-weight:600;">auto</span>' + (metric.hint ? '<div style="font-size:10px;color:var(--gray-400);font-weight:400;margin-top:2px;line-height:1.35;">' + esc(metric.hint) + '</div>' : '') + '</td>';
         html += '<td style="text-align:center;"><input style="' + goalInStyle + '" value="' + esc(rawGoal !== undefined && rawGoal !== '' ? String(rawGoal) : '') + '" placeholder="%" onchange="updateScorecardGoal(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td>';
         html += '<td style="text-align:center;font-weight:700;font-size:15px;' + color + '">' + pctStr + '</td>';
         html += '</tr>';
@@ -3193,7 +3194,7 @@ function renderScoreboardTables(metrics, locs) {
       const goalLabel = metric.invert && rawGoal !== undefined && rawGoal !== '' ? '≤' + rawGoal : (rawGoal !== undefined && rawGoal !== '' ? String(rawGoal) : '');
 
       html += '<tr>';
-      html += '<td>' + esc(metric.label) + '</td>';
+      html += '<td>' + esc(metric.label) + (metric.hint ? '<div style="font-size:10px;color:var(--gray-400);font-weight:400;margin-top:2px;line-height:1.35;">' + esc(metric.hint) + '</div>' : '') + '</td>';
       html += '<td style="text-align:center;"><input style="' + goalInStyle + '" value="' + esc(goalLabel) + '" placeholder="—" onchange="updateScorecardGoal(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td>';
       html += '<td style="text-align:center;"><input style="' + weekInStyle + colorStyle + '" value="' + esc(rawVal !== undefined && rawVal !== '' ? String(rawVal) : '') + '" placeholder="—" onchange="updateScorecardSimple(\'' + loc.id + '\',\'' + metric.id + '\',this.value)" /></td>';
       html += '</tr>';
@@ -4297,6 +4298,16 @@ function completeTaskWithNotes(section,taskId){
   if(notes)payload.notes=notes;
   fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,payload);
 }
+function completeTaskCount(section,taskId){
+  const el=document.getElementById('count_'+section+'_'+taskId);
+  const n=el?parseInt(el.value,10):NaN;
+  if(!Number.isFinite(n)||n<1){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
+  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),ts=Date.now();
+  const monthKey=getTaskMonthKey(),cycleKey=getCycleChecklistKey();
+  const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
+  const sKey=section==='cycle_checklist'||section==='cycle'?cycleKey:section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
+  fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,{ts,count:n});
+}
 function openTaskPlaybook(pbId){
   state.tab='development';state.devTab='playbooks';state.pbView='playbooks';
   state.pbRole=null;state.pbOpen=pbId;render();
@@ -4695,7 +4706,7 @@ function renderTasksPage(){
       html+='<div style="margin:4px 0 8px;padding:10px 16px;background:var(--gray-50);border-radius:10px;border:1px solid var(--gray-200);">';
       html+='<div style="font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px;">📝 Daily Exception Log</div>';
       html+='<div style="font-size:12px;color:var(--gray-400);margin-bottom:6px;">If any task above was left blank, add a one-sentence explanation before clocking out.</div>';
-      html+='<input id="exceptionLogInput" value="'+esc(exLog)+'" placeholder=\'e.g. "Skipped postcards today because of a 20-min parent meeting after the 6 PM class."\' maxlength="300" onchange="saveExceptionLog(this.value)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;outline:none;color:var(--gray-700);" />';
+      html+='<input id="exceptionLogInput" value="'+esc(exLog)+'" placeholder=\'e.g. "Skipped Loom videos today because of a 20-min parent meeting after the 6 PM class."\' maxlength="300" onchange="saveExceptionLog(this.value)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;outline:none;color:var(--gray-700);" />';
       html+='</div>';
     }
   }
@@ -4900,9 +4911,10 @@ function renderCycleChecklistSection(empId,locData){
 function renderTaskItem(section,task,doneData,isCustom,locked){
   const isDone=!!doneData;
   const hasNotes=!!task.hasNotes;
+  const isCount=!!task.count;
   const hasPlaybook=!!task.playbook;
   let cls='task-item'+(isDone?' done':'')+(locked?' locked':'');
-  const blockStyle=hasNotes?'flex-direction:column;align-items:stretch;gap:8px':'';
+  const blockStyle=(hasNotes||isCount)?'flex-direction:column;align-items:stretch;gap:8px':'';
   let html='<div class="'+cls+'" data-task-id="'+task.id+'"'+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
   // Top row: drag handle + checkbox + text + extras
   html+='<div style="display:flex;align-items:flex-start;gap:10px">';
@@ -4910,15 +4922,32 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   if(isDone){
     html+='<div class="task-check checked"'+(locked?'':' onclick="undoTask(\''+section+'\',\''+task.id+'\')" title="Click to undo"')+'>✓</div>';
   }else{
-    const completeFn=hasNotes?'completeTaskWithNotes(\''+section+'\',\''+task.id+'\')':'completeTask(\''+section+'\',\''+task.id+'\')';
+    const completeFn=isCount?'completeTaskCount(\''+section+'\',\''+task.id+'\')':hasNotes?'completeTaskWithNotes(\''+section+'\',\''+task.id+'\')':'completeTask(\''+section+'\',\''+task.id+'\')';
     html+='<div class="task-check"'+(locked?'':' onclick="'+completeFn+'" title="Click to complete"')+'></div>';
   }
-  html+='<span class="task-text" style="flex:1">'+esc(task.text)+'</span>';
+  // Split "Action: detail" into a bold action line + a lighter how/done line
+  const _tx=String(task.text||''), _ci=_tx.indexOf(': ');
+  const _title=_ci>2?_tx.slice(0,_ci):_tx, _detail=_ci>2?_tx.slice(_ci+2):'';
+  html+='<span class="task-text" style="flex:1"><span style="font-weight:600">'+esc(_title)+'</span>'+(_detail?'<span style="display:block;font-weight:400;color:var(--gray-500);font-size:12px;margin-top:2px;line-height:1.45">'+esc(_detail)+'</span>':'')+'</span>';
+  if(isCount&&isDone){
+    const n=(doneData.count!=null?doneData.count:0);
+    const min=task.min||0;
+    const ok=n>=min;
+    html+='<span title="Logged today" style="flex-shrink:0;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+(ok?'#dcfce7':'#fef3c7')+';color:'+(ok?'#15803d':'#b45309')+';">'+n+' '+esc(task.unit||'logged')+(min&&!ok?' · below min':'')+'</span>';
+  }
   if(hasPlaybook&&!locked){
     html+='<button onclick="openTaskPlaybook(\''+task.playbook+'\')" title="Open playbook" style="background:var(--blue-light);border:none;border-radius:6px;cursor:pointer;color:var(--blue);font-size:10px;font-weight:700;padding:3px 8px;white-space:nowrap;flex-shrink:0">📖 Playbook</button>';
   }
   if(isCustom&&!locked){html+='<button onclick="deleteCustomTask(\''+section+'\',\''+task.id+'\')" title="Remove task" style="background:none;border:none;cursor:pointer;color:var(--gray-300);font-size:14px;padding:0 4px;line-height:1;flex-shrink:0;" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--gray-300)\'">✕</button>';}
   html+='</div>';
+  // Count entry field (not yet logged)
+  if(isCount&&!isDone&&!locked){
+    const min=task.min||0;
+    html+='<div style="margin-left:34px;display:flex;align-items:center;gap:8px;">';
+    html+='<input id="count_'+section+'_'+task.id+'" type="number" min="0" inputmode="numeric" placeholder="How many today?'+(min?' (min '+min+')':'')+'" style="width:170px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" onkeydown="if(event.key===\'Enter\')completeTaskCount(\''+section+'\',\''+task.id+'\')" />';
+    html+='<button onclick="completeTaskCount(\''+section+'\',\''+task.id+'\')" style="padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Log</button>';
+    html+='</div>';
+  }
   // Notes field / saved notes
   if(hasNotes){
     if(isDone&&doneData.notes){
@@ -6390,32 +6419,27 @@ const LVLUP_PLAYBOOKS = [
     ]
   },
 
-  { id:'student_outreach', role:'all', category:'Communications', icon:'📬', title:'Student Outreach (Postcards & Loom Videos)', tagline:'Personal contact turns at-risk students into loyalists.',
+  { id:'student_outreach', role:'all', category:'Communications', icon:'🎥', title:'Student Outreach (Loom Videos)', tagline:'A personal video turns at-risk students into loyalists.',
     checklist:[
       'Identify targets: Yellow stoplight + milestone moments',
-      '2 outreach touchpoints per week (postcard or Loom video)',
-      'Postcards: handwritten, personal, mailed same day',
+      'Send a minimum of 2 Loom videos per week',
       'Loom: personalized 60–90 sec video, sent by text or email',
-      'Log every attempt in GymDesk or #LVLUPHQ',
-      'No response in 5 days? Try a different channel',
+      'Log how many you sent on your daily Stoplight task',
+      'No response in 5 days? Follow up with a phone call',
     ],
     steps:[
       { title:'Who Gets Outreach',
         detail:'Priority 1: Yellow stoplight students (missed 2+ classes, limited contact). Priority 2: Milestone moments — stripe earned, birthday month, 1-year anniversary, belt promotion.',
-        points:['Check the stoplight weekly and assign outreach targets','Milestone outreach is positive — it\'s not just for at-risk situations'],
+        points:['Check the stoplight daily and pick your outreach targets','Milestone outreach is positive — it\'s not just for at-risk situations'],
         avoid:['Generic mass outreach — it reads as spam','Only reaching out when someone is on the verge of quitting'] },
-      { title:'Sending a Postcard',
-        detail:'Grab a school postcard. Write a handwritten personal note — use the student\'s name and reference something specific: "We missed you at Thursday\'s class — hope you\'re doing great!" Sign with your name. Address from GymDesk. Stamp and mail same day.',
-        points:['Handwritten always beats printed — it signals real effort','Positive and warm tone — never guilt-inducing','Students keep postcards for months'],
-        avoid:['Printing a form letter on a postcard','Sending without a stamp or return address'] },
       { title:'Recording a Loom Video',
-        detail:'Open Loom app or loom.com. Record 60–90 seconds. Stand in front of a clean background — mat, school logo, or solid wall. Use the student\'s name and reference something specific about their training.',
+        detail:'Open the Loom app or loom.com and record 60–90 seconds. Stand in front of a clean background — mat, school logo, or solid wall. Use the student\'s name and reference something specific about their training.',
         points:['"Hey [Name]! It\'s [Your Name] from LVLUP. We haven\'t seen you in a couple weeks and I wanted to check in. You were making real progress on your [technique] — I\'d love to see you back. No pressure, just wanted you to know we\'re thinking about you."','Casual and warm beats scripted every time','Send the Loom link via text or email'],
         avoid:['Reading from a script word for word','Recording in a noisy background','Videos longer than 90 seconds — nobody finishes them'] },
       { title:'Logging Outreach',
-        detail:'After every attempt, log it: student name, date, method, message summary. Use GymDesk profile notes or a message in #LVLUPHQ. Two unanswered attempts = escalate to a phone call.',
-        points:['Context in your log matters — "sent postcard saying X" beats "sent postcard"'],
-        avoid:['Logging "done" without any specifics — useless for follow-up'] },
+        detail:'After you send your Loom videos, log how many on your daily Stoplight Outreach task. For context, add a note in the student\'s GymDesk profile. Two unanswered videos = escalate to a phone call.',
+        points:['Context matters — "sent Loom about their last belt test" beats "sent Loom"'],
+        avoid:['Logging without any specifics — useless for follow-up'] },
     ]
   },
 
@@ -8621,9 +8645,9 @@ function parseSyncLine(line) {
 const JOURNEY_TOUCHPOINTS = [
   {
     id:     'welcome_postcard',
-    icon:   '📬',
-    label:  'Welcome Postcard',
-    desc:   'Send a personalized welcome postcard to their home address.',
+    icon:   '🎥',
+    label:  'Welcome Loom',
+    desc:   'Send a personalized welcome Loom video to the family.',
     window: [1, 14],
     color:  '#2563eb',
   },
