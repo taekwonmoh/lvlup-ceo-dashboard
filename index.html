@@ -3073,19 +3073,63 @@ function renderScorecardPage() {
   const lvlupLocs   = LOCATIONS.filter(l => LVLUP_LOC_IDS.includes(l.id));
   const goninjaLocs = LOCATIONS.filter(l => GONINJA_LOC_IDS.includes(l.id));
 
+  const scLoc = state.scLoc || 'waunakee';
+  const pickLvlup = scLoc === 'all' ? lvlupLocs : lvlupLocs.filter(l => l.id === scLoc);
+
   let html = subNav;
   if (tab === 'acquisition') {
     html += renderScBoardNote('📣', 'Acquisition', 'Owned by Ivy — Sales &amp; Marketing', '#0f3460');
+    html += renderScLocSelector();
     html += renderRevenueKpiCards();
     html += renderScWeekNav();
-    html += renderScoreboardTables(ACQUISITION_METRICS, lvlupLocs);
-    html += renderScoreboardTables(GONINJA_METRICS, goninjaLocs);
+    html += renderScoreboardTables(ACQUISITION_METRICS, pickLvlup);
+    if (scLoc === 'all') html += renderScoreboardTables(GONINJA_METRICS, goninjaLocs);
   } else {
     html += renderScBoardNote('🥋', 'Instructor', 'Owned by Instructors — Day-One Enrollments · Upgrades · Retention', '#e94560');
+    html += renderScLocSelector();
+    if (scLoc !== 'all') html += '<button onclick="scWizardStart()" style="width:100%;padding:13px;background:#4169E1;color:#fff;border:none;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:14px;box-shadow:0 2px 8px rgba(65,105,225,.3);">⚡ Quick Weekly Check-in</button>';
     html += renderScWeekNav();
-    html += renderScoreboardTables(INSTRUCTOR_METRICS, lvlupLocs);
+    html += renderScoreboardTables(INSTRUCTOR_METRICS, pickLvlup);
   }
+  html += renderScWizard();
   return html;
+}
+
+function renderScLocSelector(){
+  const cur = state.scLoc || 'waunakee';
+  const opts = [{id:'waunakee',name:'Waunakee'},{id:'eastmad',name:'East Madison'},{id:'verona',name:'Verona'},{id:'all',name:'All gyms'}];
+  let h = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
+  opts.forEach(o => { const a = cur === o.id; h += '<button onclick="setScLoc(\'' + o.id + '\')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (a ? '#1a1a2e' : '#f1f3f9') + ';color:' + (a ? '#fff' : '#555') + ';">' + o.name + '</button>'; });
+  return h + '</div>';
+}
+function setScLoc(l){ state.scLoc = l; render(); }
+
+/* Guided one-question-at-a-time weekly check-in */
+function scWizardMetrics(){ return INSTRUCTOR_METRICS.filter(m => !m.auto); }
+function scWizardStart(){ const loc = (state.scLoc && state.scLoc !== 'all') ? state.scLoc : 'waunakee'; state.scWizard = { open:true, loc, step:0 }; render(); setTimeout(() => { const i = document.getElementById('scWizInput'); if (i) i.focus(); }, 60); }
+function scWizardClose(){ state.scWizard = { open:false, loc:null, step:0 }; render(); }
+function scWizSave(){ const w = state.scWizard; if (!w || !w.open) return; const m = scWizardMetrics()[w.step]; const i = document.getElementById('scWizInput'); if (m && i) updateScorecardSimple(w.loc, m.id, i.value); }
+function scWizNext(){ scWizSave(); const total = scWizardMetrics().length; if (state.scWizard.step >= total - 1) { scWizardClose(); } else { state.scWizard.step++; render(); setTimeout(() => { const i = document.getElementById('scWizInput'); if (i) i.focus(); }, 60); } }
+function scWizBack(){ scWizSave(); if (state.scWizard.step > 0) { state.scWizard.step--; render(); setTimeout(() => { const i = document.getElementById('scWizInput'); if (i) i.focus(); }, 60); } }
+function renderScWizard(){
+  const w = state.scWizard; if (!w || !w.open) return '';
+  const metrics = scWizardMetrics(); const m = metrics[w.step]; const total = metrics.length;
+  const locName = (LOCATIONS.find(l => l.id === w.loc) || {}).name || w.loc;
+  const cur = (((state.scorecard.weekly || {})[w.loc] || {})[m.id]);
+  const val = (cur !== undefined && cur !== null) ? esc(String(cur)) : '';
+  const pct = Math.round((w.step + 1) / total * 100);
+  let h = '<div class="modal-overlay" onclick="scWizardClose()"><div class="modal-box" onclick="event.stopPropagation()" style="max-width:420px;text-align:left;">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:12px;font-weight:700;color:#888;">' + esc(locName) + ' · ' + getWeekLabel(state.weekOffset) + '</div><button onclick="scWizardClose()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#aaa;line-height:1;">×</button></div>';
+  h += '<div style="height:6px;border-radius:999px;background:#eef0f6;overflow:hidden;margin-bottom:16px;"><div style="height:100%;width:' + pct + '%;background:#4169E1;transition:width .2s;"></div></div>';
+  h += '<div style="font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:.5px;">Step ' + (w.step + 1) + ' of ' + total + '</div>';
+  h += '<h3 style="margin:6px 0 4px;font-size:20px;font-weight:800;color:#1a1a2e;">' + esc(m.label) + '</h3>';
+  h += '<p style="margin:0 0 16px;font-size:13px;color:#888;line-height:1.5;">' + esc(m.hint || '') + '</p>';
+  h += '<input id="scWizInput" type="number" inputmode="numeric" value="' + val + '" placeholder="Enter a number" onkeydown="if(event.key===\'Enter\')scWizNext()" style="width:100%;box-sizing:border-box;padding:16px;font-size:28px;text-align:center;border:2px solid #e0e3ed;border-radius:12px;font-family:inherit;margin-bottom:16px;outline:none;" />';
+  h += '<div style="display:flex;gap:10px;">';
+  h += '<button onclick="scWizBack()"' + (w.step === 0 ? ' disabled' : '') + ' style="flex:1;padding:12px;border:1px solid #ddd;border-radius:10px;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#555;opacity:' + (w.step === 0 ? '.4' : '1') + ';">← Back</button>';
+  h += '<button onclick="scWizNext()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#1a1a2e;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">' + (w.step >= total - 1 ? 'Finish ✓' : 'Next →') + '</button>';
+  h += '</div></div></div>';
+  return h;
 }
 
 function renderScBoardNote(icon, title, subtitle, color) {
@@ -4134,6 +4178,8 @@ state.goalsMonth = getMonthKey();
 state.goalsData = {};
 state.modalTask = null;
 state.scorecardTab = 'instructor';   // 'instructor' | 'acquisition' | 'performance'
+state.scLoc        = 'waunakee';     // scoreboard location filter: gym id | 'all'
+state.scWizard     = { open:false, loc:null, step:0 };  // guided weekly check-in
 state.adLabTab     = 'playbook';     // Ad Creative: 'playbook' | 'tracker' | 'leaderboard'
 state.adLabFilter  = 'all';          // Hook bank avatar filter
 state.adCreative   = state.adCreative || {};
@@ -4696,6 +4742,19 @@ function renderTasksPage(){
     html+='<div style="margin-bottom:8px;padding:10px 16px;background:#eff6ff;border-radius:10px;border:1px solid #bfdbfe;font-size:12px;color:#1e40af;">Complete tasks in order during front desk downtime — tasks carry over between shifts, so pick up wherever you left off.</div>';
   }
   html+=dnwBar;
+  // ── Today progress banner ──
+  if(!dayOff){
+    const _ids=[...dailyTasks.map(t=>t.id),...Object.keys(customDaily||{})];
+    const _tot=_ids.length, _done=_ids.filter(id=>dailyData[id]).length;
+    const _pct=_tot?Math.round(_done/_tot*100):0;
+    const _all=_tot>0&&_done>=_tot;
+    const _msg=_all?'🎉 All done for today — awesome work!':_pct>=50?'🔥 Over halfway — keep going!':_done>0?'💪 Nice start — keep it rolling.':'👊 Let’s knock these out.';
+    const _bar=_all?'#ffffff':_pct>=50?'#f59e0b':'#4169E1';
+    html+='<div style="background:'+(_all?'linear-gradient(135deg,#16a34a,#15803d)':'#fff')+';color:'+(_all?'#fff':'#1a1a2e')+';border:1px solid '+(_all?'transparent':'var(--gray-200)')+';border-radius:14px;padding:14px 18px;margin-bottom:12px;box-shadow:var(--shadow);">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;"><div style="font-size:14px;font-weight:800;">'+_msg+'</div><div style="font-size:13px;font-weight:800;'+(_all?'':'color:var(--gray-500);')+'">'+_done+' / '+_tot+' today</div></div>';
+    html+='<div style="height:10px;border-radius:999px;background:'+(_all?'rgba(255,255,255,.35)':'var(--gray-100)')+';overflow:hidden;"><div style="height:100%;width:'+_pct+'%;background:'+_bar+';transition:width .3s;"></div></div>';
+    html+='</div>';
+  }
   html+=renderTaskSection('daily',isFD?'⬇️ Priority Queue':'Daily Checklist',dailyTasks,dayOff?{}:dailyData,customDaily,dailyLocked||dayOff);
   // ── Daily Exception Log ──────────────────────────────────────────────────
   if(!dayOff){
@@ -4908,11 +4967,51 @@ function renderCycleChecklistSection(empId,locData){
   html+='</div></div>';
   return html;
 }
+// Pick an icon for any task from its wording (no need to tag each one)
+function taskIcon(task){
+  if(task.icon) return task.icon;
+  const t=(task.text||'').toLowerCase(); const has=(...k)=>k.some(w=>t.includes(w));
+  if(has('loom','outreach','stoplight')) return '🎥';
+  if(has('bathroom','toilet')) return '🚽';
+  if(has('mop','mat ')) return '🧽';
+  if(has('clean','dust','sweep','wipe','tidy','reset')) return '🧹';
+  if(has('photo')) return '📷';
+  if(has('signage','sign ')) return '📌';
+  if(has('announcement','tv ')) return '📣';
+  if(has('schedule','homebase','coverage')) return '📅';
+  if(has('retail','merch')) return '🛒';
+  if(has('inventory','supplies','restock')) return '📦';
+  if(has('belt','lifelink','milestone','clip','award')) return '🥋';
+  if(has('party','birthday','event')) return '🎉';
+  if(has('scorecard','numbers','metric')) return '📊';
+  if(has('invite','referral','ad class','grow')) return '🌱';
+  if(has('roster','attendance','enroll')) return '📋';
+  if(has('opening','open ')) return '🌅';
+  if(has('closing','eos report','lock up','clockout','clock out')) return '🌙';
+  if(has('email','message','slack','#lvluphq')) return '💬';
+  return '✅';
+}
+// Derive a How-to playbook for a task from its wording (explicit task.playbook wins)
+function taskPlaybook(task){
+  if(task.playbook) return task.playbook;
+  const t=(task.text||'').toLowerCase(); const has=(...k)=>k.some(w=>t.includes(w));
+  if(has('stoplight','outreach','loom')) return 'student_outreach';
+  if(has('opening routine','turn on tv','tv announcement')) return 'opening';
+  if(has('closing','eos report','lock up')) return 'closing';
+  if(has('mop','mat maintenance')) return 'mop_mats';
+  if(has('bathroom','toilet')) return 'clean_bathrooms';
+  if(has('signage')) return 'update_signage';
+  if(has('retail')) return 'retail_fulfillment';
+  if(has('attendance card')) return 'attendance_cards';
+  if(has('birthday','party')) return 'birthday_party';
+  return null;
+}
 function renderTaskItem(section,task,doneData,isCustom,locked){
   const isDone=!!doneData;
   const hasNotes=!!task.hasNotes;
   const isCount=!!task.count;
-  const hasPlaybook=!!task.playbook;
+  const pb=taskPlaybook(task);
+  const hasPlaybook=!!pb;
   let cls='task-item'+(isDone?' done':'')+(locked?' locked':'');
   const blockStyle=(hasNotes||isCount)?'flex-direction:column;align-items:stretch;gap:8px':'';
   let html='<div class="'+cls+'" data-task-id="'+task.id+'"'+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
@@ -4928,7 +5027,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   // Split "Action: detail" into a bold action line + a lighter how/done line
   const _tx=String(task.text||''), _ci=_tx.indexOf(': ');
   const _title=_ci>2?_tx.slice(0,_ci):_tx, _detail=_ci>2?_tx.slice(_ci+2):'';
-  html+='<span class="task-text" style="flex:1"><span style="font-weight:600">'+esc(_title)+'</span>'+(_detail?'<span style="display:block;font-weight:400;color:var(--gray-500);font-size:12px;margin-top:2px;line-height:1.45">'+esc(_detail)+'</span>':'')+'</span>';
+  html+='<span class="task-text" style="flex:1"><span style="font-weight:600"><span style="margin-right:6px">'+taskIcon(task)+'</span>'+esc(_title)+'</span>'+(_detail?'<span style="display:block;font-weight:400;color:var(--gray-500);font-size:12px;margin-top:2px;line-height:1.45">'+esc(_detail)+'</span>':'')+'</span>';
   if(isCount&&isDone){
     const n=(doneData.count!=null?doneData.count:0);
     const min=task.min||0;
@@ -4936,7 +5035,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     html+='<span title="Logged today" style="flex-shrink:0;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+(ok?'#dcfce7':'#fef3c7')+';color:'+(ok?'#15803d':'#b45309')+';">'+n+' '+esc(task.unit||'logged')+(min&&!ok?' · below min':'')+'</span>';
   }
   if(hasPlaybook&&!locked){
-    html+='<button onclick="openTaskPlaybook(\''+task.playbook+'\')" title="Open playbook" style="background:var(--blue-light);border:none;border-radius:6px;cursor:pointer;color:var(--blue);font-size:10px;font-weight:700;padding:3px 8px;white-space:nowrap;flex-shrink:0">📖 Playbook</button>';
+    html+='<button onclick="openTaskPlaybook(\''+pb+'\')" title="How to do this" style="background:var(--blue-light);border:none;border-radius:6px;cursor:pointer;color:var(--blue);font-size:10px;font-weight:700;padding:3px 8px;white-space:nowrap;flex-shrink:0">📖 How-to</button>';
   }
   if(isCustom&&!locked){html+='<button onclick="deleteCustomTask(\''+section+'\',\''+task.id+'\')" title="Remove task" style="background:none;border:none;cursor:pointer;color:var(--gray-300);font-size:14px;padding:0 4px;line-height:1;flex-shrink:0;" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--gray-300)\'">✕</button>';}
   html+='</div>';
@@ -8799,8 +8898,7 @@ function renderOnboardingSection(allStudents, locationFilter) {
 
 /* ── Correspondence Log ──────────────────────────────────── */
 const CORR_TYPES = {
-  postcard:   { icon: '📬', label: 'Postcard' },
-  video:      { icon: '🎥', label: 'Video' },
+  video:      { icon: '🎥', label: 'Loom Video' },
   phoneCall:  { icon: '📞', label: 'Phone Call' },
   conference: { icon: '🤝', label: 'Conference' },
 };
@@ -8845,7 +8943,7 @@ function feedbackDeleteLogEntry(studentKey, entryKey) {
 }
 
 function feedbackStartLogForm(studentKey) {
-  state.feedback.logForm = { studentKey, type: 'postcard', date: new Date().toISOString().split('T')[0], note: '' };
+  state.feedback.logForm = { studentKey, type: 'video', date: new Date().toISOString().split('T')[0], note: '' };
   render();
 }
 
@@ -8999,8 +9097,7 @@ function renderFeedbackPage() {
 
   const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
   const INTERACTIONS = [
-    { field: 'postcard',   icon: '📬', label: 'Postcard' },
-    { field: 'video',      icon: '🎥', label: 'Video' },
+    { field: 'video',      icon: '🎥', label: 'Loom' },
     { field: 'phoneCall',  icon: '📞', label: 'Call' },
     { field: 'conference', icon: '🤝', label: 'Conf.' },
   ];
