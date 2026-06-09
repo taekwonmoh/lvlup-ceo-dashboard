@@ -3111,12 +3111,12 @@ function setScLoc(l){ state.scLoc = l; render(); }
 
 /* ── Nightly instructor scorecard — daily counts logged at EOS ── */
 const INSTRUCTOR_DAILY_COLS = [
-  { id:'dayOneEnroll', label:'Day-One Enrollments',    short:'Day-One Enroll', hint:'Kids who joined the same day they tried.' },
-  { id:'upgrades',     label:'Upgrades',               short:'Upgrades',       hint:'Members who moved up a program (Leadership, Black Belt Club, ADP).' },
-  { id:'attendance',   label:'Attendance',             short:'Attendance',     hint:'How many of your students showed up tonight.' },
-  { id:'touchpoints',  label:'Onboarding Touchpoints', short:'Touchpoints',    hint:'First-90-Days touchpoints you completed today.' },
-  { id:'saves',        label:'At-Risk Saves',          short:'At-Risk Saves',  hint:'At-risk kids you kept from quitting today.' },
-  { id:'attrition',    label:'Cancellations',          short:'Cancellations',  hint:'Members who cancelled today.' },
+  { id:'firstDayTrials', label:'First-Day Trial Students', short:'First-Day Trials', hint:'Students who came in for their first trial class today.' },
+  { id:'dayOneEnroll',   label:'Day-One Enrollments',      short:'Day-One Enroll',   hint:'Kids who joined the same day they tried.' },
+  { id:'upgrades',       label:'Upgrades',                 short:'Upgrades',         hint:'Members who moved up a program (Leadership, Black Belt Club, ADP).' },
+  { id:'attrition',      label:'Cancellations',            short:'Cancellations',    hint:'Members who cancelled today.' },
+  { id:'monthlyRevenue', label:'Monthly Revenue to Date',  short:'Rev to Date',      hint:'Total revenue collected so far this month — enter the running total.', snapshot:true, currency:true },
+  { id:'totalMembers',   label:'Total Members',            short:'Total Members',    hint:'Current total active members right now.', snapshot:true },
 ];
 function scdMonthDate(){ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + (state.scdMonthOffset || 0)); return d; }
 function scdMonthKey(){ const d = scdMonthDate(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
@@ -3145,40 +3145,46 @@ function renderInstructorDaily(loc){
   let h = '<div style="overflow-x:auto;margin-bottom:14px;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">';
   h += '<thead><tr><th colspan="' + (cols.length + 2) + '" style="padding:12px;font-size:16px;font-weight:800;text-align:center;letter-spacing:1px;background:' + meta.color + ';color:#fff;">' + esc(meta.name).toUpperCase() + '</th></tr>';
   h += '<tr style="background:#f5f7ff;">' + ['Date'].concat(cols.map(c => c.short)).concat(['Notes']).map((x, i) => '<th style="padding:8px;font-size:10px;color:#0f3460;text-transform:uppercase;letter-spacing:.3px;text-align:' + (i === 0 ? 'left' : 'center') + ';white-space:nowrap;">' + x + '</th>').join('') + '</tr></thead><tbody>';
-  const monthT = {}; cols.forEach(c => monthT[c.id] = 0);
-  let chunkT = {}; cols.forEach(c => chunkT[c.id] = 0);
+  // Count metrics sum; snapshot metrics (revenue, members) show the latest entered value
+  const fmtT = (c, v) => (v === '' || v == null) ? '—' : (c.currency ? fmtCurrency(parseFloat(v) || 0) : v);
+  const monthT = {}, monthLast = {}; cols.forEach(c => { monthT[c.id] = 0; monthLast[c.id] = ''; });
+  let chunkT = {}, chunkLast = {}; cols.forEach(c => { chunkT[c.id] = 0; chunkLast[c.id] = ''; });
+  const totalCell = (c, sumObj, lastObj) => c.snapshot ? fmtT(c, lastObj[c.id]) : sumObj[c.id];
   for (let day = 1; day <= days; day++) {
     const dd = data[day] || {};
     const isT = scdIsToday(day);
     h += '<tr style="border-top:1px solid #f5f5f5;' + (isT ? 'background:#eff6ff;' : '') + '">';
     h += '<td style="padding:5px 10px;font-weight:600;color:#444;white-space:nowrap;">' + monthName + ' ' + day + (isT ? ' <span style="color:#4169E1;">•</span>' : '') + '</td>';
     cols.forEach(c => {
-      const val = dd[c.id]; const n = parseFloat(val) || 0; monthT[c.id] += n; chunkT[c.id] += n;
-      h += '<td style="padding:3px;text-align:center;"><input type="number" inputmode="numeric" value="' + (val != null && val !== '' ? esc(String(val)) : '') + '" onchange="scdUpdate(\'' + loc + '\',' + day + ',\'' + c.id + '\',this.value)" style="width:54px;text-align:center;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;"></td>';
+      const val = dd[c.id];
+      if (c.snapshot) { if (val != null && val !== '') { chunkLast[c.id] = val; monthLast[c.id] = val; } }
+      else { const n = parseFloat(val) || 0; monthT[c.id] += n; chunkT[c.id] += n; }
+      h += '<td style="padding:3px;text-align:center;"><input type="number" inputmode="numeric" value="' + (val != null && val !== '' ? esc(String(val)) : '') + '" onchange="scdUpdate(\'' + loc + '\',' + day + ',\'' + c.id + '\',this.value)" style="width:' + (c.currency ? '72' : '54') + 'px;text-align:center;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;"></td>';
     });
     h += '<td style="padding:3px;"><input value="' + esc(dd.notes || '') + '" onchange="scdUpdate(\'' + loc + '\',' + day + ',\'notes\',this.value)" style="width:100%;min-width:110px;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;box-sizing:border-box;"></td>';
     h += '</tr>';
     if (day % 7 === 0 || day === days) {
       h += '<tr style="background:#eef2ff;font-weight:800;"><td style="padding:7px 10px;color:#0f3460;">WEEK TOTAL</td>';
-      cols.forEach(c => { h += '<td style="text-align:center;padding:7px;color:#0f3460;">' + chunkT[c.id] + '</td>'; });
+      cols.forEach(c => { h += '<td style="text-align:center;padding:7px;color:#0f3460;">' + totalCell(c, chunkT, chunkLast) + '</td>'; });
       h += '<td></td></tr>';
-      cols.forEach(c => chunkT[c.id] = 0);
+      cols.forEach(c => { chunkT[c.id] = 0; chunkLast[c.id] = ''; });
     }
   }
   h += '<tr style="background:' + meta.color + '22;font-weight:800;"><td style="padding:9px 10px;color:#0f3460;">MONTH TOTAL</td>';
-  cols.forEach(c => { h += '<td style="text-align:center;padding:9px;color:#0f3460;">' + monthT[c.id] + '</td>'; });
+  cols.forEach(c => { h += '<td style="text-align:center;padding:9px;color:#0f3460;">' + totalCell(c, monthT, monthLast) + '</td>'; });
   h += '<td></td></tr></tbody></table></div>';
-  // Month rollups (counts)
+  // Month rollups
+  const closePct = (monthT.firstDayTrials > 0) ? Math.round((monthT.dayOneEnroll || 0) / monthT.firstDayTrials * 100) + '%' : '—';
   const chip = (label, val) => '<div style="flex:1;min-width:100px;background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:10px 12px;text-align:center;"><div style="font-size:18px;font-weight:800;color:#1a1a2e;">' + val + '</div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.3px;">' + label + '</div></div>';
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;">';
+  h += chip('Day-One Close %', closePct);
+  h += chip('First-Day Trials', monthT.firstDayTrials || '—');
   h += chip('Enrollments', monthT.dayOneEnroll || '—');
   h += chip('Upgrades', monthT.upgrades || '—');
-  h += chip('Attendance', monthT.attendance || '—');
-  h += chip('Touchpoints', monthT.touchpoints || '—');
-  h += chip('At-Risk Saves', monthT.saves || '—');
   h += chip('Cancellations', monthT.attrition || '—');
+  h += chip('Rev to Date', monthLast.monthlyRevenue !== '' ? fmtCurrency(parseFloat(monthLast.monthlyRevenue) || 0) : '—');
+  h += chip('Total Members', monthLast.totalMembers !== '' ? monthLast.totalMembers : '—');
   h += '</div>';
-  h += '<div style="font-size:11px;color:#aaa;margin-bottom:22px;">Month totals · Day-One Close % &amp; Attendance % roll up on the Leadership view (they need trials &amp; roster as denominators).</div>';
   return h;
 }
 
