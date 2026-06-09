@@ -855,7 +855,7 @@ let state = {
   devActiveModule: null,
   devQuizAnswers: {},
   devQuizSubmitted: false,
-  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'all', showInactive: false, selectedStudents: new Set(), expandedStudents: new Set(), logs: {}, logForm: null, onboardingCollapsed: false },
+  feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'waunakee', showInactive: false, selectedStudents: new Set(), expandedStudents: new Set(), logs: {}, logForm: null, onboardingCollapsed: false },
   acq: { pinLoaded: false, pin: null, unlocked: false, monthOffset: 0, data: {}, _listeningMk: null, pinError: false }
 };
 
@@ -979,8 +979,6 @@ const BRYAN_WEEKLY = [
   {id:'b_homebase',         text:'Monday Schedule Check: Verify the Homebase schedule to ensure proper coverage of classes and assistants.'},
   {id:'b_bathroom_photos',  text:'Bathroom Photo Verification: Post 1 photo of toilets + 1 showing overall cleanliness to #LVLUPHQ.'},
   {id:'b_announcements',    text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
-  {id:'b_facebook',         text:'Facebook Engagement: Post 1 shoutout or promo on Facebook members group + share screenshot to #LVLUPHQ.'},
-  {id:'b_social',           text:'Social Media Growth: Complete 2 social media posts this week + share links to #LVLUPHQ.'},
   {id:'b_mop_mats',         text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
   {id:'b_dots',             text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
   {id:'b_supplies',         text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
@@ -993,8 +991,6 @@ const NIKKI_WEEKLY = [
   {id:'n_homebase',        text:'Monday Schedule Check: Verify the Homebase schedule to ensure proper coverage of classes and assistants.'},
   {id:'n_bathroom_photos', text:'Bathroom Photo Verification: Post 1 photo of toilets + 1 showing overall cleanliness to #LVLUPHQ.'},
   {id:'n_announcements',   text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
-  {id:'n_facebook',        text:'Facebook Engagement: Post 1 shoutout or promo on Facebook members group + share screenshot to #LVLUPHQ.'},
-  {id:'n_social',          text:'Social Media Growth: Complete 2 social media posts this week + share links to #LVLUPHQ.'},
   {id:'n_mop_mats',        text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
   {id:'n_dots',            text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
   {id:'n_supplies',        text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
@@ -1008,8 +1004,6 @@ const JOEY_WEEKLY = [
   {id:'j_homebase',        text:'Monday Schedule Check: Review the Homebase schedule to confirm proper class coverage for the week.'},
   {id:'j_bathroom_photos', text:'Bathroom Photo Verification: Post 1 photo of toilets + 1 showing overall cleanliness to #LVLUPHQ.'},
   {id:'j_announcements',   text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
-  {id:'j_facebook',        text:'Facebook Engagement: Post 1 shoutout or promo on the Facebook members group + share a screenshot to #LVLUPHQ.'},
-  {id:'j_social',          text:'Social Media Growth: Complete 2 social media posts this week + share screenshots to #LVLUPHQ.'},
   {id:'j_mop_mats',        text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
   {id:'j_dots',            text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
   {id:'j_supplies',        text:'Inventory Control: Check front desk/facility supplies and message #inventory with restocking needs.'},
@@ -1022,7 +1016,6 @@ const JOEY_WEEKLY = [
 const MIRANDA_WEEKLY = [
   {id:'m_party_reset',    text:'Friday Event Prep: Reset the party room for weekend birthday parties + post verification photo to #LVLUPHQ.'},
   {id:'m_party_cleanup',  text:'Party Room Breakdown: Clean up the party room post-event + post photo to #LVLUPHQ.'},
-  {id:'m_social',         text:'Social Media Growth: Execute weekly social media post + share to #LVLUPHQ.'},
   {id:'m_mop_mats',       text:'Mat Maintenance: Mop mats and sanitize obstacles + post photo to #LVLUPHQ.'},
   {id:'m_dust',           text:'Facility Inspection: Dust all facility trim and cabinets.'},
   {id:'m_party_supplies', text:'Inventory Control: Check party supplies inventory and message #LVLUPHQ if items are running low.'},
@@ -1866,6 +1859,30 @@ function listenAll() {
   fbRosterMetaRef.on('value', snap => { state.feedback.rosterMeta = snap.val() || {}; render(); });
   activeListeners.push({ ref: fbRosterMetaRef, event: 'value' });
 
+  // Ad Creative lab (social media avatar test matrix)
+  const adRef = fbRef('adCreative');
+  adRef.on('value', snap => { state.adCreative = snap.val() || {}; render(); });
+  activeListeners.push({ ref: adRef, event: 'value' });
+
+  // Leadership (PIN-gated owner page): PIN, daily tracker, homebase clock, perf, sign-offs
+  const ldPinRef = fbRef('leadership/pin');
+  ldPinRef.on('value', snap => { state.leadership.pin = snap.val(); state.leadership.pinLoaded = true; render(); });
+  activeListeners.push({ ref: ldPinRef, event: 'value' });
+  const ldTrackRef = fbRef('leadership/tracker');
+  ldTrackRef.on('value', snap => { state.leadership.tracker = snap.val() || {}; render(); });
+  activeListeners.push({ ref: ldTrackRef, event: 'value' });
+  const ldHbRef = fbRef('leadership/homebase');
+  ldHbRef.on('value', snap => { state.leadership.homebase = snap.val() || {}; render(); });
+  activeListeners.push({ ref: ldHbRef, event: 'value' });
+  const ldPerfRef = fbRef('leadership/perf');
+  ldPerfRef.on('value', snap => { state.leadership.perf = snap.val() || {}; render(); });
+  activeListeners.push({ ref: ldPerfRef, event: 'value' });
+  ['bryanG', 'nikkiB', 'joeyZ', 'mirandaS'].forEach(eid => {
+    const soRef = fbRef('tasks/emp/' + eid + '/weekly_signoff');
+    soRef.on('value', snap => { state.leadership.signoffs[eid] = snap.val() || {}; render(); });
+    activeListeners.push({ ref: soRef, event: 'value' });
+  });
+
   // Feedback tracking (persistent, year-round) — migrate old monthly data once, then listen
   migrateFeedbackTrackingToAll();
   listenFeedbackTracking();
@@ -1912,7 +1929,7 @@ function setSection(s) {
   state.activeSection = s;
   // Remember last-visited sub-section per group so tabs restore correctly
   if (['tasks','l10','events','rocks'].includes(s))           state.opsSection     = s;
-  if (['scorecard','goals','acq','marketing'].includes(s))    state.growthSection  = s;
+  if (['scorecard','goals','marketing'].includes(s))         state.growthSection  = s;
   render();
 }
 function changeWeek(d) { state.weekOffset += d; listenAll(); }
@@ -2154,11 +2171,10 @@ function renderGrowthPage() {
     { id: 'scorecard',  label: '📊 Scorecard'  },
     { id: 'goals',      label: '🎯 Goals'       },
     { id: 'marketing',  label: '📱 Marketing'   },
-    { id: 'acq',        label: '📈 Scale'        },
+    // Scale (PIN-gated ACQ.com dashboard) hidden for now — re-add this tab to restore.
   ]);
   if (s === 'goals')     return nav + renderGoalsPage();
   if (s === 'marketing') return nav + renderMarketingPage();
-  if (s === 'acq')       return nav + renderAcqPage();
   return nav + renderScorecardPage();
 }
 
@@ -2167,16 +2183,17 @@ function renderResourcesPage() {
 }
 
 function renderMarketingPage() {
-  return '<div class="page" style="max-width:800px;">' +
-    '<h2 style="margin:0 0 4px;font-size:18px;font-weight:800;color:#1a1a2e;">📱 Marketing</h2>' +
-    '<p style="margin:0 0 20px;font-size:13px;color:#888;">Social media content planning, campaign management, and project tracking.</p>' +
-    '<div style="background:#fff;border:1px solid #e0e3ed;border-radius:14px;padding:36px 28px;text-align:center;box-shadow:var(--shadow);">' +
-      '<div style="width:56px;height:56px;background:#f0f4ff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 14px;">📋</div>' +
-      '<h3 style="margin:0 0 6px;font-size:16px;font-weight:800;color:#1a1a2e;">Social Media Projects</h3>' +
-      '<p style="margin:0 0 22px;font-size:13px;color:#888;max-width:380px;margin-left:auto;margin-right:auto;line-height:1.6;">Content calendar, campaign planning, post scheduling, and creative briefs — tracked in Asana.</p>' +
-      '<a href="https://app.asana.com/1/1215361270408183/project/1215365592958652/board/1215365594244809" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;background:#4169E1;color:#fff;text-decoration:none;border-radius:10px;font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(65,105,225,.3);">Open Social Media Board <span style="font-size:16px;">→</span></a>' +
-    '</div>' +
-  '</div>';
+  let html = '<div class="page" style="max-width:920px;">';
+  html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px;">';
+  html += '<div>';
+  html += '<h2 style="margin:0 0 4px;font-size:18px;font-weight:800;color:#1a1a2e;">📱 Marketing</h2>';
+  html += '<p style="margin:0;font-size:13px;color:#888;">Ad creative testing, content planning, and campaign tracking.</p>';
+  html += '</div>';
+  html += '<a href="https://app.asana.com/1/1215361270408183/project/1215365592958652/board/1215365594244809" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:9px 18px;background:#4169E1;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(65,105,225,.3);">📋 Social Media Board (Asana) <span style="font-size:15px;">→</span></a>';
+  html += '</div>';
+  html += renderAdCreative();
+  html += '</div>';
+  return html;
 }
 
 function render() {
@@ -2184,6 +2201,9 @@ function render() {
   // Backward-compat: old links to removed tabs redirect into merged pages
   if (state.activeSection === 'performance') { state.scorecardTab = 'performance'; state.activeSection = 'scorecard'; }
   if (state.activeSection === 'monthlyGoals') { state.goalsTab = 'monthly'; state.activeSection = 'goals'; }
+  // Scale (acq) tab hidden for now — send any lingering links/state back to the scorecard
+  if (state.activeSection === 'acq') state.activeSection = 'scorecard';
+  if (state.growthSection === 'acq') state.growthSection = 'scorecard';
   const s = state.activeSection;
 
   app.innerHTML = renderHeader() +
@@ -2191,8 +2211,9 @@ function render() {
      s === 'wall'                                                              ? renderWallPage()    :
      ['tasks','l10','events','rocks'].includes(s)                             ? renderOpsPage()       :
      ['feedback','watchlist'].includes(s)                                     ? renderMembersPage()   :
-     ['scorecard','goals','acq','marketing'].includes(s)                      ? renderGrowthPage()    :
+     ['scorecard','goals','marketing'].includes(s)                            ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
+     s === 'leadership'                                                       ? renderLeadershipPage() :
      '');
   if (s === 'scorecard' && state.scorecardTab === 'performance') initKPICharts();
   requestAnimationFrame(initSortable);
@@ -2204,8 +2225,9 @@ function renderHeader() {
     if (s === 'home') return 'home';
     if (['tasks','l10','events','rocks'].includes(s))          return 'ops';
     if (['feedback','watchlist'].includes(s))                  return 'members';
-    if (['scorecard','goals','acq','marketing','performance','monthlyGoals'].includes(s)) return 'growth';
+    if (['scorecard','goals','marketing','performance','monthlyGoals'].includes(s)) return 'growth';
     if (s === 'development')                                   return 'resources';
+    if (s === 'leadership')                                    return 'leadership';
     return null;
   };
   const activeGroup = getGroup(cur);
@@ -2215,6 +2237,7 @@ function renderHeader() {
     { group: 'members', label: '👥 Members',  target: () => 'feedback'            },
     { group: 'growth',  label: '📈 Growth',   target: () => state.growthSection  || 'scorecard'   },
     { group: 'resources', label: '📚 Resources', target: () => 'development' },
+    { group: 'leadership', label: '🔒 Leadership', target: () => 'leadership' },
   ];
   return '<div class="header">' +
     '<h1><span style="font-family:Arial Black,sans-serif;font-weight:900;color:#4169E1;letter-spacing:-1px;font-size:1.4rem">LVLUP</span> <span style="color:#999;font-weight:300">/</span> <span style="font-family:Arial Black,sans-serif;font-weight:900;color:#e94560;letter-spacing:-0.5px;font-size:1.4rem">Go Ninja</span> <span>HQ Dashboard</span></h1>' +
@@ -2538,6 +2561,507 @@ function renderScSubTabs() {
   return '<div style="display:flex;gap:4px;background:#fff;border-radius:10px;padding:3px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px;">' +
     tabs.map(t => '<button onclick="setScorecardTab(\'' + t.id + '\')" style="padding:7px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;' + (tab === t.id ? 'background:#1a1a2e;color:#fff;' : 'background:transparent;color:#6b7280;') + '">' + t.label + '</button>').join('') +
     '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AD CREATIVE LAB — social media avatar test matrix (Acquisition)
+   Build identical videos, change only the avatar, let data pick the winner.
+   ═══════════════════════════════════════════════════════════ */
+const AD_AVATARS = [
+  { code:'CONF',    name:'The Shy-Kid Parent',        emoji:'🦋', color:'#7c3aed',
+    fear:'My kid hides behind my leg. Won’t order their own food. I’m scared they’ll get walked on.',
+    dream:'A kid who walks into a room like they belong there.',
+    proof:'Before/after of a once-shy student breaking a board in front of a crowd.' },
+  { code:'FOCUS',   name:'The Frazzled-Focus Parent', emoji:'🎯', color:'#2563eb',
+    fear:'Three hours on Roblox, three minutes on homework. The screens are winning.',
+    dream:'A kid who can sit still, listen, and finish what they start.',
+    proof:'A class clip of kids locked in, plus a parent saying grades/behavior changed.' },
+  { code:'SAFE',    name:'The Protective Parent',      emoji:'🛡️', color:'#dc2626',
+    fear:'What happens when someone bigger picks on my kid and I’m not there?',
+    dream:'A kid who’s calm, confident, and impossible to make an easy target.',
+    proof:'You (Bruce Lee credibility) explaining what real self-defense actually is for kids.' },
+  { code:'RESPECT', name:'The Fed-Up Parent',          emoji:'🥋', color:'#ea580c',
+    fear:'The day “because I said so” stopped working. The attitude is out of control.',
+    dream:'A kid who says “yes sir / ma’am” and means it — at the dojo and at home.',
+    proof:'A student demonstrating discipline + a parent who saw it carry over to home.' },
+];
+const AD_AVATAR_BY = {}; AD_AVATARS.forEach(a => AD_AVATAR_BY[a.code] = a);
+
+const AD_FORMATS = [
+  { code:'AUTH',  name:'Authority',  emoji:'🎤', who:'You → parents',       desc:'Myth-busting straight to camera. Your face does the heavy lifting.' },
+  { code:'PROG',  name:'Program',    emoji:'🥋', who:'Instructors + students', desc:'A real class moment — board break, focus drill, a kid leveling up. Shows the how.' },
+  { code:'PROOF', name:'Proof',      emoji:'💬', who:'Parents + students',     desc:'A parent on camera: “My kid was ___, now they’re ___.” Raw beats polished.' },
+  { code:'CELEB', name:'Celebrity',  emoji:'🐉', who:'Your unfair advantage',  desc:'“I trained to play Bruce Lee…” Almost no competitor on earth can run this play.' },
+];
+
+const AD_AGES = [
+  { code:'56',   label:'5–6 · Littles',    note:'Listening, following directions, first confidence, burning energy. Cuteness sells.' },
+  { code:'79',   label:'7–9 · Sweet spot', note:'Confidence, school focus, first bully encounters, friends. Most buyers live here.' },
+  { code:'1012', label:'10–12',                 note:'Discipline, screens, social pressure, serious self-defense, the respect phase. Closing window.' },
+];
+
+const AD_MATRIX = {
+  CONF:    { AUTH:'req', PROG:'req', PROOF:'req', CELEB:'opt' },
+  FOCUS:   { AUTH:'req', PROG:'req', PROOF:'req', CELEB:'opt' },
+  SAFE:    { AUTH:'req', PROG:'req', PROOF:'req', CELEB:'req' },
+  RESPECT: { AUTH:'req', PROG:'req', PROOF:'req', CELEB:'opt' },
+};
+
+const AD_HOOKS = {
+  CONF: [
+    'If your kid hides behind your leg at birthday parties, watch this.',
+    'Your shy kid isn’t broken — they’ve just never been taught how to feel brave.',
+    'The quiet one in the corner? Six months later, she’s breaking boards in front of 100 people.',
+    'Parents tell me “my kid won’t even order their own food.” Here’s how that changes.',
+  ],
+  FOCUS: [
+    'If you’ve said “put the iPad down” 14 times today, this one’s for you.',
+    'Your kid can focus 3 hours on a game but not 3 minutes on homework. There’s a reason.',
+    'We don’t medicate energy. We channel it.',
+    'What 45 minutes off the screen actually does to a 9-year-old’s brain.',
+  ],
+  SAFE: [
+    'What I’d want my own kid to know before someone bigger picks on them.',
+    'Bullies look for easy targets. We make sure your kid isn’t one.',
+    'Self-defense for kids isn’t about fighting — it’s about never being afraid again.',
+    '★ Celebrity — I played Bruce Lee. The first thing I’d teach a kid getting bullied isn’t a punch — it’s this.',
+  ],
+  RESPECT: [
+    'If “because I said so” stopped working in your house, watch this.',
+    'Your kid says “yes sir” and “yes ma’am” here. Wait till it shows up at home.',
+    'We don’t just teach kids to kick. We teach them to look an adult in the eye and say thank you.',
+    'The disrespect phase isn’t permanent. It’s a discipline gap — and it’s fixable.',
+  ],
+};
+
+const AD_SPECS = [
+  ['Format','Vertical 9:16. Phone is fine — good light + clean audio beats fancy gear.'],
+  ['Length','15–40 seconds. One idea. Cut the fat.'],
+  ['Structure','Hook (0–3s) → insight/pain (3–20s) → quick proof (20–35s) → CTA (last 3–5s).'],
+  ['Captions','Always on. Assume sound off.'],
+  ['CTA','“Book your child’s free class — link in bio,” or drive a comment: “Comment CLASS and I’ll send the link.”'],
+  ['Consistency','Same CTA on every video. Change the offer and you’ve broken the test.'],
+];
+
+const AD_VALUES = [
+  'We build physical, mental, and emotional strength.',
+  'People walk in as strangers and leave as family.',
+  'We develop leaders, not just athletes.',
+  'The offer stays: no contracts, no risk, just results.',
+  'If it doesn’t hold up against our values, it doesn’t go out.',
+];
+
+const AD_LADDER = [
+  ['3-second hold rate','Did the hook land?'],
+  ['Watch-through + saves/shares','Did the message resonate?'],
+  ['Comments / keyword DMs','Did a parent raise their hand?'],
+  ['Free trials booked','Cost per booked trial by avatar.'],
+  ['Trial → enrolled','Which avatar actually buys?'],
+  ['90-day retention / LTV','Which avatar stays?'],
+];
+
+const AD_SPRINT = [
+  'Batch Day: one filming block, aim for ~24 clips (4 avatars × ~6 hooks), mixing the four types and rotating which age is on screen. Knock out Authority/Celebrity first, then grab Program + Proof during real classes.',
+  'Post 1–2/day, rotating avatars evenly — don’t dump all four CONF videos on Monday.',
+  'Log every post here: tag, date, views, hold rate, comments/DMs, trials booked.',
+  'Two-week readout: by day 14 one or two avatars separate on booked trials — that’s your emerging best customer.',
+  'Round 2: make 5 more for the winner, kill the bottom two, and put ad spend only behind proven winners.',
+];
+
+function setAdLabTab(t){ state.adLabTab = t; render(); }
+function setAdLabFilter(f){ state.adLabFilter = f; render(); }
+function adSectionTitle(t, sub){ return '<div style="margin:6px 0 12px;"><div style="font-size:15px;font-weight:800;color:#1a1a2e;">' + t + '</div>' + (sub ? '<div style="font-size:12px;color:#888;margin-top:2px;">' + sub + '</div>' : '') + '</div>'; }
+function adCopyHook(btn){ const t = btn.getAttribute('data-hook') || ''; if(navigator.clipboard) navigator.clipboard.writeText(t); const o = btn.textContent; btn.textContent = '✓ Copied'; btn.style.color = '#16a34a'; setTimeout(() => { btn.textContent = o; btn.style.color = '#4169E1'; }, 1200); }
+
+function adClips(){ const c = (state.adCreative && state.adCreative.clips) || {}; return Object.entries(c).map(([id, v]) => ({ id, ...v })); }
+function adNextTake(avatar, age, format){ return adClips().filter(c => c.avatar === avatar && c.age === age && c.format === format).reduce((mx, c) => Math.max(mx, parseInt(c.take) || 0), 0) + 1; }
+function adBuildTag(avatar, age, format, take){ return avatar + '-' + age + '-' + format + '-' + String(take).padStart(2, '0'); }
+function adRefreshTagPreview(){ const a = document.getElementById('adNewAvatar'), g = document.getElementById('adNewAge'), f = document.getElementById('adNewFormat'), p = document.getElementById('adTagPreview'); if (a && g && f && p) p.textContent = adBuildTag(a.value, g.value, f.value, adNextTake(a.value, g.value, f.value)); }
+function adAddClip(){ const a = document.getElementById('adNewAvatar').value, g = document.getElementById('adNewAge').value, f = document.getElementById('adNewFormat').value; const take = adNextTake(a, g, f); fbSet('adCreative/clips/clip_' + Date.now(), { tag: adBuildTag(a, g, f, take), avatar: a, age: g, format: f, take, status: 'filmed', createdAt: Date.now() }); }
+function adUpdateClip(id, field, value){ fbDebounce('adCreative/clips/' + id + '/' + field, value === '' ? null : value); }
+function adSetStatus(id, status){ fbSet('adCreative/clips/' + id + '/status', status); }
+function adDeleteClip(id){ if (confirm('Delete this clip from the tracker?')) fbSet('adCreative/clips/' + id, null); }
+
+function renderAdCreative(){
+  const tab = state.adLabTab || 'playbook';
+  const tb = (id, label) => '<button onclick="setAdLabTab(\'' + id + '\')" style="padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;' + (tab === id ? 'background:#1a1a2e;color:#fff;' : 'background:#f1f3f9;color:#555;') + '">' + label + '</button>';
+  let html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;">' + tb('playbook', '🎬 Playbook') + tb('tracker', '🗂 Shot Tracker') + tb('leaderboard', '🏆 Leaderboard') + '</div>';
+  if (tab === 'tracker') html += renderAdTracker();
+  else if (tab === 'leaderboard') html += renderAdLeaderboard();
+  else html += renderAdPlaybook();
+  return html;
+}
+
+function renderAdPlaybook(){
+  let h = '';
+  // North star
+  h += '<div style="background:linear-gradient(135deg,#0f3460,#16537e);color:#fff;border-radius:14px;padding:20px 22px;margin-bottom:20px;">';
+  h += '<div style="font-size:12px;font-weight:700;letter-spacing:1px;opacity:.8;text-transform:uppercase;">The Play</div>';
+  h += '<div style="font-size:16px;font-weight:800;margin:6px 0 8px;line-height:1.4;">We’re not going viral. We’re running a test — the market votes, we pour gas on the winner.</div>';
+  h += '<div style="font-size:13px;line-height:1.6;opacity:.92;">Hold everything constant — same CTA (free trial), same length, same energy. The <b>only</b> variable is which parent pain we speak to. The kid is the proof; <b>the parent (usually Mom) is the buyer and the avatar.</b></div>';
+  h += '</div>';
+  // Avatars
+  h += adSectionTitle('🎭 The 4 Avatars', 'Four parent pains. Each a distinct customer. Film all four, then see who raises their hand.');
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:22px;">';
+  AD_AVATARS.forEach(a => {
+    h += '<div style="background:#fff;border:1px solid #e8eaf0;border-top:4px solid ' + a.color + ';border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);">';
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span style="font-size:20px;">' + a.emoji + '</span><span style="font-size:11px;font-weight:800;color:#fff;background:' + a.color + ';padding:2px 8px;border-radius:6px;letter-spacing:.5px;">' + a.code + '</span></div>';
+    h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">' + esc(a.name) + '</div>';
+    h += '<div style="font-size:10px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.4px;">😰 3am fear</div><div style="font-size:12px;color:#555;font-style:italic;margin:2px 0 8px;line-height:1.45;">“' + esc(a.fear) + '”</div>';
+    h += '<div style="font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.4px;">✨ The dream</div><div style="font-size:12px;color:#555;margin:2px 0 8px;line-height:1.45;">' + esc(a.dream) + '</div>';
+    h += '<div style="font-size:10px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.4px;">🎬 Proof that converts</div><div style="font-size:12px;color:#555;margin-top:2px;line-height:1.45;">' + esc(a.proof) + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  // Trust trifecta
+  h += adSectionTitle('🤝 The Trust Trifecta', 'Your 4 video types. Rotate so every avatar gets tested across them.');
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:22px;">';
+  AD_FORMATS.forEach(f => {
+    h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);">';
+    h += '<div style="font-size:22px;margin-bottom:6px;">' + f.emoji + '</div>';
+    h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;">' + esc(f.name) + ' <span style="font-size:10px;font-weight:700;color:#888;background:#f1f3f9;padding:1px 6px;border-radius:5px;">' + f.code + '</span></div>';
+    h += '<div style="font-size:11px;color:#2563eb;font-weight:700;margin:3px 0 6px;">' + esc(f.who) + '</div>';
+    h += '<div style="font-size:12px;color:#555;line-height:1.5;">' + esc(f.desc) + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  // Age lenses
+  h += adSectionTitle('🔎 Age Lenses (5–12)', 'Match the kids on screen to the parent you’re talking to.');
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:22px;">';
+  AD_AGES.forEach(a => {
+    h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:12px 14px;">';
+    h += '<div style="font-size:13px;font-weight:800;color:#1a1a2e;">' + esc(a.label) + ' <span style="font-size:10px;color:#aaa;font-family:monospace;">#' + a.code + '</span></div>';
+    h += '<div style="font-size:12px;color:#666;margin-top:4px;line-height:1.5;">' + esc(a.note) + '</div></div>';
+  });
+  h += '</div>';
+  // Hook bank
+  h += adSectionTitle('🪝 Hook Bank', 'The first 3 seconds decide everything. Tap Copy, say it in the first breath — no intro, no logo.');
+  const filter = state.adLabFilter || 'all';
+  const chip = (id, label, color) => '<button onclick="setAdLabFilter(\'' + id + '\')" style="padding:5px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? (color || '#1a1a2e') : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + label + '</button>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">' + chip('all', 'All') + AD_AVATARS.map(a => chip(a.code, a.code, a.color)).join('') + '</div>';
+  AD_AVATARS.filter(a => filter === 'all' || filter === a.code).forEach(a => {
+    h += '<div style="margin-bottom:14px;"><div style="font-size:12px;font-weight:800;color:' + a.color + ';margin-bottom:6px;">' + a.emoji + ' ' + a.code + ' · ' + esc(a.name) + '</div>';
+    AD_HOOKS[a.code].forEach(hook => {
+      h += '<div style="display:flex;align-items:flex-start;gap:8px;background:#fff;border:1px solid #e8eaf0;border-left:3px solid ' + a.color + ';border-radius:8px;padding:9px 12px;margin-bottom:6px;">';
+      h += '<span style="flex:1;font-size:13px;color:#333;line-height:1.45;">“' + esc(hook) + '”</span>';
+      h += '<button data-hook="' + esc(hook) + '" onclick="adCopyHook(this)" title="Copy hook" style="flex-shrink:0;background:#f1f3f9;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;color:#4169E1;padding:5px 10px;">Copy</button>';
+      h += '</div>';
+    });
+    h += '</div>';
+  });
+  // Specs + brand
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:10px 0 22px;">';
+  h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:14px 16px;">';
+  h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:10px;">🎥 Video Anatomy &amp; Specs</div>';
+  AD_SPECS.forEach(([k, v]) => { h += '<div style="margin-bottom:8px;"><span style="font-size:10px;font-weight:800;color:#0f3460;text-transform:uppercase;letter-spacing:.4px;">' + esc(k) + '</span><div style="font-size:12px;color:#555;line-height:1.45;">' + esc(v) + '</div></div>'; });
+  h += '</div>';
+  h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:14px 16px;">';
+  h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:10px;">🛡️ Brand &amp; Values Guardrail</div>';
+  AD_VALUES.forEach(v => { h += '<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;"><span style="color:#16a34a;font-weight:800;">✓</span><span style="font-size:12px;color:#555;line-height:1.45;">' + esc(v) + '</span></div>'; });
+  h += '</div></div>';
+  // Sprint
+  h += adSectionTitle('🚀 Your First 2-Week Sprint', '');
+  h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;">';
+  AD_SPRINT.forEach((s, i) => { h += '<div style="display:flex;gap:12px;align-items:flex-start;padding:11px 16px;border-bottom:' + (i < AD_SPRINT.length - 1 ? '1px solid #f1f3f9' : 'none') + ';"><span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#0f3460;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;">' + (i + 1) + '</span><span style="font-size:13px;color:#444;line-height:1.5;">' + esc(s) + '</span></div>'; });
+  h += '</div>';
+  return h;
+}
+
+function renderAdTracker(){
+  const clips = adClips();
+  let h = adSectionTitle('🗂 Test Matrix', 'Keep counts roughly even per avatar — if CONF gets 8 and RESPECT gets 2, you haven’t tested RESPECT, you’ve buried it.');
+  // Matrix grid
+  h += '<div style="overflow-x:auto;margin-bottom:22px;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">';
+  h += '<thead><tr style="background:#f5f7ff;"><th style="text-align:left;padding:10px;font-size:11px;color:#0f3460;text-transform:uppercase;letter-spacing:.4px;">Avatar</th>';
+  AD_FORMATS.forEach(f => h += '<th style="padding:10px;font-size:11px;color:#0f3460;">' + f.emoji + '<br>' + f.code + '</th>');
+  h += '<th style="padding:10px;font-size:11px;color:#0f3460;">Total</th></tr></thead><tbody>';
+  AD_AVATARS.forEach(a => {
+    const rowTotal = clips.filter(c => c.avatar === a.code).length;
+    h += '<tr style="border-top:1px solid #f1f3f9;"><td style="padding:10px;font-weight:800;color:' + a.color + ';">' + a.code + '</td>';
+    AD_FORMATS.forEach(f => {
+      const n = clips.filter(c => c.avatar === a.code && c.format === f.code).length;
+      const need = AD_MATRIX[a.code][f.code];
+      const bg = n > 0 ? '#dcfce7' : need === 'req' ? '#fef2f2' : '#f8f9fb';
+      const mark = n > 0 ? '<span style="font-weight:800;color:#16a34a;">' + n + '</span>' : (need === 'req' ? '<span style="color:#ef4444;font-weight:700;">0</span>' : '<span style="color:#bbb;">opt</span>');
+      h += '<td style="text-align:center;padding:10px;background:' + bg + ';">' + mark + '</td>';
+    });
+    h += '<td style="text-align:center;padding:10px;font-weight:800;color:#1a1a2e;">' + rowTotal + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  // Add clip
+  const defAvatar = AD_AVATARS[0].code, defFormat = AD_FORMATS[0].code;
+  const defTag = adBuildTag(defAvatar, '79', defFormat, adNextTake(defAvatar, '79', defFormat));
+  h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:14px 16px;margin-bottom:18px;">';
+  h += '<div style="font-size:13px;font-weight:800;color:#1a1a2e;margin-bottom:10px;">➕ Log a Clip</div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+  const sel = (id, opts) => '<select id="' + id + '" onchange="adRefreshTagPreview()" style="padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff;">' + opts + '</select>';
+  h += sel('adNewAvatar', AD_AVATARS.map(a => '<option value="' + a.code + '">' + a.code + ' · ' + esc(a.name) + '</option>').join(''));
+  h += sel('adNewAge', AD_AGES.map(a => '<option value="' + a.code + '"' + (a.code === '79' ? ' selected' : '') + '>' + esc(a.label) + '</option>').join(''));
+  h += sel('adNewFormat', AD_FORMATS.map(f => '<option value="' + f.code + '">' + f.emoji + ' ' + f.name + '</option>').join(''));
+  h += '<span id="adTagPreview" style="font-family:monospace;font-size:13px;font-weight:700;color:#0f3460;background:#eef2ff;padding:7px 10px;border-radius:6px;">' + defTag + '</span>';
+  h += '<button onclick="adAddClip()" style="padding:8px 16px;background:#0f3460;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">+ Add Clip</button>';
+  h += '</div></div>';
+  // Clip list
+  if (!clips.length) {
+    h += '<div style="text-align:center;padding:32px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;">No clips logged yet. Batch-film, then log each one here.</div>';
+  } else {
+    const STATUS = [{ id:'idea', l:'💡 Idea' }, { id:'filmed', l:'🎬 Filmed' }, { id:'posted', l:'🚀 Posted' }];
+    h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;">';
+    h += '<thead><tr style="background:#f5f7ff;">' + ['Tag','Status','Posted','Views','Hold %','Comments/DMs','Trials','Enrolled','Spend $',''].map((x, i) => '<th style="padding:9px 8px;font-size:10px;color:#0f3460;text-transform:uppercase;letter-spacing:.3px;text-align:' + (i === 0 ? 'left' : 'center') + ';white-space:nowrap;">' + x + '</th>').join('') + '</tr></thead><tbody>';
+    clips.sort((a, b) => (a.tag || '').localeCompare(b.tag || '')).forEach(c => {
+      const av = AD_AVATAR_BY[c.avatar] || { color:'#888' };
+      const num = (f, ph) => '<td style="text-align:center;padding:6px;"><input value="' + (c[f] !== undefined && c[f] !== null ? esc(String(c[f])) : '') + '" placeholder="' + (ph || '—') + '" onchange="adUpdateClip(\'' + c.id + '\',\'' + f + '\',this.value)" style="width:58px;text-align:center;border:1px solid #e5e7eb;border-radius:6px;padding:4px;font-size:12px;"></td>';
+      h += '<tr style="border-top:1px solid #f1f3f9;">';
+      h += '<td style="padding:8px;font-family:monospace;font-weight:700;color:' + av.color + ';white-space:nowrap;">' + esc(c.tag || '') + '</td>';
+      h += '<td style="text-align:center;padding:6px;"><select onchange="adSetStatus(\'' + c.id + '\',this.value)" style="border:1px solid #e5e7eb;border-radius:6px;padding:4px;font-size:11px;">' + STATUS.map(s => '<option value="' + s.id + '"' + ((c.status || 'filmed') === s.id ? ' selected' : '') + '>' + s.l + '</option>').join('') + '</select></td>';
+      h += '<td style="text-align:center;padding:6px;"><input type="date" value="' + esc(c.date || '') + '" onchange="adUpdateClip(\'' + c.id + '\',\'date\',this.value)" style="border:1px solid #e5e7eb;border-radius:6px;padding:4px;font-size:11px;"></td>';
+      h += num('views') + num('hold') + num('comments') + num('trials') + num('enrolled') + num('spend', '$');
+      h += '<td style="text-align:center;padding:6px;"><button onclick="adDeleteClip(\'' + c.id + '\')" title="Delete" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#ccc\'">🗑</button></td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<p style="font-size:11px;color:#aaa;margin-top:10px;text-align:center;">Edits save automatically · Tag = AVATAR-AGE-FORMAT-## · Mark clips Posted once live, then fill in their numbers</p>';
+  }
+  return h;
+}
+
+function renderAdLeaderboard(){
+  const clips = adClips();
+  let h = adSectionTitle('🏆 Avatar Leaderboard', 'Top of the ladder is nice; bottom of the ladder pays the bills. Winner = lowest cost-per-trial AND highest trial→enroll that sticks.');
+  // Ladder
+  h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;margin-bottom:18px;">';
+  AD_LADDER.forEach((l, i) => { h += '<div style="display:flex;gap:10px;align-items:center;padding:8px 14px;border-bottom:' + (i < AD_LADDER.length - 1 ? '1px solid #f1f3f9' : 'none') + ';"><span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;background:' + (i >= 3 ? '#16a34a' : '#cbd5e1') + ';color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;">' + (i + 1) + '</span><span style="font-size:12px;font-weight:700;color:#1a1a2e;flex-shrink:0;">' + esc(l[0]) + '</span><span style="font-size:11px;color:#999;">' + esc(l[1]) + '</span></div>'; });
+  h += '</div>';
+  // Aggregates
+  const rows = AD_AVATARS.map(a => {
+    const cs = clips.filter(c => c.avatar === a.code);
+    const sum = f => cs.reduce((s, c) => s + (parseFloat(c[f]) || 0), 0);
+    const trials = sum('trials'), enrolled = sum('enrolled'), spend = sum('spend');
+    return { a, n: cs.length, views: sum('views'), comments: sum('comments'), trials, enrolled,
+      enrollRate: trials > 0 ? Math.round(enrolled / trials * 100) : null,
+      cpt: (trials > 0 && spend > 0) ? spend / trials : null };
+  });
+  const scored = rows.filter(r => r.trials > 0);
+  const winner = scored.length ? scored.slice().sort((x, y) => (y.enrolled - x.enrolled) || ((y.enrollRate || 0) - (x.enrollRate || 0)))[0] : null;
+  h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">';
+  h += '<thead><tr style="background:#f5f7ff;">' + ['Avatar','Clips','Views','Comments/DMs','Trials','Enrolled','Trial→Enroll','Cost/Trial'].map((x, i) => '<th style="padding:10px 8px;font-size:10px;color:#0f3460;text-transform:uppercase;letter-spacing:.3px;text-align:' + (i === 0 ? 'left' : 'center') + ';white-space:nowrap;">' + x + '</th>').join('') + '</tr></thead><tbody>';
+  rows.forEach(r => {
+    const isW = winner && r.a.code === winner.a.code;
+    h += '<tr style="border-top:1px solid #f1f3f9;background:' + (isW ? '#f0fdf4' : '#fff') + ';">';
+    h += '<td style="padding:10px 8px;font-weight:800;color:' + r.a.color + ';white-space:nowrap;">' + (isW ? '👑 ' : '') + r.a.code + '</td>';
+    h += '<td style="text-align:center;padding:10px;">' + r.n + '</td>';
+    h += '<td style="text-align:center;padding:10px;">' + (r.views ? r.views.toLocaleString() : '—') + '</td>';
+    h += '<td style="text-align:center;padding:10px;">' + (r.comments || '—') + '</td>';
+    h += '<td style="text-align:center;padding:10px;font-weight:800;color:#2563eb;">' + (r.trials || '—') + '</td>';
+    h += '<td style="text-align:center;padding:10px;">' + (r.enrolled || '—') + '</td>';
+    h += '<td style="text-align:center;padding:10px;font-weight:700;color:' + (r.enrollRate !== null ? '#16a34a' : '#999') + ';">' + (r.enrollRate !== null ? r.enrollRate + '%' : '—') + '</td>';
+    h += '<td style="text-align:center;padding:10px;">' + (r.cpt !== null ? '$' + r.cpt.toFixed(0) : '—') + '</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div style="font-size:11px;color:#aaa;margin-top:10px;">Cost/Trial needs a Spend $ value in the tracker. A pain that gets tons of views but no enrollments is a vanity avatar — ignore it.</div>';
+  if (winner) h += '<div style="margin-top:14px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border-radius:12px;padding:14px 18px;"><div style="font-size:12px;font-weight:700;opacity:.85;text-transform:uppercase;letter-spacing:.5px;">Emerging best customer</div><div style="font-size:16px;font-weight:800;margin-top:4px;">👑 ' + winner.a.code + ' — ' + esc(winner.a.name) + '</div><div style="font-size:13px;opacity:.92;margin-top:4px;">' + winner.enrolled + ' enrolled from ' + winner.trials + ' trials' + (winner.enrollRate !== null ? ' (' + winner.enrollRate + '% trial→enroll)' : '') + '. Pour content + ad spend here; retire the losers.</div></div>';
+  return h;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LEADERSHIP — PIN-gated owner page (you + Lou)
+   Daily location tracker + staff accountability & performance.
+   ═══════════════════════════════════════════════════════════ */
+const LEAD_TRACK_LOCS = [
+  { id: 'waunakee', name: 'Waunakee',     color: '#1d4ed8' },
+  { id: 'eastmad',  name: 'East Madison', color: '#dc2626' },
+  { id: 'verona',   name: 'Verona',       color: '#16a34a' },
+  { id: 'goninja',  name: 'Go Ninja',     color: '#ea580c' },
+];
+const LEAD_TRACK_COLS = [
+  { id: 'leads',         label: 'Leads' },
+  { id: 'trialsBooked',  label: 'Trials Booked' },
+  { id: 'trialShown',    label: 'Trial Shown / Att.' },
+  { id: 'enrollments',   label: 'Enrollments' },
+  { id: 'absences',      label: 'Absences' },
+  { id: 'cancellations', label: 'Cancellations' },
+];
+// Roles are seat-based, not person-based — whoever holds the seat shows under the role.
+const LEAD_STAFF = [
+  { empId: 'bryanG',   name: 'Waunakee Lead',    loc: 'waunakee', branch: 'WNK',     color: '#1d4ed8' },
+  { empId: 'nikkiB',   name: 'E. Madison Lead',  loc: 'eastmad',  branch: 'E.MAD',   color: '#dc2626' },
+  { empId: 'joeyZ',    name: 'Verona Lead',      loc: 'verona',   branch: 'VRN',     color: '#16a34a' },
+  { empId: 'mirandaS', name: 'Go Ninja Lead',    loc: 'goninja',  branch: 'GONINJA', color: '#ea580c' },
+];
+
+function leadMonthDate(){ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + state.leadership.monthOffset); return d; }
+function leadMonthKey(){ const d = leadMonthDate(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function leadDaysInMonth(){ const d = leadMonthDate(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); }
+function leadToMin(t){ if (!t || !/^\d{1,2}:\d{2}$/.test(t)) return null; const [a, b] = t.split(':').map(Number); return a * 60 + b; }
+
+// PIN gate
+function leadTryUnlock(){ const el = document.getElementById('leadPinInput'); if (!el) return; if (el.value === state.leadership.pin) { state.leadership.unlocked = true; state.leadership.pinError = false; sessionStorage.setItem('leadershipUnlocked', '1'); render(); } else { state.leadership.pinError = true; render(); } }
+function leadLock(){ state.leadership.unlocked = false; sessionStorage.removeItem('leadershipUnlocked'); render(); }
+function leadConfirmSetPin(){ const p1 = document.getElementById('leadNewPin1'), p2 = document.getElementById('leadNewPin2'); if (!p1 || !p2) return; const pin = p1.value.trim(); if (pin.length < 4) { p1.style.borderColor = '#ef4444'; return; } if (pin !== p2.value.trim()) { p2.style.borderColor = '#ef4444'; return; } fbSet('leadership/pin', pin); state.leadership.pin = pin; state.leadership.pinLoaded = true; state.leadership.unlocked = true; sessionStorage.setItem('leadershipUnlocked', '1'); render(); }
+function leadResetPin(){ if (!confirm('Reset the Leadership PIN? You and Lou will need to create a new one.')) return; fbSet('leadership/pin', null); state.leadership.pin = null; state.leadership.unlocked = false; sessionStorage.removeItem('leadershipUnlocked'); render(); }
+function leadSetView(v){ state.leadership.view = v; render(); }
+function leadSetTrackerLoc(l){ state.leadership.trackerLoc = l; render(); }
+function leadChangeMonth(d){ state.leadership.monthOffset += d; render(); }
+function leadUpdateTracker(loc, day, field, value){ fbDebounce('leadership/tracker/' + loc + '/' + leadMonthKey() + '/' + day + '/' + field, value === '' ? null : value); }
+function leadUpdatePerf(empId, field, value){ fbSet('leadership/perf/' + empId + '/' + leadMonthKey() + '/' + field, value === '' ? null : value); }
+
+function renderLeadershipPage(){
+  if (!state.leadership.pinLoaded) return '<div class="page" style="max-width:400px;margin:80px auto;text-align:center;color:#aaa;font-size:14px;">Loading…</div>';
+  if (!state.leadership.pin) return renderLeadSetPin();
+  if (!state.leadership.unlocked) return renderLeadLock();
+  return renderLeadDashboard();
+}
+
+function renderLeadLock(){
+  const err = state.leadership.pinError;
+  return '<div style="max-width:320px;margin:80px auto;text-align:center;padding:0 20px;">' +
+    '<div style="font-size:52px;margin-bottom:16px;">🔒</div>' +
+    '<h2 style="font-size:20px;font-weight:800;color:#1a1a2e;margin:0 0 6px;">Leadership</h2>' +
+    '<p style="color:#aaa;font-size:12px;margin:0 0 24px;text-transform:uppercase;letter-spacing:.5px;">Owner-only · You &amp; Lou</p>' +
+    '<input id="leadPinInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" onkeydown="if(event.key===\'Enter\')leadTryUnlock()" autofocus style="width:100%;padding:13px;font-size:22px;letter-spacing:8px;text-align:center;border:2px solid ' + (err ? '#ef4444' : '#e0e3ed') + ';border-radius:10px;font-family:inherit;margin-bottom:' + (err ? '6' : '14') + 'px;outline:none;box-sizing:border-box;">' +
+    (err ? '<div style="color:#ef4444;font-size:12px;font-weight:600;margin-bottom:10px;">Incorrect PIN — try again</div>' : '') +
+    '<button onclick="leadTryUnlock()" style="width:100%;padding:13px;background:#1a1a2e;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;">Unlock →</button>' +
+    '<button onclick="leadResetPin()" style="background:none;border:none;cursor:pointer;font-size:11px;color:#bbb;padding:4px;">Forgot PIN</button>' +
+    '</div>';
+}
+
+function renderLeadSetPin(){
+  return '<div style="max-width:320px;margin:80px auto;text-align:center;padding:0 20px;">' +
+    '<div style="font-size:52px;margin-bottom:16px;">🔐</div>' +
+    '<h2 style="font-size:20px;font-weight:800;color:#1a1a2e;margin:0 0 6px;">Set the Leadership PIN</h2>' +
+    '<p style="color:#888;font-size:13px;margin:0 0 24px;">Create a 4–6 digit PIN. Share it only with Lou.</p>' +
+    '<input id="leadNewPin1" type="password" inputmode="numeric" maxlength="6" placeholder="Create PIN" style="width:100%;padding:13px;font-size:20px;letter-spacing:6px;text-align:center;border:2px solid #e0e3ed;border-radius:10px;font-family:inherit;margin-bottom:10px;outline:none;box-sizing:border-box;">' +
+    '<input id="leadNewPin2" type="password" inputmode="numeric" maxlength="6" placeholder="Confirm PIN" onkeydown="if(event.key===\'Enter\')leadConfirmSetPin()" style="width:100%;padding:13px;font-size:20px;letter-spacing:6px;text-align:center;border:2px solid #e0e3ed;border-radius:10px;font-family:inherit;margin-bottom:14px;outline:none;box-sizing:border-box;">' +
+    '<button onclick="leadConfirmSetPin()" style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Create PIN</button>' +
+    '</div>';
+}
+
+function renderLeadDashboard(){
+  const view = state.leadership.view || 'tracker';
+  const monthLabel = leadMonthDate().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  let h = '<div class="page" style="max-width:1100px;">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">';
+  h += '<div><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🔒 Leadership</h2><p style="margin:0;font-size:13px;color:#888;">Owner-only — daily performance tracker &amp; staff accountability.</p></div>';
+  h += '<button onclick="leadLock()" style="padding:8px 14px;background:#f1f3f9;border:1px solid #ddd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:#555;">🔒 Lock</button>';
+  h += '</div>';
+  const tb = (id, label) => '<button onclick="leadSetView(\'' + id + '\')" style="padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;' + (view === id ? 'background:#1a1a2e;color:#fff;' : 'background:#f1f3f9;color:#555;') + '">' + label + '</button>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">' + tb('tracker', '📊 Daily Tracker') + tb('accountability', '⏱ Accountability & Performance') + '</div>';
+  h += '<div style="display:flex;align-items:center;gap:6px;background:#f1f3f9;border-radius:10px;padding:3px;width:fit-content;margin-bottom:16px;">';
+  h += '<button onclick="leadChangeMonth(-1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">‹</button>';
+  h += '<span style="font-size:14px;font-weight:700;color:#1a1a2e;min-width:150px;text-align:center;">' + monthLabel + '</span>';
+  h += '<button onclick="leadChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">›</button>';
+  h += '</div>';
+  h += (view === 'accountability' ? renderLeadAccountability() : renderLeadTracker());
+  h += '</div>';
+  return h;
+}
+
+function renderLeadTracker(){
+  const loc = state.leadership.trackerLoc;
+  const mk = leadMonthKey();
+  const data = ((state.leadership.tracker[loc] || {})[mk]) || {};
+  const days = leadDaysInMonth();
+  const meta = LEAD_TRACK_LOCS.find(l => l.id === loc) || LEAD_TRACK_LOCS[0];
+  const monthName = leadMonthDate().toLocaleDateString('en-US', { month: 'long' });
+  let h = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">';
+  LEAD_TRACK_LOCS.forEach(l => { const a = l.id === loc; h += '<button onclick="leadSetTrackerLoc(\'' + l.id + '\')" style="padding:7px 16px;border-radius:20px;border:none;cursor:pointer;font-size:13px;font-weight:700;background:' + (a ? l.color : '#f1f3f9') + ';color:' + (a ? '#fff' : '#555') + ';">' + l.name + '</button>'; });
+  h += '</div>';
+  h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">';
+  h += '<thead><tr><th colspan="' + (LEAD_TRACK_COLS.length + 2) + '" style="padding:12px;font-size:16px;font-weight:800;text-align:center;letter-spacing:1px;background:' + meta.color + ';color:#fff;">' + meta.name.toUpperCase() + '</th></tr>';
+  h += '<tr style="background:#f5f7ff;">' + ['Date'].concat(LEAD_TRACK_COLS.map(c => c.label)).concat(['Notes']).map((x, i) => '<th style="padding:8px;font-size:10px;color:#0f3460;text-transform:uppercase;letter-spacing:.3px;text-align:' + (i === 0 ? 'left' : 'center') + ';white-space:nowrap;">' + x + '</th>').join('') + '</tr></thead><tbody>';
+  const monthT = {}; LEAD_TRACK_COLS.forEach(c => monthT[c.id] = 0);
+  let chunkT = {}; LEAD_TRACK_COLS.forEach(c => chunkT[c.id] = 0);
+  for (let day = 1; day <= days; day++) {
+    const dd = data[day] || {};
+    h += '<tr style="border-top:1px solid #f5f5f5;">';
+    h += '<td style="padding:5px 10px;font-weight:600;color:#444;white-space:nowrap;">' + monthName + ' ' + day + '</td>';
+    LEAD_TRACK_COLS.forEach(c => {
+      const val = dd[c.id]; const n = parseFloat(val) || 0; monthT[c.id] += n; chunkT[c.id] += n;
+      h += '<td style="padding:3px;text-align:center;"><input value="' + (val !== undefined && val !== null ? esc(String(val)) : '') + '" onchange="leadUpdateTracker(\'' + loc + '\',' + day + ',\'' + c.id + '\',this.value)" style="width:54px;text-align:center;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;"></td>';
+    });
+    h += '<td style="padding:3px;"><input value="' + esc(dd.notes || '') + '" onchange="leadUpdateTracker(\'' + loc + '\',' + day + ',\'notes\',this.value)" style="width:100%;min-width:120px;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;box-sizing:border-box;"></td>';
+    h += '</tr>';
+    if (day % 7 === 0 || day === days) {
+      h += '<tr style="background:#eef2ff;font-weight:800;"><td style="padding:7px 10px;color:#0f3460;">WEEK TOTAL</td>';
+      LEAD_TRACK_COLS.forEach(c => { h += '<td style="text-align:center;padding:7px;color:#0f3460;">' + chunkT[c.id] + '</td>'; });
+      h += '<td></td></tr>';
+      LEAD_TRACK_COLS.forEach(c => chunkT[c.id] = 0);
+    }
+  }
+  h += '<tr style="background:' + meta.color + '22;font-weight:800;"><td style="padding:9px 10px;color:#0f3460;">MONTH TOTAL</td>';
+  LEAD_TRACK_COLS.forEach(c => { h += '<td style="text-align:center;padding:9px;color:#0f3460;">' + monthT[c.id] + '</td>'; });
+  h += '<td></td></tr></tbody></table></div>';
+  return h;
+}
+
+function renderLeadHomebaseTable(hb){
+  const fmtDiff = m => m === null ? '—' : (m > 0 ? '+' : '') + m;
+  let h = '<div style="overflow-x:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+  h += '<thead><tr style="background:#f5f7ff;">' + ['Date', 'Sched In', 'Actual In', 'Δ', 'Sched Out', 'Actual Out', 'Δ', 'Hours'].map((x, i) => '<th style="padding:6px;color:#0f3460;font-size:10px;text-transform:uppercase;text-align:' + (i === 0 ? 'left' : 'center') + ';">' + x + '</th>').join('') + '</tr></thead><tbody>';
+  Object.keys(hb).map(Number).sort((a, b) => a - b).forEach(day => {
+    const d = hb[day] || {};
+    const si = leadToMin(d.ss), ai = leadToMin(d.as), so = leadToMin(d.se), ao = leadToMin(d.ae);
+    const dIn = (si !== null && ai !== null) ? ai - si : null;
+    const dOut = (so !== null && ao !== null) ? ao - so : null;
+    const hrs = (ai !== null && ao !== null) ? ((ao - ai) / 60).toFixed(1) : '—';
+    const flag = v => v !== null && Math.abs(v) > 5 ? 'background:#fee2e2;color:#b91c1c;font-weight:700;' : '';
+    h += '<tr style="border-top:1px solid #f5f5f5;"><td style="padding:5px;">' + day + '</td>';
+    h += '<td style="text-align:center;">' + (d.ss || '—') + '</td><td style="text-align:center;">' + (d.as || '—') + '</td><td style="text-align:center;' + flag(dIn) + '">' + fmtDiff(dIn) + '</td>';
+    h += '<td style="text-align:center;">' + (d.se || '—') + '</td><td style="text-align:center;">' + (d.ae || '—') + '</td><td style="text-align:center;' + flag(dOut) + '">' + fmtDiff(dOut) + '</td>';
+    h += '<td style="text-align:center;font-weight:700;">' + hrs + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
+function renderLeadAccountability(){
+  const mk = leadMonthKey();
+  const md = leadMonthDate();
+  const monthWeeks = getMonthWeekKeys(md.getFullYear(), md.getMonth() + 1);
+  let h = '';
+  LEAD_STAFF.forEach(st => {
+    const tdata = ((state.leadership.tracker[st.loc] || {})[mk]) || {};
+    let trialShown = 0, enroll = 0, cancel = 0;
+    Object.values(tdata).forEach(d => { trialShown += parseFloat(d.trialShown) || 0; enroll += parseFloat(d.enrollments) || 0; cancel += parseFloat(d.cancellations) || 0; });
+    const conv = trialShown > 0 ? Math.round(enroll / trialShown * 100) : null;
+    const net = enroll - cancel;
+    const so = state.leadership.signoffs[st.empId] || {};
+    const signed = monthWeeks.filter(wk => so[wk]).length;
+    const eligible = signed >= 4;
+    const perf = ((state.leadership.perf[st.empId] || {})[mk]) || {};
+    const rec = perf.recommendation || 'TBD';
+    const hb = ((state.leadership.homebase[st.empId] || {})[mk]) || {};
+    const hasHb = Object.keys(hb).length > 0;
+
+    h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden;">';
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:' + st.color + ';color:#fff;">';
+    h += '<span style="font-size:15px;font-weight:800;">' + esc(st.name) + '</span><span style="font-size:11px;font-weight:700;background:rgba(255,255,255,.25);padding:2px 8px;border-radius:6px;">' + st.branch + '</span>';
+    h += '<span style="margin-left:auto;font-size:12px;font-weight:700;background:' + (eligible ? '#16a34a' : 'rgba(0,0,0,.18)') + ';padding:3px 10px;border-radius:6px;">' + (eligible ? '✓ Bonus Eligible' : signed + '/4 weeks') + '</span>';
+    h += '</div>';
+    const cell = (label, val, color) => '<div style="flex:1;min-width:90px;text-align:center;padding:10px;border-right:1px solid #f1f3f9;"><div style="font-size:18px;font-weight:800;color:' + (color || '#1a1a2e') + ';">' + val + '</div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.3px;">' + label + '</div></div>';
+    h += '<div style="display:flex;flex-wrap:wrap;border-bottom:1px solid #f1f3f9;">';
+    h += cell('Trial Att.', trialShown || '—');
+    h += cell('Enrollments', enroll || '—', '#2563eb');
+    h += cell('Conv %', conv !== null ? conv + '%' : '—', '#16a34a');
+    h += cell('Cancellations', cancel || '—', '#dc2626');
+    h += cell('Net Growth', (net > 0 ? '+' : '') + net, net >= 0 ? '#16a34a' : '#dc2626');
+    h += cell('Weeks Signed', signed + '/' + (monthWeeks.length || 4));
+    h += '</div>';
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;flex-wrap:wrap;">';
+    h += '<span style="font-size:12px;font-weight:700;color:#555;">Recommendation:</span>';
+    h += '<select onchange="leadUpdatePerf(\'' + st.empId + '\',\'recommendation\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:7px;font-size:12px;font-weight:700;">' + ['TBD', 'For Coaching', 'Review Required'].map(o => '<option' + (rec === o ? ' selected' : '') + '>' + o + '</option>').join('') + '</select>';
+    h += '<span style="font-size:11px;color:#aaa;">Performance metrics pull live from the Daily Tracker + task sign-offs.</span>';
+    h += '</div>';
+    h += '<div style="padding:0 16px 14px;">';
+    if (!hasHb) {
+      h += '<div style="background:#fffbeb;border:1px dashed #fde68a;border-radius:10px;padding:12px 14px;font-size:12px;color:#92400e;display:flex;align-items:flex-start;gap:8px;"><span style="font-size:16px;">⏱</span><span><b>Accountability (clock-in / clock-out)</b> — awaiting Homebase sync. Scheduled vs actual times, variance flags, and weekly hours light up here automatically once the Homebase integration is connected.</span></div>';
+    } else {
+      h += renderLeadHomebaseTable(hb);
+    }
+    h += '</div></div>';
+  });
+  return h;
 }
 
 function renderScorecardPage() {
@@ -3609,6 +4133,12 @@ state.goalsMonth = getMonthKey();
 state.goalsData = {};
 state.modalTask = null;
 state.scorecardTab = 'instructor';   // 'instructor' | 'acquisition' | 'performance'
+state.adLabTab     = 'playbook';     // Ad Creative: 'playbook' | 'tracker' | 'leaderboard'
+state.adLabFilter  = 'all';          // Hook bank avatar filter
+state.adCreative   = state.adCreative || {};
+// Leadership (PIN-gated owner page)
+state.leadership   = { pin: null, pinLoaded: false, unlocked: false, pinError: false, view: 'tracker', trackerLoc: 'waunakee', monthOffset: 0, tracker: {}, homebase: {}, perf: {}, signoffs: {} };
+if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('leadershipUnlocked') === '1') state.leadership.unlocked = true;
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
 state.devTab        = 'instructor'; // 'instructor' | 'gymdesk' | 'playbooks'
 state.gdActiveModule = null;
@@ -5957,6 +6487,27 @@ const LVLUP_PLAYBOOKS = [
         detail:'If the student shows up without sparring gear after 3 weeks, check in with the parent warmly: "Hey, just wanted to make sure [Name] has everything they need for class — can we help with sizing when you\'re next in?"',
         points:['Never let a student participate in sparring contact drills without proper protective gear'],
         avoid:['Being pushy or making the family feel guilty — offer to help, not pressure'] },
+    ]
+  },
+
+  // ── CONTENT PILLARS (owned by Ivy — formalization in progress) ──
+  { id:'content_pillars', role:'sales', category:'Content Pillars', icon:'🧱', title:'Content Pillars', tagline:'The core themes every piece of content ladders back to — owned by Ivy, formalization in progress.',
+    checklist:[
+      'Pillar 1 — to be defined by Ivy',
+      'Pillar 2 — to be defined by Ivy',
+      'Pillar 3 — to be defined by Ivy',
+      'Pillar 4 — to be defined by Ivy',
+      'Map every piece of content to a pillar before it goes out',
+    ],
+    steps:[
+      { title:'Formalization In Progress',
+        detail:'This section is being built out by Ivy. Each content pillar will define a recurring theme, the audience it speaks to, and example post types — so every piece of content has a clear home and the overall mix stays balanced.',
+        points:['Each pillar = one recurring theme with a clear audience','Tag every post to a pillar so coverage stays even across themes'],
+        avoid:['Posting one-off content that doesn\'t ladder back to a pillar'] },
+      { title:'How Pillars Connect to the Ad Creative Lab',
+        detail:'Pillars are the always-on content themes that keep the feed consistent; the Ad Creative Lab (Growth → Marketing) runs the avatar tests and paid pushes. Pillars keep a steady drumbeat between test campaigns.',
+        points:['Pillars = steady, always-on themes','Ad Creative Lab = the avatar tests and paid pushes'],
+        avoid:['Treating pillars and ad tests as the same thing — they work together, not interchangeably'] },
     ]
   },
 ];
@@ -8415,6 +8966,8 @@ function renderStudentLogRow(s, locationFilter, isInactive) {
 }
 
 function renderFeedbackPage() {
+  // "All" view removed — always show a single location
+  if (state.feedback.locationFilter === 'all' || !state.feedback.locationFilter) state.feedback.locationFilter = 'waunakee';
   const { roster, tracking, rosterMeta, locationFilter, showInactive } = state.feedback;
   const monthLabel   = getFeedbackMonthLabel();
   const currentMonth = getCurrentMonthKey();
@@ -8454,7 +9007,10 @@ function renderFeedbackPage() {
   const byFilter = locationFilter === 'all' ? allStudents : allStudents.filter(s => s.location === locationFilter);
   const activeStudents   = byFilter.filter(s => s.active !== false);
   const inactiveStudents = byFilter.filter(s => s.active === false);
-  const displayed = showInactive ? byFilter : activeStudents;
+  // Students inside their First 90 Days live in the onboarding tracker only — keep them out of the general list.
+  // (Inactive students are never in onboarding, so they remain in the list under "show inactive".)
+  const inFirst90 = s => { const d = getDaysInJourney(s.startDate); return d !== null && d <= 90; };
+  const displayed = (showInactive ? byFilter : activeStudents).filter(s => !(s.active !== false && inFirst90(s)));
 
   // ── Stats (active only) ──
   const total = activeStudents.length;
@@ -8611,7 +9167,7 @@ function renderFeedbackPage() {
         '<button onclick="feedbackChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 10px;border-radius:7px;color:#4169E1;font-weight:700;">›</button>' +
       '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-        pill('all','All') + pill('waunakee','Waunakee') + pill('eastmad','East Madison') + pill('verona','Verona') +
+        pill('waunakee','Waunakee') + pill('eastmad','East Madison') + pill('verona','Verona') +
       '</div>' +
     '</div>' +
 
