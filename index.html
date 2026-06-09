@@ -3113,7 +3113,8 @@ function setScLoc(l){ state.scLoc = l; render(); }
 /* ── Nightly instructor scorecard — daily counts logged at EOS ── */
 const INSTRUCTOR_DAILY_COLS = [
   { id:'firstDayTrials', label:'First-Day Trial Students', short:'First-Day Trials', hint:'Students who came in for their first trial class today.' },
-  { id:'dayOneEnroll',   label:'Day-One Enrollments',      short:'Day-One Enroll',   hint:'Kids who joined the same day they tried.' },
+  { id:'dayOneEnroll',   label:'Day-One Enrollments',      short:'Day-One Enroll',   hint:'Kids who joined the same day they tried.', captureNames:true },
+  { id:'laterEnroll',    label:'Later Enrollments',        short:'Later Enroll',     hint:'Members who enrolled after their trial — not the same day (e.g. a week later).', captureNames:true },
   { id:'upgrades',       label:'Upgrades',                 short:'Upgrades',         hint:'Members who moved up a program (Leadership, Black Belt Club, ADP).' },
   { id:'attrition',      label:'Cancellations',            short:'Cancellations',    hint:'Members who cancelled today.' },
   { id:'monthlyRevenue', label:'Monthly Revenue to Date',  short:'Rev to Date',      hint:'Total revenue collected so far this month — enter the running total.', snapshot:true, currency:true },
@@ -3180,7 +3181,8 @@ function renderInstructorDaily(loc){
   h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;">';
   h += chip('Day-One Close %', closePct);
   h += chip('First-Day Trials', monthT.firstDayTrials || '—');
-  h += chip('Enrollments', monthT.dayOneEnroll || '—');
+  h += chip('Day-One Enroll', monthT.dayOneEnroll || '—');
+  h += chip('Later Enroll', monthT.laterEnroll || '—');
   h += chip('Upgrades', monthT.upgrades || '—');
   h += chip('Cancellations', monthT.attrition || '—');
   h += chip('Rev to Date', monthLast.monthlyRevenue !== '' ? fmtCurrency(parseFloat(monthLast.monthlyRevenue) || 0) : '—');
@@ -3191,27 +3193,68 @@ function renderInstructorDaily(loc){
 
 /* Guided nightly check-in — one count per screen, targets today */
 function scWizardMetrics(){ return INSTRUCTOR_DAILY_COLS; }
-function scWizToday(){ const t = new Date(); return { mk: t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'), day: t.getDate(), label: t.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) }; }
-function scWizardStart(){ const loc = (state.scLoc && state.scLoc !== 'all') ? state.scLoc : 'waunakee'; state.scWizard = { open:true, loc, step:0 }; render(); setTimeout(() => { const i = document.getElementById('scWizInput'); if (i) i.focus(); }, 60); }
-function scWizardClose(){ state.scWizard = { open:false, loc:null, step:0 }; render(); }
+function scWizToday(){ const t = new Date(); return { mk: t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'), day: t.getDate(), date: t.toISOString().split('T')[0], label: t.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) }; }
+function scWizardStart(){ const loc = (state.scLoc && state.scLoc !== 'all') ? state.scLoc : 'waunakee'; state.scWizard = { open:true, loc, step:0, names:{}, counts:{}, done:false, added:0 }; render(); setTimeout(() => { const i = document.getElementById('scWizInput'); if (i) i.focus(); }, 60); }
+function scWizardClose(){ state.scWizard = { open:false, loc:null, step:0, names:{}, counts:{}, done:false, added:0 }; render(); }
+function scWizCurCount(){ const w = state.scWizard, m = scWizardMetrics()[w.step]; if (w.counts && w.counts[m.id] != null) return w.counts[m.id]; const td = scWizToday(); const s = ((((state.scorecardDaily || {})[w.loc] || {})[td.mk] || {})[td.day] || {})[m.id]; return (s != null ? String(s) : ''); }
+function scWizCountChanged(v){ const w = state.scWizard, m = scWizardMetrics()[w.step]; w.counts = w.counts || {}; w.counts[m.id] = v; render(); setTimeout(() => { const f = document.getElementById('scWizName0') || document.getElementById('scWizInput'); if (f) f.focus(); }, 50); }
+function scWizName(mid, idx, v){ const w = state.scWizard; w.names = w.names || {}; w.names[mid] = w.names[mid] || []; w.names[mid][idx] = v; }
 function scWizSave(){ const w = state.scWizard; if (!w || !w.open) return; const m = scWizardMetrics()[w.step]; const i = document.getElementById('scWizInput'); if (m && i) { const td = scWizToday(); fbDebounce('scorecardDaily/' + w.loc + '/' + td.mk + '/' + td.day + '/' + m.id, i.value === '' ? null : i.value); } }
-function scWizNext(){ scWizSave(); const total = scWizardMetrics().length; if (state.scWizard.step >= total - 1) { scWizardClose(); } else { state.scWizard.step++; render(); setTimeout(() => { const i = document.getElementById('scWizInput'); if (i) i.focus(); }, 60); } }
+function scWizNext(){ scWizSave(); const total = scWizardMetrics().length; if (state.scWizard.step >= total - 1) { scWizFinish(); } else { state.scWizard.step++; render(); setTimeout(() => { const i = document.getElementById('scWizInput'); if (i) i.focus(); }, 60); } }
 function scWizBack(){ scWizSave(); if (state.scWizard.step > 0) { state.scWizard.step--; render(); setTimeout(() => { const i = document.getElementById('scWizInput'); if (i) i.focus(); }, 60); } }
+function scWizFinish(){
+  const w = state.scWizard; const td = scWizToday(); const mk = getCurrentMonthKey();
+  const norm = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const roster = state.feedback.roster || {};
+  const seen = new Set(Object.values(roster).filter(r => r && r.active !== false).map(r => norm(r.name) + '|' + r.location));
+  let added = 0;
+  scWizardMetrics().filter(c => c.captureNames).forEach(c => {
+    ((w.names || {})[c.id] || []).forEach(nm => {
+      const name = (nm || '').trim(); if (!name) return;
+      const k = norm(name) + '|' + w.loc; if (seen.has(k)) return; seen.add(k);
+      const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      db.ref('feedbackRoster/' + key).set({ name, location: w.loc, active: true, addedDate: mk, startDate: td.date });
+      added++;
+    });
+  });
+  if (added > 0) { state.scWizard = { open:true, done:true, added, loc: w.loc, step:0, names:{}, counts:{} }; render(); }
+  else scWizardClose();
+}
 function renderScWizard(){
   const w = state.scWizard; if (!w || !w.open) return '';
-  const metrics = scWizardMetrics(); const m = metrics[w.step]; const total = metrics.length;
   const locName = (LOCATIONS.find(l => l.id === w.loc) || {}).name || w.loc;
+  if (w.done) {
+    return '<div class="modal-overlay" onclick="scWizardClose()"><div class="modal-box" onclick="event.stopPropagation()" style="max-width:380px;text-align:center;">' +
+      '<div style="font-size:46px;margin-bottom:10px;">🎉</div>' +
+      '<h3 style="margin:0 0 6px;font-size:19px;font-weight:800;color:#1a1a2e;">Nightly check-in saved</h3>' +
+      '<p style="margin:0 0 18px;font-size:14px;color:#555;line-height:1.5;"><b>' + w.added + ' new ' + (w.added === 1 ? 'student' : 'students') + '</b> added to ' + esc(locName) + '\'s roster &amp; First-90-Days tracker.</p>' +
+      '<button onclick="scWizardClose()" style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Done</button>' +
+      '</div></div>';
+  }
+  const metrics = scWizardMetrics(); const m = metrics[w.step]; const total = metrics.length;
   const td = scWizToday();
-  const cur = ((((state.scorecardDaily || {})[w.loc] || {})[td.mk] || {})[td.day] || {})[m.id];
-  const val = (cur !== undefined && cur !== null) ? esc(String(cur)) : '';
+  const countVal = scWizCurCount();
   const pct = Math.round((w.step + 1) / total * 100);
+  const n = parseInt(countVal) || 0;
   let h = '<div class="modal-overlay" onclick="scWizardClose()"><div class="modal-box" onclick="event.stopPropagation()" style="max-width:420px;text-align:left;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:12px;font-weight:700;color:#888;">🌙 ' + esc(locName) + ' · Tonight — ' + td.label + '</div><button onclick="scWizardClose()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#aaa;line-height:1;">×</button></div>';
   h += '<div style="height:6px;border-radius:999px;background:#eef0f6;overflow:hidden;margin-bottom:16px;"><div style="height:100%;width:' + pct + '%;background:#4169E1;transition:width .2s;"></div></div>';
   h += '<div style="font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:.5px;">Step ' + (w.step + 1) + ' of ' + total + '</div>';
   h += '<h3 style="margin:6px 0 4px;font-size:20px;font-weight:800;color:#1a1a2e;">' + esc(m.label) + '</h3>';
   h += '<p style="margin:0 0 16px;font-size:13px;color:#888;line-height:1.5;">' + esc(m.hint || '') + '</p>';
-  h += '<input id="scWizInput" type="number" inputmode="numeric" value="' + val + '" placeholder="Enter a number" onkeydown="if(event.key===\'Enter\')scWizNext()" style="width:100%;box-sizing:border-box;padding:16px;font-size:28px;text-align:center;border:2px solid #e0e3ed;border-radius:12px;font-family:inherit;margin-bottom:16px;outline:none;" />';
+  if (m.captureNames) {
+    h += '<input id="scWizInput" type="number" inputmode="numeric" min="0" value="' + esc(countVal) + '" placeholder="How many?" onchange="scWizCountChanged(this.value)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();scWizCountChanged(this.value);}" style="width:100%;box-sizing:border-box;padding:16px;font-size:28px;text-align:center;border:2px solid #e0e3ed;border-radius:12px;font-family:inherit;margin-bottom:' + (n > 0 ? '12' : '16') + 'px;outline:none;" />';
+    if (n > 0) {
+      h += '<div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:6px;">✍️ Enter ' + (n === 1 ? 'the new student\'s name' : 'each new student\'s name') + ' (auto-adds to Members):</div>';
+      for (let k = 0; k < n; k++) {
+        const nm = ((w.names || {})[m.id] || [])[k] || '';
+        h += '<input id="scWizName' + k + '" type="text" value="' + esc(nm) + '" placeholder="New student #' + (k + 1) + ' name" oninput="scWizName(\'' + m.id + '\',' + k + ',this.value)" onkeydown="if(event.key===\'Enter\')scWizNext()" style="width:100%;box-sizing:border-box;padding:11px 12px;font-size:14px;border:1px solid #e0e3ed;border-radius:9px;font-family:inherit;margin-bottom:8px;outline:none;" />';
+      }
+      h += '<div style="margin-bottom:10px;"></div>';
+    }
+  } else {
+    h += '<input id="scWizInput" type="number" inputmode="numeric" value="' + esc(countVal) + '" placeholder="Enter a number" onkeydown="if(event.key===\'Enter\')scWizNext()" style="width:100%;box-sizing:border-box;padding:16px;font-size:28px;text-align:center;border:2px solid #e0e3ed;border-radius:12px;font-family:inherit;margin-bottom:16px;outline:none;" />';
+  }
   h += '<div style="display:flex;gap:10px;">';
   h += '<button onclick="scWizBack()"' + (w.step === 0 ? ' disabled' : '') + ' style="flex:1;padding:12px;border:1px solid #ddd;border-radius:10px;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#555;opacity:' + (w.step === 0 ? '.4' : '1') + ';">← Back</button>';
   h += '<button onclick="scWizNext()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#1a1a2e;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">' + (w.step >= total - 1 ? 'Finish ✓' : 'Next →') + '</button>';
