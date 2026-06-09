@@ -7738,6 +7738,11 @@ function feedbackToggle(studentKey, field) {
   db.ref('feedbackTracking/all/' + studentKey + '/' + field).set(!current);
 }
 
+function feedbackSetInitials(studentKey, field, value) {
+  const v = (value || '').trim().toUpperCase();
+  db.ref('feedbackTracking/all/' + studentKey + '/' + field).set(v || null);
+}
+
 function feedbackSetStatus(studentKey, status) {
   // Clicking the active status clears it (toggle off)
   const current = (state.feedback.roster[studentKey] || {}).status;
@@ -8898,6 +8903,7 @@ function renderOnboardingSection(allStudents, locationFilter) {
 
 /* ── Correspondence Log ──────────────────────────────────── */
 const CORR_TYPES = {
+  postcard:   { icon: '📬', label: 'Postcard' },
   video:      { icon: '🎥', label: 'Loom Video' },
   phoneCall:  { icon: '📞', label: 'Phone Call' },
   conference: { icon: '🤝', label: 'Conference' },
@@ -9097,6 +9103,7 @@ function renderFeedbackPage() {
 
   const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
   const INTERACTIONS = [
+    { field: 'postcard',   icon: '📬', label: 'Postcard', initials: true },
     { field: 'video',      icon: '🎥', label: 'Loom' },
     { field: 'phoneCall',  icon: '📞', label: 'Call' },
     { field: 'conference', icon: '🤝', label: 'Conf.' },
@@ -9161,6 +9168,17 @@ function renderFeedbackPage() {
     '<td style="text-align:center;padding:10px 4px;">' +
     '<input type="checkbox" ' + (checked ? 'checked' : '') + (disabled ? ' disabled' : '') + ' onchange="feedbackToggle(\'' + studentKey + '\',\'' + field + '\')" style="width:17px;height:17px;cursor:' + (disabled ? 'default' : 'pointer') + ';accent-color:#4169E1;opacity:' + (disabled ? '0.3' : '1') + ';">' +
     '</td>';
+
+  // Initials entry (e.g. postcard) — records WHO did it; any text counts as done
+  const initialsCell = (studentKey, field, val, disabled) => {
+    const filled = !!val;
+    const shown = typeof val === 'string' ? val : '';
+    return '<td style="text-align:center;padding:6px 4px;">' +
+      '<input type="text" maxlength="4" value="' + esc(shown) + '" placeholder="—" ' + (disabled ? 'disabled' : '') +
+      ' title="Initials of who sent it" onchange="feedbackSetInitials(\'' + studentKey + '\',\'' + field + '\',this.value)" ' +
+      'style="width:44px;text-align:center;text-transform:uppercase;border:1px solid ' + (filled ? '#4169E1' : 'var(--gray-200)') + ';border-radius:6px;padding:4px 2px;font-size:12px;font-weight:700;color:' + (filled ? '#4169E1' : '#999') + ';background:' + (filled ? '#eef2ff' : '#fff') + ';opacity:' + (disabled ? '0.4' : '1') + ';">' +
+      '</td>';
+  };
 
   const STATUS_ORDER = { red: 0, yellow: 1, '': 2, null: 2, undefined: 2, green: 3 };
   const statusDot = (studentKey, currentStatus, disabled) => {
@@ -9236,7 +9254,7 @@ function renderFeedbackPage() {
             (journeyPhase ? ' <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:' + journeyPhase.bg + ';color:' + journeyPhase.color + ';">Day ' + journeyDays + '</span>' : '') +
           '</td>' +
           (locationFilter === 'all' ? '<td style="padding:10px 10px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
-          INTERACTIONS.map(i => chk(s.key, i.field, !!t[i.field], isInactive)).join('') +
+          INTERACTIONS.map(i => i.initials ? initialsCell(s.key, i.field, t[i.field], isInactive) : chk(s.key, i.field, !!t[i.field], isInactive)).join('') +
           (function() {
             const hasFeedback = !!(t.instructorFeedback && t.instructorFeedback.trim());
             return '<td style="text-align:center;padding:10px 4px;white-space:nowrap;">' +
