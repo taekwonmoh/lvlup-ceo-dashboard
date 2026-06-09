@@ -1879,6 +1879,9 @@ function listenAll() {
   const ldHbRef = fbRef('leadership/homebase');
   ldHbRef.on('value', snap => { state.leadership.homebase = snap.val() || {}; render(); });
   activeListeners.push({ ref: ldHbRef, event: 'value' });
+  const ldHbMapRef = fbRef('leadership/homebaseMap');
+  ldHbMapRef.on('value', snap => { state.leadership.homebaseMap = snap.val() || {}; render(); });
+  activeListeners.push({ ref: ldHbMapRef, event: 'value' });
   const ldPerfRef = fbRef('leadership/perf');
   ldPerfRef.on('value', snap => { state.leadership.perf = snap.val() || {}; render(); });
   activeListeners.push({ ref: ldPerfRef, event: 'value' });
@@ -2958,8 +2961,9 @@ function renderLeadDashboard(){
   h += '<span style="font-size:14px;font-weight:700;color:#1a1a2e;min-width:150px;text-align:center;">' + monthLabel + '</span>';
   h += '<button onclick="leadChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">›</button>';
   h += '</div>';
-  h += (view === 'accountability' ? renderLeadAccountability() : renderLeadTracker());
+  h += (view === 'accountability' ? (renderHbImportBar() + renderLeadAccountability()) : renderLeadTracker());
   h += '</div>';
+  h += renderHbImportModal();
   return h;
 }
 
@@ -3067,6 +3071,144 @@ function renderLeadAccountability(){
     }
     h += '</div></div>';
   });
+  return h;
+}
+
+/* ── Homebase hours importer (paste / CSV upload → leadership/homebase) ── */
+function hbKey(name){ return (name || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.#$\[\]\/]/g, ''); }
+function hbNormTime(str){
+  if (str == null) return null;
+  let s = String(str).trim().toLowerCase();
+  if (!s || s === '-' || s === '—' || s === 'off' || s === 'absent') return null;
+  const ampm = s.includes('pm') ? 'pm' : s.includes('am') ? 'am' : null;
+  s = s.replace(/[ap]\.?m\.?/, '').replace(/\s+/g, '').trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  let hh = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+  if (ampm === 'pm' && hh < 12) hh += 12;
+  if (ampm === 'am' && hh === 12) hh = 0;
+  if (hh > 23 || mm > 59) return null;
+  return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+}
+function hbParseDate(str){
+  if (!str) return null;
+  const s = String(str).trim();
+  let y, m, d, mm;
+  if ((mm = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/))) { y = +mm[1]; m = +mm[2]; d = +mm[3]; }
+  else if ((mm = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/))) { m = +mm[1]; d = +mm[2]; y = +mm[3]; if (y < 100) y += 2000; }
+  else { const dt = new Date(s); if (!isNaN(dt.getTime())) { y = dt.getFullYear(); m = dt.getMonth() + 1; d = dt.getDate(); } }
+  if (!y || !m || !d) return null;
+  return { mk: y + '-' + String(m).padStart(2, '0'), day: d };
+}
+function hbGuessSeat(name){
+  const map = state.leadership.homebaseMap || {};
+  if (map[hbKey(name)]) return map[hbKey(name)];
+  const n = (name || '').toLowerCase();
+  if (n.includes('goad')) return 'bryanG';
+  if (n.includes('bein')) return 'nikkiB';
+  if (n.includes('zaworski')) return 'joeyZ';
+  if (n.includes('smith')) return 'mirandaS';
+  return '';
+}
+function hbParseImport(raw){
+  const lines = String(raw || '').split(/\r?\n/).map(l => l.replace(/\s+$/, '')).filter(l => l.trim().length);
+  if (!lines.length) return { error: 'Nothing pasted.' };
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  const split = l => l.split(delim).map(c => c.trim().replace(/^"|"$/g, ''));
+  const header = split(lines[0]).map(h => h.toLowerCase());
+  const hasAny = (h, ...ks) => ks.some(k => h.includes(k));
+  const find = pred => header.findIndex(pred);
+  const idx = {
+    name: find(h => hasAny(h, 'name', 'employee', 'staff', 'team member')),
+    date: find(h => h.includes('date')),
+    ss:   find(h => hasAny(h, 'sched', 'shift') && hasAny(h, 'start', 'in') && !hasAny(h, 'end', 'out')),
+    as:   find(h => (hasAny(h, 'actual', 'clock') && hasAny(h, 'start', 'in')) || h === 'in' || hasAny(h, 'time in', 'clock-in')),
+    se:   find(h => hasAny(h, 'sched', 'shift') && hasAny(h, 'end', 'out')),
+    ae:   find(h => (hasAny(h, 'actual', 'clock') && hasAny(h, 'end', 'out')) || h === 'out' || hasAny(h, 'time out', 'clock-out')),
+  };
+  if (idx.name < 0 || idx.date < 0 || idx.as < 0 || idx.ae < 0)
+    return { error: 'Couldn\'t find the needed columns. Make sure the first row is a header with: Name, Date, Clock In, Clock Out (Scheduled Start/End optional).' };
+  const rows = [], namesSet = new Set();
+  for (let i = 1; i < lines.length; i++) {
+    const c = split(lines[i]);
+    const name = (c[idx.name] || '').trim(); if (!name) continue;
+    const dt = hbParseDate(c[idx.date]); if (!dt) continue;
+    rows.push({ name, mk: dt.mk, day: dt.day,
+      ss: idx.ss >= 0 ? hbNormTime(c[idx.ss]) : null,
+      as: hbNormTime(c[idx.as]),
+      se: idx.se >= 0 ? hbNormTime(c[idx.se]) : null,
+      ae: hbNormTime(c[idx.ae]) });
+    namesSet.add(name);
+  }
+  return { rows, names: [...namesSet] };
+}
+function hbImportOpen(){ state.leadership.hbImport = { open:true, raw:'', parsed:null, mapping:{}, error:'', done:false }; render(); }
+function hbImportClose(){ state.leadership.hbImport = { open:false, raw:'', parsed:null, mapping:{}, error:'', done:false }; render(); }
+function hbImportBack(){ const im = state.leadership.hbImport; im.parsed = null; im.error = ''; render(); }
+function hbImportFile(input){ const f = input.files && input.files[0]; if (!f) return; const r = new FileReader(); r.onload = e => { state.leadership.hbImport.raw = e.target.result; const ta = document.getElementById('hbImportText'); if (ta) ta.value = e.target.result; }; r.readAsText(f); }
+function hbImportSetMap(ni, empId){ const im = state.leadership.hbImport; const nm = im.parsed.names[ni]; im.mapping[nm] = empId; render(); }
+function hbImportParse(){
+  const ta = document.getElementById('hbImportText');
+  const raw = ta ? ta.value : (state.leadership.hbImport.raw || '');
+  const im = state.leadership.hbImport; im.raw = raw;
+  const res = hbParseImport(raw);
+  if (res.error) { im.error = res.error; im.parsed = null; render(); return; }
+  if (!res.rows.length) { im.error = 'No readable rows found — check the dates and times.'; im.parsed = null; render(); return; }
+  const mapping = {}; res.names.forEach(nm => mapping[nm] = hbGuessSeat(nm));
+  im.parsed = res; im.mapping = mapping; im.error = ''; render();
+}
+function hbImportConfirm(){
+  const im = state.leadership.hbImport; if (!im.parsed) return;
+  const updates = {}; let count = 0;
+  im.parsed.rows.forEach(r => {
+    const eid = im.mapping[r.name]; if (!eid) return;
+    const base = eid + '/' + r.mk + '/' + r.day;
+    updates[base + '/ss'] = r.ss || null; updates[base + '/as'] = r.as || null;
+    updates[base + '/se'] = r.se || null; updates[base + '/ae'] = r.ae || null;
+    count++;
+  });
+  if (count > 0) fbRef('leadership/homebase').update(updates);
+  Object.entries(im.mapping).forEach(([nm, eid]) => { if (eid) fbSet('leadership/homebaseMap/' + hbKey(nm), eid); });
+  state.leadership.hbImport = { open:true, done:true, count, raw:'', parsed:null, mapping:{}, error:'' };
+  render();
+}
+function renderHbImportBar(){
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#eef2ff;border:1px solid #dbe3ff;border-radius:10px;padding:10px 14px;margin-bottom:14px;">' +
+    '<div style="font-size:12px;color:#3730a3;"><b>⏱ Clock-in / out hours</b> — upload your Homebase timesheet export to fill the accountability tables.</div>' +
+    '<button onclick="hbImportOpen()" style="padding:8px 16px;background:#4169E1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">📥 Import Hours</button>' +
+    '</div>';
+}
+function renderHbImportModal(){
+  const im = state.leadership.hbImport; if (!im || !im.open) return '';
+  let h = '<div class="modal-overlay" onclick="hbImportClose()"><div class="modal-box" onclick="event.stopPropagation()" style="max-width:560px;text-align:left;max-height:86vh;overflow:auto;">';
+  if (im.done) {
+    h += '<div style="text-align:center;"><div style="font-size:44px;margin-bottom:8px;">✅</div><h3 style="margin:0 0 6px;font-size:19px;font-weight:800;color:#1a1a2e;">Imported ' + im.count + ' day-' + (im.count === 1 ? 'row' : 'rows') + '</h3><p style="margin:0 0 18px;font-size:14px;color:#555;">The accountability tables are now filled with scheduled vs actual times, variance flags, and hours.</p><button onclick="hbImportClose()" style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Done</button></div></div></div>';
+    return h;
+  }
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><h3 style="margin:0;font-size:18px;font-weight:800;color:#1a1a2e;">📥 Import Hours</h3><button onclick="hbImportClose()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#aaa;line-height:1;">×</button></div>';
+  if (!im.parsed) {
+    h += '<p style="font-size:13px;color:#666;line-height:1.5;margin:0 0 12px;">Paste your Homebase timesheet (copy from Excel/Sheets) or upload a CSV. Include a <b>header row</b> with columns for <b>Name</b>, <b>Date</b>, <b>Clock In</b>, and <b>Clock Out</b> — Scheduled Start/End are optional (used for the on-time flags). Times in 12h (1:13 PM) or 24h (13:13) both work.</p>';
+    h += '<input type="file" accept=".csv,.tsv,.txt" onchange="hbImportFile(this)" style="font-size:12px;margin-bottom:8px;display:block;" />';
+    h += '<textarea id="hbImportText" placeholder="Name&#9;Date&#9;Scheduled Start&#9;Actual Start&#9;Scheduled End&#9;Actual End&#10;Bryan Goad&#9;06/05/2026&#9;1:00 PM&#9;1:13 PM&#9;8:30 PM&#9;8:54 PM" style="width:100%;box-sizing:border-box;min-height:160px;padding:10px;border:1px solid #e0e3ed;border-radius:9px;font-family:monospace;font-size:12px;outline:none;">' + esc(im.raw || '') + '</textarea>';
+    if (im.error) h += '<div style="color:#dc2626;font-size:12px;font-weight:700;margin-top:8px;">' + esc(im.error) + '</div>';
+    h += '<div style="display:flex;gap:10px;margin-top:14px;"><button onclick="hbImportClose()" style="flex:1;padding:12px;border:1px solid #ddd;border-radius:10px;background:#fff;font-weight:700;cursor:pointer;color:#555;">Cancel</button><button onclick="hbImportParse()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#1a1a2e;color:#fff;font-weight:800;cursor:pointer;">Preview →</button></div>';
+  } else {
+    const p = im.parsed;
+    h += '<p style="font-size:13px;color:#16a34a;font-weight:700;margin:0 0 12px;">✓ Parsed ' + p.rows.length + ' day-rows for ' + p.names.length + ' ' + (p.names.length === 1 ? 'person' : 'people') + '. Assign each name to a seat:</p>';
+    p.names.forEach((nm, ni) => {
+      const sel = im.mapping[nm] || '';
+      const cnt = p.rows.filter(r => r.name === nm).length;
+      h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+      h += '<span style="font-size:13px;font-weight:700;color:#1a1a2e;flex:1;min-width:140px;">' + esc(nm) + ' <span style="font-weight:400;color:#aaa;">(' + cnt + (cnt === 1 ? ' day' : ' days') + ')</span></span>';
+      h += '<select onchange="hbImportSetMap(' + ni + ',this.value)" style="padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;font-weight:700;"><option value="">— Skip —</option>';
+      LEAD_STAFF.forEach(st => { h += '<option value="' + st.empId + '"' + (sel === st.empId ? ' selected' : '') + '>' + esc(st.name) + ' (' + st.branch + ')</option>'; });
+      h += '</select></div>';
+    });
+    const assigned = p.rows.filter(r => im.mapping[r.name]).length;
+    h += '<div style="font-size:11px;color:#888;margin:6px 0 14px;">' + assigned + ' of ' + p.rows.length + ' rows will import (unassigned names are skipped). Existing entries for the same day are overwritten.</div>';
+    h += '<div style="display:flex;gap:10px;"><button onclick="hbImportBack()" style="flex:1;padding:12px;border:1px solid #ddd;border-radius:10px;background:#fff;font-weight:700;cursor:pointer;color:#555;">← Re-paste</button><button onclick="hbImportConfirm()"' + (assigned ? '' : ' disabled') + ' style="flex:2;padding:12px;border:none;border-radius:10px;background:' + (assigned ? '#16a34a' : '#cbd5e1') + ';color:#fff;font-weight:800;cursor:' + (assigned ? 'pointer' : 'default') + ';">Import ' + assigned + (assigned === 1 ? ' row' : ' rows') + ' ✓</button></div>';
+  }
+  h += '</div></div>';
   return h;
 }
 
@@ -4368,7 +4510,7 @@ state.adLabTab     = 'playbook';     // Ad Creative: 'playbook' | 'tracker' | 'l
 state.adLabFilter  = 'all';          // Hook bank avatar filter
 state.adCreative   = state.adCreative || {};
 // Leadership (PIN-gated owner page)
-state.leadership   = { pin: null, pinLoaded: false, unlocked: false, pinError: false, view: 'tracker', trackerLoc: 'waunakee', monthOffset: 0, tracker: {}, homebase: {}, perf: {}, signoffs: {} };
+state.leadership   = { pin: null, pinLoaded: false, unlocked: false, pinError: false, view: 'tracker', trackerLoc: 'waunakee', monthOffset: 0, tracker: {}, homebase: {}, homebaseMap: {}, perf: {}, signoffs: {}, hbImport: { open:false } };
 if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('leadershipUnlocked') === '1') state.leadership.unlocked = true;
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
 state.devTab        = 'instructor'; // 'instructor' | 'gymdesk' | 'playbooks'
