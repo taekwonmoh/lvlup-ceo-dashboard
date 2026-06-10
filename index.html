@@ -2566,7 +2566,7 @@ function formatTestDate(dateStr) {
 /*  -  -  Scorecard Page  -  -  */
 function renderScSubTabs() {
   const tab = state.scorecardTab || 'instructor';
-  const tabs = [{ id:'instructor', label:'🥋 Instructor' }, { id:'acquisition', label:'📣 Acquisition' }, { id:'performance', label:'📈 KPIs & Financials' }];
+  const tabs = [{ id:'instructor', label:'🥋 Instructor' }, { id:'performance', label:'📈 KPIs & Financials' }];
   return '<div style="display:flex;gap:4px;background:#fff;border-radius:10px;padding:3px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px;">' +
     tabs.map(t => '<button onclick="setScorecardTab(\'' + t.id + '\')" style="padding:7px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;' + (tab === t.id ? 'background:#1a1a2e;color:#fff;' : 'background:transparent;color:#6b7280;') + '">' + t.label + '</button>').join('') +
     '</div>';
@@ -3213,32 +3213,22 @@ function renderHbImportModal(){
 }
 
 function renderScorecardPage() {
-  if (state.scorecardTab === 'weekly') state.scorecardTab = 'instructor';   // migrate old saved tab
+  if (state.scorecardTab === 'weekly' || state.scorecardTab === 'acquisition') state.scorecardTab = 'instructor';   // migrate removed/old tabs
   const tab = state.scorecardTab || 'instructor';
   const subNav = renderScSubTabs();
   if (tab === 'performance') return subNav + renderPerformancePage();
 
   const lvlupLocs   = LOCATIONS.filter(l => LVLUP_LOC_IDS.includes(l.id));
-  const goninjaLocs = LOCATIONS.filter(l => GONINJA_LOC_IDS.includes(l.id));
 
   const scLoc = state.scLoc || 'waunakee';
   const pickLvlup = scLoc === 'all' ? lvlupLocs : lvlupLocs.filter(l => l.id === scLoc);
 
   let html = subNav;
-  if (tab === 'acquisition') {
-    html += renderScBoardNote('📣', 'Acquisition', 'Owned by Ivy — Sales &amp; Marketing', '#0f3460');
-    html += renderScLocSelector();
-    html += renderRevenueKpiCards();
-    html += renderScWeekNav();
-    html += renderScoreboardTables(ACQUISITION_METRICS, pickLvlup);
-    if (scLoc === 'all') html += renderScoreboardTables(GONINJA_METRICS, goninjaLocs);
-  } else {
-    html += renderScBoardNote('🥋', 'Instructor', 'Owned by Instructors — logged nightly at EOS', '#e94560');
-    html += renderScLocSelector();
-    if (scLoc !== 'all') html += '<button onclick="scWizardStart()" style="width:100%;padding:13px;background:#4169E1;color:#fff;border:none;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:14px;box-shadow:0 2px 8px rgba(65,105,225,.3);">⚡ Tonight\'s Numbers (EOS check-in)</button>';
-    html += renderScdMonthNav();
-    (scLoc === 'all' ? lvlupLocs : pickLvlup).forEach(l => html += renderInstructorDaily(l.id));
-  }
+  html += renderScBoardNote('🥋', 'Instructor', 'Owned by Instructors — logged nightly at EOS', '#e94560');
+  html += renderScLocSelector();
+  if (scLoc !== 'all') html += '<button onclick="scWizardStart()" style="width:100%;padding:13px;background:#4169E1;color:#fff;border:none;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:14px;box-shadow:0 2px 8px rgba(65,105,225,.3);">⚡ Tonight\'s Numbers (EOS check-in)</button>';
+  html += renderScdMonthNav();
+  (scLoc === 'all' ? lvlupLocs : pickLvlup).forEach(l => html += renderInstructorDaily(l.id));
   html += renderScWizard();
   html += renderEnrollModal();
   return html;
