@@ -2947,21 +2947,18 @@ function renderLeadSetPin(){
 }
 
 function renderLeadDashboard(){
-  const view = state.leadership.view || 'tracker';
   const monthLabel = leadMonthDate().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   let h = '<div class="page" style="max-width:1100px;">';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">';
-  h += '<div><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🔒 Leadership</h2><p style="margin:0;font-size:13px;color:#888;">Owner-only — daily performance tracker &amp; staff accountability.</p></div>';
+  h += '<div><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🔒 Leadership</h2><p style="margin:0;font-size:13px;color:#888;">Owner-only — staff accountability &amp; performance.</p></div>';
   h += '<button onclick="leadLock()" style="padding:8px 14px;background:#f1f3f9;border:1px solid #ddd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:#555;">🔒 Lock</button>';
   h += '</div>';
-  const tb = (id, label) => '<button onclick="leadSetView(\'' + id + '\')" style="padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;' + (view === id ? 'background:#1a1a2e;color:#fff;' : 'background:#f1f3f9;color:#555;') + '">' + label + '</button>';
-  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">' + tb('tracker', '📊 Daily Tracker') + tb('accountability', '⏱ Accountability & Performance') + '</div>';
   h += '<div style="display:flex;align-items:center;gap:6px;background:#f1f3f9;border-radius:10px;padding:3px;width:fit-content;margin-bottom:16px;">';
   h += '<button onclick="leadChangeMonth(-1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">‹</button>';
   h += '<span style="font-size:14px;font-weight:700;color:#1a1a2e;min-width:150px;text-align:center;">' + monthLabel + '</span>';
   h += '<button onclick="leadChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">›</button>';
   h += '</div>';
-  h += (view === 'accountability' ? (renderHbImportBar() + renderLeadAccountability()) : renderLeadTracker());
+  h += renderHbImportBar() + renderLeadAccountability();
   h += '</div>';
   h += renderHbImportModal();
   return h;
@@ -3031,10 +3028,12 @@ function renderLeadAccountability(){
   const monthWeeks = getMonthWeekKeys(md.getFullYear(), md.getMonth() + 1);
   let h = '';
   LEAD_STAFF.forEach(st => {
-    const tdata = ((state.leadership.tracker[st.loc] || {})[mk]) || {};
-    let trialShown = 0, enroll = 0, cancel = 0;
-    Object.values(tdata).forEach(d => { trialShown += parseFloat(d.trialShown) || 0; enroll += parseFloat(d.enrollments) || 0; cancel += parseFloat(d.cancellations) || 0; });
-    const conv = trialShown > 0 ? Math.round(enroll / trialShown * 100) : null;
+    // Performance pulls live from the Ops nightly instructor tracker (scorecardDaily)
+    const tdata = ((state.scorecardDaily[st.loc] || {})[mk]) || {};
+    let trials = 0, enroll = 0, cancel = 0;
+    Object.values(tdata).forEach(d => { trials += parseFloat(d.firstDayTrials) || 0; enroll += (parseFloat(d.dayOneEnroll) || 0) + (parseFloat(d.laterEnroll) || 0); cancel += parseFloat(d.attrition) || 0; });
+    const trialShown = trials;
+    const conv = trials > 0 ? Math.round(enroll / trials * 100) : null;
     const net = enroll - cancel;
     const so = state.leadership.signoffs[st.empId] || {};
     const signed = monthWeeks.filter(wk => so[wk]).length;
@@ -3051,7 +3050,7 @@ function renderLeadAccountability(){
     h += '</div>';
     const cell = (label, val, color) => '<div style="flex:1;min-width:90px;text-align:center;padding:10px;border-right:1px solid #f1f3f9;"><div style="font-size:18px;font-weight:800;color:' + (color || '#1a1a2e') + ';">' + val + '</div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.3px;">' + label + '</div></div>';
     h += '<div style="display:flex;flex-wrap:wrap;border-bottom:1px solid #f1f3f9;">';
-    h += cell('Trial Att.', trialShown || '—');
+    h += cell('First-Day Trials', trialShown || '—');
     h += cell('Enrollments', enroll || '—', '#2563eb');
     h += cell('Conv %', conv !== null ? conv + '%' : '—', '#16a34a');
     h += cell('Cancellations', cancel || '—', '#dc2626');
@@ -3061,7 +3060,7 @@ function renderLeadAccountability(){
     h += '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;flex-wrap:wrap;">';
     h += '<span style="font-size:12px;font-weight:700;color:#555;">Recommendation:</span>';
     h += '<select onchange="leadUpdatePerf(\'' + st.empId + '\',\'recommendation\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:7px;font-size:12px;font-weight:700;">' + ['TBD', 'For Coaching', 'Review Required'].map(o => '<option' + (rec === o ? ' selected' : '') + '>' + o + '</option>').join('') + '</select>';
-    h += '<span style="font-size:11px;color:#aaa;">Performance metrics pull live from the Daily Tracker + task sign-offs.</span>';
+    h += '<span style="font-size:11px;color:#aaa;">Performance pulls live from the Ops nightly scorecard + task sign-offs.</span>';
     h += '</div>';
     h += '<div style="padding:0 16px 14px;">';
     if (!hasHb) {
