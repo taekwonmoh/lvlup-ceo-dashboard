@@ -1774,6 +1774,16 @@ function listenAll() {
   scDailyRef.on('value', snap => { state.scorecardDaily = snap.val() || {}; render(); });
   activeListeners.push({ ref: scDailyRef, event: 'value' });
 
+  // Trial pipeline (first-day trials awaiting enrollment follow-up)
+  const trialRef = fbRef('trialPipeline');
+  trialRef.on('value', snap => { state.trialPipeline = snap.val() || {}; render(); });
+  activeListeners.push({ ref: trialRef, event: 'value' });
+
+  // Leadership backup timestamp (shared across owners)
+  const ldBackupRef = fbRef('leadership/lastBackup');
+  ldBackupRef.on('value', snap => { state.leadership.lastBackup = snap.val(); render(); });
+  activeListeners.push({ ref: ldBackupRef, event: 'value' });
+
   // Scorecard monthly
   const monthKey = getMonthKey();
   const scMonthRef = fbRef('kpis/2026/' + monthKey);
@@ -2958,7 +2968,7 @@ function renderLeadDashboard(){
   h += '<span style="font-size:14px;font-weight:700;color:#1a1a2e;min-width:150px;text-align:center;">' + monthLabel + '</span>';
   h += '<button onclick="leadChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">›</button>';
   h += '</div>';
-  h += renderHbImportBar() + renderLeadAccountability();
+  h += renderLeadBackupBar() + renderHbImportBar() + renderLeadAccountability();
   h += '</div>';
   h += renderHbImportModal();
   return h;
@@ -3171,6 +3181,39 @@ function hbImportConfirm(){
   state.leadership.hbImport = { open:true, done:true, count, raw:'', parsed:null, mapping:{}, error:'' };
   render();
 }
+/* ── Full-data JSON backup (one click; weekly overdue nudge) ── */
+async function leadDownloadBackup(){
+  const btn = document.getElementById('leadBackupBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Preparing…'; }
+  try {
+    const [mainDb, eventsDb] = await Promise.all([
+      fetch(firebaseConfig.databaseURL + '/.json').then(r => r.json()),
+      fetch(EVENTS_DB_URL + '.json').then(r => r.json()).catch(() => null),
+    ]);
+    const payload = { exportedAt: new Date().toISOString(), mainDb, eventsDb };
+    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'lvlup-dashboard-backup-' + new Date().toISOString().split('T')[0] + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    fbSet('leadership/lastBackup', Date.now());
+  } catch (e) {
+    alert('Backup failed: ' + e.message);
+  }
+  render();
+}
+function renderLeadBackupBar(){
+  const ts = state.leadership.lastBackup;
+  const days = ts ? Math.floor((Date.now() - ts) / 86400000) : null;
+  const overdue = !ts || days >= 7;
+  const when = !ts ? 'never' : days === 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:' + (overdue ? '#fffbeb' : '#f8fafc') + ';border:1px solid ' + (overdue ? '#fde68a' : '#e2e8f0') + ';border-radius:10px;padding:10px 14px;margin-bottom:14px;">' +
+    '<div style="font-size:12px;color:' + (overdue ? '#92400e' : '#555') + ';">' + (overdue ? '⚠️ ' : '📦 ') + '<b>Data backup</b> — last backup: <b>' + when + '</b>' + (overdue ? ' · weekly backups recommended (this dashboard is the only copy of your data)' : '') + '</div>' +
+    '<button id="leadBackupBtn" onclick="leadDownloadBackup()" style="padding:8px 16px;background:' + (overdue ? '#d97706' : '#64748b') + ';color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">📦 Download Backup</button>' +
+    '</div>';
+}
+
 function renderHbImportBar(){
   return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#eef2ff;border:1px solid #dbe3ff;border-radius:10px;padding:10px 14px;margin-bottom:14px;">' +
     '<div style="font-size:12px;color:#3730a3;"><b>⏱ Clock-in / out hours</b> — upload your Homebase timesheet export to fill the accountability tables.</div>' +
@@ -3211,6 +3254,65 @@ function renderHbImportModal(){
   return h;
 }
 
+/* ── Trial pipeline — first-day trials who haven't enrolled yet ── */
+function trialNorm(s){ return (s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+function addOpenTrial(loc, name, date){
+  const nm = (name || '').trim(); if (!nm) return;
+  const existing = Object.values((state.trialPipeline || {})[loc] || {});
+  if (existing.some(t => t && (t.status === 'open' || !t.status) && trialNorm(t.name) === trialNorm(nm))) return;
+  fbSet('trialPipeline/' + loc + '/trial_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), { name: nm, date, status: 'open' });
+}
+function closeTrialIfMatch(loc, name){
+  // A new enrollee with a matching name closes their open trial automatically
+  Object.entries((state.trialPipeline || {})[loc] || {}).forEach(([k, t]) => {
+    if (t && (t.status === 'open' || !t.status) && trialNorm(t.name) === trialNorm(name)) {
+      fbSet('trialPipeline/' + loc + '/' + k + '/status', 'enrolled');
+      fbSet('trialPipeline/' + loc + '/' + k + '/closedDate', new Date().toISOString().split('T')[0]);
+    }
+  });
+}
+function trialMarkEnrolled(loc, key){
+  const t = ((state.trialPipeline || {})[loc] || {})[key]; if (!t) return;
+  fbSet('trialPipeline/' + loc + '/' + key + '/status', 'enrolled');
+  fbSet('trialPipeline/' + loc + '/' + key + '/closedDate', new Date().toISOString().split('T')[0]);
+  // Add to the roster if they're not already on it
+  const norm = trialNorm(t.name);
+  const onRoster = Object.values(state.feedback.roster || {}).some(r => r && r.active !== false && r.location === loc && trialNorm(r.name) === norm);
+  if (!onRoster) {
+    const rk = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    db.ref('feedbackRoster/' + rk).set({ name: t.name, location: loc, active: true, addedDate: getCurrentMonthKey(), startDate: new Date().toISOString().split('T')[0] });
+  }
+}
+function trialMarkLost(loc, key){
+  fbSet('trialPipeline/' + loc + '/' + key + '/status', 'lost');
+  fbSet('trialPipeline/' + loc + '/' + key + '/closedDate', new Date().toISOString().split('T')[0]);
+}
+function renderOpenTrials(loc){
+  const open = Object.entries((state.trialPipeline || {})[loc] || {})
+    .map(([k, v]) => ({ key: k, ...v }))
+    .filter(t => t.status === 'open' || !t.status)
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  if (!open.length) return '';
+  const locName = (LOCATIONS.find(l => l.id === loc) || {}).name || loc;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let h = '<div style="background:#fff;border:1px solid #e8eaf0;border-left:4px solid #f59e0b;border-radius:12px;box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px;">';
+  h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;">📋 Open Trials — follow up (' + open.length + ')' + '<span style="font-weight:400;font-size:11px;color:#aaa;"> · ' + esc(locName) + '</span></div>';
+  h += '<div style="font-size:12px;color:#888;margin:2px 0 10px;">Tried a class but haven\'t enrolled yet. Call or text the family, then mark the outcome.</div>';
+  open.forEach(t => {
+    const d = t.date ? new Date(t.date + 'T00:00:00') : null;
+    const days = d ? Math.max(0, Math.floor((today - d) / 86400000)) : null;
+    const stale = days !== null && days >= 7;
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #f5f5f5;flex-wrap:wrap;">';
+    h += '<span style="font-size:13px;font-weight:700;color:#1a1a2e;flex:1;min-width:130px;">' + esc(t.name) + '</span>';
+    h += '<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:' + (stale ? '#fee2e2' : '#fef3c7') + ';color:' + (stale ? '#b91c1c' : '#b45309') + ';white-space:nowrap;">' + (days === null ? 'trial date —' : days === 0 ? 'today' : days + (days === 1 ? ' day ago' : ' days ago')) + '</span>';
+    h += '<button onclick="trialMarkEnrolled(\'' + loc + '\',\'' + t.key + '\')" style="padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">✓ Enrolled</button>';
+    h += '<button onclick="trialMarkLost(\'' + loc + '\',\'' + t.key + '\')" style="padding:6px 12px;background:#f1f3f9;color:#777;border:1px solid #ddd;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">✕ Lost</button>';
+    h += '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
 function renderScorecardPage() {
   if (state.scorecardTab === 'weekly' || state.scorecardTab === 'acquisition') state.scorecardTab = 'instructor';   // migrate removed/old tabs
   const tab = state.scorecardTab || 'instructor';
@@ -3227,7 +3329,7 @@ function renderScorecardPage() {
   html += renderScLocSelector();
   if (scLoc !== 'all') html += '<button onclick="scWizardStart()" style="width:100%;padding:13px;background:#4169E1;color:#fff;border:none;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:14px;box-shadow:0 2px 8px rgba(65,105,225,.3);">⚡ Tonight\'s Numbers (EOS check-in)</button>';
   html += renderScdMonthNav();
-  (scLoc === 'all' ? lvlupLocs : pickLvlup).forEach(l => html += renderInstructorDaily(l.id));
+  (scLoc === 'all' ? lvlupLocs : pickLvlup).forEach(l => html += renderOpenTrials(l.id) + renderInstructorDaily(l.id));
   html += renderScWizard();
   html += renderEnrollModal();
   return html;
@@ -3244,7 +3346,7 @@ function setScLoc(l){ state.scLoc = l; render(); }
 
 /* ── Nightly instructor scorecard — daily counts logged at EOS ── */
 const INSTRUCTOR_DAILY_COLS = [
-  { id:'firstDayTrials', label:'First-Day Trial Students', short:'First-Day Trials', hint:'Students who came in for their first trial class today.' },
+  { id:'firstDayTrials', label:'First-Day Trial Students', short:'First-Day Trials', hint:'Students who came in for their first trial class today.', captureTrials:true },
   { id:'dayOneEnroll',   label:'Day-One Enrollments',      short:'Day-One Enroll',   hint:'Kids who joined the same day they tried.', captureNames:true },
   { id:'laterEnroll',    label:'Later Enrollments',        short:'Later Enroll',     hint:'Members who enrolled after their trial — not the same day (e.g. a week later).', captureNames:true },
   { id:'upgrades',       label:'Upgrades',                 short:'Upgrades',         hint:'Members who moved up a program (Leadership, Black Belt Club, ADP).' },
@@ -3269,7 +3371,8 @@ function scdEnrollChanged(loc, day, metricId, value){
   state.scorecardDaily[loc][mk][day] = state.scorecardDaily[loc][mk][day] || {};
   state.scorecardDaily[loc][mk][day][metricId] = value;
   const n = parseInt(value) || 0;
-  if (n > 0) { state.enrollModal = { open:true, loc, day, mk, metricId, count:n, names:[] }; render(); setTimeout(() => { const f = document.getElementById('enrollName0'); if (f) f.focus(); }, 60); }
+  const metric = INSTRUCTOR_DAILY_COLS.find(c => c.id === metricId) || {};
+  if (n > 0) { state.enrollModal = { open:true, loc, day, mk, metricId, mode: metric.captureTrials ? 'trial' : 'enroll', count:n, names:[] }; render(); setTimeout(() => { const f = document.getElementById('enrollName0'); if (f) f.focus(); }, 60); }
   else render();
 }
 function enrollName(idx, v){ if (state.enrollModal) { state.enrollModal.names[idx] = v; } }
@@ -3277,15 +3380,20 @@ function enrollModalClose(){ state.enrollModal = null; render(); }
 function enrollModalAdd(){
   const em = state.enrollModal; if (!em) return;
   const norm = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const entryDate = em.mk + '-' + String(em.day).padStart(2, '0');
+  if (em.mode === 'trial') {
+    (em.names || []).forEach(nm => { if ((nm || '').trim()) addOpenTrial(em.loc, nm, entryDate); });
+    state.enrollModal = null; render(); return;
+  }
   const roster = state.feedback.roster || {};
   const seen = new Set(Object.values(roster).filter(r => r && r.active !== false).map(r => norm(r.name) + '|' + r.location));
   const addedMk = getCurrentMonthKey();
-  const startDate = em.mk + '-' + String(em.day).padStart(2, '0');
   (em.names || []).forEach(nm => {
     const name = (nm || '').trim(); if (!name) return;
+    closeTrialIfMatch(em.loc, name);
     const k = norm(name) + '|' + em.loc; if (seen.has(k)) return; seen.add(k);
     const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-    db.ref('feedbackRoster/' + key).set({ name, location: em.loc, active: true, addedDate: addedMk, startDate });
+    db.ref('feedbackRoster/' + key).set({ name, location: em.loc, active: true, addedDate: addedMk, startDate: entryDate });
   });
   state.enrollModal = null; render();
 }
@@ -3295,15 +3403,16 @@ function renderEnrollModal(){
   const metricLabel = (INSTRUCTOR_DAILY_COLS.find(c => c.id === em.metricId) || {}).label || 'Enrollments';
   let h = '<div class="modal-overlay" onclick="enrollModalClose()"><div class="modal-box" onclick="event.stopPropagation()" style="max-width:400px;text-align:left;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:12px;font-weight:700;color:#888;">' + esc(locName) + ' · ' + esc(metricLabel) + '</div><button onclick="enrollModalClose()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#aaa;line-height:1;">×</button></div>';
-  h += '<h3 style="margin:0 0 4px;font-size:19px;font-weight:800;color:#1a1a2e;">✍️ Name your ' + em.count + ' new ' + (em.count === 1 ? 'student' : 'students') + '</h3>';
-  h += '<p style="margin:0 0 14px;font-size:13px;color:#888;line-height:1.5;">They\'ll be added to ' + esc(locName) + '\'s roster &amp; First-90-Days tracker.</p>';
+  const isTrial = em.mode === 'trial';
+  h += '<h3 style="margin:0 0 4px;font-size:19px;font-weight:800;color:#1a1a2e;">✍️ Name your ' + em.count + (isTrial ? ' trial ' : ' new ') + (em.count === 1 ? 'student' : 'students') + '</h3>';
+  h += '<p style="margin:0 0 14px;font-size:13px;color:#888;line-height:1.5;">' + (isTrial ? 'They\'ll go on the Open Trials follow-up list until they enroll (or you mark them lost).' : 'They\'ll be added to ' + esc(locName) + '\'s roster &amp; First-90-Days tracker.') + '</p>';
   for (let k = 0; k < em.count; k++) {
     const nm = (em.names || [])[k] || '';
-    h += '<input id="enrollName' + k + '" type="text" value="' + esc(nm) + '" placeholder="New student #' + (k + 1) + ' name" oninput="enrollName(' + k + ',this.value)" onkeydown="if(event.key===\'Enter\')enrollModalAdd()" style="width:100%;box-sizing:border-box;padding:11px 12px;font-size:14px;border:1px solid #e0e3ed;border-radius:9px;font-family:inherit;margin-bottom:8px;outline:none;" />';
+    h += '<input id="enrollName' + k + '" type="text" value="' + esc(nm) + '" placeholder="' + (isTrial ? 'Trial' : 'New') + ' student #' + (k + 1) + ' name" oninput="enrollName(' + k + ',this.value)" onkeydown="if(event.key===\'Enter\')enrollModalAdd()" style="width:100%;box-sizing:border-box;padding:11px 12px;font-size:14px;border:1px solid #e0e3ed;border-radius:9px;font-family:inherit;margin-bottom:8px;outline:none;" />';
   }
   h += '<div style="display:flex;gap:10px;margin-top:6px;">';
   h += '<button onclick="enrollModalClose()" style="flex:1;padding:12px;border:1px solid #ddd;border-radius:10px;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#555;">Skip for now</button>';
-  h += '<button onclick="enrollModalAdd()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#16a34a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">Add to Members</button>';
+  h += '<button onclick="enrollModalAdd()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#16a34a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">' + (isTrial ? 'Add to Follow-ups' : 'Add to Members') + '</button>';
   h += '</div></div></div>';
   return h;
 }
@@ -3342,7 +3451,7 @@ function renderInstructorDaily(loc){
       const val = dd[c.id];
       if (c.snapshot) { if (val != null && val !== '') { chunkLast[c.id] = val; monthLast[c.id] = val; } }
       else { const n = parseFloat(val) || 0; monthT[c.id] += n; chunkT[c.id] += n; }
-      const cellHandler = c.captureNames ? 'scdEnrollChanged' : 'scdUpdate';
+      const cellHandler = (c.captureNames || c.captureTrials) ? 'scdEnrollChanged' : 'scdUpdate';
       h += '<td style="padding:3px;text-align:center;"><input type="number" inputmode="numeric" value="' + (val != null && val !== '' ? esc(String(val)) : '') + '" onchange="' + cellHandler + '(\'' + loc + '\',' + day + ',\'' + c.id + '\',this.value)" style="width:' + (c.currency ? '72' : '54') + 'px;text-align:center;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;"></td>';
     });
     h += '<td style="padding:3px;"><input value="' + esc(dd.notes || '') + '" onchange="scdUpdate(\'' + loc + '\',' + day + ',\'notes\',this.value)" style="width:100%;min-width:110px;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;box-sizing:border-box;"></td>';
@@ -3389,27 +3498,38 @@ function scWizFinish(){
   const norm = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const roster = state.feedback.roster || {};
   const seen = new Set(Object.values(roster).filter(r => r && r.active !== false).map(r => norm(r.name) + '|' + r.location));
-  let added = 0;
+  let added = 0, trialsAdded = 0;
   scWizardMetrics().filter(c => c.captureNames).forEach(c => {
     ((w.names || {})[c.id] || []).forEach(nm => {
       const name = (nm || '').trim(); if (!name) return;
+      closeTrialIfMatch(w.loc, name);   // an enrollee's open trial auto-closes
       const k = norm(name) + '|' + w.loc; if (seen.has(k)) return; seen.add(k);
       const key = 'student_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
       db.ref('feedbackRoster/' + key).set({ name, location: w.loc, active: true, addedDate: mk, startDate: td.date });
       added++;
     });
   });
-  if (added > 0) { state.scWizard = { open:true, done:true, added, loc: w.loc, step:0, names:{}, counts:{} }; render(); }
+  scWizardMetrics().filter(c => c.captureTrials).forEach(c => {
+    ((w.names || {})[c.id] || []).forEach(nm => {
+      const name = (nm || '').trim(); if (!name) return;
+      addOpenTrial(w.loc, name, td.date);
+      trialsAdded++;
+    });
+  });
+  if (added > 0 || trialsAdded > 0) { state.scWizard = { open:true, done:true, added, trialsAdded, loc: w.loc, step:0, names:{}, counts:{} }; render(); }
   else scWizardClose();
 }
 function renderScWizard(){
   const w = state.scWizard; if (!w || !w.open) return '';
   const locName = (LOCATIONS.find(l => l.id === w.loc) || {}).name || w.loc;
   if (w.done) {
+    let msg = '';
+    if (w.added > 0) msg += '<b>' + w.added + ' new ' + (w.added === 1 ? 'student' : 'students') + '</b> added to ' + esc(locName) + '\'s roster &amp; First-90-Days tracker.';
+    if (w.trialsAdded > 0) msg += (msg ? '<br>' : '') + '<b>' + w.trialsAdded + ' trial ' + (w.trialsAdded === 1 ? 'student' : 'students') + '</b> added to the Open Trials follow-up list.';
     return '<div class="modal-overlay" onclick="scWizardClose()"><div class="modal-box" onclick="event.stopPropagation()" style="max-width:380px;text-align:center;">' +
       '<div style="font-size:46px;margin-bottom:10px;">🎉</div>' +
       '<h3 style="margin:0 0 6px;font-size:19px;font-weight:800;color:#1a1a2e;">Nightly check-in saved</h3>' +
-      '<p style="margin:0 0 18px;font-size:14px;color:#555;line-height:1.5;"><b>' + w.added + ' new ' + (w.added === 1 ? 'student' : 'students') + '</b> added to ' + esc(locName) + '\'s roster &amp; First-90-Days tracker.</p>' +
+      '<p style="margin:0 0 18px;font-size:14px;color:#555;line-height:1.5;">' + msg + '</p>' +
       '<button onclick="scWizardClose()" style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Done</button>' +
       '</div></div>';
   }
@@ -3424,13 +3544,17 @@ function renderScWizard(){
   h += '<div style="font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:.5px;">Step ' + (w.step + 1) + ' of ' + total + '</div>';
   h += '<h3 style="margin:6px 0 4px;font-size:20px;font-weight:800;color:#1a1a2e;">' + esc(m.label) + '</h3>';
   h += '<p style="margin:0 0 16px;font-size:13px;color:#888;line-height:1.5;">' + esc(m.hint || '') + '</p>';
-  if (m.captureNames) {
+  if (m.captureNames || m.captureTrials) {
     h += '<input id="scWizInput" type="number" inputmode="numeric" min="0" value="' + esc(countVal) + '" placeholder="How many?" onchange="scWizCountChanged(this.value)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();scWizCountChanged(this.value);}" style="width:100%;box-sizing:border-box;padding:16px;font-size:28px;text-align:center;border:2px solid #e0e3ed;border-radius:12px;font-family:inherit;margin-bottom:' + (n > 0 ? '12' : '16') + 'px;outline:none;" />';
     if (n > 0) {
-      h += '<div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:6px;">✍️ Enter ' + (n === 1 ? 'the new student\'s name' : 'each new student\'s name') + ' (auto-adds to Members):</div>';
+      const heading = m.captureTrials
+        ? '✍️ Enter ' + (n === 1 ? 'the trial student\'s name' : 'each trial student\'s name') + ' (builds your follow-up list):'
+        : '✍️ Enter ' + (n === 1 ? 'the new student\'s name' : 'each new student\'s name') + ' (auto-adds to Members):';
+      const ph = m.captureTrials ? 'Trial student #' : 'New student #';
+      h += '<div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:6px;">' + heading + '</div>';
       for (let k = 0; k < n; k++) {
         const nm = ((w.names || {})[m.id] || [])[k] || '';
-        h += '<input id="scWizName' + k + '" type="text" value="' + esc(nm) + '" placeholder="New student #' + (k + 1) + ' name" oninput="scWizName(\'' + m.id + '\',' + k + ',this.value)" onkeydown="if(event.key===\'Enter\')scWizNext()" style="width:100%;box-sizing:border-box;padding:11px 12px;font-size:14px;border:1px solid #e0e3ed;border-radius:9px;font-family:inherit;margin-bottom:8px;outline:none;" />';
+        h += '<input id="scWizName' + k + '" type="text" value="' + esc(nm) + '" placeholder="' + ph + (k + 1) + ' name" oninput="scWizName(\'' + m.id + '\',' + k + ',this.value)" onkeydown="if(event.key===\'Enter\')scWizNext()" style="width:100%;box-sizing:border-box;padding:11px 12px;font-size:14px;border:1px solid #e0e3ed;border-radius:9px;font-family:inherit;margin-bottom:8px;outline:none;" />';
       }
       h += '<div style="margin-bottom:10px;"></div>';
     }
@@ -4340,11 +4464,26 @@ function renderEventsPage() {
 
 /*  -  -  Goals Page  -  -  */
 function getGoalActualRevenue(locId, monthIdx) {
-  // Get actual revenue for a location/month from financials data
+  // Actual revenue = the fresher of the financials entry and the latest
+  // nightly EOS "Rev to Date" snapshot (revenue-to-date only grows, so max
+  // = freshest known without ever regressing on corrections)
   const monthKeys = ['january','february','march','april','may','june','july','august','september','october','november','december'];
   const fin = state.financials[locId] || {};
   const md = fin[monthKeys[monthIdx]] || {};
-  return parseFloat(md.grossTY) || parseFloat(md.grossRevenue) || 0;
+  const finVal = parseFloat(md.grossTY) || parseFloat(md.grossRevenue) || 0;
+  return Math.max(finVal, scdLatestRevenue(locId, monthIdx));
+}
+
+function scdLatestRevenue(locId, monthIdx) {
+  // Latest nightly "Monthly Revenue to Date" snapshot for a gym/month (2026)
+  const mk = '2026-' + String(monthIdx + 1).padStart(2, '0');
+  const md = ((state.scorecardDaily || {})[locId] || {})[mk] || {};
+  let latest = 0, latestDay = -1;
+  Object.keys(md).forEach(d => {
+    const v = parseFloat(md[d] && md[d].monthlyRevenue);
+    if (Number.isFinite(v) && v > 0 && +d > latestDay) { latestDay = +d; latest = v; }
+  });
+  return latest;
 }
 
 function renderGoalsSubTabs() {
@@ -4399,8 +4538,15 @@ function renderGoalsPage() {
   const remaining   = Math.max(VACATION_GOAL - ytdActual, 0);
   const pct         = Math.min(Math.round(ytdActual / VACATION_GOAL * 100), 100);
   const monthsLeft  = 12 - currentMonthIdx;
-  const curPace     = latestWithData >= 0 ? monthData[latestWithData].pace : 0;
-  const cumPace     = latestWithData >= 0 ? monthData[latestWithData].ahead : 0;
+  // Prorate the in-progress month: compare actuals to the goal *to date*,
+  // not the full-month goal (a half-finished month isn't "behind")
+  const dayOfMonth  = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), currentMonthIdx + 1, 0).getDate();
+  const cm          = monthData[currentMonthIdx];
+  const proGoal     = cm ? cm.planned * dayOfMonth / daysInMonth : 0;
+  const isCurLatest = latestWithData === currentMonthIdx;
+  const curPace     = latestWithData < 0 ? 0 : isCurLatest ? cm.actual - proGoal : monthData[latestWithData].pace;
+  const cumPace     = latestWithData < 0 ? 0 : isCurLatest ? cm.cumActual - (cm.cumPlanned - cm.planned + proGoal) : monthData[latestWithData].ahead;
   const won         = ytdActual >= VACATION_GOAL;
 
   let html = '<div class="section">';
@@ -4424,7 +4570,7 @@ function renderGoalsPage() {
 
   // Stats
   html += '<div class="goal-hero-stats">';
-  html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (curPace >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (curPace >= 0 ? '+' : '') + fmtCurrency(curPace) + '</div><div class="goal-stat-label">This Month vs Goal</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (curPace >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (curPace >= 0 ? '+' : '') + fmtCurrency(curPace) + '</div><div class="goal-stat-label">' + (isCurLatest ? 'This Month vs Goal to Date (day ' + dayOfMonth + ' of ' + daysInMonth + ')' : 'This Month vs Goal') + '</div></div>';
   html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (cumPace >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (cumPace >= 0 ? '+' : '') + fmtCurrency(cumPace) + '</div><div class="goal-stat-label">Cumulative Pace</div></div>';
   html += '<div class="goal-stat"><div class="goal-stat-num">' + monthsLeft + '</div><div class="goal-stat-label">Months Left</div></div>';
   html += '<div class="goal-stat"><div class="goal-stat-num">' + pct + '%</div><div class="goal-stat-label">Goal Complete</div></div>';
@@ -4433,6 +4579,7 @@ function renderGoalsPage() {
 
   // Monthly grid
   html += '<div style="padding:4px 20px 0;font-size:12px;color:var(--gray-500);font-weight:600;letter-spacing:0.3px">Monthly Pace — actual vs goal (cumulative)</div>';
+  html += '<div style="padding:2px 20px 0;font-size:10px;color:var(--gray-400)">Current-month actuals include the latest nightly EOS revenue reports · the in-progress month is measured against its goal to date</div>';
   html += '<div class="goal-grid">';
   MONTHS_SHORT.forEach((mon, i) => {
     const md = monthData[i];
@@ -4443,12 +4590,15 @@ function renderGoalsPage() {
     html += '<div class="' + cls + '">';
     html += '<div class="month-label">' + mon + (isCurrent ? ' ●' : '') + '</div>';
     if (md.hasData) {
-      const paceColor = md.pace >= 0 ? 'var(--green)' : 'var(--red)';
-      const cumColor  = md.ahead >= 0 ? 'var(--green)' : 'var(--red)';
-      html += '<div style="font-size:14px;font-weight:800;color:' + paceColor + ';padding:4px 0">' + (md.pace >= 0 ? '+' : '') + fmtCurrency(md.pace) + '</div>';
-      html += '<div style="font-size:10px;color:var(--gray-500)">Goal: ' + fmtCurrency(md.planned) + '</div>';
+      // In-progress month: show pace against the prorated goal-to-date
+      const pace  = isCurrent ? md.actual - proGoal : md.pace;
+      const ahead = isCurrent ? md.cumActual - (md.cumPlanned - md.planned + proGoal) : md.ahead;
+      const paceColor = pace >= 0 ? 'var(--green)' : 'var(--red)';
+      const cumColor  = ahead >= 0 ? 'var(--green)' : 'var(--red)';
+      html += '<div style="font-size:14px;font-weight:800;color:' + paceColor + ';padding:4px 0">' + (pace >= 0 ? '+' : '') + fmtCurrency(pace) + '</div>';
+      html += '<div style="font-size:10px;color:var(--gray-500)">' + (isCurrent ? 'Goal to date: ' + fmtCurrency(proGoal) + ' (of ' + fmtCurrency(md.planned) + ')' : 'Goal: ' + fmtCurrency(md.planned)) + '</div>';
       html += '<div style="font-size:10px;color:var(--gray-500)">Actual: ' + fmtCurrency(md.actual) + '</div>';
-      html += '<div style="font-size:10px;font-weight:700;color:' + cumColor + ';margin-top:3px">' + (md.ahead >= 0 ? '+' : '') + fmtCurrency(md.ahead) + ' YTD</div>';
+      html += '<div style="font-size:10px;font-weight:700;color:' + cumColor + ';margin-top:3px">' + (ahead >= 0 ? '+' : '') + fmtCurrency(ahead) + ' YTD</div>';
     } else if (md.planned > 0) {
       html += '<div style="font-size:12px;color:var(--gray-600);padding:4px 0">—</div>';
       html += '<div style="font-size:10px;color:var(--gray-600)">Goal: ' + fmtCurrency(md.planned) + '</div>';
@@ -4495,11 +4645,12 @@ state.scWizard     = { open:false, loc:null, step:0 };  // guided nightly check-
 state.scdMonthOffset = 0;            // instructor nightly grid month offset
 state.scorecardDaily = {};           // nightly instructor counts (Firebase-synced)
 state.enrollModal    = null;         // name-capture prompt for direct grid enrollment entry
+state.trialPipeline  = {};           // open trials awaiting follow-up (Firebase-synced)
 state.adLabTab     = 'playbook';     // Ad Creative: 'playbook' | 'tracker' | 'leaderboard'
 state.adLabFilter  = 'all';          // Hook bank avatar filter
 state.adCreative   = state.adCreative || {};
 // Leadership (PIN-gated owner page)
-state.leadership   = { pin: null, pinLoaded: false, unlocked: false, pinError: false, view: 'tracker', trackerLoc: 'waunakee', monthOffset: 0, tracker: {}, homebase: {}, homebaseMap: {}, perf: {}, signoffs: {}, hbImport: { open:false } };
+state.leadership   = { pin: null, pinLoaded: false, unlocked: false, pinError: false, view: 'tracker', trackerLoc: 'waunakee', monthOffset: 0, tracker: {}, homebase: {}, homebaseMap: {}, perf: {}, signoffs: {}, hbImport: { open:false }, lastBackup: null };
 if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('leadershipUnlocked') === '1') state.leadership.unlocked = true;
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
 state.devTab        = 'instructor'; // 'instructor' | 'gymdesk' | 'playbooks'
