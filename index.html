@@ -1813,7 +1813,7 @@ function listenAll() {
     finRef.on('value', snap => { state.financials[loc] = snap.val() || {}; render(); });
     activeListeners.push({ ref: finRef, event: 'value' });
   });
-  ['waunakee', 'eastmad', 'verona'].forEach(loc => {
+  ['waunakee', 'eastmad', 'verona', 'goninjaW', 'goninjaV'].forEach(loc => {
     const memRef = fbRef('membership/' + loc + '/2026');
     memRef.on('value', snap => { state.membership[loc] = snap.val() || {}; render(); });
     activeListeners.push({ ref: memRef, event: 'value' });
@@ -3704,11 +3704,16 @@ function renderKPIsPage() {
 
       html += '<h3 style="margin:24px 0 16px;font-size:1.1rem;color:var(--primary)">Location Details</h3>';
       LOCATIONS.forEach(function(loc) {
+        var isGN = loc.id === 'goninjaW' || loc.id === 'goninjaV';
         var memData = state.membership[loc.id] || {};
         html += '<div class="kpi-detail-card"><details>';
-        html += '<summary class="kpi-detail-summary"><span class="kpi-loc-badge">'+loc.short+'</span> '+loc.name+'</summary>';
+        html += '<summary class="kpi-detail-summary"><span class="kpi-loc-badge">'+loc.short+'</span> '+loc.name+(isGN ? ' <span style="font-size:11px;color:var(--gray-400);font-weight:400">— memberships, parties &amp; camps</span>' : '')+'</summary>';
         html += '<div style="overflow-x:auto"><table class="kpi-detail-table"><thead><tr>';
-        html += '<th>Month</th><th>Total</th><th>Goal</th><th>+/-</th><th>Leads</th><th>Intros</th><th>New</th><th>Upgrades</th><th>Attrition</th><th>Reviews</th><th>Conv%</th>';
+        if (isGN) {
+          html += '<th>Month</th><th>Students</th><th>Goal</th><th>+/-</th><th>Intros</th><th>New Mem</th><th>Attrition</th><th>🎉 Parties</th><th>🏕️ Camp Wks</th><th>Conv%</th>';
+        } else {
+          html += '<th>Month</th><th>Total</th><th>Goal</th><th>+/-</th><th>Leads</th><th>Intros</th><th>New</th><th>Upgrades</th><th>Attrition</th><th>Reviews</th><th>Conv%</th>';
+        }
         html += '</tr></thead><tbody>';
 
         for (var mi = 0; mi < 12; mi++) {
@@ -3720,29 +3725,46 @@ function renderKPIsPage() {
           var tm = parseFloat(md.total)||0;
           var gl = parseFloat(md.goal)||0;
           var diff = tm - gl;
-          var ld = parseFloat(md.leads)||0;
           var intr = parseFloat(md.intros)||0;
-          var nm = parseFloat(md.newMem)||0;
-          var up = parseFloat(md.upgrades)||0;
           var at = parseFloat(md.attrition)||0;
-          var gr = parseFloat(md.googleReviews)||0;
-          var cv = ld > 0 ? ((nm/ld)*100).toFixed(0)+'%' : '--';
           var atPct = tm > 0 ? ((at/tm)*100).toFixed(1)+'%' : '--';
           var diffColor = diff >= 0 ? 'var(--green)' : 'var(--red)';
           var diffStr = diff >= 0 ? '+'+diff : ''+diff;
+          var inp = function(field, val){ return '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="'+field+'" value="'+val+'"></td>'; };
 
           html += '<tr class="'+rowCls+'">';
           html += '<td style="font-weight:600">'+monthNames[mi]+(isCur ? ' <span class="kpi-now-badge">NOW</span>' : '')+'</td>';
-          html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="totalMembers" value="'+tm+'"></td>';
-          html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="goal" value="'+gl+'"></td>';
-          html += '<td style="color:'+diffColor+';font-weight:600">'+diffStr+'</td>';
-          html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="leads" value="'+ld+'"></td>';
-          html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="intros" value="'+intr+'"></td>';
-          html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="newMembers" value="'+nm+'"></td>';
-          html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="upgrades" value="'+up+'"></td>';
-          html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="attrition" value="'+at+'"> <small style="color:var(--gray-400)">'+atPct+'</small></td>';
-          html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="googleReviews" value="'+gr+'"></td>';
-          html += '<td style="font-weight:600">'+cv+'</td>';
+
+          if (isGN) {
+            // Go Ninja: own funnel (intros/new mem/attrition) + parties + camps. Fields read/write consistently.
+            var nmGN = parseFloat(md.newMem)||0;
+            var cvGN = intr > 0 ? ((nmGN/intr)*100).toFixed(0)+'%' : '--';
+            html += inp('total', tm);
+            html += inp('goal', gl);
+            html += '<td style="color:'+diffColor+';font-weight:600">'+diffStr+'</td>';
+            html += inp('intros', intr);
+            html += inp('newMem', nmGN);
+            html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="attrition" value="'+at+'"> <small style="color:var(--gray-400)">'+atPct+'</small></td>';
+            html += inp('bdayParties', parseFloat(md.bdayParties)||0);
+            html += inp('campWeeks', parseFloat(md.campWeeks)||0);
+            html += '<td style="font-weight:600">'+cvGN+'</td>';
+          } else {
+            var ld = parseFloat(md.leads)||0;
+            var nm = parseFloat(md.newMem)||0;
+            var up = parseFloat(md.upgrades)||0;
+            var gr = parseFloat(md.googleReviews)||0;
+            var cv = ld > 0 ? ((nm/ld)*100).toFixed(0)+'%' : '--';
+            html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="totalMembers" value="'+tm+'"></td>';
+            html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="goal" value="'+gl+'"></td>';
+            html += '<td style="color:'+diffColor+';font-weight:600">'+diffStr+'</td>';
+            html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="leads" value="'+ld+'"></td>';
+            html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="intros" value="'+intr+'"></td>';
+            html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="newMembers" value="'+nm+'"></td>';
+            html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="upgrades" value="'+up+'"></td>';
+            html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="attrition" value="'+at+'"> <small style="color:var(--gray-400)">'+atPct+'</small></td>';
+            html += '<td><input class="kpi-input" type="number" data-loc="'+loc.id+'" data-month="'+mk+'" data-field="googleReviews" value="'+gr+'"></td>';
+            html += '<td style="font-weight:600">'+cv+'</td>';
+          }
           html += '</tr>';
         }
         html += '</tbody></table></div></details></div>';
