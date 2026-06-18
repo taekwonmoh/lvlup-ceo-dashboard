@@ -3487,16 +3487,25 @@ function renderScorecardPage() {
   const pickLvlup = scLoc === 'all' ? lvlupLocs : lvlupLocs.filter(l => l.id === scLoc);
 
   let html = subNav;
+  if (scLoc === 'all') {
+    // "Trials" view — open-trial follow-up pipeline across every school, nothing else
+    html += renderScBoardNote('📋', 'Trials', 'Open-trial follow-up pipeline across all schools', '#f59e0b');
+    html += renderScLocSelector();
+    let trialsHtml = '';
+    lvlupLocs.forEach(l => trialsHtml += renderOpenTrials(l.id));
+    html += trialsHtml || '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:24px;text-align:center;color:#aaa;font-size:13px;">No open trials right now across any school. 🎉</div>';
+    return html;
+  }
   html += renderScBoardNote('🥋', 'Instructor', 'Owned by Instructors — entered weekly (by Sunday) before Monday\'s meeting', '#e94560');
   html += renderScLocSelector();
   html += renderScdMonthNav();
-  (scLoc === 'all' ? lvlupLocs : pickLvlup).forEach(l => html += renderOpenTrials(l.id) + renderWeeklyScorecard(l.id));
+  pickLvlup.forEach(l => html += renderOpenTrials(l.id) + renderWeeklyScorecard(l.id));
   return html;
 }
 
 function renderScLocSelector(){
   const cur = state.scLoc || 'waunakee';
-  const opts = [{id:'waunakee',name:'Waunakee'},{id:'eastmad',name:'East Madison'},{id:'verona',name:'Verona'},{id:'all',name:'All gyms'}];
+  const opts = [{id:'waunakee',name:'Waunakee'},{id:'eastmad',name:'East Madison'},{id:'verona',name:'Verona'},{id:'all',name:'📋 Trials'}];
   let h = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
   opts.forEach(o => { const a = cur === o.id; h += '<button onclick="setScLoc(\'' + o.id + '\')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (a ? '#1a1a2e' : '#f1f3f9') + ';color:' + (a ? '#fff' : '#555') + ';">' + o.name + '</button>'; });
   return h + '</div>';
