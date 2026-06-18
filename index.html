@@ -3496,6 +3496,15 @@ function renderScorecardPage() {
     html += trialsHtml || '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:24px;text-align:center;color:#aaa;font-size:13px;">No open trials right now across any school. 🎉</div>';
     return html;
   }
+  if (scLoc === 'goninja') {
+    // Go Ninja view — two sections (Waunakee incl. After School, Verona without)
+    html += renderScBoardNote('🥷', 'Go Ninja', 'Fill rates & revenue — all figures are month-to-date running totals', '#e94560');
+    html += renderScLocSelector();
+    html += renderScdMonthNav();
+    html += renderWeeklyScorecard('goninjaW', GONINJA_COLS);
+    html += renderWeeklyScorecard('goninjaV', GONINJA_COLS.filter(c => !c.waunakeeOnly));
+    return html;
+  }
   html += renderScBoardNote('🥋', 'Instructor', 'Owned by Instructors — entered weekly (by Sunday) before Monday\'s meeting', '#e94560');
   html += renderScLocSelector();
   html += renderScdMonthNav();
@@ -3505,7 +3514,7 @@ function renderScorecardPage() {
 
 function renderScLocSelector(){
   const cur = state.scLoc || 'waunakee';
-  const opts = [{id:'waunakee',name:'Waunakee'},{id:'eastmad',name:'East Madison'},{id:'verona',name:'Verona'},{id:'all',name:'📋 Trials'}];
+  const opts = [{id:'waunakee',name:'Waunakee'},{id:'eastmad',name:'East Madison'},{id:'verona',name:'Verona'},{id:'all',name:'📋 Trials'},{id:'goninja',name:'🥷 Go Ninja'}];
   let h = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
   opts.forEach(o => { const a = cur === o.id; h += '<button onclick="setScLoc(\'' + o.id + '\')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (a ? '#1a1a2e' : '#f1f3f9') + ';color:' + (a ? '#fff' : '#555') + ';">' + o.name + '</button>'; });
   return h + '</div>';
@@ -3521,6 +3530,7 @@ const SC_WEEKLY_COLS = [
   { id:'attrition',      short:'Upcoming Cancellations', agg:'sum' },
   { id:'revenue',        short:'Revenue',           agg:'latest', currency:true, note:'running total (MTD)' },
   { id:'totalMembers',   short:'Total Members',     agg:'latest', note:'running total (MTD)' },
+  { id:'attritionRate',  short:'Attrition %',       computed:'attrition', pct:true, sub:'cancellations ÷ members' },
 ];
 function scSundayKey(dt){ return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
 function scMonthSundays(){
@@ -3542,10 +3552,10 @@ function scWeeklyLatest(loc, monthKey, metricId){
   const keys = Object.keys(locData).filter(k => k.slice(0, 7) === monthKey && (locData[k] || {})[metricId] != null && locData[k][metricId] !== '').sort();
   return keys.length ? locData[keys[keys.length - 1]][metricId] : '';
 }
-function renderWeeklyScorecard(loc){
+function renderWeeklyScorecard(loc, colsArg){
   const meta = LOCATIONS.find(l => l.id === loc) || { name: loc, color: '#1a1a2e' };
   const mk = scdMonthKey();
-  const cols = SC_WEEKLY_COLS;
+  const cols = colsArg || SC_WEEKLY_COLS;
   const sundays = scMonthSundays();
   const wk = (state.scWeekly || {})[loc] || {};
   const goals = ((state.scGoals || {})[loc] || {})[mk] || {};
@@ -3565,7 +3575,8 @@ function renderWeeklyScorecard(loc){
   let headCells = '<th style="' + thBase + 'text-align:left;">Week (Sun)</th>';
   cols.forEach(c => {
     headCells += '<th style="' + thBase + 'text-align:center;">' + c.short +
-      (c.note ? '<div style="font-size:8px;font-weight:700;color:#4169E1;text-transform:none;letter-spacing:0;margin-top:2px;">↻ ' + c.note + '</div>' : '') + '</th>';
+      (c.note ? '<div style="font-size:8px;font-weight:700;color:#4169E1;text-transform:none;letter-spacing:0;margin-top:2px;">↻ ' + c.note + '</div>' : '') +
+      (c.sub ? '<div style="font-size:8px;font-weight:600;color:#888;text-transform:none;letter-spacing:0;margin-top:2px;">' + c.sub + '</div>' : '') + '</th>';
   });
   headCells += '<th style="' + thBase + 'text-align:center;">Notes</th>';
   h += '<tr style="background:#f5f7ff;">' + headCells + '</tr></thead><tbody>';
@@ -3580,8 +3591,13 @@ function renderWeeklyScorecard(loc){
   h += '<tr style="background:' + meta.color + '22;font-weight:800;"><td style="padding:9px 10px;color:#0f3460;white-space:nowrap;">Σ Monthly Total</td>';
   cols.forEach(c => {
     let val;
-    if (c.agg === 'latest'){ const lv = scWeeklyLatest(loc, mk, c.id); val = (lv === '' || lv == null) ? '—' : (c.currency ? fmtCurrency(parseFloat(lv) || 0) : lv); }
-    else { const s = scWeeklySum(loc, mk, c.id); val = s ? (c.currency ? fmtCurrency(s) : s) : '—'; }
+    if (c.computed === 'attrition'){
+      const canc = scWeeklySum(loc, mk, 'attrition');
+      const mem = parseFloat(scWeeklyLatest(loc, mk, 'totalMembers')) || 0;
+      val = mem > 0 ? (Math.round(canc / mem * 1000) / 10 + '%') : '—';
+    }
+    else if (c.agg === 'latest'){ const lv = scWeeklyLatest(loc, mk, c.id); val = (lv === '' || lv == null) ? '—' : (c.currency ? fmtCurrency(parseFloat(lv) || 0) : c.pct ? (lv + '%') : lv); }
+    else { const s = scWeeklySum(loc, mk, c.id); val = s ? (c.currency ? fmtCurrency(s) : c.pct ? (s + '%') : s) : '—'; }
     h += '<td style="text-align:center;padding:9px;color:#0f3460;">' + val + '</td>';
   });
   h += '<td></td></tr>';
@@ -3594,7 +3610,9 @@ function renderWeeklyScorecard(loc){
     const isCur = key === curKey;
     h += '<tr style="border-top:1px solid #f5f5f5;' + (isCur ? 'background:#eff6ff;' : '') + '">';
     h += '<td style="padding:5px 10px;font-weight:600;color:#444;white-space:nowrap;">' + monthName + ' ' + dt.getDate() + (isCur ? ' <span style="color:#4169E1;">•</span>' : '') + '</td>';
-    cols.forEach(c => { const v = row[c.id];
+    cols.forEach(c => {
+      if (c.computed){ h += '<td style="padding:3px;text-align:center;color:#ccc;">—</td>'; return; }
+      const v = row[c.id];
       h += '<td style="padding:3px;text-align:center;"><input type="number" inputmode="' + (c.currency ? 'decimal' : 'numeric') + '" value="' + (v != null && v !== '' ? esc(String(v)) : '') + '" onchange="scWeeklyUpdate(\'' + loc + '\',\'' + key + '\',\'' + c.id + '\',this.value)" style="' + inStyle + '"></td>'; });
     h += '<td style="padding:3px;"><input value="' + esc(row.notes || '') + '" onchange="scWeeklyUpdate(\'' + loc + '\',\'' + key + '\',\'notes\',this.value)" style="width:100%;min-width:110px;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;box-sizing:border-box;"></td>';
     h += '</tr>';
@@ -3603,6 +3621,13 @@ function renderWeeklyScorecard(loc){
   return h;
 }
 
+/* ── Go Ninja scorecard — fill-rate % + revenue, all month-to-date running totals ── */
+const GONINJA_COLS = [
+  { id:'gnSummerPct', short:'Summer Camps % Filled',  agg:'latest', pct:true,      note:'running total (MTD)' },
+  { id:'gnNinjaPct',  short:'Ninja Classes % Filled', agg:'latest', pct:true,      note:'running total (MTD)' },
+  { id:'gnAfterPct',  short:'After School % Filled',  agg:'latest', pct:true,      note:'running total (MTD)', waunakeeOnly:true },
+  { id:'gnRevenue',   short:'Revenue',                agg:'latest', currency:true, note:'running total (MTD)' },
+];
 /* ── Nightly instructor scorecard — daily counts logged at EOS ── */
 const INSTRUCTOR_DAILY_COLS = [
   { id:'firstDayTrials', label:'First-Day Trial Students', short:'First-Day Trials', hint:'Students who came in for their first trial class today.', captureTrials:true },
