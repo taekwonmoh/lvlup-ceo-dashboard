@@ -2467,7 +2467,7 @@ function renderCrModal(){
 function render() {
   const app = document.getElementById('app');
   // Backward-compat: old links to removed tabs redirect into merged pages
-  if (state.activeSection === 'performance') { state.scorecardTab = 'performance'; state.activeSection = 'scorecard'; }
+  if (state.activeSection === 'performance') state.activeSection = 'scorecard';   // KPIs & Financials tab removed
   if (state.activeSection === 'monthlyGoals') { state.goalsTab = 'monthly'; state.activeSection = 'goals'; }
   // Scale (acq) tab hidden for now — send any lingering links/state back to the scorecard
   if (state.activeSection === 'acq') state.activeSection = 'scorecard';
@@ -2488,7 +2488,6 @@ function render() {
      s === 'development'                                                      ? renderResourcesPage() :
      s === 'leadership'                                                       ? renderLeadershipPage() :
      '');
-  if (s === 'scorecard' && state.scorecardTab === 'performance') initKPICharts();
   requestAnimationFrame(initSortable);
 }
 
@@ -3491,17 +3490,13 @@ function renderOpenTrials(loc){
 }
 
 function renderScorecardPage() {
-  if (state.scorecardTab === 'weekly' || state.scorecardTab === 'acquisition') state.scorecardTab = 'instructor';   // migrate removed/old tabs
-  const tab = state.scorecardTab || 'instructor';
-  const subNav = renderScSubTabs();
-  if (tab === 'performance') return subNav + renderPerformancePage();
-
+  // Scorecard shows the instructor weekly boards directly — no sub-tabs
   const lvlupLocs   = LOCATIONS.filter(l => LVLUP_LOC_IDS.includes(l.id));
 
   const scLoc = state.scLoc || 'waunakee';
   const pickLvlup = scLoc === 'all' ? lvlupLocs : lvlupLocs.filter(l => l.id === scLoc);
 
-  let html = subNav;
+  let html = '';
   if (scLoc === 'all') {
     // "Trials" view — open-trial follow-up pipeline across every school, nothing else
     html += renderScBoardNote('📋', 'Trials', 'Open-trial follow-up pipeline across all schools', '#f59e0b');
