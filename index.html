@@ -856,7 +856,11 @@ let state = {
   devQuizAnswers: {},
   devQuizSubmitted: false,
   feedback: { roster: {}, tracking: {}, rosterMeta: {}, monthOffset: 0, locationFilter: 'waunakee', showInactive: false, selectedStudents: new Set(), expandedStudents: new Set(), logs: {}, logForm: null, onboardingCollapsed: false },
-  acq: { pinLoaded: false, pin: null, unlocked: false, monthOffset: 0, data: {}, _listeningMk: null, pinError: false }
+  acq: { pinLoaded: false, pin: null, unlocked: false, monthOffset: 0, data: {}, _listeningMk: null, pinError: false },
+  mktTab: 'content',
+  contentRequests: {},
+  crDraft: null,
+  crFilter: 'all'
 };
 
 let debounceTimers = {};
@@ -1879,6 +1883,11 @@ function listenAll() {
   adRef.on('value', snap => { state.adCreative = snap.val() || {}; render(); });
   activeListeners.push({ ref: adRef, event: 'value' });
 
+  // Content Request board (replaces Asana social-media workflow)
+  const crRef = fbRef('contentRequests');
+  crRef.on('value', snap => { state.contentRequests = snap.val() || {}; render(); });
+  activeListeners.push({ ref: crRef, event: 'value' });
+
   // Leadership (PIN-gated owner page): PIN, daily tracker, homebase clock, perf, sign-offs
   const ldPinRef = fbRef('leadership/pin');
   ldPinRef.on('value', snap => { state.leadership.pin = snap.val(); state.leadership.pinLoaded = true; render(); });
@@ -2201,17 +2210,251 @@ function renderResourcesPage() {
 }
 
 function renderMarketingPage() {
-  let html = '<div class="page" style="max-width:920px;">';
-  html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px;">';
-  html += '<div>';
+  const tab = state.mktTab || 'content';
+  const wide = tab === 'content';
+  let html = '<div class="page" style="max-width:' + (wide ? '1180px' : '920px') + ';">';
+  html += '<div style="margin-bottom:16px;">';
   html += '<h2 style="margin:0 0 4px;font-size:18px;font-weight:800;color:#1a1a2e;">📱 Marketing</h2>';
-  html += '<p style="margin:0;font-size:13px;color:#888;">Ad creative testing, content planning, and campaign tracking.</p>';
+  html += '<p style="margin:0;font-size:13px;color:#888;">Content requests, ad creative testing, and campaign tracking.</p>';
   html += '</div>';
-  html += '<a href="https://app.asana.com/1/1215361270408183/project/1215365592958652/board/1215365594244809" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:9px 18px;background:#4169E1;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(65,105,225,.3);">📋 Social Media Board (Asana) <span style="font-size:15px;">→</span></a>';
+  const tb = (id, label) => '<button onclick="setMktTab(\'' + id + '\')" style="padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;' + (tab === id ? 'background:#1a1a2e;color:#fff;' : 'background:#f1f3f9;color:#555;') + '">' + label + '</button>';
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;">' + tb('content', '📋 Content Board') + tb('adlab', '🎬 Ad Creative Lab') + '</div>';
+  if (tab === 'adlab') html += renderAdCreative();
+  else html += renderContentBoard();
   html += '</div>';
-  html += renderAdCreative();
-  html += '</div>';
+  if (state.crDraft) html += renderCrModal();
   return html;
+}
+
+function setMktTab(t){ state.mktTab = t; render(); }
+
+/*  -  -  Content Request Board (in-app replacement for the Asana social workflow)  -  -  */
+const CR_BRANDS = ['LVLUP', 'GO NINJA'];
+const CR_LOCATIONS = { 'LVLUP': ['Waunakee', 'East Madison', 'Verona'], 'GO NINJA': ['Waunakee', 'Verona'] };
+const CR_FORMATS = ['Reel', 'Static Post', 'Story', 'Carousel', 'Photo Album', 'Other'];
+const CR_CHANNELS = [
+  { id: 'igPost', label: 'Instagram Post' }, { id: 'igReel', label: 'Instagram Reel' }, { id: 'igStory', label: 'Instagram Story' },
+  { id: 'fbPost', label: 'Facebook Post' }, { id: 'fbReel', label: 'Facebook Reel' }, { id: 'fbStory', label: 'Facebook Story' },
+  { id: 'tiktok', label: 'TikTok' }
+];
+const CR_CHANNEL_LABEL = {}; CR_CHANNELS.forEach(c => CR_CHANNEL_LABEL[c.id] = c.label);
+const CR_PRIORITIES = [{ id: 'High', color: '#dc2626' }, { id: 'Medium', color: '#d97706' }, { id: 'Low', color: '#16a34a' }];
+const CR_PRIORITY_COLOR = {}; CR_PRIORITIES.forEach(p => CR_PRIORITY_COLOR[p.id] = p.color);
+const CR_STATUSES = [
+  { id: 'todo', label: 'To Do', emoji: '📥', color: '#64748b' },
+  { id: 'production', label: 'In Production', emoji: '🎬', color: '#2563eb' },
+  { id: 'approved', label: 'Approved', emoji: '✅', color: '#16a34a' },
+  { id: 'delivered', label: 'Delivered', emoji: '🚀', color: '#7c3aed' }
+];
+const CR_STATUS_IDX = {}; CR_STATUSES.forEach((s, i) => CR_STATUS_IDX[s.id] = i);
+
+function crTodayStr(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function crAll(){ const c = state.contentRequests || {}; return Object.entries(c).map(([id, v]) => ({ id, ...v })); }
+function crFmtDate(s){ if (!s) return ''; const p = s.split('-'); if (p.length !== 3) return s; return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(p[1], 10) - 1] + ' ' + parseInt(p[2], 10); }
+function crChannelList(ch){ if (!ch) return []; return Object.keys(ch).filter(k => ch[k]).map(k => CR_CHANNEL_LABEL[k] || k); }
+
+function renderContentBoard(){
+  const all = crAll();
+  const filter = state.crFilter || 'all';
+  const filtered = filter === 'all' ? all : all.filter(c => (c.brand || '') === filter);
+  let h = '';
+  // Intro + new request
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">';
+  h += '<div style="font-size:12.5px;color:#666;line-height:1.5;max-width:640px;">One home for every content request. Instructors submit ideas, media, and context in <b>To Do</b>; the content team moves cards across the board as they’re produced, approved, and published.</div>';
+  h += '<button onclick="crNew()" style="flex-shrink:0;padding:10px 18px;background:#1a1a2e;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(26,26,46,.25);">+ New Content Request</button>';
+  h += '</div>';
+  // Brand filter
+  const chip = (id, label) => '<button onclick="crSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + label + '</button>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All Brands') + CR_BRANDS.map(b => chip(b, b)).join('') + '</div>';
+  // Board columns
+  h += '<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;align-items:flex-start;">';
+  CR_STATUSES.forEach(st => {
+    const cards = filtered.filter(c => (c.status || 'todo') === st.id)
+      .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999') || (b.createdAt || 0) - (a.createdAt || 0));
+    h += '<div style="flex:0 0 290px;min-width:290px;background:#f6f7fb;border:1px solid #e8eaf0;border-radius:12px;padding:10px;">';
+    h += '<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;padding:2px 4px;">';
+    h += '<span style="width:9px;height:9px;border-radius:50%;background:' + st.color + ';flex-shrink:0;"></span>';
+    h += '<span style="font-size:12px;font-weight:800;color:#1a1a2e;text-transform:uppercase;letter-spacing:.4px;">' + st.emoji + ' ' + st.label + '</span>';
+    h += '<span style="margin-left:auto;font-size:11px;font-weight:800;color:#888;background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:1px 8px;">' + cards.length + '</span>';
+    h += '</div>';
+    if (!cards.length) {
+      h += '<div style="text-align:center;padding:22px 10px;color:#bbb;font-size:12px;border:1px dashed #d8dbe6;border-radius:10px;">' + (st.id === 'todo' ? 'No open requests' : 'Nothing here yet') + '</div>';
+    } else {
+      cards.forEach(c => { h += renderCrCard(c); });
+    }
+    h += '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function renderCrCard(c){
+  const idx = CR_STATUS_IDX[c.status || 'todo'];
+  const today = crTodayStr();
+  const overdue = c.dueDate && c.dueDate < today && (c.status || 'todo') !== 'delivered';
+  const dueSoon = !overdue && c.dueDate && c.dueDate <= addDaysStr(today, 3) && (c.status || 'todo') !== 'delivered';
+  const channels = crChannelList(c.channels);
+  const atts = (c.attachments || []).filter(a => a && (a.url || a.label));
+  let h = '<div onclick="crEdit(\'' + c.id + '\')" style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:11px 12px;margin-bottom:9px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.04);">';
+  // brand + priority row
+  h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">';
+  if (c.brand) h += '<span style="font-size:9px;font-weight:800;color:#fff;background:' + (c.brand === 'GO NINJA' ? '#e94560' : '#0f3460') + ';padding:2px 7px;border-radius:5px;letter-spacing:.4px;">' + esc(c.brand) + '</span>';
+  if (c.location) h += '<span style="font-size:10px;font-weight:700;color:#666;">' + esc(c.location) + '</span>';
+  if (c.priority) h += '<span style="margin-left:auto;font-size:9px;font-weight:800;color:' + (CR_PRIORITY_COLOR[c.priority] || '#888') + ';text-transform:uppercase;letter-spacing:.4px;">● ' + esc(c.priority) + '</span>';
+  h += '</div>';
+  // title (request part)
+  h += '<div style="font-size:13px;font-weight:700;color:#1a1a2e;line-height:1.35;margin-bottom:7px;">' + esc(c.request || c.title || 'Untitled') + '</div>';
+  // meta chips
+  h += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">';
+  if (c.format) h += '<span style="font-size:10px;font-weight:700;color:#0f3460;background:#eef2ff;border-radius:5px;padding:2px 7px;">' + esc(c.format) + '</span>';
+  channels.slice(0, 3).forEach(ch => h += '<span style="font-size:10px;color:#666;background:#f1f3f9;border-radius:5px;padding:2px 7px;">' + esc(ch) + '</span>');
+  if (channels.length > 3) h += '<span style="font-size:10px;color:#999;padding:2px 4px;">+' + (channels.length - 3) + '</span>';
+  if (atts.length) h += '<span style="font-size:10px;color:#666;background:#f1f3f9;border-radius:5px;padding:2px 7px;">📎 ' + atts.length + '</span>';
+  h += '</div>';
+  // due date + move controls
+  h += '<div style="display:flex;align-items:center;gap:6px;border-top:1px solid #f1f3f9;padding-top:8px;">';
+  if (c.dueDate) {
+    const col = overdue ? '#dc2626' : (dueSoon ? '#d97706' : '#888');
+    h += '<span style="font-size:11px;font-weight:700;color:' + col + ';">📅 ' + crFmtDate(c.dueDate) + (overdue ? ' · overdue' : (dueSoon ? ' · soon' : '')) + '</span>';
+  } else {
+    h += '<span style="font-size:11px;color:#bbb;">No due date</span>';
+  }
+  h += '<span style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation();">';
+  const arrow = (dir, sym, on) => '<button ' + (on ? 'onclick="crMove(\'' + c.id + '\',' + dir + ')"' : 'disabled') + ' title="Move ' + (dir < 0 ? 'back' : 'forward') + '" style="width:24px;height:24px;border:1px solid #e3e6ef;background:' + (on ? '#fff' : '#f3f4f8') + ';border-radius:6px;cursor:' + (on ? 'pointer' : 'default') + ';font-size:12px;color:' + (on ? '#1a1a2e' : '#cbd0dc') + ';font-weight:800;line-height:1;">' + sym + '</button>';
+  h += arrow(-1, '‹', idx > 0);
+  h += arrow(1, '›', idx < CR_STATUSES.length - 1);
+  h += '</span>';
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
+
+function addDaysStr(str, n){ const d = new Date(str + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+/* ---- Board actions ---- */
+function crSetFilter(f){ state.crFilter = f; render(); }
+function crMove(id, dir){
+  const c = (state.contentRequests || {})[id]; if (!c) return;
+  const cur = CR_STATUS_IDX[c.status || 'todo'];
+  const next = Math.max(0, Math.min(CR_STATUSES.length - 1, cur + dir));
+  fbSet('contentRequests/' + id + '/status', CR_STATUSES[next].id);
+}
+
+/* ---- Create / edit modal ---- */
+function crNew(){
+  state.crDraft = { _id: null, brand: 'LVLUP', location: '', request: '', dueDate: '', description: '', format: 'Reel', channels: {}, priority: '', attachments: [], status: 'todo', createdBy: '' };
+  render();
+}
+function crEdit(id){
+  const c = (state.contentRequests || {})[id]; if (!c) return;
+  state.crDraft = {
+    _id: id, brand: c.brand || 'LVLUP', location: c.location || '', request: c.request || '', dueDate: c.dueDate || '',
+    description: c.description || '', format: c.format || 'Reel', channels: Object.assign({}, c.channels || {}),
+    priority: c.priority || '', attachments: (c.attachments || []).map(a => ({ label: a.label || '', url: a.url || '' })),
+    status: c.status || 'todo', createdBy: c.createdBy || '', createdAt: c.createdAt
+  };
+  render();
+}
+function crCloseModal(){ state.crDraft = null; render(); }
+function crSet(field, val){ if (state.crDraft) state.crDraft[field] = val; }
+function crSetRender(field, val){ if (state.crDraft){ state.crDraft[field] = val; if (field === 'brand') state.crDraft.location = ''; render(); } }
+function crToggleChannel(id){ if (!state.crDraft) return; const ch = state.crDraft.channels || (state.crDraft.channels = {}); ch[id] = !ch[id]; render(); }
+function crAddAttachment(){ if (!state.crDraft) return; (state.crDraft.attachments || (state.crDraft.attachments = [])).push({ label: '', url: '' }); render(); }
+function crRemoveAttachment(i){ if (!state.crDraft) return; state.crDraft.attachments.splice(i, 1); render(); }
+function crSetAttachment(i, field, val){ if (state.crDraft && state.crDraft.attachments[i]) state.crDraft.attachments[i][field] = val; }
+
+function crSave(){
+  const d = state.crDraft; if (!d) return;
+  if (!d.brand || !d.location || !(d.request || '').trim()){ alert('Please fill in Brand, Location, and the Content Request name.'); return; }
+  if (!d.dueDate){ alert('Please pick a Due Date.'); return; }
+  const id = d._id || ('cr_' + Date.now());
+  const atts = (d.attachments || []).filter(a => (a.url || '').trim() || (a.label || '').trim()).map(a => ({ label: (a.label || '').trim(), url: (a.url || '').trim() }));
+  const rec = {
+    brand: d.brand, location: d.location, request: d.request.trim(),
+    title: d.brand + ' - ' + d.location + ' - ' + d.request.trim(),
+    dueDate: d.dueDate, description: (d.description || '').trim(), format: d.format,
+    channels: d.channels || {}, priority: d.priority || '', attachments: atts,
+    status: d.status || 'todo', createdBy: (d.createdBy || '').trim().toUpperCase(),
+    createdAt: d.createdAt || Date.now(), updatedAt: Date.now()
+  };
+  fbSet('contentRequests/' + id, rec);
+  state.crDraft = null;
+  render();
+}
+function crDelete(){
+  const d = state.crDraft; if (!d || !d._id) return;
+  if (!confirm('Delete this content request? This cannot be undone.')) return;
+  fbSet('contentRequests/' + d._id, null);
+  state.crDraft = null;
+  render();
+}
+
+function renderCrModal(){
+  const d = state.crDraft;
+  const editing = !!d._id;
+  const fieldLbl = 'font-size:11px;font-weight:800;color:#0f3460;text-transform:uppercase;letter-spacing:.4px;margin:0 0 5px;display:block;';
+  const inputCss = 'width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #dde1ec;border-radius:9px;font-size:13px;outline:none;font-family:inherit;';
+  let h = '<div onclick="crCloseModal()" style="position:fixed;inset:0;background:rgba(15,20,35,.55);z-index:1000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:28px 14px;">';
+  h += '<div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px;max-width:560px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3);">';
+  // header
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #eef0f6;position:sticky;top:0;background:#fff;border-radius:16px 16px 0 0;">';
+  h += '<div style="font-size:16px;font-weight:800;color:#1a1a2e;">' + (editing ? '✏️ Edit Content Request' : '➕ New Content Request') + '</div>';
+  h += '<button onclick="crCloseModal()" style="background:#f1f3f9;border:none;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:16px;color:#666;line-height:1;">×</button>';
+  h += '</div>';
+  h += '<div style="padding:20px 22px;">';
+  // Title builder
+  h += '<label style="' + fieldLbl + '">Title <span style="color:#dc2626;">*</span></label>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">';
+  h += '<select onchange="crSetRender(\'brand\',this.value)" style="' + inputCss + 'flex:1;min-width:120px;background:#fff;">' + CR_BRANDS.map(b => '<option' + (d.brand === b ? ' selected' : '') + '>' + b + '</option>').join('') + '</select>';
+  const locs = CR_LOCATIONS[d.brand] || [];
+  h += '<select onchange="crSetRender(\'location\',this.value)" style="' + inputCss + 'flex:1;min-width:120px;background:#fff;"><option value="">Location…</option>' + locs.map(l => '<option' + (d.location === l ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>';
+  h += '</div>';
+  h += '<input oninput="crSet(\'request\',this.value)" value="' + esc(d.request || '') + '" placeholder="Content request — e.g. Student Spotlight: John Belt Promotion" style="' + inputCss + 'margin-bottom:5px;">';
+  h += '<div style="font-size:11px;color:#999;margin-bottom:16px;">Saves as: <span style="font-family:monospace;color:#0f3460;font-weight:700;">' + esc((d.brand || '[Brand]') + ' - ' + (d.location || '[Location]') + ' - ' + (d.request || '[Content Request]')) + '</span></div>';
+  // Due date + priority
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+  h += '<div style="flex:1;min-width:150px;"><label style="' + fieldLbl + '">📅 Due Date <span style="color:#dc2626;">*</span></label><input type="date" oninput="crSet(\'dueDate\',this.value)" value="' + esc(d.dueDate || '') + '" style="' + inputCss + '"></div>';
+  h += '<div style="flex:1;min-width:150px;"><label style="' + fieldLbl + '">Priority</label><select onchange="crSet(\'priority\',this.value)" style="' + inputCss + 'background:#fff;"><option value="">None</option>' + CR_PRIORITIES.map(p => '<option' + (d.priority === p.id ? ' selected' : '') + '>' + p.id + '</option>').join('') + '</select></div>';
+  h += '</div>';
+  // Description
+  h += '<label style="' + fieldLbl + '">Description</label>';
+  h += '<textarea oninput="crSet(\'description\',this.value)" placeholder="What the content is about, key details to highlight, the objective, important context, and any CTA or caption ideas." style="' + inputCss + 'min-height:90px;resize:vertical;margin-bottom:16px;line-height:1.5;">' + esc(d.description || '') + '</textarea>';
+  // Format
+  h += '<label style="' + fieldLbl + '">Content Format</label>';
+  h += '<select onchange="crSet(\'format\',this.value)" style="' + inputCss + 'background:#fff;margin-bottom:16px;">' + CR_FORMATS.map(f => '<option' + (d.format === f ? ' selected' : '') + '>' + f + '</option>').join('') + '</select>';
+  // Channels
+  h += '<label style="' + fieldLbl + '">Distribution Channel</label>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;">';
+  CR_CHANNELS.forEach(ch => {
+    const on = !!(d.channels && d.channels[ch.id]);
+    h += '<button onclick="crToggleChannel(\'' + ch.id + '\')" style="padding:6px 12px;border-radius:18px;border:1px solid ' + (on ? '#1a1a2e' : '#dde1ec') + ';background:' + (on ? '#1a1a2e' : '#fff') + ';color:' + (on ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (on ? '✓ ' : '') + ch.label + '</button>';
+  });
+  h += '</div>';
+  // Attachments
+  h += '<label style="' + fieldLbl + '">Attachments / Media</label>';
+  h += '<div style="font-size:11px;color:#999;margin:-2px 0 8px;">Paste links to photos, videos, testimonials, or flyers (e.g. the shared Drive folder for this request).</div>';
+  (d.attachments || []).forEach((a, i) => {
+    h += '<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">';
+    h += '<input oninput="crSetAttachment(' + i + ',\'label\',this.value)" value="' + esc(a.label || '') + '" placeholder="Label" style="' + inputCss + 'flex:0 0 120px;">';
+    h += '<input oninput="crSetAttachment(' + i + ',\'url\',this.value)" value="' + esc(a.url || '') + '" placeholder="https://…" style="' + inputCss + 'flex:1;">';
+    h += '<button onclick="crRemoveAttachment(' + i + ')" style="flex-shrink:0;background:#fef2f2;border:none;width:32px;height:32px;border-radius:8px;cursor:pointer;color:#dc2626;font-size:15px;line-height:1;">×</button>';
+    h += '</div>';
+  });
+  h += '<button onclick="crAddAttachment()" style="background:#f1f3f9;border:none;border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700;color:#0f3460;cursor:pointer;margin-bottom:16px;">+ Add link</button>';
+  // Submitted by + status
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px;">';
+  h += '<div style="flex:1;min-width:120px;"><label style="' + fieldLbl + '">Submitted by (initials)</label><input oninput="crSet(\'createdBy\',this.value)" value="' + esc(d.createdBy || '') + '" placeholder="e.g. LV" maxlength="4" style="' + inputCss + 'text-transform:uppercase;"></div>';
+  if (editing) h += '<div style="flex:1;min-width:120px;"><label style="' + fieldLbl + '">Status</label><select onchange="crSet(\'status\',this.value)" style="' + inputCss + 'background:#fff;">' + CR_STATUSES.map(s => '<option value="' + s.id + '"' + ((d.status || 'todo') === s.id ? ' selected' : '') + '>' + s.emoji + ' ' + s.label + '</option>').join('') + '</select></div>';
+  h += '</div>';
+  h += '</div>';
+  // footer
+  h += '<div style="display:flex;align-items:center;gap:10px;padding:16px 22px;border-top:1px solid #eef0f6;position:sticky;bottom:0;background:#fff;border-radius:0 0 16px 16px;">';
+  if (editing) h += '<button onclick="crDelete()" style="background:#fff;border:1px solid #f3c6c6;color:#dc2626;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;">Delete</button>';
+  h += '<button onclick="crCloseModal()" style="margin-left:auto;background:#f1f3f9;border:none;color:#555;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>';
+  h += '<button onclick="crSave()" style="background:#1a1a2e;border:none;color:#fff;border-radius:9px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;">' + (editing ? 'Save Changes' : 'Create Request') + '</button>';
+  h += '</div>';
+  h += '</div></div>';
+  return h;
 }
 
 function render() {
