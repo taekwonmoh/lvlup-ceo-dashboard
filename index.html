@@ -839,6 +839,8 @@ let state = {
   weekOffset: 0,
   scMonthOffset: 0,
   scorecard: { weekly: {}, monthly: {}, goals: {} },
+  scWeekly: {},   // weekly instructor scorecard: scWeekly[loc][YYYY-MM-DD Sunday][metricId]
+  scGoals: {},    // monthly goals:               scGoals[loc][YYYY-MM][metricId]
   rocks: { company: [], individual: {} },
   events: [],
   goals: {},
@@ -1773,10 +1775,18 @@ function listenAll() {
   scGoalsRef.on('value', snap => { state.scorecard.goals = snap.val() || {}; render(); });
   activeListeners.push({ ref: scGoalsRef, event: 'value' });
 
-  // Nightly instructor scorecard (daily counts)
+  // Nightly instructor scorecard (daily counts) — legacy, kept for back-compat
   const scDailyRef = fbRef('scorecardDaily');
   scDailyRef.on('value', snap => { state.scorecardDaily = snap.val() || {}; render(); });
   activeListeners.push({ ref: scDailyRef, event: 'value' });
+
+  // Weekly instructor scorecard (one row per Sunday) + monthly goals
+  const scWeeklyRef = fbRef('scWeekly');
+  scWeeklyRef.on('value', snap => { state.scWeekly = snap.val() || {}; render(); });
+  activeListeners.push({ ref: scWeeklyRef, event: 'value' });
+  const scGoalsMonthRef = fbRef('scGoals');
+  scGoalsMonthRef.on('value', snap => { state.scGoals = snap.val() || {}; render(); });
+  activeListeners.push({ ref: scGoalsMonthRef, event: 'value' });
 
   // Trial pipeline (first-day trials awaiting enrollment follow-up)
   const trialRef = fbRef('trialPipeline');
@@ -3190,10 +3200,10 @@ function renderLeadAccountability(){
   const monthWeeks = getMonthWeekKeys(md.getFullYear(), md.getMonth() + 1);
   let h = '';
   LEAD_STAFF.forEach(st => {
-    // Performance pulls live from the Ops nightly instructor tracker (scorecardDaily)
-    const tdata = ((state.scorecardDaily[st.loc] || {})[mk]) || {};
-    let trials = 0, enroll = 0, cancel = 0;
-    Object.values(tdata).forEach(d => { trials += parseFloat(d.firstDayTrials) || 0; enroll += (parseFloat(d.dayOneEnroll) || 0) + (parseFloat(d.laterEnroll) || 0); cancel += parseFloat(d.attrition) || 0; });
+    // Performance pulls live from the Ops weekly instructor scorecard (scWeekly)
+    const trials = scWeeklySum(st.loc, mk, 'firstDayTrials');
+    const enroll = scWeeklySum(st.loc, mk, 'dayOneEnroll') + scWeeklySum(st.loc, mk, 'laterEnroll');
+    const cancel = scWeeklySum(st.loc, mk, 'attrition');
     const trialShown = trials;
     const conv = trials > 0 ? Math.round(enroll / trials * 100) : null;
     const net = enroll - cancel;
@@ -3222,7 +3232,7 @@ function renderLeadAccountability(){
     h += '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;flex-wrap:wrap;">';
     h += '<span style="font-size:12px;font-weight:700;color:#555;">Recommendation:</span>';
     h += '<select onchange="leadUpdatePerf(\'' + st.empId + '\',\'recommendation\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:7px;font-size:12px;font-weight:700;">' + ['TBD', 'For Coaching', 'Review Required'].map(o => '<option' + (rec === o ? ' selected' : '') + '>' + o + '</option>').join('') + '</select>';
-    h += '<span style="font-size:11px;color:#aaa;">Performance pulls live from the Ops nightly scorecard + task sign-offs.</span>';
+    h += '<span style="font-size:11px;color:#aaa;">Performance pulls live from the Ops weekly scorecard + task sign-offs.</span>';
     h += '</div>';
     h += '<div style="padding:0 16px 14px;">';
     if (!hasHb) {
@@ -3477,13 +3487,10 @@ function renderScorecardPage() {
   const pickLvlup = scLoc === 'all' ? lvlupLocs : lvlupLocs.filter(l => l.id === scLoc);
 
   let html = subNav;
-  html += renderScBoardNote('🥋', 'Instructor', 'Owned by Instructors — logged nightly at EOS', '#e94560');
+  html += renderScBoardNote('🥋', 'Instructor', 'Owned by Instructors — entered weekly (by Sunday) before Monday\'s meeting', '#e94560');
   html += renderScLocSelector();
-  if (scLoc !== 'all') html += '<button onclick="scWizardStart()" style="width:100%;padding:13px;background:#4169E1;color:#fff;border:none;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:14px;box-shadow:0 2px 8px rgba(65,105,225,.3);">⚡ Tonight\'s Numbers (EOS check-in)</button>';
   html += renderScdMonthNav();
-  (scLoc === 'all' ? lvlupLocs : pickLvlup).forEach(l => html += renderOpenTrials(l.id) + renderInstructorDaily(l.id));
-  html += renderScWizard();
-  html += renderEnrollModal();
+  (scLoc === 'all' ? lvlupLocs : pickLvlup).forEach(l => html += renderOpenTrials(l.id) + renderWeeklyScorecard(l.id));
   return html;
 }
 
@@ -3495,6 +3502,90 @@ function renderScLocSelector(){
   return h + '</div>';
 }
 function setScLoc(l){ state.scLoc = l; render(); }
+
+/* ── Weekly instructor scorecard (one row per Sunday, monthly goal + auto total) ── */
+const SC_WEEKLY_COLS = [
+  { id:'firstDayTrials', short:'First-Day Trials', agg:'sum' },
+  { id:'dayOneEnroll',   short:'Day-One Enroll',   agg:'sum' },
+  { id:'laterEnroll',    short:'Later Enroll',      agg:'sum' },
+  { id:'upgrades',       short:'Upgrades',          agg:'sum' },
+  { id:'attrition',      short:'Cancellations',     agg:'sum' },
+  { id:'revenue',        short:'Revenue',           agg:'sum',    currency:true },
+  { id:'totalMembers',   short:'Total Members',     agg:'latest' },
+];
+function scSundayKey(dt){ return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
+function scMonthSundays(){
+  const d = scdMonthDate(); const y = d.getFullYear(), m = d.getMonth();
+  const days = new Date(y, m + 1, 0).getDate();
+  const out = [];
+  for (let day = 1; day <= days; day++){ const dt = new Date(y, m, day); if (dt.getDay() === 0) out.push(dt); }
+  return out;
+}
+function scWeeklyUpdate(loc, sundayKey, metricId, value){ fbDebounce('scWeekly/' + loc + '/' + sundayKey + '/' + metricId, value === '' ? null : value); }
+function scGoalUpdate(loc, metricId, value){ fbDebounce('scGoals/' + loc + '/' + scdMonthKey() + '/' + metricId, value === '' ? null : value); }
+function scWeeklySum(loc, monthKey, metricId){
+  const locData = (state.scWeekly || {})[loc] || {}; let s = 0;
+  Object.keys(locData).forEach(k => { if (k.slice(0, 7) === monthKey) s += parseFloat((locData[k] || {})[metricId]) || 0; });
+  return s;
+}
+function scWeeklyLatest(loc, monthKey, metricId){
+  const locData = (state.scWeekly || {})[loc] || {};
+  const keys = Object.keys(locData).filter(k => k.slice(0, 7) === monthKey && (locData[k] || {})[metricId] != null && locData[k][metricId] !== '').sort();
+  return keys.length ? locData[keys[keys.length - 1]][metricId] : '';
+}
+function renderWeeklyScorecard(loc){
+  const meta = LOCATIONS.find(l => l.id === loc) || { name: loc, color: '#1a1a2e' };
+  const mk = scdMonthKey();
+  const cols = SC_WEEKLY_COLS;
+  const sundays = scMonthSundays();
+  const wk = (state.scWeekly || {})[loc] || {};
+  const goals = ((state.scGoals || {})[loc] || {})[mk] || {};
+  const monthName = scdMonthDate().toLocaleDateString('en-US', { month: 'long' });
+
+  // highlight the most recent Sunday on/before today (within this month)
+  const today = new Date(); today.setHours(0,0,0,0);
+  let curKey = '';
+  sundays.forEach(dt => { if (dt <= today) curKey = scSundayKey(dt); });
+
+  const inStyle   = 'width:64px;text-align:center;border:1px solid #eee;border-radius:5px;padding:5px;font-size:13px;';
+  const goalStyle = 'width:64px;text-align:center;border:1px solid #d8def0;border-radius:5px;padding:5px;font-size:13px;background:#f8faff;color:#0f3460;font-weight:600;';
+
+  let h = '<div style="overflow-x:auto;margin-bottom:22px;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">';
+  h += '<thead><tr><th colspan="' + (cols.length + 2) + '" style="padding:12px;font-size:16px;font-weight:800;text-align:center;letter-spacing:1px;background:' + meta.color + ';color:#fff;">' + esc(meta.name).toUpperCase() + '</th></tr>';
+  h += '<tr style="background:#f5f7ff;">' + ['Week (Sun)'].concat(cols.map(c => c.short)).concat(['Notes']).map((x, i) => '<th style="padding:8px;font-size:10px;color:#0f3460;text-transform:uppercase;letter-spacing:.3px;text-align:' + (i === 0 ? 'left' : 'center') + ';white-space:nowrap;">' + x + '</th>').join('') + '</tr></thead><tbody>';
+
+  // Monthly Goal row (manual, top)
+  h += '<tr style="background:#eef2ff;font-weight:700;"><td style="padding:7px 10px;color:#0f3460;white-space:nowrap;">🎯 Monthly Goal</td>';
+  cols.forEach(c => { const v = goals[c.id];
+    h += '<td style="padding:3px;text-align:center;"><input type="number" inputmode="' + (c.currency ? 'decimal' : 'numeric') + '" value="' + (v != null && v !== '' ? esc(String(v)) : '') + '" onchange="scGoalUpdate(\'' + loc + '\',\'' + c.id + '\',this.value)" style="' + goalStyle + '"></td>'; });
+  h += '<td></td></tr>';
+
+  // Monthly Total row (auto)
+  h += '<tr style="background:' + meta.color + '22;font-weight:800;"><td style="padding:9px 10px;color:#0f3460;white-space:nowrap;">Σ Monthly Total</td>';
+  cols.forEach(c => {
+    let val;
+    if (c.agg === 'latest'){ const lv = scWeeklyLatest(loc, mk, c.id); val = (lv === '' || lv == null) ? '—' : (c.currency ? fmtCurrency(parseFloat(lv) || 0) : lv); }
+    else { const s = scWeeklySum(loc, mk, c.id); val = s ? (c.currency ? fmtCurrency(s) : s) : '—'; }
+    h += '<td style="text-align:center;padding:9px;color:#0f3460;">' + val + '</td>';
+  });
+  h += '<td></td></tr>';
+
+  // Weekly rows (one per Sunday)
+  if (!sundays.length){ h += '<tr><td colspan="' + (cols.length + 2) + '" style="padding:12px;text-align:center;color:#aaa;">No Sundays in this month.</td></tr>'; }
+  sundays.forEach(dt => {
+    const key = scSundayKey(dt);
+    const row = wk[key] || {};
+    const isCur = key === curKey;
+    h += '<tr style="border-top:1px solid #f5f5f5;' + (isCur ? 'background:#eff6ff;' : '') + '">';
+    h += '<td style="padding:5px 10px;font-weight:600;color:#444;white-space:nowrap;">' + monthName + ' ' + dt.getDate() + (isCur ? ' <span style="color:#4169E1;">•</span>' : '') + '</td>';
+    cols.forEach(c => { const v = row[c.id];
+      h += '<td style="padding:3px;text-align:center;"><input type="number" inputmode="' + (c.currency ? 'decimal' : 'numeric') + '" value="' + (v != null && v !== '' ? esc(String(v)) : '') + '" onchange="scWeeklyUpdate(\'' + loc + '\',\'' + key + '\',\'' + c.id + '\',this.value)" style="' + inStyle + '"></td>'; });
+    h += '<td style="padding:3px;"><input value="' + esc(row.notes || '') + '" onchange="scWeeklyUpdate(\'' + loc + '\',\'' + key + '\',\'notes\',this.value)" style="width:100%;min-width:110px;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;box-sizing:border-box;"></td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
 
 /* ── Nightly instructor scorecard — daily counts logged at EOS ── */
 const INSTRUCTOR_DAILY_COLS = [
@@ -3576,7 +3667,7 @@ function renderScdMonthNav(){
     '<span style="font-weight:700;font-size:15px;color:var(--primary);">' + monthLabel + '</span>' +
     '<button onclick="changeScdMonth(1)" style="padding:7px 16px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">Next Month &rarr;</button>' +
     '</div>' +
-    '<div style="text-align:center;font-size:11px;color:var(--gray-400);margin-bottom:14px;">🌙 Log your numbers each night at EOS · totals roll up by week &amp; month</div>';
+    '<div style="text-align:center;font-size:11px;color:var(--gray-400);margin-bottom:14px;">🗓️ Enter each week\'s numbers (by Sunday) before Monday\'s meeting · monthly total auto-calculates</div>';
 }
 
 function renderInstructorDaily(loc){
