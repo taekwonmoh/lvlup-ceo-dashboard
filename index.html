@@ -2181,9 +2181,10 @@ function renderOpsPage() {
     { id: 'scorecard', label: '📊 Scorecard' },
     { id: 'events',    label: '📅 Events'    },
   ]);
-  if (s === 'scorecard') return nav + renderScorecardPage();
-  if (s === 'events')    return nav + renderEventsPage();
-  return nav + renderTasksPage();
+  const pulse = renderPulseBar();
+  if (s === 'scorecard') return pulse + nav + renderScorecardPage();
+  if (s === 'events')    return pulse + nav + renderEventsPage();
+  return pulse + nav + renderTasksPage();
 }
 
 function renderMembersPage() {
@@ -2585,10 +2586,6 @@ function renderPulseBar() {
   const eventsArr = Array.isArray(state.events) ? state.events : Object.values(state.events || {});
   const eventsThisWeek = eventsArr.filter(e => { if (!e || !e.date) return false; const d = new Date(e.date + 'T00:00:00'); return d >= today && d <= weekEnd; }).length;
 
-  // ── Off-track rocks ──
-  const companyRocks = (state.rocks && state.rocks.company) || [];
-  const offTrackRocks = companyRocks.filter(r => r && r.status === 'off-track').length;
-
   // ── Today's tasks across all employees ──
   const todayKey = new Date().toISOString().split('T')[0];
   const thisWeekKey = getTaskWeekKey(todayKey);
@@ -2610,9 +2607,6 @@ function renderPulseBar() {
   bar += chip(eventsThisWeek > 0 ? '#eff6ff' : '#f9fafb', eventsThisWeek > 0 ? '#93c5fd' : '#e5e7eb',
     eventsThisWeek > 0 ? eventsThisWeek + ' Event' + (eventsThisWeek !== 1 ? 's' : '') + ' This Week' : 'No Events This Week',
     '📅', 'events');
-  bar += chip(offTrackRocks > 0 ? '#fffbeb' : '#f9fafb', offTrackRocks > 0 ? '#fde68a' : '#e5e7eb',
-    offTrackRocks > 0 ? offTrackRocks + ' Rock' + (offTrackRocks !== 1 ? 's' : '') + ' Off Track' : 'All Rocks On Track',
-    '🪨', 'leadership');
   bar += chip(tasksTotal > 0 && tasksDone === tasksTotal ? '#f0fdf4' : '#f9fafb',
     tasksTotal > 0 && tasksDone === tasksTotal ? '#86efac' : '#e5e7eb',
     'Tasks: ' + tasksDone + ' / ' + tasksTotal + ' Today',
@@ -2625,7 +2619,7 @@ function renderHomePage() {
   const cycle = getCurrentCycleInfo();
   const events = state.events || [];
 
-  let html = renderPulseBar();
+  let html = '';
 
   // Core Values strip — hidden while quiz is active
   const quizActive = state._cvQuiz && !state._cvQuiz.complete && state._cvQuiz.current >= 0;
