@@ -3424,6 +3424,18 @@ function addOpenTrial(loc, name, date){
   if (existing.some(t => t && (t.status === 'open' || !t.status) && trialNorm(t.name) === trialNorm(nm))) return;
   fbSet('trialPipeline/' + loc + '/trial_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), { name: nm, date, status: 'open' });
 }
+function addTrialPrompt(loc){
+  const locName = (LOCATIONS.find(l => l.id === loc) || {}).name || loc;
+  const name = prompt('New trial at ' + locName + ' — student name:');
+  if (name === null) return;
+  const nm = name.trim(); if (!nm) return;
+  const todayStr = new Date().toISOString().split('T')[0];
+  let date = prompt('Trial date (YYYY-MM-DD):', todayStr);
+  if (date === null) return;
+  date = (date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = todayStr;   // fall back to today on blank/invalid
+  addOpenTrial(loc, nm, date);
+}
 function closeTrialIfMatch(loc, name){
   // A new enrollee with a matching name closes their open trial automatically
   Object.entries((state.trialPipeline || {})[loc] || {}).forEach(([k, t]) => {
@@ -3454,12 +3466,15 @@ function renderOpenTrials(loc){
     .map(([k, v]) => ({ key: k, ...v }))
     .filter(t => t.status === 'open' || !t.status)
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-  if (!open.length) return '';
   const locName = (LOCATIONS.find(l => l.id === loc) || {}).name || loc;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   let h = '<div style="background:#fff;border:1px solid #e8eaf0;border-left:4px solid #f59e0b;border-radius:12px;box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px;">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">';
   h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;">📋 Open Trials — follow up (' + open.length + ')' + '<span style="font-weight:400;font-size:11px;color:#aaa;"> · ' + esc(locName) + '</span></div>';
+  h += '<button onclick="addTrialPrompt(\'' + loc + '\')" style="padding:6px 12px;background:#f59e0b;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">+ Add Trial</button>';
+  h += '</div>';
   h += '<div style="font-size:12px;color:#888;margin:2px 0 10px;">Tried a class but haven\'t enrolled yet. Call or text the family, then mark the outcome.</div>';
+  if (!open.length) h += '<div style="font-size:12px;color:#bbb;padding:6px 0;">No open trials right now.</div>';
   open.forEach(t => {
     const d = t.date ? new Date(t.date + 'T00:00:00') : null;
     const days = d ? Math.max(0, Math.floor((today - d) / 86400000)) : null;
