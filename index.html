@@ -3518,9 +3518,9 @@ const SC_WEEKLY_COLS = [
   { id:'dayOneEnroll',   short:'Day-One Enroll',   agg:'sum' },
   { id:'laterEnroll',    short:'Later Enroll',      agg:'sum' },
   { id:'upgrades',       short:'Upgrades',          agg:'sum' },
-  { id:'attrition',      short:'Cancellations',     agg:'sum' },
-  { id:'revenue',        short:'Revenue',           agg:'sum',    currency:true },
-  { id:'totalMembers',   short:'Total Members',     agg:'latest' },
+  { id:'attrition',      short:'Upcoming Cancellations', agg:'sum' },
+  { id:'revenue',        short:'Revenue',           agg:'latest', currency:true, note:'running total (MTD)' },
+  { id:'totalMembers',   short:'Total Members',     agg:'latest', note:'running total (MTD)' },
 ];
 function scSundayKey(dt){ return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
 function scMonthSundays(){
@@ -3561,7 +3561,14 @@ function renderWeeklyScorecard(loc){
 
   let h = '<div style="overflow-x:auto;margin-bottom:22px;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">';
   h += '<thead><tr><th colspan="' + (cols.length + 2) + '" style="padding:12px;font-size:16px;font-weight:800;text-align:center;letter-spacing:1px;background:' + meta.color + ';color:#fff;">' + esc(meta.name).toUpperCase() + '</th></tr>';
-  h += '<tr style="background:#f5f7ff;">' + ['Week (Sun)'].concat(cols.map(c => c.short)).concat(['Notes']).map((x, i) => '<th style="padding:8px;font-size:10px;color:#0f3460;text-transform:uppercase;letter-spacing:.3px;text-align:' + (i === 0 ? 'left' : 'center') + ';white-space:nowrap;">' + x + '</th>').join('') + '</tr></thead><tbody>';
+  const thBase = 'padding:8px;font-size:10px;color:#0f3460;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;';
+  let headCells = '<th style="' + thBase + 'text-align:left;">Week (Sun)</th>';
+  cols.forEach(c => {
+    headCells += '<th style="' + thBase + 'text-align:center;">' + c.short +
+      (c.note ? '<div style="font-size:8px;font-weight:700;color:#4169E1;text-transform:none;letter-spacing:0;margin-top:2px;">↻ ' + c.note + '</div>' : '') + '</th>';
+  });
+  headCells += '<th style="' + thBase + 'text-align:center;">Notes</th>';
+  h += '<tr style="background:#f5f7ff;">' + headCells + '</tr></thead><tbody>';
 
   // Monthly Goal row (manual, top)
   h += '<tr style="background:#eef2ff;font-weight:700;"><td style="padding:7px 10px;color:#0f3460;white-space:nowrap;">🎯 Monthly Goal</td>';
