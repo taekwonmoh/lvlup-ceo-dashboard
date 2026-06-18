@@ -841,6 +841,7 @@ let state = {
   scorecard: { weekly: {}, monthly: {}, goals: {} },
   scWeekly: {},   // weekly instructor scorecard: scWeekly[loc][YYYY-MM-DD Sunday][metricId]
   scGoals: {},    // monthly goals:               scGoals[loc][YYYY-MM][metricId]
+  cancellations: {}, // cancellation save list:    cancellations[loc][key] = {name,date,reason,notes}
   rocks: { company: [], individual: {} },
   events: [],
   goals: {},
@@ -1787,6 +1788,11 @@ function listenAll() {
   const scGoalsMonthRef = fbRef('scGoals');
   scGoalsMonthRef.on('value', snap => { state.scGoals = snap.val() || {}; render(); });
   activeListeners.push({ ref: scGoalsMonthRef, event: 'value' });
+
+  // Cancellation save list (per school)
+  const cancelRef = fbRef('cancellations');
+  cancelRef.on('value', snap => { state.cancellations = snap.val() || {}; render(); });
+  activeListeners.push({ ref: cancelRef, event: 'value' });
 
   // Trial pipeline (first-day trials awaiting enrollment follow-up)
   const trialRef = fbRef('trialPipeline');
@@ -3518,7 +3524,7 @@ function renderScorecardPage() {
   html += renderScBoardNote('🥋', 'Instructor', 'Owned by Instructors — entered weekly (by Sunday) before Monday\'s meeting', '#e94560');
   html += renderScLocSelector();
   html += renderScdMonthNav();
-  pickLvlup.forEach(l => html += renderOpenTrials(l.id) + renderWeeklyScorecard(l.id));
+  pickLvlup.forEach(l => html += renderOpenTrials(l.id) + renderWeeklyScorecard(l.id) + renderCancellationDetails(l.id));
   return html;
 }
 
@@ -3638,6 +3644,37 @@ const GONINJA_COLS = [
   { id:'gnAfterPct',  short:'After School % Filled',  agg:'latest', pct:true,      note:'running total (MTD)', waunakeeOnly:true },
   { id:'gnRevenue',   short:'Revenue',                agg:'latest', currency:true, note:'running total (MTD)' },
 ];
+/* ── Cancellation Details — save list for quitting students (per school) ── */
+function cancelAdd(loc){ fbSet('cancellations/' + loc + '/c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), { name:'', date:'', reason:'', notes:'' }); }
+function cancelUpdate(loc, key, field, value){ fbDebounce('cancellations/' + loc + '/' + key + '/' + field, value === '' ? null : value); }
+function cancelRemove(loc, key){ if (!confirm('Remove this cancellation entry?')) return; fbSet('cancellations/' + loc + '/' + key, null); }
+function renderCancellationDetails(loc){
+  const meta = LOCATIONS.find(l => l.id === loc) || { name: loc, color: '#1a1a2e' };
+  const rows = Object.entries((state.cancellations || {})[loc] || {})
+    .map(([k, v]) => ({ key: k, ...(v || {}) }))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));   // most recent first
+  const inCss = 'width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;box-sizing:border-box;';
+  let h = '<div class="section" style="margin-bottom:22px;">';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📞 Cancellation Details — ' + esc(meta.name) + '</h2><span style="font-size:11px;color:var(--gray-400);font-weight:600;">Save list — work to keep these students</span></div>';
+  h += '<div style="overflow-x:auto;"><table class="sc-table" style="width:100%;"><thead><tr>';
+  h += '<th style="text-align:left;">Student Name</th><th style="text-align:center;width:140px;">Cancellation Date</th><th style="text-align:left;width:22%;">Reason</th><th style="text-align:left;">Notes for Next Steps</th><th style="width:36px;"></th>';
+  h += '</tr></thead><tbody>';
+  if (!rows.length){ h += '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--gray-400);font-size:13px;">No cancellations logged. Add one when a student gives notice.</td></tr>'; }
+  rows.forEach(r => {
+    h += '<tr>';
+    h += '<td><input value="' + esc(r.name || '') + '" placeholder="Student name..." onchange="cancelUpdate(\'' + loc + '\',\'' + r.key + '\',\'name\',this.value)" style="' + inCss + '" /></td>';
+    h += '<td><input type="date" value="' + esc(r.date || '') + '" onchange="cancelUpdate(\'' + loc + '\',\'' + r.key + '\',\'date\',this.value)" style="' + inCss + '" /></td>';
+    h += '<td><input value="' + esc(r.reason || '') + '" placeholder="Reason for leaving..." onchange="cancelUpdate(\'' + loc + '\',\'' + r.key + '\',\'reason\',this.value)" style="' + inCss + '" /></td>';
+    h += '<td><input value="' + esc(r.notes || '') + '" placeholder="Next steps to save them..." onchange="cancelUpdate(\'' + loc + '\',\'' + r.key + '\',\'notes\',this.value)" style="' + inCss + '" /></td>';
+    h += '<td style="text-align:center;"><button onclick="cancelRemove(\'' + loc + '\',\'' + r.key + '\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;" title="Remove">&times;</button></td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<button class="l10-add-btn" onclick="cancelAdd(\'' + loc + '\')">+ Add Cancellation</button>';
+  h += '</div>';
+  return h;
+}
+
 /* ── Nightly instructor scorecard — daily counts logged at EOS ── */
 const INSTRUCTOR_DAILY_COLS = [
   { id:'firstDayTrials', label:'First-Day Trial Students', short:'First-Day Trials', hint:'Students who came in for their first trial class today.', captureTrials:true },
