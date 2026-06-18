@@ -2623,7 +2623,6 @@ function renderPulseBar() {
 
 function renderHomePage() {
   const cycle = getCurrentCycleInfo();
-  const quote = getMotivationalQuote();
   const events = state.events || [];
 
   let html = renderPulseBar();
@@ -2638,54 +2637,6 @@ function renderHomePage() {
     html += '<div class="cv-desc">' + v.desc + '</div>';
     html += '</div>';
   });
-  html += '</div>';
-
-  // Core Values quiz
-  const quiz = state._cvQuiz;
-  html += '<div class="cv-quiz-wrap">';
-  if (!quiz || quiz.complete === undefined) {
-    html += '<div style="display:flex;justify-content:space-between;align-items:center">';
-    html += '<div style="font-size:13px;font-weight:700;color:var(--primary)">🧠 Core Values Quiz</div>';
-    html += '<button onclick="startCVQuiz()" style="padding:7px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Test Yourself</button>';
-    html += '</div>';
-  } else if (quiz.complete) {
-    html += '<div class="cv-quiz-complete">';
-    html += '<div class="cv-quiz-score">' + quiz.score + ' / 5</div>';
-    html += '<div class="cv-quiz-score-label">' + (quiz.score === 5 ? '🏆 Perfect! You know them cold.' : quiz.score >= 3 ? '💪 Nice work — keep reviewing.' : '📚 Keep studying — you\'ll get there.') + '</div>';
-    html += '<button onclick="startCVQuiz()" style="padding:7px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Try Again</button>';
-    html += '</div>';
-  } else {
-    const q = quiz.order[quiz.current];
-    const answered = quiz.answered;
-    html += '<div class="cv-quiz-header">';
-    html += '<div class="cv-quiz-title">🧠 Which core value is this?</div>';
-    html += '<div class="cv-quiz-progress">Question ' + (quiz.current + 1) + ' of 5</div>';
-    html += '</div>';
-    html += '<div class="cv-quiz-def">' + esc(CORE_VALUES[q].desc) + '</div>';
-    html += '<div class="cv-quiz-choices">';
-    CORE_VALUES.forEach((v, i) => {
-      let cls = '';
-      if (answered !== null && answered !== undefined) {
-        if (i === q) cls = ' reveal';
-        else if (i === answered) cls = ' wrong';
-      }
-      const disabled = (answered !== null && answered !== undefined) ? 'disabled' : '';
-      html += '<button class="cv-choice-btn' + cls + '" ' + disabled + ' onclick="answerCVQuiz(' + i + ')">' + v.name + '</button>';
-    });
-    html += '</div>';
-    if (answered !== null && answered !== undefined) {
-      const correct = answered === q;
-      html += '<div class="cv-quiz-feedback" style="color:' + (correct ? '#16a34a' : '#ef4444') + '">' + (correct ? '✓ Correct!' : '✗ Not quite — the answer is ' + CORE_VALUES[q].name + '.') + '</div>';
-      html += '<div class="cv-quiz-next"><button onclick="nextCVQuiz()">Next →</button></div>';
-    }
-  }
-  html += '</div>';
-
-  // Motivational quote
-  html += '<div class="home-motivation">';
-  html += '<div class="quote-mark">\u201C</div>';
-  html += '<div class="quote-text">' + esc(quote.text) + '</div>';
-  html += '<div class="quote-category">' + esc(quote.category) + '</div>';
   html += '</div>';
 
   if (!cycle) {
