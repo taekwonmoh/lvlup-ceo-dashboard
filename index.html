@@ -1955,7 +1955,7 @@ function migrateFeedbackTrackingToAll() {
 function setSection(s) {
   state.activeSection = s;
   // Remember last-visited sub-section per group so tabs restore correctly
-  if (['tasks','scorecard','l10','events','rocks'].includes(s)) state.opsSection   = s;
+  if (['tasks','scorecard','events'].includes(s)) state.opsSection   = s;
   if (['goals','marketing'].includes(s))                     state.growthSection  = s;
   render();
 }
@@ -2180,11 +2180,9 @@ function renderOpsPage() {
     { id: 'tasks',     label: '✅ Tasks'     },
     { id: 'scorecard', label: '📊 Scorecard' },
     { id: 'events',    label: '📅 Events'    },
-    { id: 'rocks',     label: '🪨 Rocks'     },
   ]);
   if (s === 'scorecard') return nav + renderScorecardPage();
   if (s === 'events')    return nav + renderEventsPage();
-  if (s === 'rocks')     return nav + renderRocksPage();
   return nav + renderTasksPage();
 }
 
@@ -2464,6 +2462,8 @@ function render() {
   if (state.activeSection === 'acq') state.activeSection = 'scorecard';
   // L10 became the "Agenda" embedded on the Home page
   if (state.activeSection === 'l10') state.activeSection = 'home';
+  // Rocks moved into the (owner-only) Leadership tab
+  if (state.activeSection === 'rocks') state.activeSection = 'leadership';
   // Scorecard moved to Ops — keep the Growth group's memory off it
   if (state.growthSection === 'scorecard' || state.growthSection === 'acq') state.growthSection = 'goals';
   const s = state.activeSection;
@@ -2471,7 +2471,7 @@ function render() {
   app.innerHTML = renderHeader() +
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
-     ['tasks','scorecard','events','rocks'].includes(s)                       ? renderOpsPage()       :
+     ['tasks','scorecard','events'].includes(s)                               ? renderOpsPage()       :
      ['feedback','watchlist'].includes(s)                                     ? renderMembersPage()   :
      ['goals','marketing'].includes(s)                                        ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
@@ -2485,7 +2485,7 @@ function renderHeader() {
   const cur = state.activeSection;
   const getGroup = s => {
     if (s === 'home') return 'home';
-    if (['tasks','scorecard','events','rocks','performance'].includes(s)) return 'ops';
+    if (['tasks','scorecard','events','performance'].includes(s)) return 'ops';
     if (['feedback','watchlist'].includes(s))                  return 'members';
     if (['goals','marketing','monthlyGoals'].includes(s))      return 'growth';
     if (s === 'development')                                   return 'resources';
@@ -2612,7 +2612,7 @@ function renderPulseBar() {
     '📅', 'events');
   bar += chip(offTrackRocks > 0 ? '#fffbeb' : '#f9fafb', offTrackRocks > 0 ? '#fde68a' : '#e5e7eb',
     offTrackRocks > 0 ? offTrackRocks + ' Rock' + (offTrackRocks !== 1 ? 's' : '') + ' Off Track' : 'All Rocks On Track',
-    '🪨', 'rocks');
+    '🪨', 'leadership');
   bar += chip(tasksTotal > 0 && tasksDone === tasksTotal ? '#f0fdf4' : '#f9fafb',
     tasksTotal > 0 && tasksDone === tasksTotal ? '#86efac' : '#e5e7eb',
     'Tasks: ' + tasksDone + ' / ' + tasksTotal + ' Today',
@@ -3122,6 +3122,11 @@ function renderLeadDashboard(){
   h += '<button onclick="leadChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">›</button>';
   h += '</div>';
   h += renderLeadBackupBar() + renderHbImportBar() + renderLeadAccountability();
+  // Rocks — moved here from Ops (owner-only)
+  h += '<div style="margin-top:28px;border-top:2px solid #e8eaf0;padding-top:20px;">';
+  h += '<h2 style="margin:0 0 14px;font-size:18px;font-weight:800;color:#1a1a2e;">🪨 Rocks</h2>';
+  h += renderRocksPage();
+  h += '</div>';
   h += '</div>';
   h += renderHbImportModal();
   return h;
