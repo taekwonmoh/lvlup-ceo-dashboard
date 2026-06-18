@@ -3499,19 +3499,11 @@ function renderScorecardPage() {
   // Scorecard shows the instructor weekly boards directly — no sub-tabs
   const lvlupLocs   = LOCATIONS.filter(l => LVLUP_LOC_IDS.includes(l.id));
 
+  if (state.scLoc === 'all') state.scLoc = 'waunakee';   // standalone Trials view removed — trials now live on each school tab
   const scLoc = state.scLoc || 'waunakee';
-  const pickLvlup = scLoc === 'all' ? lvlupLocs : lvlupLocs.filter(l => l.id === scLoc);
+  const pickLvlup = lvlupLocs.filter(l => l.id === scLoc);
 
   let html = '';
-  if (scLoc === 'all') {
-    // "Trials" view — open-trial follow-up pipeline across every school, nothing else
-    html += renderScBoardNote('📋', 'Trials', 'Open-trial follow-up pipeline across all schools', '#f59e0b');
-    html += renderScLocSelector();
-    let trialsHtml = '';
-    lvlupLocs.forEach(l => trialsHtml += renderOpenTrials(l.id));
-    html += trialsHtml || '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:24px;text-align:center;color:#aaa;font-size:13px;">No open trials right now across any school. 🎉</div>';
-    return html;
-  }
   if (scLoc === 'goninja') {
     // Go Ninja view — two sections (Waunakee incl. After School, Verona without)
     html += renderScBoardNote('🥷', 'Go Ninja', 'Fill rates & revenue — all figures are month-to-date running totals', '#e94560');
@@ -3530,7 +3522,7 @@ function renderScorecardPage() {
 
 function renderScLocSelector(){
   const cur = state.scLoc || 'waunakee';
-  const opts = [{id:'waunakee',name:'Waunakee'},{id:'eastmad',name:'East Madison'},{id:'verona',name:'Verona'},{id:'all',name:'📋 Trials'},{id:'goninja',name:'🥷 Go Ninja'}];
+  const opts = [{id:'waunakee',name:'Waunakee'},{id:'eastmad',name:'East Madison'},{id:'verona',name:'Verona'},{id:'goninja',name:'🥷 Go Ninja'}];
   let h = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
   opts.forEach(o => { const a = cur === o.id; h += '<button onclick="setScLoc(\'' + o.id + '\')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (a ? '#1a1a2e' : '#f1f3f9') + ';color:' + (a ? '#fff' : '#555') + ';">' + o.name + '</button>'; });
   return h + '</div>';
