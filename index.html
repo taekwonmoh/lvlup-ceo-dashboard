@@ -2179,12 +2179,10 @@ function renderOpsPage() {
   const nav = renderGroupSubNav([
     { id: 'tasks',     label: '✅ Tasks'     },
     { id: 'scorecard', label: '📊 Scorecard' },
-    { id: 'l10',       label: '🤝 L10'       },
     { id: 'events',    label: '📅 Events'    },
     { id: 'rocks',     label: '🪨 Rocks'     },
   ]);
   if (s === 'scorecard') return nav + renderScorecardPage();
-  if (s === 'l10')       return nav + renderL10Page();
   if (s === 'events')    return nav + renderEventsPage();
   if (s === 'rocks')     return nav + renderRocksPage();
   return nav + renderTasksPage();
@@ -2464,6 +2462,8 @@ function render() {
   if (state.activeSection === 'monthlyGoals') { state.goalsTab = 'monthly'; state.activeSection = 'goals'; }
   // Scale (acq) tab hidden for now — send any lingering links/state back to the scorecard
   if (state.activeSection === 'acq') state.activeSection = 'scorecard';
+  // L10 became the "Agenda" embedded on the Home page
+  if (state.activeSection === 'l10') state.activeSection = 'home';
   // Scorecard moved to Ops — keep the Growth group's memory off it
   if (state.growthSection === 'scorecard' || state.growthSection === 'acq') state.growthSection = 'goals';
   const s = state.activeSection;
@@ -2471,7 +2471,7 @@ function render() {
   app.innerHTML = renderHeader() +
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
-     ['tasks','scorecard','l10','events','rocks'].includes(s)                 ? renderOpsPage()       :
+     ['tasks','scorecard','events','rocks'].includes(s)                       ? renderOpsPage()       :
      ['feedback','watchlist'].includes(s)                                     ? renderMembersPage()   :
      ['goals','marketing'].includes(s)                                        ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
@@ -2485,7 +2485,7 @@ function renderHeader() {
   const cur = state.activeSection;
   const getGroup = s => {
     if (s === 'home') return 'home';
-    if (['tasks','scorecard','l10','events','rocks','performance'].includes(s)) return 'ops';
+    if (['tasks','scorecard','events','rocks','performance'].includes(s)) return 'ops';
     if (['feedback','watchlist'].includes(s))                  return 'members';
     if (['goals','marketing','monthlyGoals'].includes(s))      return 'growth';
     if (s === 'development')                                   return 'resources';
@@ -2687,53 +2687,12 @@ function renderHomePage() {
   }
   html += '</div></div>';
 
-  // Events card
-  html += '<div class="home-card">';
-  html += '<div class="home-card-header"><span class="card-icon">\uD83D\uDCC5</span><h3>Upcoming Events</h3></div>';
-  html += '<div class="home-card-body">';
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  const upcoming = (Array.isArray(events) ? events : Object.values(events)).filter(e => {
-    if (!e || !e.date) return false;
-    const d = new Date(e.date + 'T00:00:00');
-    return d >= today;
-  }).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 8);
-
-  if (upcoming.length === 0) {
-    // Show test dates as fallback
-    html += '<div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">Test Dates:</div>';
-    for (let i = 1; i <= 6; i++) {
-      const c = (state.cycles || {})[i];
-      if (!c) continue;
-      const td = new Date(c.testDate + 'T00:00:00');
-      if (td < today) continue;
-      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      html += '<div class="home-event-item">';
-      html += '<div class="home-event-date"><span class="evt-month">' + monthNames[td.getMonth()] + '</span><span class="evt-day">' + td.getDate() + '</span></div>';
-      html += '<div class="home-event-name">Cycle ' + i + ' Belt Test - ' + esc(c.lifeSkill) + '</div>';
-      html += '<div class="home-event-loc">' + esc(c.testDay || '') + '</div>';
-      html += '</div>';
-    }
-  } else {
-    upcoming.forEach(e => {
-      const d = new Date(e.date + 'T00:00:00');
-      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      const locCls = e.loc ? ' loc-' + e.loc : '';
-      const locLabel = e.loc === 'waunakee' ? 'Waunakee' : e.loc === 'eastmad' ? 'E. Madison' : e.loc === 'verona' ? 'Verona' : '';
-      const evtTimeStr = formatEvtTimeRange(e.time, e.endTime);
-      html += '<div class="home-event-item' + locCls + '">';
-      html += '<div class="home-event-date"><span class="evt-month">' + monthNames[d.getMonth()] + '</span><span class="evt-day">' + d.getDate() + '</span></div>';
-      html += '<div class="home-event-name">' + esc(e.event || e.name || e.title || '') + '</div>';
-      if (evtTimeStr) html += '<div class="home-event-loc" style="font-weight:600;color:var(--accent);">\u23f0 ' + evtTimeStr + '</div>';
-      else if (locLabel) html += '<div class="home-event-loc">' + locLabel + '</div>';
-      if (locLabel && evtTimeStr) html += '<div class="home-event-loc">' + locLabel + '</div>';
-      if (e.link) html += '<a class="home-event-link" href="' + esc(e.link) + '" target="_blank">GymDesk \u2192</a>';
-      html += '</div>';
-    });
-  }
   html += '</div></div>';
 
   html += '</div>'; // close home-grid
+
+  // Weekly Agenda (formerly the L10 meeting) embedded on Home
+  html += '<div style="margin-top:8px">' + renderL10Page() + '</div>';
 
   return html;
 }
@@ -6002,37 +5961,38 @@ function renderL10Page() {
   let html = tabsHtml;
   html += '<div class="l10-header-bar">';
   html += '<div class="l10-date-display">LVLUP Weekly Agenda \u2014 ' + dateStr + '</div>';
-  const hasData = data && (data.todos || data.issues || data.headlines || data.segue);
+  const hasData = data && (data.todos || data.issues || data.headlines || data.introQuestion);
   if (!hasData) {
     html += '<button class="l10-print-btn" onclick="copyL10FromPrevious(\'' + weekKey + '\')">Copy from Previous Week</button>';
   }
   html += '</div>';
 
-  // 1. Segue (5 min)
-  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">1</span>Segue</h3><span class="l10-duration">5 min</span></div>';
-  html += '<div style="padding:12px 20px;font-size:13px;color:var(--gray-500)">Personal &amp; Business Bests</div>';
-  html += '<div style="padding:0 20px 16px"><textarea style="width:100%;min-height:60px;border:1px solid var(--gray-200);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;resize:vertical" placeholder="Share personal and business wins..." onchange="updateL10Note(\'' + weekKey + '\',\'segue\',this.value)">' + esc(data.segue || '') + '</textarea></div></div>';
+  // 1. Intro (5 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">1</span>Intro</h3><span class="l10-duration">5 min</span></div>';
+  html += '<div style="padding:12px 20px 6px;font-size:13px;color:var(--gray-500)">Question for the team (answered live, round-robin)</div>';
+  html += '<div style="padding:0 20px 16px"><textarea style="width:100%;min-height:50px;border:1px solid var(--gray-200);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;resize:vertical" placeholder="Type this week\'s question for the team..." onchange="updateL10Note(\'' + weekKey + '\',\'introQuestion\',this.value)">' + esc(data.introQuestion || '') + '</textarea></div></div>';
 
   // 2. Scorecard Review (5 min)
   html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">2</span>Scorecard Review</h3><span class="l10-duration">5 min</span></div>';
   html += '<div style="padding:12px 20px;font-size:13px;color:var(--gray-500)">Review weekly scorecard numbers. <a href="#" onclick="event.preventDefault();setSection(\'scorecard\')" style="color:var(--blue);font-weight:600">Go to Scorecard \u2192</a></div></div>';
 
-  // 3. Rock Review (5 min)
-  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">3</span>Rock Review</h3><span class="l10-duration">5 min</span></div>';
-  html += '<div style="padding:12px 20px;font-size:13px;color:var(--gray-500)">On Track / Off Track. <a href="#" onclick="event.preventDefault();setSection(\'rocks\')" style="color:var(--blue);font-weight:600">Go to Rocks \u2192</a></div></div>';
+  // 3. Event Review (5 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">3</span>Event Review</h3><span class="l10-duration">5 min</span></div>';
+  html += '<div style="padding:12px 20px;font-size:13px;color:var(--gray-500)">Review upcoming events. <a href="#" onclick="event.preventDefault();setSection(\'events\')" style="color:var(--blue);font-weight:600">Go to Events \u2192</a></div></div>';
 
-  // 4. Customer / Employee Headlines (5 min)
-  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">4</span>Customer / Employee Headlines</h3><span class="l10-duration">5 min</span></div>';
+  // 4. Student / Employee Reviews (5 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">4</span>Student / Employee Reviews</h3><span class="l10-duration">5 min</span></div>';
+  html += '<div style="padding:10px 20px 0;font-size:12px;color:var(--gray-400);font-style:italic">Including next steps for students in the red</div>';
   const headlines = Array.isArray(data.headlines) ? data.headlines : [];
-  html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="l10-table"><thead><tr><th class="drag-col"></th><th>Good / Bad</th><th>Headline</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="headlines" data-sort-week="' + weekKey + '">';
+  html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="l10-table"><thead><tr><th class="drag-col"></th><th>Good / Bad</th><th>Review</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="headlines" data-sort-week="' + weekKey + '">';
   headlines.forEach((h, i) => {
     if (!h) return;
     html += '<tr data-row-idx="' + i + '"><td class="drag-col"><span class="drag-handle" title="Drag to reorder">\u283f</span></td><td style="width:100px"><select onchange="updateL10Field(\'' + weekKey + '\',\'headlines\',' + i + ',\'type\',this.value)"><option value="">--</option><option value="good"' + (h.type === 'good' ? ' selected' : '') + '>Good</option><option value="bad"' + (h.type === 'bad' ? ' selected' : '') + '>Bad</option></select></td>';
-    html += '<td><input value="' + esc(h.text || '') + '" placeholder="Headline..." onchange="updateL10Field(\'' + weekKey + '\',\'headlines\',' + i + ',\'text\',this.value)" /></td>';
+    html += '<td><input value="' + esc(h.text || '') + '" placeholder="Review / next step..." onchange="updateL10Field(\'' + weekKey + '\',\'headlines\',' + i + ',\'text\',this.value)" /></td>';
     html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'headlines\',' + i + ')">\u00d7</button></td></tr>';
   });
   html += '</tbody></table></div>';
-  html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'headlines\')">+ Add Headline</button></div>';
+  html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'headlines\')">+ Add Review</button></div>';
 
   // 5. To-Do List (5 min)
   html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">5</span>To-Do List</h3><span class="l10-duration">5 min</span></div>';
