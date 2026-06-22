@@ -2242,6 +2242,7 @@ function renderMarketingPage() {
 function setMktTab(t){ state.mktTab = t; render(); }
 
 /*  -  -  Content Request Board (in-app replacement for the Asana social workflow)  -  -  */
+const CR_DROPBOX_URL = 'https://www.dropbox.com/scl/fo/msz00g3xc0v8cettbln62/AAMiDYDPUGd_tggXrn49ukc?rlkey=8agxrjhuvm7pa148wjbbyba9v&st=s4133m4b&dl=0';
 const CR_BRANDS = ['LVLUP', 'GO NINJA'];
 const CR_LOCATIONS = { 'LVLUP': ['Waunakee', 'East Madison', 'Verona'], 'GO NINJA': ['Waunakee', 'Verona'] };
 const CR_FORMATS = ['Reel', 'Static Post', 'Story', 'Carousel', 'Photo Album', 'Other'];
@@ -2273,9 +2274,14 @@ function renderContentBoard(){
   let h = '';
   // Intro + new request
   h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">';
-  h += '<div style="font-size:12.5px;color:#666;line-height:1.5;max-width:640px;">One home for every content request. Instructors submit ideas, media, and context in <b>To Do</b>; the content team moves cards across the board as they’re produced, approved, and published.</div>';
-  h += '<button onclick="crNew()" style="flex-shrink:0;padding:10px 18px;background:#1a1a2e;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(26,26,46,.25);">+ New Content Request</button>';
+  h += '<div style="font-size:12.5px;color:#666;line-height:1.5;max-width:600px;">One home for every content request. Instructors submit ideas, media, and context in <b>To Do</b>; the content team moves cards across the board as they’re produced, approved, and published.</div>';
+  h += '<div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;">';
+  h += '<a href="' + CR_DROPBOX_URL + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;padding:10px 16px;background:#0061fe;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:700;box-shadow:0 2px 8px rgba(0,97,254,.28);">📤 Upload to Dropbox</a>';
+  h += '<button onclick="crNew()" style="padding:10px 18px;background:#1a1a2e;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(26,26,46,.25);">+ New Content Request</button>';
   h += '</div>';
+  h += '</div>';
+  // Dropbox helper note
+  h += '<div style="background:#f0f6ff;border:1px solid #cfe1ff;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#0a4bb0;line-height:1.5;">📤 <b>Upload all media to Dropbox</b> — both content-request assets and your weekly media-capture goal. Drop your photos &amp; videos in the shared folder, then paste the Dropbox link into your request below so Ivy can find and edit it.</div>';
   // Brand filter
   const chip = (id, label) => '<button onclick="crSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + label + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All Brands') + CR_BRANDS.map(b => chip(b, b)).join('') + '</div>';
@@ -2445,7 +2451,8 @@ function renderCrModal(){
   h += '</div>';
   // Attachments
   h += '<label style="' + fieldLbl + '">Attachments / Media</label>';
-  h += '<div style="font-size:11px;color:#999;margin:-2px 0 8px;">Paste links to photos, videos, testimonials, or flyers (e.g. the shared Drive folder for this request).</div>';
+  h += '<div style="font-size:11px;color:#999;margin:-2px 0 8px;">Upload your photos &amp; videos to <b>Dropbox</b>, then paste the shareable link(s) below so Ivy can find and edit them.</div>';
+  h += '<a href="' + CR_DROPBOX_URL + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#0061fe;color:#fff;text-decoration:none;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:10px;">📤 Open Dropbox</a>';
   (d.attachments || []).forEach((a, i) => {
     h += '<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">';
     h += '<input oninput="crSetAttachment(' + i + ',\'label\',this.value)" value="' + esc(a.label || '') + '" placeholder="Label" style="' + inputCss + 'flex:0 0 120px;">';
