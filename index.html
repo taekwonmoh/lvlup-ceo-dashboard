@@ -993,6 +993,7 @@ const BRYAN_WEEKLY = [
   {id:'b_lifelinks',        text:'Student Milestones: Review LifeLinks, award belt clips + post to #LVLUPHQ.'},
   {id:'b_signage',          text:'Signage Execution: Physically hang and verify all current cycle signage is correctly displayed in the gym + post photo to #LVLUPHQ.'},
   {id:'b_scorecard',        text:'Update your scorecard numbers in the dashboard for this week.'},
+  {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
 ];
 const NIKKI_WEEKLY = [
   {id:'n_homebase',        text:'Monday Schedule Check: Verify the Homebase schedule to ensure proper coverage of classes and assistants.'},
@@ -1006,6 +1007,7 @@ const NIKKI_WEEKLY = [
   {id:'n_signage',         text:'Signage Execution: Physically hang and verify all current cycle signage is correctly displayed in the gym + post photo to #LVLUPHQ.'},
   {id:'n_instructor_stn',  text:'Instructor Station: Clean instructor station + take photo for #LVLUPHQ.'},
   {id:'n_scorecard',       text:'Update your scorecard numbers in the dashboard for this week.'},
+  {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
 ];
 const JOEY_WEEKLY = [
   {id:'j_homebase',        text:'Monday Schedule Check: Review the Homebase schedule to confirm proper class coverage for the week.'},
@@ -1019,6 +1021,7 @@ const JOEY_WEEKLY = [
   {id:'j_signage',         text:'Signage Execution: Physically hang and verify all current cycle signage is correctly displayed in the gym + post photo to #LVLUPHQ.'},
   {id:'j_instructor_stn',  text:'Instructor Station Deep Clean: Clean instructor station + take photo for #LVLUPHQ.'},
   {id:'j_scorecard',       text:'Update your scorecard numbers in the dashboard for this week.'},
+  {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
 ];
 const MIRANDA_WEEKLY = [
   {id:'m_party_reset',    text:'Friday Event Prep: Reset the party room for weekend birthday parties + post verification photo to #LVLUPHQ.'},
@@ -1026,6 +1029,7 @@ const MIRANDA_WEEKLY = [
   {id:'m_mop_mats',       text:'Mat Maintenance: Mop mats and sanitize obstacles + post photo to #LVLUPHQ.'},
   {id:'m_dust',           text:'Facility Inspection: Dust all facility trim and cabinets.'},
   {id:'m_party_supplies', text:'Inventory Control: Check party supplies inventory and message #LVLUPHQ if items are running low.'},
+  {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
 ];
 // ── Routing maps (fallback to legacy shared arrays if no per-emp entry) ───
 const EMP_DAILY  = {bryanG:BRYAN_DAILY, nikkiB:NIKKI_DAILY, joeyZ:JOEY_DAILY, mirandaS:MIRANDA_DAILY};
@@ -5824,6 +5828,43 @@ function taskPlaybook(task){
   if(has('birthday','party')) return 'birthday_party';
   return null;
 }
+/* ── Brand content pillars — rotates two pillars per week for the weekly Capture Content task ── */
+const CONTENT_PILLARS = [
+  { name:'Student Wins',         icon:'🏆', ideas:['Stripe promotions','Competition results','First class stories','Confidence transformations','Perseverance moment'] },
+  { name:'Family Culture',       icon:'🏠', ideas:['Parent testimonials','Birthday parties','Community events','Summer camp moments','Friendship moments'] },
+  { name:'Instructor Expertise', icon:'🥋', ideas:['Technique breakdowns','Coaching philosophy','Training tips'] },
+  { name:'LVLUP Values',         icon:'⭐', values:true },   // ideas come from CORE_VALUES
+];
+function getContentWeekIndex(){
+  const epoch = new Date(2024, 0, 1).getTime();           // Monday, Jan 1 2024
+  const now = new Date();
+  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.floor((t - epoch) / (7 * 86400000));
+}
+function contentPillarsForWeek(wk){
+  const pairs = [[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]];    // mix all four pillars, two per week
+  const p = pairs[((wk % pairs.length) + pairs.length) % pairs.length];
+  return p.map(i => CONTENT_PILLARS[i]);
+}
+function renderContentPillarsBlock(active){
+  let h = '<div style="margin-left:34px;margin-top:8px;display:flex;flex-direction:column;gap:6px;">';
+  active.forEach(p => {
+    h += '<details style="border:1px solid var(--gray-200);border-radius:8px;background:#fff;">';
+    h += '<summary style="cursor:pointer;padding:8px 12px;font-size:12px;font-weight:700;color:var(--primary);">' + p.icon + ' ' + esc(p.name) + ' <span style="font-weight:400;color:var(--gray-400);font-size:11px;">— ideas to capture</span></summary>';
+    h += '<div style="padding:2px 14px 10px;">';
+    if (p.values) {
+      CORE_VALUES.forEach(v => {
+        h += '<div style="margin:6px 0;"><div style="font-size:12px;font-weight:700;color:var(--gray-700);">' + v.icon + ' ' + esc(v.name) + '</div><div style="font-size:11px;color:var(--gray-500);line-height:1.45;">' + esc(v.desc) + '</div></div>';
+      });
+    } else {
+      h += '<ul style="margin:4px 0 0;padding-left:18px;">';
+      p.ideas.forEach(it => { h += '<li style="font-size:12px;color:var(--gray-600);line-height:1.6;">' + esc(it) + '</li>'; });
+      h += '</ul>';
+    }
+    h += '</div></details>';
+  });
+  return h + '</div>';
+}
 function renderTaskItem(section,task,doneData,isCustom,locked){
   const isDone=!!doneData;
   const hasNotes=!!task.hasNotes;
@@ -5831,7 +5872,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   const pb=taskPlaybook(task);
   const hasPlaybook=!!pb;
   let cls='task-item'+(isDone?' done':'')+(locked?' locked':'');
-  const blockStyle=(hasNotes||isCount)?'flex-direction:column;align-items:stretch;gap:8px':'';
+  const blockStyle=(hasNotes||isCount||task.contentPillars)?'flex-direction:column;align-items:stretch;gap:8px':'';
   let html='<div class="'+cls+'" data-task-id="'+task.id+'"'+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
   // Top row: drag handle + checkbox + text + extras
   html+='<div style="display:flex;align-items:flex-start;gap:10px">';
@@ -5843,8 +5884,15 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     html+='<div class="task-check"'+(locked?'':' onclick="'+completeFn+'" title="Click to complete"')+'></div>';
   }
   // Split "Action: detail" into a bold action line + a lighter how/done line
-  const _tx=String(task.text||''), _ci=_tx.indexOf(': ');
-  const _title=_ci>2?_tx.slice(0,_ci):_tx, _detail=_ci>2?_tx.slice(_ci+2):'';
+  const _cpActive = task.contentPillars ? contentPillarsForWeek(getContentWeekIndex()) : null;
+  let _title, _detail;
+  if(_cpActive){
+    _title='Capture Content';
+    _detail='This week’s pillars: '+_cpActive.map(p=>p.name).join(' & ')+' — tap a pillar below for capture ideas.';
+  } else {
+    const _tx=String(task.text||''), _ci=_tx.indexOf(': ');
+    _title=_ci>2?_tx.slice(0,_ci):_tx; _detail=_ci>2?_tx.slice(_ci+2):'';
+  }
   html+='<span class="task-text" style="flex:1"><span style="font-weight:600"><span style="margin-right:6px">'+taskIcon(task)+'</span>'+esc(_title)+'</span>'+(_detail?'<span style="display:block;font-weight:400;color:var(--gray-500);font-size:12px;margin-top:2px;line-height:1.45">'+esc(_detail)+'</span>':'')+'</span>';
   if(isCount&&isDone){
     const n=(doneData.count!=null?doneData.count:0);
@@ -5873,6 +5921,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
       html+='<div style="margin-left:34px"><input id="notes_'+section+'_'+task.id+'" type="text" placeholder="Enter student names..." style="width:100%;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" onkeydown="if(event.key===\'Enter\')completeTaskWithNotes(\''+section+'\',\''+task.id+'\')" /></div>';
     }
   }
+  if(_cpActive){ html+=renderContentPillarsBlock(_cpActive); }
   html+='</div>';return html;
 }
 function renderInitialsModal(){
