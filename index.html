@@ -3586,15 +3586,17 @@ function renderScLocSelector(){
 function setScLoc(l){ state.scLoc = l; render(); }
 
 /* ── Weekly instructor scorecard (one row per Sunday, monthly goal + auto total) ── */
+// Lead instructor (retention owner) per LVLUP school
+const SCHOOL_LEADS = { waunakee:'Master Moh', verona:'Mr. Goad', eastmad:'Ms. Mouille' };
 const SC_WEEKLY_COLS = [
-  { id:'firstDayTrials', short:'First-Day Trials', agg:'sum' },
-  { id:'dayOneEnroll',   short:'Day-One Enroll',   agg:'sum' },
-  { id:'laterEnroll',    short:'Later Enroll',      agg:'sum' },
-  { id:'upgrades',       short:'Upgrades',          agg:'sum' },
-  { id:'attrition',      short:'Upcoming Cancellations', agg:'sum' },
-  { id:'revenue',        short:'Revenue',           agg:'latest', currency:true, note:'running total (MTD)' },
-  { id:'totalMembers',   short:'Total Members',     agg:'latest', note:'running total (MTD)' },
-  { id:'attritionRate',  short:'Attrition %',       computed:'attrition', pct:true, sub:'cancellations ÷ members' },
+  { id:'firstDayTrials', short:'First-Day Trials', agg:'sum', owner:'Ms. K' },
+  { id:'dayOneEnroll',   short:'Day-One Enroll',   agg:'sum', owner:'Ms. K' },
+  { id:'laterEnroll',    short:'Later Enroll',      agg:'sum', owner:'Ms. K' },
+  { id:'upgrades',       short:'Upgrades',          agg:'sum', owner:'Ms. K' },
+  { id:'attrition',      short:'Upcoming Cancellations', agg:'sum', ownerLead:true },
+  { id:'revenue',        short:'Revenue',           agg:'latest', currency:true, note:'running total (MTD)', ownerLead:true },
+  { id:'totalMembers',   short:'Total Members',     agg:'latest', note:'running total (MTD)', ownerLead:true },
+  { id:'attritionRate',  short:'Attrition %',       computed:'attrition', pct:true, sub:'cancellations ÷ members', ownerLead:true },
 ];
 function scSundayKey(dt){ return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
 function scMonthSundays(){
@@ -3635,6 +3637,23 @@ function renderWeeklyScorecard(loc, colsArg){
 
   let h = '<div style="overflow-x:auto;margin-bottom:22px;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">';
   h += '<thead><tr><th colspan="' + (cols.length + 2) + '" style="padding:12px;font-size:16px;font-weight:800;text-align:center;letter-spacing:1px;background:' + meta.color + ';color:#fff;">' + esc(meta.name).toUpperCase() + '</th></tr>';
+  // Responsibility band — group consecutive columns by their owner (Ms. K vs lead instructor)
+  const owners = cols.map(c => c.owner || (c.ownerLead ? (SCHOOL_LEADS[loc] || 'Lead Instructor') : ''));
+  if (owners.some(o => o)) {
+    let band = '<th style="border:none;background:#fafbff;"></th>';   // under Week (Sun)
+    let i = 0;
+    while (i < cols.length) {
+      let j = i; while (j + 1 < cols.length && owners[j + 1] === owners[i]) j++;
+      const span = j - i + 1, o = owners[i];
+      const isK = o === 'Ms. K';
+      const bg = !o ? '#fafbff' : (isK ? '#e8f0ff' : '#fff1e6');
+      const fg = !o ? '#bbb' : (isK ? '#1d4ed8' : '#c2410c');
+      band += '<th colspan="' + span + '" style="padding:5px 6px;text-align:center;font-size:10px;font-weight:800;letter-spacing:.3px;background:' + bg + ';color:' + fg + ';border-left:2px solid #fff;">' + (o ? '👤 ' + esc(o) : '') + '</th>';
+      i = j + 1;
+    }
+    band += '<th style="border:none;background:#fafbff;"></th>';      // under Notes
+    h += '<tr>' + band + '</tr>';
+  }
   const thBase = 'padding:8px;font-size:10px;color:#0f3460;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;';
   let headCells = '<th style="' + thBase + 'text-align:left;">Week (Sun)</th>';
   cols.forEach(c => {
