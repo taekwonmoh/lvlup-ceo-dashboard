@@ -6284,8 +6284,22 @@ function renderL10Page() {
   html += '</tbody></table></div>';
   html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'headlines\')">+ Add Review</button></div>';
 
-  // 5. To-Do List (5 min)
-  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">5</span>To-Do List</h3><span class="l10-duration">5 min</span></div>';
+  // 5. To Discuss (IDS - 60 min)  [formerly Issues List]
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">5</span>To Discuss</h3><span class="l10-duration">60 min</span></div>';
+  html += '<div style="padding:8px 20px 0;font-size:12px;color:var(--gray-400);font-weight:600">IDS: Identify, Discuss, Solve</div>';
+  const issues = Array.isArray(data.issues) ? data.issues : [];
+  html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="l10-table"><thead><tr><th class="drag-col"></th><th class="priority-col">Priority</th><th>Topic</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="issues" data-sort-week="' + weekKey + '">';
+  issues.forEach((is, i) => {
+    if (!is) return;
+    html += '<tr data-row-idx="' + i + '"><td class="drag-col"><span class="drag-handle" title="Drag to reorder">\u283f</span></td><td class="priority-col"><input value="' + esc(is.priority || '') + '" placeholder="#" style="width:50px;text-align:center" onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'priority\',this.value)" /></td>';
+    html += '<td><input value="' + esc(is.issue || '') + '" placeholder="Topic to discuss..." onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'issue\',this.value)" /></td>';
+    html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'issues\',' + i + ')">\u00d7</button></td></tr>';
+  });
+  html += '</tbody></table></div>';
+  html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'issues\')">+ Add Topic</button></div>';
+
+  // 6. To-Do List (5 min)
+  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">6</span>To-Do List</h3><span class="l10-duration">5 min</span></div>';
   const todos = Array.isArray(data.todos) ? data.todos : [];
   html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="l10-table"><thead><tr><th class="drag-col"></th><th class="who-col">Who</th><th>To-Do</th><th class="status-col">Done / Not Done</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="todos" data-sort-week="' + weekKey + '">';
   todos.forEach((t, i) => {
@@ -6298,20 +6312,6 @@ function renderL10Page() {
   });
   html += '</tbody></table></div>';
   html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'todos\')">+ Add To-Do</button></div>';
-
-  // 6. Issues List (IDS - 60 min)
-  html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">6</span>Issues List</h3><span class="l10-duration">60 min</span></div>';
-  html += '<div style="padding:8px 20px 0;font-size:12px;color:var(--gray-400);font-weight:600">IDS: Identify, Discuss, Solve</div>';
-  const issues = Array.isArray(data.issues) ? data.issues : [];
-  html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="l10-table"><thead><tr><th class="drag-col"></th><th class="priority-col">Priority</th><th>Issue</th><th class="del-col"></th></tr></thead><tbody data-sort-l10="issues" data-sort-week="' + weekKey + '">';
-  issues.forEach((is, i) => {
-    if (!is) return;
-    html += '<tr data-row-idx="' + i + '"><td class="drag-col"><span class="drag-handle" title="Drag to reorder">\u283f</span></td><td class="priority-col"><input value="' + esc(is.priority || '') + '" placeholder="#" style="width:50px;text-align:center" onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'priority\',this.value)" /></td>';
-    html += '<td><input value="' + esc(is.issue || '') + '" placeholder="Issue description..." onchange="updateL10Field(\'' + weekKey + '\',\'issues\',' + i + ',\'issue\',this.value)" /></td>';
-    html += '<td class="del-col"><button class="l10-del-btn" onclick="removeL10Row(\'' + weekKey + '\',\'issues\',' + i + ')">\u00d7</button></td></tr>';
-  });
-  html += '</tbody></table></div>';
-  html += '<button class="l10-add-btn" onclick="addL10Row(\'' + weekKey + '\',\'issues\')">+ Add Issue</button></div>';
 
   // 7. Conclude (5 min)
   html += '<div class="l10-section"><div class="l10-section-header"><h3><span class="l10-num">7</span>Conclude</h3><span class="l10-duration">5 min</span></div>';
