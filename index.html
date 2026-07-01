@@ -954,20 +954,17 @@ const WALL_TYPES = [
 // ── Per-employee daily task lists ──────────────────────────────────────────
 const BRYAN_DAILY = [
   {id:'b_opening',   text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
-  {id:'b_retail',    text:'Fulfill Retail Orders: Process and package any pending merchandise sales.'},
-  {id:'b_stoplight', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Send a minimum of 2 Loom videos to keep members connected — log how many you sent today.'},
+  {id:'b_stoplight', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Send a minimum of 2 Loom videos or 2 postcards to keep members connected — log how many you sent today.'},
   {id:'b_closing',   text:'Closing Routine & Venue Check: Spot check/freshen up the men\'s bathroom, straighten the training floor, review rosters, update location Slack regarding new students, and submit the EOS report.'},
 ];
 const NIKKI_DAILY = [
   {id:'n_opening',   text:'Opening Routine: Turn on TV announcements and ensure the EMAD facility is ready for students.'},
-  {id:'n_retail',    text:'Fulfill Retail Orders: Process and package any pending merchandise sales.'},
-  {id:'n_stoplight', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Send a minimum of 2 Loom videos to keep EMAD members connected — log how many you sent today.'},
+  {id:'n_stoplight', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Send a minimum of 2 Loom videos or 2 postcards to keep EMAD members connected — log how many you sent today.'},
   {id:'n_closing',   text:'Closing Routine: Spot check/freshen up EMAD bathrooms, review rosters, update location Slack, and submit the EOS report.'},
 ];
 const JOEY_DAILY = [
   {id:'j_tv',        cat:'Pre-Class Admin', text:'Turn on TV announcements (message @jam in #LVLUPHQ if anything needs updating).'},
-  {id:'j_retail',    cat:'Pre-Class Admin', text:'Check GymDesk for pending retail orders (fulfill and notify customers).'},
-  {id:'j_stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Review the stoplight report, then send a minimum of 2 Loom videos — log how many you sent today.'},
+  {id:'j_stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Review the stoplight report, then send a minimum of 2 Loom videos or 2 postcards — log how many you sent today.'},
   {id:'j_rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students/class counts, check attendance numbers, and post in your location channel about anyone starting today.'},
   {id:'j_spray',     cat:'Closing & EOS',   text:'Spray mop the training floors.'},
   {id:'j_bathrooms', cat:'Closing & EOS',   text:'Spot check and freshen up the bathrooms.'},
@@ -1044,7 +1041,6 @@ const LVLUP_MONTHLY = [];
 const FRONTDESK_DAILY = [
   {id:'fd_messages',    text:'Check and respond to all parent messages, emails, and missed calls — log any action items that need follow-up'},
   {id:'fd_rosters',     text:'Review class rosters — note new students and post in your location channel about anyone starting today'},
-  {id:'fd_retail',      text:'Check GymDesk for pending retail orders — fulfill and notify customers'},
   {id:'fd_complaints',  text:'Log and follow up on any open parent concerns or complaints — note resolution in GymDesk'},
   {id:'fd_eos',         text:'Post EOS report at clockout'},
 ];
