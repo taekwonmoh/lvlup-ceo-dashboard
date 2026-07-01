@@ -3618,19 +3618,45 @@ function scWeeklyLatest(loc, monthKey, metricId){
   const keys = Object.keys(locData).filter(k => k.slice(0, 7) === monthKey && (locData[k] || {})[metricId] != null && locData[k][metricId] !== '').sort();
   return keys.length ? locData[keys[keys.length - 1]][metricId] : '';
 }
+// Month-bounded weeks: each week ends on a Sunday OR on the last day of the month,
+// and every month starts a fresh week on the 1st — so weeks never cross month boundaries.
+function scMonthWeeks(){
+  const d = scdMonthDate(); const y = d.getFullYear(), m = d.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const weeks = []; let startDay = 1;
+  for (let day = 1; day <= daysInMonth; day++){
+    const dt = new Date(y, m, day);
+    if (dt.getDay() === 0 || day === daysInMonth){   // close the week on Sunday or the last day of the month
+      weeks.push({ start: new Date(y, m, startDay), end: dt, startDay, endDay: day });
+      startDay = day + 1;
+    }
+  }
+  return weeks;
+}
+// Display value for a column's month total (sum, latest-snapshot, or computed) — shared by the top and end-of-month total rows
+function scColTotalCell(c, loc, mk){
+  if (c.computed === 'attrition'){
+    const canc = scWeeklySum(loc, mk, 'attrition');
+    const mem = parseFloat(scWeeklyLatest(loc, mk, 'totalMembers')) || 0;
+    return mem > 0 ? (Math.round(canc / mem * 1000) / 10 + '%') : '—';
+  }
+  if (c.agg === 'latest'){ const lv = scWeeklyLatest(loc, mk, c.id); return (lv === '' || lv == null) ? '—' : (c.currency ? fmtCurrency(parseFloat(lv) || 0) : c.pct ? (lv + '%') : lv); }
+  const s = scWeeklySum(loc, mk, c.id); return s ? (c.currency ? fmtCurrency(s) : c.pct ? (s + '%') : s) : '—';
+}
 function renderWeeklyScorecard(loc, colsArg){
   const meta = LOCATIONS.find(l => l.id === loc) || { name: loc, color: '#1a1a2e' };
   const mk = scdMonthKey();
   const cols = colsArg || SC_WEEKLY_COLS;
-  const sundays = scMonthSundays();
+  const weeks = scMonthWeeks();
   const wk = (state.scWeekly || {})[loc] || {};
   const goals = ((state.scGoals || {})[loc] || {})[mk] || {};
   const monthName = scdMonthDate().toLocaleDateString('en-US', { month: 'long' });
+  const wkLabel = w => monthName + ' ' + w.startDay + (w.endDay !== w.startDay ? '–' + w.endDay : '');
 
-  // highlight the most recent Sunday on/before today (within this month)
+  // highlight the week that contains today (within this month)
   const today = new Date(); today.setHours(0,0,0,0);
   let curKey = '';
-  sundays.forEach(dt => { if (dt <= today) curKey = scSundayKey(dt); });
+  weeks.forEach(w => { if (today >= w.start && today <= w.end) curKey = scSundayKey(w.end); });
 
   const inStyle   = 'width:64px;text-align:center;border:1px solid #eee;border-radius:5px;padding:5px;font-size:13px;';
   const goalStyle = 'width:64px;text-align:center;border:1px solid #d8def0;border-radius:5px;padding:5px;font-size:13px;background:#f8faff;color:#0f3460;font-weight:600;';
@@ -3655,7 +3681,7 @@ function renderWeeklyScorecard(loc, colsArg){
     h += '<tr>' + band + '</tr>';
   }
   const thBase = 'padding:8px;font-size:10px;color:#0f3460;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;';
-  let headCells = '<th style="' + thBase + 'text-align:left;">Week (Sun)</th>';
+  let headCells = '<th style="' + thBase + 'text-align:left;">Week</th>';
   cols.forEach(c => {
     headCells += '<th style="' + thBase + 'text-align:center;">' + c.short +
       (c.note ? '<div style="font-size:8px;font-weight:700;color:#4169E1;text-transform:none;letter-spacing:0;margin-top:2px;">↻ ' + c.note + '</div>' : '') +
@@ -3672,27 +3698,17 @@ function renderWeeklyScorecard(loc, colsArg){
 
   // Monthly Total row (auto)
   h += '<tr style="background:' + meta.color + '22;font-weight:800;"><td style="padding:9px 10px;color:#0f3460;white-space:nowrap;">Σ Monthly Total</td>';
-  cols.forEach(c => {
-    let val;
-    if (c.computed === 'attrition'){
-      const canc = scWeeklySum(loc, mk, 'attrition');
-      const mem = parseFloat(scWeeklyLatest(loc, mk, 'totalMembers')) || 0;
-      val = mem > 0 ? (Math.round(canc / mem * 1000) / 10 + '%') : '—';
-    }
-    else if (c.agg === 'latest'){ const lv = scWeeklyLatest(loc, mk, c.id); val = (lv === '' || lv == null) ? '—' : (c.currency ? fmtCurrency(parseFloat(lv) || 0) : c.pct ? (lv + '%') : lv); }
-    else { const s = scWeeklySum(loc, mk, c.id); val = s ? (c.currency ? fmtCurrency(s) : c.pct ? (s + '%') : s) : '—'; }
-    h += '<td style="text-align:center;padding:9px;color:#0f3460;">' + val + '</td>';
-  });
+  cols.forEach(c => { h += '<td style="text-align:center;padding:9px;color:#0f3460;">' + scColTotalCell(c, loc, mk) + '</td>'; });
   h += '<td></td></tr>';
 
-  // Weekly rows (one per Sunday)
-  if (!sundays.length){ h += '<tr><td colspan="' + (cols.length + 2) + '" style="padding:12px;text-align:center;color:#aaa;">No Sundays in this month.</td></tr>'; }
-  sundays.forEach(dt => {
-    const key = scSundayKey(dt);
+  // Weekly rows (month-bounded weeks; the last week ends on the last day of the month)
+  if (!weeks.length){ h += '<tr><td colspan="' + (cols.length + 2) + '" style="padding:12px;text-align:center;color:#aaa;">No weeks in this month.</td></tr>'; }
+  weeks.forEach(w => {
+    const key = scSundayKey(w.end);
     const row = wk[key] || {};
     const isCur = key === curKey;
     h += '<tr style="border-top:1px solid #f5f5f5;' + (isCur ? 'background:#eff6ff;' : '') + '">';
-    h += '<td style="padding:5px 10px;font-weight:600;color:#444;white-space:nowrap;">' + monthName + ' ' + dt.getDate() + (isCur ? ' <span style="color:#4169E1;">•</span>' : '') + '</td>';
+    h += '<td style="padding:5px 10px;font-weight:600;color:#444;white-space:nowrap;">' + wkLabel(w) + (isCur ? ' <span style="color:#4169E1;">•</span>' : '') + '</td>';
     cols.forEach(c => {
       if (c.computed){ h += '<td style="padding:3px;text-align:center;color:#ccc;">—</td>'; return; }
       const v = row[c.id];
@@ -3700,6 +3716,10 @@ function renderWeeklyScorecard(loc, colsArg){
     h += '<td style="padding:3px;"><input value="' + esc(row.notes || '') + '" onchange="scWeeklyUpdate(\'' + loc + '\',\'' + key + '\',\'notes\',this.value)" style="width:100%;min-width:110px;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;box-sizing:border-box;"></td>';
     h += '</tr>';
   });
+  // End-of-Month total — closes out the month after the weekly rows
+  h += '<tr style="background:' + meta.color + '18;font-weight:800;border-top:2px solid ' + meta.color + '55;"><td style="padding:9px 10px;color:#0f3460;white-space:nowrap;">🏁 End of Month</td>';
+  cols.forEach(c => { h += '<td style="text-align:center;padding:9px;color:#0f3460;">' + scColTotalCell(c, loc, mk) + '</td>'; });
+  h += '<td></td></tr>';
   h += '</tbody></table></div>';
   return h;
 }
