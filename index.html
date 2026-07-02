@@ -8755,14 +8755,43 @@ function feedbackToggleInactive() {
   render();
 }
 
+/* ── Communication cycle: date-stamp each box, 6-month countdown, per-person auto-reset ── */
+const CYCLE_MONTHS = 6;
+function fmtBoxDate(d){ if (!d) return ''; const x = new Date(d + 'T00:00:00'); return (x.getMonth() + 1) + '/' + x.getDate(); }
+function feedbackCycleResetDate(startStr){ const r = new Date(startStr + 'T00:00:00'); r.setMonth(r.getMonth() + CYCLE_MONTHS); return r; }
+function feedbackMaybeStartCycle(studentKey){
+  const t = state.feedback.tracking[studentKey] || {};
+  if (!t._cycleStart) db.ref('feedbackTracking/all/' + studentKey + '/_cycleStart').set(new Date().toISOString().split('T')[0]);
+}
+function feedbackResetCycle(studentKey){
+  const base = 'feedbackTracking/all/' + studentKey;
+  ['postcard', 'video', 'phoneCall', 'conference'].forEach(f => db.ref(base + '/' + f).set(null));
+  db.ref(base + '/dates').set(null);
+  db.ref(base + '/_cycleStart').set(null);
+}
+// Auto-clear a member's current-cycle boxes once their 6 months elapse (history in the Correspondence Log is kept)
+function feedbackAutoResetExpiredCycles(){
+  const guard = state.feedback._resetGuard || (state.feedback._resetGuard = new Set());
+  const roster = state.feedback.roster || {}, tracking = state.feedback.tracking || {}, now = Date.now();
+  Object.keys(roster).forEach(key => {
+    const t = tracking[key]; if (!t || !t._cycleStart || guard.has(key)) return;
+    if (now >= feedbackCycleResetDate(t._cycleStart).getTime()) { guard.add(key); feedbackResetCycle(key); }
+  });
+}
+
 function feedbackToggle(studentKey, field) {
+  const base = 'feedbackTracking/all/' + studentKey;
   const current = (state.feedback.tracking[studentKey] || {})[field];
-  db.ref('feedbackTracking/all/' + studentKey + '/' + field).set(!current);
+  if (current) { db.ref(base + '/' + field).set(null); db.ref(base + '/dates/' + field).set(null); }
+  else { db.ref(base + '/' + field).set(true); db.ref(base + '/dates/' + field).set(new Date().toISOString().split('T')[0]); feedbackMaybeStartCycle(studentKey); }
 }
 
 function feedbackSetInitials(studentKey, field, value) {
+  const base = 'feedbackTracking/all/' + studentKey;
   const v = (value || '').trim().toUpperCase();
-  db.ref('feedbackTracking/all/' + studentKey + '/' + field).set(v || null);
+  db.ref(base + '/' + field).set(v || null);
+  if (v) { db.ref(base + '/dates/' + field).set(new Date().toISOString().split('T')[0]); feedbackMaybeStartCycle(studentKey); }
+  else { db.ref(base + '/dates/' + field).set(null); }
 }
 
 function feedbackSetStatus(studentKey, status) {
@@ -9938,9 +9967,11 @@ function feedbackLogCorrespondence(studentKey) {
   const entry = { type: form.type, ts };
   if (form.note && form.note.trim()) entry.note = form.note.trim();
   const newRef = db.ref('feedbackCorrespondenceLog/' + studentKey).push(entry);
-  // Auto-tick the tracking checkbox for this type
+  // Auto-tick the tracking checkbox for this type + stamp its date + start the cycle
   const t = state.feedback.tracking[studentKey] || {};
   if (!t[form.type]) db.ref('feedbackTracking/all/' + studentKey + '/' + form.type).set(true);
+  db.ref('feedbackTracking/all/' + studentKey + '/dates/' + form.type).set(form.date || new Date().toISOString().split('T')[0]);
+  feedbackMaybeStartCycle(studentKey);
   // Update local log cache optimistically
   if (!state.feedback.logs[studentKey]) state.feedback.logs[studentKey] = {};
   state.feedback.logs[studentKey][newRef.key] = entry;
@@ -10102,6 +10133,7 @@ function renderStudentLogRow(s, locationFilter, isInactive) {
 function renderFeedbackPage() {
   // "All" view removed — always show a single location
   if (state.feedback.locationFilter === 'all' || !state.feedback.locationFilter) state.feedback.locationFilter = 'waunakee';
+  feedbackAutoResetExpiredCycles();   // per-person 6-month cycle reset (clears current-cycle boxes; log history kept)
   const { roster, tracking, rosterMeta, locationFilter, showInactive } = state.feedback;
   const monthLabel   = getFeedbackMonthLabel();
   const currentMonth = getCurrentMonthKey();
@@ -10170,19 +10202,21 @@ function renderFeedbackPage() {
     return '<button onclick="feedbackSetLocationFilter(\'' + id + '\')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:' + (active ? '#4169E1' : '#f1f3f9') + ';color:' + (active ? '#fff' : '#555') + ';">' + label + '</button>';
   };
 
-  const chk = (studentKey, field, checked, disabled) =>
-    '<td style="text-align:center;padding:10px 4px;">' +
+  const chk = (studentKey, field, checked, disabled, dateStr) =>
+    '<td style="text-align:center;padding:8px 4px;">' +
     '<input type="checkbox" ' + (checked ? 'checked' : '') + (disabled ? ' disabled' : '') + ' onchange="feedbackToggle(\'' + studentKey + '\',\'' + field + '\')" style="width:17px;height:17px;cursor:' + (disabled ? 'default' : 'pointer') + ';accent-color:#4169E1;opacity:' + (disabled ? '0.3' : '1') + ';">' +
+    (checked && dateStr ? '<div style="font-size:8px;font-weight:700;color:#4169E1;margin-top:2px;white-space:nowrap;">' + fmtBoxDate(dateStr) + '</div>' : '') +
     '</td>';
 
   // Initials entry (e.g. postcard) — records WHO did it; any text counts as done
-  const initialsCell = (studentKey, field, val, disabled) => {
+  const initialsCell = (studentKey, field, val, disabled, dateStr) => {
     const filled = !!val;
     const shown = typeof val === 'string' ? val : '';
     return '<td style="text-align:center;padding:6px 4px;">' +
       '<input type="text" maxlength="4" value="' + esc(shown) + '" placeholder="—" ' + (disabled ? 'disabled' : '') +
       ' title="Initials of who sent it" onchange="feedbackSetInitials(\'' + studentKey + '\',\'' + field + '\',this.value)" ' +
       'style="width:44px;text-align:center;text-transform:uppercase;border:1px solid ' + (filled ? '#4169E1' : 'var(--gray-200)') + ';border-radius:6px;padding:4px 2px;font-size:12px;font-weight:700;color:' + (filled ? '#4169E1' : '#999') + ';background:' + (filled ? '#eef2ff' : '#fff') + ';opacity:' + (disabled ? '0.4' : '1') + ';">' +
+      (filled && dateStr ? '<div style="font-size:8px;font-weight:700;color:#4169E1;margin-top:2px;white-space:nowrap;">' + fmtBoxDate(dateStr) + '</div>' : '') +
       '</td>';
   };
 
@@ -10258,9 +10292,10 @@ function renderFeedbackPage() {
             (isInactive ? ' <span style="font-size:10px;color:#bbb;font-weight:400;">inactive</span>' : '') +
             (hasNotes ? ' <span title="Has notes" style="display:inline-block;width:7px;height:7px;background:#4169E1;border-radius:50%;margin-left:5px;vertical-align:middle;flex-shrink:0;"></span>' : '') +
             (journeyPhase ? ' <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:' + journeyPhase.bg + ';color:' + journeyPhase.color + ';">Day ' + journeyDays + '</span>' : '') +
+            (t._cycleStart ? (function(){ const r = feedbackCycleResetDate(t._cycleStart); const dLeft = Math.ceil((r.getTime() - Date.now()) / 86400000); const lbl = dLeft > 60 ? Math.round(dLeft / 30) + 'mo left' : Math.max(0, dLeft) + 'd left'; const near = dLeft <= 30; return ' <span title="6-month communication cycle · resets ' + r.toLocaleDateString() + '" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:' + (near ? '#fffbeb' : '#f0fdf4') + ';color:' + (near ? '#b45309' : '#15803d') + ';">🔄 ' + lbl + '</span>'; })() : '') +
           '</td>' +
           (locationFilter === 'all' ? '<td style="padding:10px 10px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
-          INTERACTIONS.map(i => i.initials ? initialsCell(s.key, i.field, t[i.field], isInactive) : chk(s.key, i.field, !!t[i.field], isInactive)).join('') +
+          INTERACTIONS.map(i => i.initials ? initialsCell(s.key, i.field, t[i.field], isInactive, (t.dates || {})[i.field]) : chk(s.key, i.field, !!t[i.field], isInactive, (t.dates || {})[i.field])).join('') +
           (function() {
             const hasFeedback = !!(t.instructorFeedback && t.instructorFeedback.trim());
             return '<td style="text-align:center;padding:10px 4px;white-space:nowrap;">' +
