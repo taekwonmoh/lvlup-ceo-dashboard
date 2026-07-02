@@ -1039,21 +1039,37 @@ const GONINJA_WEEKLY_REC = MIRANDA_WEEKLY;
 const LVLUP_MONTHLY = [];
 // Front desk managers (Sue K, Mario S) — tasks TBD
 const FRONTDESK_DAILY = [
-  {id:'fd_messages',    text:'Check and respond to all parent messages, emails, and missed calls — log any action items that need follow-up'},
-  {id:'fd_rosters',     text:'Review class rosters — note new students and post in your location channel about anyone starting today'},
-  {id:'fd_complaints',  text:'Log and follow up on any open parent concerns or complaints — note resolution in GymDesk'},
-  {id:'fd_eos',         text:'Post EOS report at clockout'},
+  {id:'fd_messages',    text:'Check and respond to all parent messages, emails, and missed calls.'},
+  {id:'fd_followups',   text:'Log any follow-up action items.'},
+  {id:'fd_notify_msk',  text:'Notify Ms. K of any membership-related issues requiring follow-up.'},
+  {id:'fd_questions',   text:'Answer parent questions at the front desk.'},
+  {id:'fd_photos',      text:'Take and upload student photos to GymDesk as needed.'},
+  {id:'fd_retail',      text:'Check and fulfill GymDesk for pending retail orders.'},
+  {id:'fd_gear',        text:'Assist members with retail purchases and sparring gear fittings.'},
+  {id:'fd_lobby',       text:'Maintain a clean, organized, and welcoming front lobby.', subs:[
+    'Straighten lobby and retail displays',
+    'Clean front entrance doors',
+    'Empty trash',
+    'Check and refresh customer bathrooms',
+    'Wipe front desk counters',
+    'Refill restroom supplies as needed',
+  ]},
+  {id:'fd_eos',         text:'Post EOS report before clocking out.'},
+  {id:'fd_next_shift',  text:'Note any outstanding action items for the next shift.'},
 ];
 const FRONTDESK_WEEKLY = [
-  {id:'fd_homebase_sched',  text:'Monday — Review Homebase schedule to confirm proper class coverage'},
-  {id:'fd_roster_sync',     text:'Sync student roster with GymDesk — add new enrollments, update statuses'},
-  {id:'fd_memberships',     text:'Process any membership changes, pauses, or cancellations in GymDesk — confirm changes are reflected accurately'},
-  {id:'fd_payments',        text:'Check GymDesk for overdue or failed payments — flag any outstanding accounts to the lead instructor'},
-  {id:'fd_tiger_emails',    text:'Send Tigers move-up emails for any students confirmed ready by lead instructor'},
-  {id:'fd_yb_emails',       text:'Send Yellow Belt emails for any new yellow belts confirmed by lead instructor'},
-  {id:'fd_supplies',        text:'Check front desk supplies — restock if low, message #inventory'},
-  {id:'fd_signage',         text:'Signage Prep: Design/print all cycle signage (life skill, promotions, events) and organize for lead instructor to hang — message lead when ready'},
-  {id:'fd_social',          text:'2 social media posts this week — share screenshots to #LVLUPHQ'},
+  {id:'fdw_birthday',  text:'Generate the upcoming birthday report and send Birthday Party invitations/offers to eligible families.'},
+  {id:'fdw_events',    text:'Review upcoming events and promote to students.'},
+  {id:'fdw_inventory', text:'Review front desk retail inventory and supplies.'},
+  {id:'fdw_restock',   text:'Restock merchandise as needed.'},
+  {id:'fdw_lowstock',  text:'Notify #inventory of low-stock items.'},
+  {id:'fdw_displays',  text:'Organize and merchandise retail displays.'},
+  {id:'fdw_signage',   text:'Prepare, print, and organize retail signage and promotional materials for:', subs:[
+    'Retail products',
+    'Seasonal promotions',
+    'Front desk displays',
+    'Upcoming events',
+  ]},
 ];
 const FRONTDESK_MONTHLY = [];
 const GONINJA_MONTHLY = [
@@ -5588,7 +5604,7 @@ function renderTasksPage(){
   const countableWeeks=monthWeeks.filter((_,i)=>i!==exemptIdx);
   const signedCount=countableWeeks.filter(wk=>locSignoffs[wk]).length;
   const eligible=signedCount>=weeksRequired;
-  if(emp.bonus){
+  if(emp.bonus&&!isFrontDesk(loc)){
     html+='<div class="bonus-tracker">';
     html+='<div style="display:flex;justify-content:space-between;align-items:center;">';
     html+='<div style="font-weight:800;font-size:14px;color:var(--primary);">🏆 Bonus Tracker — '+now.toLocaleDateString('en-US',{month:'long',year:'numeric'})+'</div>';
@@ -5616,7 +5632,7 @@ function renderTasksPage(){
     html+='</div>';
     html+='<div style="margin-top:10px;padding:8px 12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500);">Bonus (0–5%) is determined by leadership review of task completion, hours, monthly revenue, and student metrics.</div>';
     html+='</div>';
-  } else {
+  } else if(!isFrontDesk(loc)){
     html+='<div style="margin-top:4px;margin-bottom:4px;padding:12px 16px;background:var(--gray-50);border-radius:12px;border:1.5px dashed var(--gray-200);font-size:13px;color:var(--gray-500);font-weight:600;">⏸ Part-time</div>';
   }
 
@@ -5658,7 +5674,7 @@ function renderTasksPage(){
     html+='<div style="height:10px;border-radius:999px;background:'+(_all?'rgba(255,255,255,.35)':'var(--gray-100)')+';overflow:hidden;"><div style="height:100%;width:'+_pct+'%;background:'+_bar+';transition:width .3s;"></div></div>';
     html+='</div>';
   }
-  html+=renderTaskSection('daily',isFD?'⬇️ Priority Queue':'Daily Checklist',dailyTasks,dayOff?{}:dailyData,customDaily,dailyLocked||dayOff);
+  html+=renderTaskSection('daily',isFD?'Daily Responsibilities':'Daily Checklist',dailyTasks,dayOff?{}:dailyData,customDaily,dailyLocked||dayOff);
   // ── Daily Exception Log ──────────────────────────────────────────────────
   if(!dayOff){
     const exLog=((locData.exception_log)||{})[dateKey]||'';
@@ -5672,10 +5688,10 @@ function renderTasksPage(){
       html+='</div>';
     }
   }
-  html+=renderTaskSection('weekly',isFD?'Recurring Tasks':'Weekly Recurring',weeklyRec,weeklyData,customWeekly,weekLocked);
+  html+=renderTaskSection('weekly',isFD?'Weekly Responsibilities':'Weekly Recurring',weeklyRec,weeklyData,customWeekly,weekLocked);
 
-  // Week sign-off button (bonus-eligible staff only)
-  if(emp.bonus){
+  // Week sign-off button (bonus-eligible staff only; not front desk)
+  if(emp.bonus&&!isFrontDesk(loc)){
     if(!weekLocked){
       html+='<div style="margin-top:8px;padding:16px 20px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;gap:12px;">';
       html+='<div><div style="font-weight:700;font-size:14px;">Ready to sign off this week?</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px;">Sign off confirms all tasks are complete for this week. The week will be locked.</div></div>';
@@ -5700,7 +5716,7 @@ function renderTasksPage(){
     }
     html+='</div>';
     html+=renderCycleSection('cycle','Week '+cycleWeek+': '+cw.name,cw.tasks,cycleData);
-  }else{
+  }else if(!isFrontDesk(loc)){
     html+=renderCycleChecklistSection(loc,locData);
   }
   if(state.modalTask)html+=renderInitialsModal();
@@ -5953,7 +5969,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   const pb=taskPlaybook(task);
   const hasPlaybook=!!pb;
   let cls='task-item'+(isDone?' done':'')+(locked?' locked':'');
-  const blockStyle=(hasNotes||isCount||task.contentPillars)?'flex-direction:column;align-items:stretch;gap:8px':'';
+  const blockStyle=(hasNotes||isCount||task.contentPillars||(task.subs&&task.subs.length))?'flex-direction:column;align-items:stretch;gap:8px':'';
   let html='<div class="'+cls+'" data-task-id="'+task.id+'"'+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
   // Top row: drag handle + checkbox + text + extras
   html+='<div style="display:flex;align-items:flex-start;gap:10px">';
@@ -6003,6 +6019,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     }
   }
   if(_cpActive){ html+=renderContentPillarsBlock(_cpActive); }
+  if(task.subs&&task.subs.length){ html+='<ul style="margin:0 0 0 34px;padding-left:18px;color:var(--gray-500);font-size:12px;line-height:1.75;">'+task.subs.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>'; }
   html+='</div>';return html;
 }
 function renderInitialsModal(){
