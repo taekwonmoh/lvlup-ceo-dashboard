@@ -5473,6 +5473,8 @@ function renderHistoryWeekGrid(){
     days.forEach(dk=>{
       if(hIsFuture(dk)){
         html+='<td><button class="h-cell-btn future" title="Future">—</button></td>';
+      } else if(new Date(dk+'T12:00:00').getDay()===0){
+        html+='<td><button class="h-cell-btn future" title="Closed — Sunday">🌙</button></td>';
       } else {
         const key=emp.id+'|'+dk;
         const info=state.historyData[key];
@@ -5529,6 +5531,8 @@ function renderHistoryMonthHeatmap(){
     days.forEach(dk=>{
       if(hIsFuture(dk)){
         html+='<td><div class="h-hm-sq future" title="Future"></div></td>';
+      } else if(new Date(dk+'T12:00:00').getDay()===0){
+        html+='<td><div class="h-hm-sq future" title="Closed — Sunday"></div></td>';
       } else {
         const key=emp.id+'|'+dk;
         const info=state.historyData[key];
@@ -5641,9 +5645,15 @@ function renderTasksPage(){
   html+='<span class="date-label">'+navLabel+'</span>';
   html+='<button onclick="changeTasksDate(1)">Tomorrow &rarr;</button></div>';
 
+  const customWeekly=(locData['custom_weekly']||{})[weekKey]||{};
+  const isFD=isFrontDesk(loc);
+  const isSunday=new Date(dateKey+'T12:00:00').getDay()===0;
+  if(isSunday){
+    // Closed on Sundays — skip the daily checklist entirely
+    html+='<div style="margin:4px 0 12px;padding:16px 20px;background:#eef2ff;border-radius:12px;border:1px solid #dbe3ff;font-size:14px;font-weight:700;color:#1e40af;text-align:center;">🌙 Closed on Sundays — no daily checklist today.</div>';
+  }else{
   // "Did not work" bar for daily section
   const customDaily=(locData['custom_daily']||{})[dateKey]||{};
-  const customWeekly=(locData['custom_weekly']||{})[weekKey]||{};
   let dnwBar='';
   if(!weekLocked){
     if(dayOff){
@@ -5656,7 +5666,6 @@ function renderTasksPage(){
       dnwBar+='<button onclick="markDidNotWork()" style="font-size:12px;padding:6px 14px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;color:var(--gray-600);font-weight:600;">😴 Did not work today</button></div>';
     }
   }
-  const isFD=isFrontDesk(loc);
   if(isFD&&!dayOff&&!dailyLocked){
     html+='<div style="margin-bottom:8px;padding:10px 16px;background:#eff6ff;border-radius:10px;border:1px solid #bfdbfe;font-size:12px;color:#1e40af;">Complete tasks in order during front desk downtime — tasks carry over between shifts, so pick up wherever you left off.</div>';
   }
@@ -5687,6 +5696,7 @@ function renderTasksPage(){
       html+='<input id="exceptionLogInput" value="'+esc(exLog)+'" placeholder=\'e.g. "Skipped Loom videos today because of a 20-min parent meeting after the 6 PM class."\' maxlength="300" onchange="saveExceptionLog(this.value)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;outline:none;color:var(--gray-700);" />';
       html+='</div>';
     }
+  }
   }
   html+=renderTaskSection('weekly',isFD?'Weekly Responsibilities':'Weekly Recurring',weeklyRec,weeklyData,customWeekly,weekLocked);
 
