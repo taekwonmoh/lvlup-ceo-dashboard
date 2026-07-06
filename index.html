@@ -988,7 +988,6 @@ const BRYAN_WEEKLY = [
   {id:'b_supplies',         text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
   {id:'b_ad_invites',       text:'Program Growth: Invite 2 students to try the AD class + post names to #LVLUPHQ.'},
   {id:'b_lifelinks',        text:'Student Milestones: Review LifeLinks, award belt clips + post to #LVLUPHQ.'},
-  {id:'b_signage',          text:'Signage Execution: Physically hang and verify all current cycle signage is correctly displayed in the gym + post photo to #LVLUPHQ.'},
   {id:'b_scorecard',        text:'Update your scorecard numbers in the dashboard for this week.'},
   {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
 ];
@@ -1001,7 +1000,6 @@ const NIKKI_WEEKLY = [
   {id:'n_supplies',        text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
   {id:'n_ad_invites',      text:'Program Growth: Invite 2 students to try the AD class + post names to #LVLUPHQ.'},
   {id:'n_lifelinks',       text:'Student Milestones: Review LifeLinks, award belt clips + post to #LVLUPHQ.'},
-  {id:'n_signage',         text:'Signage Execution: Physically hang and verify all current cycle signage is correctly displayed in the gym + post photo to #LVLUPHQ.'},
   {id:'n_instructor_stn',  text:'Instructor Station: Clean instructor station + take photo for #LVLUPHQ.'},
   {id:'n_scorecard',       text:'Update your scorecard numbers in the dashboard for this week.'},
   {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
@@ -1015,7 +1013,6 @@ const JOEY_WEEKLY = [
   {id:'j_supplies',        text:'Inventory Control: Check front desk/facility supplies and message #inventory with restocking needs.'},
   {id:'j_ad_invites',      text:'Program Growth: Invite 2 students to try the AD class + post their names to #LVLUPHQ.'},
   {id:'j_lifelinks',       text:'Student Milestones: Review LifeLinks and award belt clips + post to #LVLUPHQ.'},
-  {id:'j_signage',         text:'Signage Execution: Physically hang and verify all current cycle signage is correctly displayed in the gym + post photo to #LVLUPHQ.'},
   {id:'j_instructor_stn',  text:'Instructor Station Deep Clean: Clean instructor station + take photo for #LVLUPHQ.'},
   {id:'j_scorecard',       text:'Update your scorecard numbers in the dashboard for this week.'},
   {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
@@ -5936,6 +5933,7 @@ function taskPlaybook(task){
   return null;
 }
 /* ── Brand content pillars — rotates two pillars per week for the weekly Capture Content task ── */
+const CAPTURE_CONTENT_DROPBOX_URL = 'https://www.dropbox.com/scl/fo/msz00g3xc0v8cettbln62/AAMiDYDPUGd_tggXrn49ukc?rlkey=8agxrjhuvm7pa148wjbbyba9v&st=s4133m4b&e=1&dl=0';
 const CONTENT_PILLARS = [
   { name:'Student Wins',         icon:'🏆', ideas:['Stripe promotions','Competition results','First class stories','Confidence transformations','Perseverance moment'] },
   { name:'Family Culture',       icon:'🏠', ideas:['Parent testimonials','Birthday parties','Community events','Summer camp moments','Friendship moments'] },
@@ -6028,7 +6026,10 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
       html+='<div style="margin-left:34px"><input id="notes_'+section+'_'+task.id+'" type="text" placeholder="Enter student names..." style="width:100%;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" onkeydown="if(event.key===\'Enter\')completeTaskWithNotes(\''+section+'\',\''+task.id+'\')" /></div>';
     }
   }
-  if(_cpActive){ html+=renderContentPillarsBlock(_cpActive); }
+  if(_cpActive){
+    html+='<div style="margin-left:34px;margin-top:6px;"><a href="'+CAPTURE_CONTENT_DROPBOX_URL+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#0061fe;color:#fff;text-decoration:none;border-radius:8px;font-size:12px;font-weight:700;">📤 Upload to Dropbox</a></div>';
+    html+=renderContentPillarsBlock(_cpActive);
+  }
   if(task.subs&&task.subs.length){ html+='<ul style="margin:0 0 0 34px;padding-left:18px;color:var(--gray-500);font-size:12px;line-height:1.75;">'+task.subs.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>'; }
   html+='</div>';return html;
 }
