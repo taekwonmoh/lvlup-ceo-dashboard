@@ -3618,6 +3618,10 @@ function scMonthSundays(){
 }
 function scWeeklyUpdate(loc, sundayKey, metricId, value){ fbDebounce('scWeekly/' + loc + '/' + sundayKey + '/' + metricId, value === '' ? null : value); }
 function scGoalUpdate(loc, metricId, value){ fbDebounce('scGoals/' + loc + '/' + scdMonthKey() + '/' + metricId, value === '' ? null : value); }
+// Currency inputs are type=text so "$1,500" is accepted — strip formatting before saving so it isn't lost
+function scCleanNum(raw){ return (raw || '').replace(/[^0-9.]/g, ''); }
+function scWeeklyUpdateNum(loc, sundayKey, metricId, raw){ scWeeklyUpdate(loc, sundayKey, metricId, scCleanNum(raw)); }
+function scGoalUpdateNum(loc, metricId, raw){ scGoalUpdate(loc, metricId, scCleanNum(raw)); }
 function scWeeklySum(loc, monthKey, metricId){
   const locData = (state.scWeekly || {})[loc] || {}; let s = 0;
   Object.keys(locData).forEach(k => { if (k.slice(0, 7) === monthKey) s += parseFloat((locData[k] || {})[metricId]) || 0; });
@@ -3703,7 +3707,7 @@ function renderWeeklyScorecard(loc, colsArg){
   // Monthly Goal row (manual, top)
   h += '<tr style="background:#eef2ff;font-weight:700;"><td style="padding:7px 10px;color:#0f3460;white-space:nowrap;">🎯 Monthly Goal</td>';
   cols.forEach(c => { const v = goals[c.id];
-    h += '<td style="padding:3px;text-align:center;"><input type="number" inputmode="' + (c.currency ? 'decimal' : 'numeric') + '" value="' + (v != null && v !== '' ? esc(String(v)) : '') + '" onchange="scGoalUpdate(\'' + loc + '\',\'' + c.id + '\',this.value)" style="' + goalStyle + '"></td>'; });
+    h += '<td style="padding:3px;text-align:center;"><input type="' + (c.currency ? 'text' : 'number') + '" inputmode="' + (c.currency ? 'decimal' : 'numeric') + '" value="' + (v != null && v !== '' ? esc(String(v)) : '') + '" onchange="' + (c.currency ? 'scGoalUpdateNum' : 'scGoalUpdate') + '(\'' + loc + '\',\'' + c.id + '\',this.value)" style="' + goalStyle + '"></td>'; });
   h += '<td></td></tr>';
 
   // Monthly Total row (auto)
@@ -3722,7 +3726,7 @@ function renderWeeklyScorecard(loc, colsArg){
     cols.forEach(c => {
       if (c.computed){ h += '<td style="padding:3px;text-align:center;color:#ccc;">—</td>'; return; }
       const v = row[c.id];
-      h += '<td style="padding:3px;text-align:center;"><input type="number" inputmode="' + (c.currency ? 'decimal' : 'numeric') + '" value="' + (v != null && v !== '' ? esc(String(v)) : '') + '" onchange="scWeeklyUpdate(\'' + loc + '\',\'' + key + '\',\'' + c.id + '\',this.value)" style="' + inStyle + '"></td>'; });
+      h += '<td style="padding:3px;text-align:center;"><input type="' + (c.currency ? 'text' : 'number') + '" inputmode="' + (c.currency ? 'decimal' : 'numeric') + '" value="' + (v != null && v !== '' ? esc(String(v)) : '') + '" onchange="' + (c.currency ? 'scWeeklyUpdateNum' : 'scWeeklyUpdate') + '(\'' + loc + '\',\'' + key + '\',\'' + c.id + '\',this.value)" style="' + inStyle + '"></td>'; });
     h += '<td style="padding:3px;"><input value="' + esc(row.notes || '') + '" onchange="scWeeklyUpdate(\'' + loc + '\',\'' + key + '\',\'notes\',this.value)" style="width:100%;min-width:110px;border:1px solid #eee;border-radius:5px;padding:4px;font-size:12px;box-sizing:border-box;"></td>';
     h += '</tr>';
   });
