@@ -862,6 +862,7 @@ let state = {
   acq: { pinLoaded: false, pin: null, unlocked: false, monthOffset: 0, data: {}, _listeningMk: null, pinError: false },
   mktTab: 'content',
   contentRequests: {},
+  jamTasks: {},   // simple standalone "Jam" task list: jamTasks[id] = {task, priority, dueDate, done, ts}
   crDraft: null,
   crFilter: 'all'
 };
@@ -1806,6 +1807,11 @@ function listenAll() {
   const cancelRef = fbRef('cancellations');
   cancelRef.on('value', snap => { state.cancellations = snap.val() || {}; render(); });
   activeListeners.push({ ref: cancelRef, event: 'value' });
+
+  // Jam list (standalone task list)
+  const jamRef = fbRef('jamTasks');
+  jamRef.on('value', snap => { state.jamTasks = snap.val() || {}; render(); });
+  activeListeners.push({ ref: jamRef, event: 'value' });
 
   // Trial pipeline (first-day trials awaiting enrollment follow-up)
   const trialRef = fbRef('trialPipeline');
@@ -5554,6 +5560,59 @@ function renderHistoryMonthHeatmap(){
   return html;
 }
 
+/* ── Jam — standalone task list (task + priority + due date) ── */
+const JAM_PRIORITIES = [
+  { id:'high',   label:'High',   color:'#dc2626' },
+  { id:'medium', label:'Medium', color:'#d97706' },
+  { id:'low',    label:'Low',    color:'#2563eb' },
+];
+function jamAdd(){
+  const taskEl=document.getElementById('jamTaskInput'), prEl=document.getElementById('jamPriInput'), dueEl=document.getElementById('jamDueInput');
+  const task=(taskEl?taskEl.value:'').trim(); if(!task) return;
+  fbSet('jamTasks/j_'+Date.now(), { task, priority:(prEl?prEl.value:'medium'), dueDate:(dueEl?dueEl.value:'')||'', done:false, ts:Date.now() });
+}
+function jamUpdate(id, field, value){ fbDebounce('jamTasks/'+id+'/'+field, value===''?null:value); }
+function jamToggleDone(id){ const t=(state.jamTasks||{})[id]||{}; fbSet('jamTasks/'+id+'/done', !t.done); }
+function jamDelete(id){ if(!confirm('Delete this Jam task?')) return; fbSet('jamTasks/'+id, null); }
+function renderJamList(){
+  const items=Object.entries(state.jamTasks||{}).map(([id,v])=>({id,...(v||{})}));
+  const prRank={high:0,medium:1,low:2};
+  items.sort((a,b)=> (a.done?1:0)-(b.done?1:0) || (prRank[a.priority]??1)-(prRank[b.priority]??1) || (a.dueDate||'9999').localeCompare(b.dueDate||'9999') || (a.ts||0)-(b.ts||0));
+  const inCss='padding:8px 10px;border:1px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;background:#fff;';
+  const today=new Date().toISOString().split('T')[0];
+  let h='<div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;">';
+  h+='<div style="padding:14px 18px 10px;"><h3 style="margin:0 0 2px;font-size:16px;font-weight:800;color:var(--primary);">🎸 Jam</h3><p style="margin:0;font-size:12px;color:var(--gray-500);">A quick running task list — add a task, set a priority and a due date.</p></div>';
+  // Add form
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 18px 14px;border-bottom:1px solid var(--gray-100);">';
+  h+='<input id="jamTaskInput" placeholder="New task…" onkeydown="if(event.key===\'Enter\')jamAdd()" style="'+inCss+'flex:1;min-width:180px;">';
+  h+='<select id="jamPriInput" style="'+inCss+'">'+JAM_PRIORITIES.map(p=>'<option value="'+p.id+'"'+(p.id==='medium'?' selected':'')+'>'+p.label+'</option>').join('')+'</select>';
+  h+='<input id="jamDueInput" type="date" title="Due date" style="'+inCss+'">';
+  h+='<button onclick="jamAdd()" style="padding:9px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">+ Add</button>';
+  h+='</div>';
+  // List
+  if(!items.length){
+    h+='<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px;">No tasks yet — add one above.</div>';
+  }else{
+    h+='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:var(--gray-50);">';
+    ['','Task','Priority','Due',''].forEach((c,i)=>{ h+='<th style="padding:9px 10px;text-align:'+(i===1?'left':'center')+';font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--gray-500);">'+c+'</th>'; });
+    h+='</tr></thead><tbody>';
+    items.forEach(t=>{
+      const pr=JAM_PRIORITIES.find(p=>p.id===t.priority)||JAM_PRIORITIES[1];
+      const overdue=t.dueDate && t.dueDate<today && !t.done;
+      h+='<tr style="border-top:1px solid var(--gray-100);'+(t.done?'opacity:.55;':'')+'">';
+      h+='<td style="text-align:center;padding:8px 10px;width:34px;"><input type="checkbox" '+(t.done?'checked':'')+' onchange="jamToggleDone(\''+t.id+'\')" style="width:16px;height:16px;cursor:pointer;accent-color:var(--green);"></td>';
+      h+='<td style="padding:6px 10px;"><input value="'+esc(t.task||'')+'" onchange="jamUpdate(\''+t.id+'\',\'task\',this.value)" style="'+inCss+'width:100%;'+(t.done?'text-decoration:line-through;color:var(--gray-400);':'')+'"></td>';
+      h+='<td style="text-align:center;padding:6px 10px;"><select onchange="jamUpdate(\''+t.id+'\',\'priority\',this.value)" style="'+inCss+'color:'+pr.color+';font-weight:700;">'+JAM_PRIORITIES.map(p=>'<option value="'+p.id+'"'+(p.id===t.priority?' selected':'')+'>'+p.label+'</option>').join('')+'</select></td>';
+      h+='<td style="text-align:center;padding:6px 10px;white-space:nowrap;"><input type="date" value="'+esc(t.dueDate||'')+'" onchange="jamUpdate(\''+t.id+'\',\'dueDate\',this.value)" style="'+inCss+(overdue?'border-color:#dc2626;color:#dc2626;':'')+'">'+(overdue?' <span style="font-size:10px;color:#dc2626;font-weight:700;">overdue</span>':'')+'</td>';
+      h+='<td style="text-align:center;padding:6px 10px;width:34px;"><button onclick="jamDelete(\''+t.id+'\')" title="Delete task" style="background:none;border:none;color:var(--gray-300);cursor:pointer;font-size:16px;">×</button></td>';
+      h+='</tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  h+='</div>';
+  return h;
+}
+
 /*  -  -  Render Tasks Page  -  -  */
 function renderTasksPage(){
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
@@ -5586,9 +5645,11 @@ function renderTasksPage(){
     const cls=isActive?(gn?'active':'active lvlup'):'';
     html+='<button class="loc-btn '+cls+'" onclick="state.tasksTab=\'sheets\';setTasksLoc(\''+e.id+'\')" title="'+e.label+'">'+e.name+'</button>';
   });
+  html+='<button class="loc-btn '+(loc==='jam'&&state.tasksTab==='sheets'?'active lvlup':'')+'" onclick="state.tasksTab=\'sheets\';setTasksLoc(\'jam\')" title="Jam list">🎸 Jam</button>';
   html+='<button class="loc-btn'+(state.tasksTab==='history'?' active':'')+'" onclick="state.tasksTab=\'history\';render()" style="margin-left:auto;flex-shrink:0;'+(state.tasksTab==='history'?'background:var(--accent);color:#fff':'')+'">📊 History</button>';
   html+='</div>';
   if(state.tasksTab==='history'){html+=renderHistorySection();return html;}
+  if(loc==='jam'){ html+=renderJamList(); return html; }
 
   const locSignoffs=locData.weekly_signoff||{};
   const locDnw=locData.did_not_work||{};
