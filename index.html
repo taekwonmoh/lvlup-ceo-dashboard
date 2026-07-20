@@ -864,7 +864,10 @@ let state = {
   contentRequests: {},
   jamTasks: {},   // simple standalone "Jam" task list: jamTasks[id] = {task, priority, dueDate, done, ts}
   crDraft: null,
-  crFilter: 'all'
+  crFilter: 'all',
+  classPlaybook: {},
+  cpWeek: null,
+  cpEditing: false
 };
 
 let debounceTimers = {};
@@ -1918,6 +1921,10 @@ function listenAll() {
   activeListeners.push({ ref: adRef, event: 'value' });
 
   // Content Request board (replaces Asana social-media workflow)
+  const cpRef = fbRef('classPlaybook');
+  cpRef.on('value', snap => { state.classPlaybook = snap.val() || {}; render(); });
+  activeListeners.push({ ref: cpRef, event: 'value' });
+
   const crRef = fbRef('contentRequests');
   crRef.on('value', snap => { state.contentRequests = snap.val() || {}; render(); });
   activeListeners.push({ ref: crRef, event: 'value' });
@@ -2767,7 +2774,7 @@ function renderHomePage() {
   }
   html += '</div></div>';
 
-  html += '</div></div>';
+  html += renderClassPlaybook(cycle);
 
   html += '</div>'; // close home-grid
 
@@ -2775,6 +2782,59 @@ function renderHomePage() {
   html += '<div style="margin-top:8px">' + renderL10Page() + '</div>';
 
   return html;
+}
+
+/*  -  -  Class Playbook (per-week run-of-class, editable, complements the Mat Chat)  -  -  */
+const CLASS_PLAYBOOK_SECTIONS = [
+  { id: 'warmups',       label: '🔥 Warm-Ups' },
+  { id: 'curriculum',    label: '📋 Curriculum' },
+  { id: 'skillBuilding', label: '🎯 Skill Building' },
+  { id: 'conditioning',  label: '💪 Conditioning' },
+  { id: 'stretching',    label: '🧘 Stretching' },
+];
+
+function renderClassPlaybook(cycle) {
+  const cn = cycle.cycleNum;
+  const wk = state.cpWeek || cycle.weekNum;
+  const editing = !!state.cpEditing;
+  const accent = '#4338ca';
+  const data = (((state.classPlaybook || {})['c' + cn] || {})['w' + wk]) || {};
+
+  let h = '<div class="home-card">';
+  h += '<div class="home-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
+  h += '<div style="display:flex;align-items:center;gap:8px;"><span class="card-icon">📋</span><h3 style="margin:0;">Class Playbook — Week ' + wk + '</h3></div>';
+  h += '<button onclick="cpToggleEdit()" style="flex-shrink:0;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;background:' + (editing ? accent : '#f1f3f9') + ';color:' + (editing ? '#fff' : '#555') + ';">' + (editing ? '✓ Done' : '✏️ Edit') + '</button>';
+  h += '</div>';
+  h += '<div class="home-card-body">';
+  // Week selector (1–8, defaults to the current cycle week)
+  h += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px;">';
+  for (let w = 1; w <= 8; w++) {
+    const on = w === wk;
+    h += '<button onclick="setCpWeek(' + w + ')" title="Week ' + w + '" style="width:30px;height:28px;border-radius:7px;border:1px solid ' + (on ? accent : '#e3e6ef') + ';background:' + (on ? accent : '#fff') + ';color:' + (on ? '#fff' : '#9aa0b0') + ';font-size:12px;font-weight:800;cursor:pointer;">' + w + '</button>';
+  }
+  h += '</div>';
+  // Sections (all shown at once)
+  CLASS_PLAYBOOK_SECTIONS.forEach(s => {
+    const val = data[s.id] || '';
+    h += '<div class="mat-chat-section" style="border-left-color:' + accent + '">';
+    h += '<div class="mat-chat-label">' + s.label + '</div>';
+    if (editing) {
+      h += '<textarea onchange="cpUpdate(' + cn + ',' + wk + ',\'' + s.id + '\',this.value)" placeholder="Add for this week…" style="width:100%;box-sizing:border-box;min-height:52px;margin-top:5px;padding:8px 10px;border:1px solid #dde1ec;border-radius:8px;font-size:13px;font-family:inherit;line-height:1.5;resize:vertical;">' + esc(val) + '</textarea>';
+    } else if (val) {
+      h += '<div class="mat-chat-text">' + esc(val).replace(/\n/g, '<br>') + '</div>';
+    } else {
+      h += '<div style="color:var(--gray-400);font-size:12.5px;font-style:italic;">Not set yet — tap Edit to add.</div>';
+    }
+    h += '</div>';
+  });
+  h += '</div></div>';
+  return h;
+}
+
+function setCpWeek(w) { state.cpWeek = w; render(); }
+function cpToggleEdit() { state.cpEditing = !state.cpEditing; render(); }
+function cpUpdate(cn, wk, section, value) {
+  fbDebounce('classPlaybook/c' + cn + '/w' + wk + '/' + section, value.trim() === '' ? null : value);
 }
 
 function startCVQuiz() {
