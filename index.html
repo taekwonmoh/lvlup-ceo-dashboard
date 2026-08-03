@@ -9961,6 +9961,167 @@ function feedbackAddStudent() {
   nameEl.value = '';
 }
 
+/* ── Attendance sync → traffic-light classification ──────────
+   GREEN = checked in within 10 days AND ≥6 visits in last 30 days (~1.5×/wk)
+   YELLOW = checked in within 10 days but below the green bar
+   RED = no check-in in >10 days (or none found in the file)
+   Every sync re-classifies all matched active members; notes are untouched. */
+let _attParsed = null;
+const ATT_GREEN_VISITS = 6, ATT_RED_DAYS = 10;
+
+function attClassify(lastCheckIn, visits30) {
+  if (!lastCheckIn) return 'red';
+  const days = Math.floor((Date.now() - new Date(lastCheckIn + 'T00:00:00').getTime()) / 86400000);
+  if (days > ATT_RED_DAYS) return 'red';
+  if ((visits30 || 0) >= ATT_GREEN_VISITS) return 'green';
+  return 'yellow';
+}
+
+function attLastSeenChip(att) {
+  if (!att) return '';
+  if (!att.lastCheckIn) return ' <span title="No check-in found in the last attendance sync" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:#fef2f2;color:#dc2626;">👣 not seen</span>';
+  const days = Math.floor((Date.now() - new Date(att.lastCheckIn + 'T00:00:00').getTime()) / 86400000);
+  const col = days > ATT_RED_DAYS ? '#dc2626' : ((att.visits30 || 0) >= ATT_GREEN_VISITS ? '#16a34a' : '#d97706');
+  const bg  = days > ATT_RED_DAYS ? '#fef2f2' : ((att.visits30 || 0) >= ATT_GREEN_VISITS ? '#f0fdf4' : '#fffbeb');
+  const ago = days === 0 ? 'today' : days === 1 ? '1d ago' : days + 'd ago';
+  return ' <span title="Last check-in ' + att.lastCheckIn + ' · ' + (att.visits30 || 0) + ' visits in last 30 days" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:' + bg + ';color:' + col + ';">👣 ' + ago + ' · ' + (att.visits30 || 0) + '/30d</span>';
+}
+
+function feedbackOpenAttendance() {
+  const existing = document.getElementById('attSyncModal');
+  if (existing) existing.remove();
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const locOptions = ['waunakee','eastmad','verona'].map(l => '<option value="' + l + '"' + (l === 'waunakee' ? ' selected' : '') + '>' + LOC_LABELS[l] + '</option>').join('');
+  const modal = document.createElement('div');
+  modal.id = 'attSyncModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.onclick = function(e){ if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:28px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.2);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <h3 style="margin:0;font-size:16px;font-weight:800;color:#1a1a2e;">📊 Sync Attendance &amp; Classify</h3>
+        <button onclick="document.getElementById('attSyncModal').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa;padding:0 4px;">✕</button>
+      </div>
+      <p style="margin:0 0 16px;font-size:12.5px;color:#888;line-height:1.5;">Sets each active member's light from their check-ins: <b style="color:#16a34a;">green</b> = 6+ visits/30d, <b style="color:#d97706;">yellow</b> = seen ≤10 days but less often, <b style="color:#dc2626;">red</b> = no check-in in 10+ days. Re-run any time — notes are never changed.</p>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px;font-weight:700;color:#555;display:block;margin-bottom:5px;">LOCATION</label>
+        <select id="attSyncLoc" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-weight:600;" onchange="if(_attParsed)attendancePreview()">${locOptions}</select>
+      </div>
+      <div style="background:#f8f9ff;border:1px solid #dde1f0;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:800;color:#4169E1;margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px;">How to export attendance from GymDesk</div>
+        <ol style="margin:0;padding-left:18px;font-size:13px;color:#444;line-height:1.8;">
+          <li>In <strong>GymDesk</strong>, open <strong>Attendance / Check-ins</strong></li>
+          <li>Set the date range (last 30+ days recommended) and <strong>Export to CSV</strong></li>
+          <li>Upload it below — needs at least a <strong>Checked In</strong> date and <strong>Name</strong> column</li>
+        </ol>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:#0f766e;color:#fff;border-radius:9px;cursor:pointer;font-size:13px;font-weight:700;width:100%;justify-content:center;box-sizing:border-box;">
+          📂 Choose Attendance CSV File
+          <input type="file" accept=".csv,.CSV" onchange="attendanceParseCSV(this)" style="display:none;">
+        </label>
+        <div id="attCSVStatus" style="margin-top:8px;font-size:12px;"></div>
+      </div>
+      <div id="attPreview" style="margin-bottom:16px;"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="document.getElementById('attSyncModal').remove()" style="padding:9px 20px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#555;">Cancel</button>
+        <button id="attConfirmBtn" onclick="attendanceSyncConfirm()" disabled style="padding:9px 20px;border:none;border-radius:8px;background:#0f766e;color:#fff;cursor:pointer;font-size:13px;font-weight:700;opacity:0.5;">Sync &amp; Classify</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  _attParsed = null;
+}
+
+function attendanceParseCSV(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('attCSVStatus');
+  if (statusEl) { statusEl.innerHTML = '⏳ Parsing…'; statusEl.style.color = '#888'; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const rows = parseCSVToRows(e.target.result);
+    if (rows.length < 2) { if (statusEl) { statusEl.innerHTML = '⚠️ Empty or unreadable file.'; statusEl.style.color = '#b45309'; } return; }
+    const hdr = rows[0].map(h => (h || '').trim().toLowerCase());
+    const col = name => hdr.findIndex(h => h === name || h.includes(name));
+    const iChk = col('checked in'), iName = col('name'), iMid = col('member id');
+    if (iChk === -1 || iName === -1) { if (statusEl) { statusEl.innerHTML = '⚠️ Could not find "Checked In" and "Name" columns.'; statusEl.style.color = '#b45309'; } return; }
+    const byName = {}; let minD = null, maxD = null, rowCount = 0; const now = Date.now();
+    rows.slice(1).forEach(r => {
+      const nm = (r[iName] || '').trim(); if (!nm) return;
+      const raw = (r[iChk] || '').trim().split(' ')[0];
+      const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (!m) return;
+      const iso = m[3] + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0');
+      rowCount++;
+      if (!minD || iso < minD) minD = iso;
+      if (!maxD || iso > maxD) maxD = iso;
+      const key = normName(nm);
+      const rec = byName[key] || (byName[key] = { name: nm, memberId: (r[iMid] || '').trim(), dates: new Set() });
+      rec.dates.add(iso);
+    });
+    Object.values(byName).forEach(rec => {
+      const dates = [...rec.dates].sort();
+      rec.lastCheckIn = dates[dates.length - 1];
+      rec.visits30 = dates.filter(d => (now - new Date(d + 'T00:00:00').getTime()) / 86400000 <= 30).length;
+      delete rec.dates;
+    });
+    _attParsed = { byName, rows: rowCount, minD, maxD, students: Object.keys(byName).length };
+    attendancePreview();
+  };
+  reader.onerror = () => { if (statusEl) { statusEl.innerHTML = '❌ Could not read file.'; statusEl.style.color = '#dc2626'; } };
+  reader.readAsText(file);
+}
+
+function attendanceActiveAtLoc(loc) {
+  return Object.entries(state.feedback.roster || {})
+    .filter(([, v]) => v.location === loc && v.active !== false)
+    .map(([k, v]) => ({ key: k, ...v }));
+}
+
+function attendancePreview() {
+  if (!_attParsed) return;
+  const statusEl = document.getElementById('attCSVStatus');
+  const previewEl = document.getElementById('attPreview');
+  const btn = document.getElementById('attConfirmBtn');
+  const loc = (document.getElementById('attSyncLoc') || {}).value || 'waunakee';
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const active = attendanceActiveAtLoc(loc);
+  let g = 0, y = 0, r = 0, matched = 0;
+  active.forEach(s => {
+    const rec = _attParsed.byName[normName(s.name)];
+    if (rec) matched++;
+    const st = rec ? attClassify(rec.lastCheckIn, rec.visits30) : 'red';
+    if (st === 'green') g++; else if (st === 'yellow') y++; else r++;
+  });
+  const unmatched = _attParsed.students - matched;
+  if (statusEl) { statusEl.innerHTML = '✅ <strong>' + _attParsed.rows + '</strong> check-ins · <strong>' + _attParsed.students + '</strong> people · ' + _attParsed.minD + ' → ' + _attParsed.maxD; statusEl.style.color = '#15803d'; }
+  if (previewEl) {
+    previewEl.innerHTML = '<div style="background:#f8f9ff;border:1px solid #dde1f0;border-radius:10px;padding:12px 14px;font-size:13px;color:#444;line-height:1.7;">'
+      + 'Classifying <strong>' + active.length + '</strong> active ' + (LOC_LABELS[loc] || loc) + ' members:<br>'
+      + '<span style="color:#16a34a;font-weight:700;">● ' + g + ' green</span> &nbsp; <span style="color:#d97706;font-weight:700;">● ' + y + ' yellow</span> &nbsp; <span style="color:#dc2626;font-weight:700;">● ' + r + ' red</span><br>'
+      + '<span style="color:#888;font-size:12px;">' + matched + ' matched to check-ins · ' + (active.length - matched) + ' active with no check-in in file (→ red) · ' + unmatched + ' names in file not on the active roster (ignored)</span></div>';
+  }
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+}
+
+function attendanceSyncConfirm() {
+  if (!_attParsed) return;
+  const loc = (document.getElementById('attSyncLoc') || {}).value || 'waunakee';
+  const active = attendanceActiveAtLoc(loc);
+  const updates = {}; const now = Date.now();
+  active.forEach(s => {
+    const rec = _attParsed.byName[normName(s.name)];
+    const lastCheckIn = rec ? rec.lastCheckIn : null;
+    const visits30 = rec ? rec.visits30 : 0;
+    updates['feedbackRoster/' + s.key + '/status'] = attClassify(lastCheckIn, visits30);
+    updates['feedbackRoster/' + s.key + '/attendance'] = { lastCheckIn: lastCheckIn || null, visits30: visits30, syncedAt: now };
+  });
+  updates['feedbackRosterMeta/' + loc + '/lastAttendanceSyncAt'] = now;
+  db.ref().update(updates, err => {
+    if (!err) { const m = document.getElementById('attSyncModal'); if (m) m.remove(); }
+    else alert('Error syncing attendance: ' + err.message);
+  });
+}
+
 /* ── First 90 Days ──────────────────────────────────────── */
 function getDaysInJourney(startDate) {
   if (!startDate) return null;
@@ -10492,6 +10653,7 @@ function renderFeedbackPage() {
             (isInactive ? ' <span style="font-size:10px;color:#bbb;font-weight:400;">inactive</span>' : '') +
             (hasNotes ? ' <span title="Has notes" style="display:inline-block;width:7px;height:7px;background:#4169E1;border-radius:50%;margin-left:5px;vertical-align:middle;flex-shrink:0;"></span>' : '') +
             (journeyPhase ? ' <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:' + journeyPhase.bg + ';color:' + journeyPhase.color + ';">Day ' + journeyDays + '</span>' : '') +
+            attLastSeenChip(s.attendance) +
             (t._cycleStart ? (function(){ const r = feedbackCycleResetDate(t._cycleStart); const dLeft = Math.ceil((r.getTime() - Date.now()) / 86400000); const lbl = dLeft > 60 ? Math.round(dLeft / 30) + 'mo left' : Math.max(0, dLeft) + 'd left'; const near = dLeft <= 30; return ' <span title="6-month communication cycle · resets ' + r.toLocaleDateString() + '" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:' + (near ? '#fffbeb' : '#f0fdf4') + ';color:' + (near ? '#b45309' : '#15803d') + ';">🔄 ' + lbl + '</span>'; })() : '') +
           '</td>' +
           (locationFilter === 'all' ? '<td style="padding:10px 10px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
@@ -10532,6 +10694,7 @@ function renderFeedbackPage() {
       '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
         '<button onclick="feedbackOpenSync()" style="padding:9px 18px;background:#4169E1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">🔄 Sync Roster</button>' +
+        '<button onclick="feedbackOpenAttendance()" style="padding:9px 18px;background:#0f766e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">📊 Sync Attendance</button>' +
         '<button onclick="feedbackGenerateReports()" style="padding:9px 18px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">⚡ ' + (selectedCount > 0 ? 'Generate (' + selectedCount + ')' : 'Generate Reports') + '</button>' +
       '</div>' +
     '</div>' +
