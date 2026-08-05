@@ -10011,6 +10011,24 @@ function attLastSeenChip(att) {
   return ' <span title="Last check-in ' + att.lastCheckIn + ' · ' + (att.visits30 || 0) + ' visits in last 30 days" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:' + bg + ';color:' + col + ';">👣 ' + ago + ' · ' + (att.visits30 || 0) + '/30d</span>';
 }
 
+function attColumnCell(att) {
+  const base = 'padding:10px 8px;text-align:center;white-space:nowrap;';
+  if (!att || (!att.lastCheckIn && !att.syncedAt)) {
+    return '<td style="' + base + 'font-size:11px;color:#cbd5e1;">—</td>';
+  }
+  if (!att.lastCheckIn) {
+    return '<td style="' + base + '"><div style="font-size:12px;font-weight:700;color:#dc2626;">Never</div><div style="font-size:9px;font-weight:700;color:#dc2626;margin-top:1px;">🔴 Away</div></td>';
+  }
+  const d = new Date(att.lastCheckIn + 'T00:00:00');
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  const dateStr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getDate();
+  let label, col;
+  if (days > ATT_RED_DAYS) { label = '🔴 Away · ' + days + 'd'; col = '#dc2626'; }
+  else if ((att.visits30 || 0) >= ATT_GREEN_VISITS) { label = '🟢 Regular · ' + (att.visits30 || 0) + '/30d'; col = '#16a34a'; }
+  else { label = '🟡 Spotty · ' + (att.visits30 || 0) + '/30d'; col = '#d97706'; }
+  return '<td style="' + base + '"><div style="font-size:12px;font-weight:700;color:#1a1a2e;">' + dateStr + '</div><div style="font-size:9px;font-weight:700;color:' + col + ';margin-top:1px;">' + label + '</div></td>';
+}
+
 function feedbackOpenAttendance() {
   const existing = document.getElementById('attSyncModal');
   if (existing) existing.remove();
@@ -10623,7 +10641,7 @@ function renderFeedbackPage() {
   // ── Rows ──
   let rows = '';
   if (!displayed.length) {
-    rows = '<tr><td colspan="11" style="text-align:center;padding:36px;color:#999;font-size:13px;">' +
+    rows = '<tr><td colspan="13" style="text-align:center;padding:36px;color:#999;font-size:13px;">' +
       (Object.keys(roster).length === 0 ? 'No students yet — sync a roster to get started.' : 'No students to display.') +
       '</td></tr>';
   } else {
@@ -10643,7 +10661,7 @@ function renderFeedbackPage() {
       if (locationFilter === 'all') {
         const activeCount = group.filter(s => s.active !== false).length;
         const redCount    = group.filter(s => s.active !== false && s.status === 'red').length;
-        rows += '<tr><td colspan="11" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' +
+        rows += '<tr><td colspan="13" style="padding:8px 12px;background:#f5f7ff;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.5px;">' +
           (LOC_LABELS[loc] || 'Unknown') + ' — ' + activeCount + ' active' +
           (redCount ? ' · <span style="color:#ef4444;">⚠ ' + redCount + ' at risk</span>' : '') +
           (showInactive && group.length > activeCount ? ' · ' + (group.length - activeCount) + ' inactive' : '') +
@@ -10677,10 +10695,10 @@ function renderFeedbackPage() {
             (isInactive ? ' <span style="font-size:10px;color:#bbb;font-weight:400;">inactive</span>' : '') +
             (hasNotes ? ' <span title="Has notes" style="display:inline-block;width:7px;height:7px;background:#4169E1;border-radius:50%;margin-left:5px;vertical-align:middle;flex-shrink:0;"></span>' : '') +
             (journeyPhase ? ' <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:' + journeyPhase.bg + ';color:' + journeyPhase.color + ';">Day ' + journeyDays + '</span>' : '') +
-            attLastSeenChip(s.attendance) +
             (t._cycleStart ? (function(){ const r = feedbackCycleResetDate(t._cycleStart); const dLeft = Math.ceil((r.getTime() - Date.now()) / 86400000); const lbl = dLeft > 60 ? Math.round(dLeft / 30) + 'mo left' : Math.max(0, dLeft) + 'd left'; const near = dLeft <= 30; return ' <span title="6-month communication cycle · resets ' + r.toLocaleDateString() + '" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;background:' + (near ? '#fffbeb' : '#f0fdf4') + ';color:' + (near ? '#b45309' : '#15803d') + ';">🔄 ' + lbl + '</span>'; })() : '') +
           '</td>' +
           (locationFilter === 'all' ? '<td style="padding:10px 10px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
+          attColumnCell(s.attendance) +
           INTERACTIONS.map(i => i.initials ? initialsCell(s.key, i.field, t[i.field], isInactive, (t.dates || {})[i.field]) : chk(s.key, i.field, !!t[i.field], isInactive, (t.dates || {})[i.field])).join('') +
           (function() {
             const hasFeedback = !!(t.instructorFeedback && t.instructorFeedback.trim());
@@ -10800,6 +10818,7 @@ function renderFeedbackPage() {
           '<th style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;width:60px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">Status</th>' +
           '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">Name</th>' +
           (locationFilter === 'all' ? '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">Location</th>' : '') +
+          '<th style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="Date of last check-in and how regularly they attend (from the attendance sync)">Last Attended</th>' +
           INTERACTIONS.map(i => '<th style="padding:10px 6px;text-align:center;font-size:17px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="' + i.label + '">' + i.icon + '</th>').join('') +
           '<th style="padding:10px 6px;text-align:center;font-size:17px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="Instructor Feedback">💬</th>' +
           '<th style="width:80px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;"></th>' +
