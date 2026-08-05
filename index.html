@@ -5041,6 +5041,13 @@ function scdLatestRevenue(locId, monthIdx) {
   return latest;
 }
 
+function goalSetOverride(month, val) {
+  const path = 'goals/2026/vacationOverride/' + month;
+  const v = parseFloat(val);
+  if (val === '' || val === null || val === undefined || !Number.isFinite(v)) fbSet(path, null);
+  else fbSet(path, v);
+}
+
 function renderGoalsSubTabs() {
   const tab = state.goalsTab || 'annual';
   const tabs = [{ id:'annual', label:'🏆 Annual Tracker' }, { id:'monthly', label:'📋 Monthly Plan' }];
@@ -5074,19 +5081,26 @@ function renderGoalsPage() {
   const monthData = [];
   let latestWithData = -1;
 
+  const vacOverride = (state.goals && state.goals.vacationOverride) || {};
   for (let m = 0; m < 12; m++) {
     let monthActual = 0, monthPlanned = 0;
     allLocs.forEach(loc => {
       monthActual  += getGoalActualRevenue(loc, m);
       monthPlanned += getFinGoal(loc, m);
     });
+    // Per-month manual override: an authoritative company-wide total that takes
+    // precedence over the summed per-location figure (vacation tracker only)
+    const autoActual = monthActual;
+    const ovRaw = vacOverride[MFULL[m]];
+    const overridden = ovRaw !== undefined && ovRaw !== null && ovRaw !== '' && Number.isFinite(parseFloat(ovRaw));
+    if (overridden) monthActual = parseFloat(ovRaw);
     cumulativeActual  += monthActual;
     cumulativePlanned += monthPlanned;
     const pace = monthActual - monthPlanned; // this month's +/-
     const ahead = cumulativeActual - cumulativePlanned; // cumulative +/-
     const hasData = monthActual > 0;
     if (hasData) latestWithData = m;
-    monthData.push({ actual: monthActual, planned: monthPlanned, pace, cumActual: cumulativeActual, cumPlanned: cumulativePlanned, ahead, hasData });
+    monthData.push({ actual: monthActual, planned: monthPlanned, pace, cumActual: cumulativeActual, cumPlanned: cumulativePlanned, ahead, hasData, autoActual, overridden });
   }
 
   const ytdActual   = latestWithData >= 0 ? monthData[latestWithData].cumActual : 0;
@@ -5133,8 +5147,12 @@ function renderGoalsPage() {
   html += '</div>';
 
   // Monthly grid
-  html += '<div style="padding:4px 20px 0;font-size:12px;color:var(--gray-500);font-weight:600;letter-spacing:0.3px">Monthly Pace — actual vs goal (cumulative)</div>';
-  html += '<div style="padding:2px 20px 0;font-size:10px;color:var(--gray-400)">Current-month actuals include the latest nightly EOS revenue reports · the in-progress month is measured against its goal to date</div>';
+  const editingActuals = !!state.goalEditActuals;
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 20px 0;flex-wrap:wrap;">';
+  html += '<div style="font-size:12px;color:var(--gray-500);font-weight:600;letter-spacing:0.3px">Monthly Pace — actual vs goal (cumulative)</div>';
+  html += '<button onclick="state.goalEditActuals=!state.goalEditActuals;render()" style="border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;background:' + (editingActuals ? '#1a1a2e' : '#f1f3f9') + ';color:' + (editingActuals ? '#fff' : '#555') + ';">' + (editingActuals ? '✓ Done' : '✏️ Adjust actuals') + '</button>';
+  html += '</div>';
+  html += '<div style="padding:2px 20px 0;font-size:10px;color:var(--gray-400)">Current-month actuals include the latest nightly EOS revenue reports · the in-progress month is measured against its goal to date. Use “Adjust actuals” to enter an authoritative monthly total that overrides the computed figure.</div>';
   html += '<div class="goal-grid">';
   MONTHS_SHORT.forEach((mon, i) => {
     const md = monthData[i];
@@ -5159,6 +5177,12 @@ function renderGoalsPage() {
       html += '<div style="font-size:10px;color:var(--gray-600)">Goal: ' + fmtCurrency(md.planned) + '</div>';
     } else {
       html += '<div style="font-size:12px;color:var(--gray-700);padding:4px 0">—</div>';
+    }
+    if (editingActuals && i <= currentMonthIdx) {
+      const ovCur = vacOverride[MFULL[i]];
+      html += '<input type="number" step="0.01" value="' + (ovCur !== undefined && ovCur !== null ? ovCur : '') + '" placeholder="auto ' + Math.round(md.autoActual) + '" onchange="goalSetOverride(\'' + MFULL[i] + '\',this.value)" style="width:100%;box-sizing:border-box;margin-top:5px;padding:5px 6px;border:1px solid #cbd5e1;border-radius:6px;font-size:11px;text-align:center;" title="Enter this month&#39;s authoritative total. Clear to revert to the computed value.">';
+    } else if (md.overridden) {
+      html += '<div style="font-size:9px;color:#7c3aed;font-weight:700;margin-top:2px;" title="Manual override — computed figure was ' + fmtCurrency(md.autoActual) + '">✎ adjusted</div>';
     }
     html += '</div>';
   });
