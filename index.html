@@ -842,6 +842,8 @@ let state = {
   scWeekly: {},   // weekly instructor scorecard: scWeekly[loc][YYYY-MM-DD Sunday][metricId]
   scGoals: {},    // monthly goals:               scGoals[loc][YYYY-MM][metricId]
   cancellations: {}, // cancellation save list:    cancellations[loc][key] = {name,date,reason,notes}
+  cancellationRequests: {}, // form-fed hold/cancellation requests (Apps Script webhook → Firebase)
+  holdsFilter: 'all',
   rocks: { company: [], individual: {} },
   events: [],
   goals: {},
@@ -1810,6 +1812,11 @@ function listenAll() {
   cancelRef.on('value', snap => { state.cancellations = snap.val() || {}; render(); });
   activeListeners.push({ ref: cancelRef, event: 'value' });
 
+  // Hold/cancellation requests (fed by the Google Form via Apps Script webhook)
+  const crqRef = fbRef('cancellationRequests');
+  crqRef.on('value', snap => { state.cancellationRequests = snap.val() || {}; render(); });
+  activeListeners.push({ ref: crqRef, event: 'value' });
+
   // Jam list (standalone task list)
   const jamRef = fbRef('jamTasks');
   jamRef.on('value', snap => { state.jamTasks = snap.val() || {}; render(); });
@@ -2229,7 +2236,92 @@ function renderOpsPage() {
 }
 
 function renderMembersPage() {
-  return renderFeedbackPage();
+  const s = state.activeSection;
+  const pending = crqAll().filter(r => !r.status).length;
+  const nav = renderGroupSubNav([
+    { id: 'feedback', label: '👥 Students' },
+    { id: 'holds',    label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') },
+  ]);
+  if (s === 'holds') return nav + renderHoldsPage();
+  return nav + renderFeedbackPage();
+}
+
+/* ── Holds & Cancellations — form-fed request queue ─────────── */
+const CRQ_STATUSES = [
+  { id: 'processed', label: 'Processed', color: '#2563eb' },
+  { id: 'canceled',  label: 'Canceled',  color: '#dc2626' },
+  { id: 'frozen',    label: 'Frozen',    color: '#0891b2' },
+];
+const CRQ_LOC = { waunakee: 'Waunakee', verona: 'Verona', eastmad: 'East Madison' };
+
+function crqAll(){ return Object.entries(state.cancellationRequests || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
+function crqSetStatus(id, status){ const cur = ((state.cancellationRequests || {})[id] || {}).status; fbSet('cancellationRequests/' + id + '/status', cur === status ? null : status); }
+function crqSetCompletedBy(id, val){ fbDebounce('cancellationRequests/' + id + '/completedBy', (val || '').trim().toUpperCase() || null); }
+function crqDelete(id){ if (!confirm('Delete this request from the tracker?')) return; fbSet('cancellationRequests/' + id, null); }
+function crqSetFilter(f){ state.holdsFilter = f; render(); }
+function fmtReqDate(ts){ if (!ts) return ''; const d = new Date(ts); if (isNaN(d.getTime())) return String(ts); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+
+function renderHoldsPage(){
+  const all = crqAll().sort((a, b) => (b.receivedAt || 0) - (a.receivedAt || 0));
+  const filter = state.holdsFilter || 'all';
+  const statusOf = r => r.status || 'pending';
+  const counts = { pending: 0, processed: 0, canceled: 0, frozen: 0 };
+  all.forEach(r => { counts[statusOf(r)] = (counts[statusOf(r)] || 0) + 1; });
+  const filtered = filter === 'all' ? all : all.filter(r => statusOf(r) === filter);
+
+  let h = '<div class="page" style="max-width:960px;">';
+  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🧊 Holds &amp; Cancellations</h2><p style="margin:0;font-size:13px;color:#888;">Membership hold and cancellation requests from the form. Set a status and mark who completed the action.</p></div>';
+  const stat = (n, label, color) => '<div style="flex:1;min-width:88px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:12px 14px;text-align:center;box-shadow:var(--shadow);"><div style="font-size:20px;font-weight:800;color:' + color + ';">' + n + '</div><div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;">' + label + '</div></div>';
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' + stat(all.length, 'Total', '#1a1a2e') + stat(counts.pending, 'Pending', '#d97706') + stat(counts.processed, 'Processed', '#2563eb') + stat(counts.canceled, 'Canceled', '#dc2626') + stat(counts.frozen, 'Frozen', '#0891b2') + '</div>';
+  const chip = (id, label) => '<button onclick="crqSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + label + '</button>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All') + chip('pending', 'Pending') + chip('processed', 'Processed') + chip('canceled', 'Canceled') + chip('frozen', 'Frozen') + '</div>';
+
+  if (!all.length) {
+    h += '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;">No requests yet. Once the form webhook is connected, submissions appear here automatically.</div>';
+    return h + '</div>';
+  }
+  if (!filtered.length) h += '<div style="text-align:center;padding:28px;color:#aaa;font-size:13px;">No ' + filter + ' requests.</div>';
+  filtered.forEach(r => { h += renderHoldCard(r); });
+  h += '</div>';
+  return h;
+}
+
+function renderHoldCard(r){
+  const locN = CRQ_LOC[r.location] || r.location || '';
+  const action = r.action || '';
+  const isCancel = /cancel/i.test(action);
+  const isHold = /hold/i.test(action);
+  const actColor = isCancel ? '#dc2626' : isHold ? '#0891b2' : '#64748b';
+  const actBg = isCancel ? '#fef2f2' : isHold ? '#ecfeff' : '#f1f5f9';
+  const st = r.status || 'pending';
+  const reason = isCancel ? (r.reasonCancel || r.reasonHold || '') : (r.reasonHold || r.reasonCancel || '');
+  let h = '<div style="background:#fff;border:1px solid #e8eaf0;border-left:4px solid ' + actColor + ';border-radius:12px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);">';
+  h += '<div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;">';
+  h += '<div style="flex:1;min-width:180px;">';
+  h += '<div style="font-size:15px;font-weight:800;color:#1a1a2e;">' + esc(r.name || '—') + '</div>';
+  h += '<div style="font-size:11px;color:#888;margin-top:2px;">' + esc(locN) + (r.rank ? ' · ' + esc(r.rank) : '') + (r.email ? ' · ' + esc(r.email) : '') + '</div>';
+  h += '</div>';
+  if (st === 'pending') h += '<span style="flex-shrink:0;font-size:10px;font-weight:800;color:#d97706;background:#fffbeb;padding:3px 9px;border-radius:6px;">● PENDING</span>';
+  if (action) h += '<span style="flex-shrink:0;font-size:11px;font-weight:800;color:' + actColor + ';background:' + actBg + ';padding:3px 10px;border-radius:6px;">' + esc(action) + '</span>';
+  h += '</div>';
+  h += '<div style="margin-top:8px;font-size:12.5px;color:#555;line-height:1.6;">';
+  if (reason) h += '<div><b style="color:#999;font-weight:700;">Reason:</b> ' + esc(reason) + '</div>';
+  if (isHold && r.holdStart) h += '<div><b style="color:#999;font-weight:700;">Hold starts:</b> ' + esc(r.holdStart) + '</div>';
+  if (r.timestamp) h += '<div><b style="color:#999;font-weight:700;">Submitted:</b> ' + esc(fmtReqDate(r.timestamp)) + '</div>';
+  if (r.feedback) h += '<div style="font-style:italic;color:#777;margin-top:2px;">“' + esc(r.feedback) + '”</div>';
+  h += '</div>';
+  h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f1f3f9;margin-top:10px;padding-top:10px;">';
+  CRQ_STATUSES.forEach(s => {
+    const on = st === s.id;
+    h += '<button onclick="crqSetStatus(\'' + r.id + '\',\'' + s.id + '\')" style="padding:5px 12px;border-radius:8px;border:1px solid ' + (on ? s.color : '#e3e6ef') + ';background:' + (on ? s.color : '#fff') + ';color:' + (on ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (on ? '✓ ' : '') + s.label + '</button>';
+  });
+  h += '<span style="margin-left:auto;display:flex;align-items:center;gap:6px;">';
+  h += '<label style="font-size:11px;font-weight:700;color:#888;">Completed by</label>';
+  h += '<input value="' + esc(r.completedBy || '') + '" maxlength="4" placeholder="XX" onchange="crqSetCompletedBy(\'' + r.id + '\',this.value)" style="width:52px;text-align:center;text-transform:uppercase;border:1px solid ' + (r.completedBy ? '#16a34a' : '#e3e6ef') + ';border-radius:6px;padding:4px;font-size:12px;font-weight:700;color:' + (r.completedBy ? '#16a34a' : '#555') + ';">';
+  h += '<button onclick="crqDelete(\'' + r.id + '\')" title="Delete" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 4px;" onmouseover="this.style.color=\'#dc2626\'" onmouseout="this.style.color=\'#ccc\'">🗑</button>';
+  h += '</span></div>';
+  h += '</div>';
+  return h;
 }
 
 function renderGrowthPage() {
@@ -2567,7 +2659,7 @@ function render() {
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
      ['tasks','scorecard','events'].includes(s)                               ? renderOpsPage()       :
-     ['feedback','watchlist'].includes(s)                                     ? renderMembersPage()   :
+     ['feedback','watchlist','holds'].includes(s)                             ? renderMembersPage()   :
      ['goals','marketing'].includes(s)                                        ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
      s === 'leadership'                                                       ? renderLeadershipPage() :
@@ -2580,7 +2672,7 @@ function renderHeader() {
   const getGroup = s => {
     if (s === 'home') return 'home';
     if (['tasks','scorecard','events','performance'].includes(s)) return 'ops';
-    if (['feedback','watchlist'].includes(s))                  return 'members';
+    if (['feedback','watchlist','holds'].includes(s))          return 'members';
     if (['goals','marketing','monthlyGoals'].includes(s))      return 'growth';
     if (s === 'development')                                   return 'resources';
     if (s === 'leadership')                                    return 'leadership';
