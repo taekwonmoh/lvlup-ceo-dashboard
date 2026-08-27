@@ -2320,16 +2320,17 @@ function renderTestingPrepPage(){
 }
 
 /* ── Applications & Rollovers — unified processing queue ───── */
+const ATA_PORTAL_URL = 'https://www.atamartialarts.com';
 const APP_TYPES = {
-  leadership: { label: 'Leadership', color: '#7c3aed', steps: [
-    { id: 'ata',      label: 'Submit to ATA' },
+  leadership: { label: 'Athlete Development', color: '#7c3aed', ata: true, steps: [
+    { id: 'ata',      label: 'Register in ATA as Leadership' },
+    { id: 'uniform',  label: 'Order leadership uniform' },
+    { id: 'bme',      label: 'Order combat weapon (BME)' },
+    { id: 'wallbelt', label: 'Order embroidered Black Belt for wall' },
     { id: 'gymdesk',  label: 'Update GymDesk membership' },
-    { id: 'uniform',  label: 'Order uniform' },
-    { id: 'bme',      label: 'Label Combat BME' },
-    { id: 'wallbelt', label: 'Order Black Belt for wall' },
   ] },
-  legacy: { label: 'Legacy', color: '#0891b2', steps: [
-    { id: 'ata',     label: 'Submit to ATA' },
+  legacy: { label: 'Legacy', color: '#0891b2', ata: true, steps: [
+    { id: 'ata',     label: 'Submit Legacy upgrade in ATA' },
     { id: 'gymdesk', label: 'Update GymDesk membership' },
   ] },
   rollover: { label: 'Rollover', color: '#16a34a', steps: [
@@ -2403,8 +2404,26 @@ function renderAppCard(a){
     const on = !!(a.steps || {})[s.id];
     h += '<button onclick="appToggleStep(\'' + a.id + '\',\'' + s.id + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:8px;border:1px solid ' + (on ? '#16a34a' : '#dde1ec') + ';background:' + (on ? '#f0fdf4' : '#fff') + ';color:' + (on ? '#15803d' : '#555') + ';font-size:12px;font-weight:600;cursor:pointer;">' + (on ? '✅' : '⬜') + ' ' + esc(s.label) + '</button>';
   });
-  h += '</div></div>';
+  h += '</div>';
+  // ATA portal submission helper (manual portal — no API, so we make it one click + paste-ready)
+  if (t.ata){
+    h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;border-top:1px dashed #eef0f6;padding-top:9px;">';
+    h += '<span style="font-size:11px;font-weight:800;color:' + t.color + ';">ATA submission:</span>';
+    h += '<a href="' + ATA_PORTAL_URL + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:' + t.color + ';color:#fff;text-decoration:none;border-radius:8px;font-size:12px;font-weight:700;">🔗 Open ATA portal</a>';
+    h += '<button onclick="appCopyForAta(\'' + a.id + '\',this)" style="padding:5px 12px;background:#f1f3f9;border:none;border-radius:8px;font-size:12px;font-weight:700;color:#555;cursor:pointer;">📋 Copy details</button>';
+    if (a.type === 'leadership') h += '<span style="font-size:10.5px;color:#888;line-height:1.4;">Must be registered as <b>Leadership</b> in ATA for tournament points to count toward state/district/world.</span>';
+    h += '</div>';
+  }
+  h += '</div>';
   return h;
+}
+
+function appCopyForAta(id, btn){
+  const a = (state.applications || {})[id] || {};
+  const prog = a.type === 'leadership' ? 'Leadership (Athlete Development)' : a.type === 'legacy' ? 'Legacy' : (a.type || '');
+  const txt = 'Student: ' + (a.name || '') + '\nProgram: ' + prog + '\nLocation: ' + (APP_LOC[a.location] || a.location || '');
+  try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(function(){}); } catch (e) {}
+  if (btn){ const o = btn.textContent; btn.textContent = '✓ Copied'; btn.style.color = '#16a34a'; setTimeout(() => { btn.textContent = o; btn.style.color = '#555'; }, 1300); }
 }
 
 function renderMembersPage() {
