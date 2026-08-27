@@ -845,6 +845,8 @@ let state = {
   cancellationRequests: {}, // form-fed hold/cancellation requests (Apps Script webhook → Firebase)
   holdsFilter: 'all',
   testingPrep: {}, // testingPrep[cycleTestKey][stepId] = { wau,emad,ver | x, by }
+  applications: {}, // Leadership/Legacy/Rollover processing queue
+  appFilter: 'all',
   rocks: { company: [], individual: {} },
   events: [],
   goals: {},
@@ -1823,6 +1825,11 @@ function listenAll() {
   tpRef.on('value', snap => { state.testingPrep = snap.val() || {}; render(); });
   activeListeners.push({ ref: tpRef, event: 'value' });
 
+  // Applications & rollovers processing queue
+  const appRef = fbRef('applications');
+  appRef.on('value', snap => { state.applications = snap.val() || {}; render(); });
+  activeListeners.push({ ref: appRef, event: 'value' });
+
   // Jam list (standalone task list)
   const jamRef = fbRef('jamTasks');
   jamRef.on('value', snap => { state.jamTasks = snap.val() || {}; render(); });
@@ -2317,14 +2324,105 @@ function renderTestingPrepPage(){
   return html;
 }
 
+/* ── Applications & Rollovers — unified processing queue ───── */
+const APP_TYPES = {
+  leadership: { label: 'Leadership', color: '#7c3aed', steps: [
+    { id: 'ata',      label: 'Submit to ATA' },
+    { id: 'gymdesk',  label: 'Update GymDesk membership' },
+    { id: 'uniform',  label: 'Order uniform' },
+    { id: 'bme',      label: 'Label Combat BME' },
+    { id: 'wallbelt', label: 'Order Black Belt for wall' },
+  ] },
+  legacy: { label: 'Legacy', color: '#0891b2', steps: [
+    { id: 'ata',     label: 'Submit to ATA' },
+    { id: 'gymdesk', label: 'Update GymDesk membership' },
+  ] },
+  rollover: { label: 'Rollover', color: '#16a34a', steps: [
+    { id: 'ata',     label: 'Add student to ATA' },
+    { id: 'card',    label: 'Create student card' },
+    { id: 'gymdesk', label: 'Update GymDesk membership' },
+  ] },
+};
+const APP_ORDER = ['leadership', 'legacy', 'rollover'];
+const APP_LOC = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+
+function appAll(){ return Object.entries(state.applications || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
+function appIsDone(a){ const t = APP_TYPES[a.type]; return t ? t.steps.every(s => (a.steps || {})[s.id]) : false; }
+function appAdd(){
+  const nameEl = document.getElementById('appNewName');
+  const name = (nameEl.value || '').trim(); if (!name) { nameEl.focus(); return; }
+  fbSet('applications/app_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), {
+    name: name, location: document.getElementById('appNewLoc').value, type: document.getElementById('appNewType').value,
+    createdAt: Date.now(), steps: {}, by: ''
+  });
+  nameEl.value = '';
+}
+function appToggleStep(id, stepId){ const cur = (((state.applications || {})[id] || {}).steps || {})[stepId]; fbSet('applications/' + id + '/steps/' + stepId, cur ? null : true); }
+function appSetBy(id, val){ fbDebounce('applications/' + id + '/by', (val || '').trim().toUpperCase() || null); }
+function appDelete(id){ if (!confirm('Remove this application from the tracker?')) return; fbSet('applications/' + id, null); }
+function appSetFilter(f){ state.appFilter = f; render(); }
+
+function renderApplicationsPage(){
+  const all = appAll().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const filter = state.appFilter || 'all';
+  const open = all.filter(a => !appIsDone(a));
+  let filtered = all;
+  if (filter === 'open') filtered = open;
+  else if (filter === 'done') filtered = all.filter(a => appIsDone(a));
+  else if (filter !== 'all') filtered = all.filter(a => a.type === filter);
+
+  let h = '<div class="page" style="max-width:900px;">';
+  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">📋 Applications &amp; Rollovers</h2><p style="margin:0;font-size:13px;color:#888;">Process Leadership, Legacy, and membership-rollover paperwork — every step tracked so nothing is skipped.</p></div>';
+  h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:12px 14px;margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+  h += '<input id="appNewName" placeholder="Student name" onkeydown="if(event.key===\'Enter\')appAdd()" style="flex:1;min-width:150px;padding:8px 11px;border:1px solid #dde1ec;border-radius:8px;font-size:13px;">';
+  h += '<select id="appNewType" style="padding:8px 10px;border:1px solid #dde1ec;border-radius:8px;font-size:13px;background:#fff;">' + APP_ORDER.map(t => '<option value="' + t + '">' + APP_TYPES[t].label + '</option>').join('') + '</select>';
+  h += '<select id="appNewLoc" style="padding:8px 10px;border:1px solid #dde1ec;border-radius:8px;font-size:13px;background:#fff;">' + Object.entries(APP_LOC).map(([k, l]) => '<option value="' + k + '">' + l + '</option>').join('') + '</select>';
+  h += '<button onclick="appAdd()" style="padding:8px 16px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">+ Add</button>';
+  h += '</div>';
+  const chip = (id, label) => '<button onclick="appSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + label + '</button>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All (' + all.length + ')') + chip('open', 'Open (' + open.length + ')') + chip('done', 'Done') + chip('leadership', 'Leadership') + chip('legacy', 'Legacy') + chip('rollover', 'Rollover') + '</div>';
+  if (!all.length) { h += '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;">No applications yet. Add one above as they come in.</div>'; return h + '</div>'; }
+  if (!filtered.length) h += '<div style="text-align:center;padding:28px;color:#aaa;font-size:13px;">Nothing here.</div>';
+  filtered.forEach(a => { h += renderAppCard(a); });
+  h += '</div>';
+  return h;
+}
+
+function renderAppCard(a){
+  const t = APP_TYPES[a.type]; if (!t) return '';
+  const doneSteps = t.steps.filter(s => (a.steps || {})[s.id]).length;
+  const complete = doneSteps === t.steps.length;
+  let h = '<div style="background:#fff;border:1px solid #e8eaf0;border-left:4px solid ' + t.color + ';border-radius:12px;padding:13px 15px;margin-bottom:10px;box-shadow:var(--shadow);' + (complete ? 'opacity:.7;' : '') + '">';
+  h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">';
+  h += '<span style="font-size:11px;font-weight:800;color:#fff;background:' + t.color + ';padding:2px 8px;border-radius:5px;">' + t.label + '</span>';
+  h += '<span style="font-size:15px;font-weight:800;color:#1a1a2e;">' + esc(a.name || '—') + '</span>';
+  h += '<span style="font-size:11px;color:#888;">' + esc(APP_LOC[a.location] || a.location || '') + '</span>';
+  h += complete ? '<span style="font-size:11px;font-weight:800;color:#16a34a;">✅ Complete</span>' : '<span style="font-size:11px;font-weight:700;color:#d97706;">' + doneSteps + '/' + t.steps.length + ' steps</span>';
+  h += '<span style="margin-left:auto;display:flex;align-items:center;gap:6px;">';
+  h += '<label style="font-size:11px;font-weight:700;color:#888;">By</label>';
+  h += '<input value="' + esc(a.by || '') + '" maxlength="4" placeholder="XX" onchange="appSetBy(\'' + a.id + '\',this.value)" style="width:46px;text-align:center;text-transform:uppercase;border:1px solid ' + (a.by ? '#16a34a' : '#e3e6ef') + ';border-radius:6px;padding:4px;font-size:11px;font-weight:700;color:' + (a.by ? '#16a34a' : '#999') + ';">';
+  h += '<button onclick="appDelete(\'' + a.id + '\')" title="Delete" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 4px;" onmouseover="this.style.color=\'#dc2626\'" onmouseout="this.style.color=\'#ccc\'">🗑</button>';
+  h += '</span></div>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+  t.steps.forEach(s => {
+    const on = !!(a.steps || {})[s.id];
+    h += '<button onclick="appToggleStep(\'' + a.id + '\',\'' + s.id + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:8px;border:1px solid ' + (on ? '#16a34a' : '#dde1ec') + ';background:' + (on ? '#f0fdf4' : '#fff') + ';color:' + (on ? '#15803d' : '#555') + ';font-size:12px;font-weight:600;cursor:pointer;">' + (on ? '✅' : '⬜') + ' ' + esc(s.label) + '</button>';
+  });
+  h += '</div></div>';
+  return h;
+}
+
 function renderMembersPage() {
   const s = state.activeSection;
   const pending = crqAll().filter(r => !r.status).length;
+  const openApps = appAll().filter(a => !appIsDone(a)).length;
   const nav = renderGroupSubNav([
-    { id: 'feedback', label: '👥 Students' },
-    { id: 'holds',    label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') },
+    { id: 'feedback',     label: '👥 Students' },
+    { id: 'holds',        label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') },
+    { id: 'applications', label: '📋 Applications' + (openApps ? ' (' + openApps + ')' : '') },
   ]);
   if (s === 'holds') return nav + renderHoldsPage();
+  if (s === 'applications') return nav + renderApplicationsPage();
   return nav + renderFeedbackPage();
 }
 
@@ -2741,7 +2839,7 @@ function render() {
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
      ['tasks','scorecard','events','testing'].includes(s)                     ? renderOpsPage()       :
-     ['feedback','watchlist','holds'].includes(s)                             ? renderMembersPage()   :
+     ['feedback','watchlist','holds','applications'].includes(s)              ? renderMembersPage()   :
      ['goals','marketing'].includes(s)                                        ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
      s === 'leadership'                                                       ? renderLeadershipPage() :
@@ -2754,7 +2852,7 @@ function renderHeader() {
   const getGroup = s => {
     if (s === 'home') return 'home';
     if (['tasks','scorecard','events','performance','testing'].includes(s)) return 'ops';
-    if (['feedback','watchlist','holds'].includes(s))          return 'members';
+    if (['feedback','watchlist','holds','applications'].includes(s)) return 'members';
     if (['goals','marketing','monthlyGoals'].includes(s))      return 'growth';
     if (s === 'development')                                   return 'resources';
     if (s === 'leadership')                                    return 'leadership';
