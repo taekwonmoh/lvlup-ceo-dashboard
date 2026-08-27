@@ -844,6 +844,7 @@ let state = {
   cancellations: {}, // cancellation save list:    cancellations[loc][key] = {name,date,reason,notes}
   cancellationRequests: {}, // form-fed hold/cancellation requests (Apps Script webhook → Firebase)
   holdsFilter: 'all',
+  testingPrep: {}, // testingPrep[cycleTestKey][stepId] = { wau,emad,ver | x, by }
   rocks: { company: [], individual: {} },
   events: [],
   goals: {},
@@ -1817,6 +1818,11 @@ function listenAll() {
   crqRef.on('value', snap => { state.cancellationRequests = snap.val() || {}; render(); });
   activeListeners.push({ ref: crqRef, event: 'value' });
 
+  // Testing prep checklist (per test date)
+  const tpRef = fbRef('testingPrep');
+  tpRef.on('value', snap => { state.testingPrep = snap.val() || {}; render(); });
+  activeListeners.push({ ref: tpRef, event: 'value' });
+
   // Jam list (standalone task list)
   const jamRef = fbRef('jamTasks');
   jamRef.on('value', snap => { state.jamTasks = snap.val() || {}; render(); });
@@ -2003,7 +2009,7 @@ function migrateFeedbackTrackingToAll() {
 function setSection(s) {
   state.activeSection = s;
   // Remember last-visited sub-section per group so tabs restore correctly
-  if (['tasks','scorecard','events'].includes(s)) state.opsSection   = s;
+  if (['tasks','scorecard','events','testing'].includes(s)) state.opsSection   = s;
   if (['goals','marketing'].includes(s))                     state.growthSection  = s;
   render();
 }
@@ -2228,11 +2234,87 @@ function renderOpsPage() {
     { id: 'tasks',     label: '✅ Tasks'     },
     { id: 'scorecard', label: '📊 Scorecard' },
     { id: 'events',    label: '📅 Events'    },
+    { id: 'testing',   label: '🥋 Testing'   },
   ]);
   const pulse = renderPulseBar();
   if (s === 'scorecard') return pulse + nav + renderScorecardPage();
   if (s === 'events')    return pulse + nav + renderEventsPage();
+  if (s === 'testing')   return pulse + nav + renderTestingPrepPage();
   return pulse + nav + renderTasksPage();
+}
+
+/* ── Testing Prep — full belt-test checklist per cycle ─────── */
+const TESTING_STEPS = [
+  { group:'Belt Inventory', id:'belts_needed',    label:'Put together belts-needed list', loc:true },
+  { group:'Belt Inventory', id:'belts_storage',   label:'Get belts from storage' },
+  { group:'Belt Inventory', id:'belts_order_wma', label:'Order belts needed from WMA' },
+  { group:'Belt Inventory', id:'belts_order_bb',  label:'Order Black Belts for the Black Belt test' },
+  { group:'Rosters & Prep', id:'testors_list',    label:'Create testors list', loc:true },
+  { group:'Rosters & Prep', id:'belt_stickers',   label:'Create belt stickers' },
+  { group:'Rosters & Prep', id:'accumulate',      label:'Accumulate belts for other locations' },
+  { group:'Rosters & Prep', id:'prep_wau',        label:'Prepare belts for Waunakee test' },
+  { group:'Rosters & Prep', id:'print_rosters',   label:'Prepare & print test rosters', loc:true },
+  { group:'Rosters & Prep', id:'makeup_rosters',  label:'Prepare makeup test rosters' },
+  { group:'Ranks & ATA',    id:'update_ranks',    label:'Update ranks in GymDesk', loc:true },
+  { group:'Ranks & ATA',    id:'send_ata',        label:'Send test data to ATA', loc:true },
+  { group:'Ranks & ATA',    id:'ata_renewals',    label:'Update ATA renewals as required' },
+  { group:'Ranks & ATA',    id:'bb_midterm',      label:'Update Black Belt & Midterm data sheet' },
+  { group:'Ranks & ATA',    id:'verify_ranks',    label:'Verify ranks — GymDesk vs ATA', loc:true },
+  { group:'Before Testing', id:'yellow_gear',     label:'Send yellow-belt gear order info', loc:true, when:'~1 wk before' },
+  { group:'Before Testing', id:'tigers_juniors',  label:'Instructors: Tigers → Juniors rank talk + notify parents', when:'~2 wks before' },
+];
+const TP_LOCS = [{ k:'wau', l:'WAU' }, { k:'emad', l:'EM' }, { k:'ver', l:'VER' }];
+
+function tpToggle(ck, id, target){ const cur = (((state.testingPrep || {})[ck] || {})[id] || {})[target]; fbSet('testingPrep/' + ck + '/' + id + '/' + target, cur ? null : true); }
+function tpSetBy(ck, id, val){ fbDebounce('testingPrep/' + ck + '/' + id + '/by', (val || '').trim().toUpperCase() || null); }
+
+function renderTestingPrepPage(){
+  const c = getCurrentCycleInfo();
+  let html = '<div class="page" style="max-width:900px;">';
+  html += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🥋 Testing Prep</h2><p style="margin:0;font-size:13px;color:#888;">The full belt-test checklist for the current cycle — every box checked means nothing slipped. Resets each cycle.</p></div>';
+  if (!c || !c.testDate){
+    html += '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;">No active testing cycle. Set the cycle test dates to use this checklist.</div>';
+    return html + '</div>';
+  }
+  const ck = 't' + c.testDate;
+  const data = (state.testingPrep || {})[ck] || {};
+  let total = 0, done = 0;
+  TESTING_STEPS.forEach(st => { (st.loc ? TP_LOCS.map(x => x.k) : ['x']).forEach(t => { total++; if ((data[st.id] || {})[t]) done++; }); });
+  const pct = total ? Math.round(done / total * 100) : 0;
+  const dut = c.daysUntilTest;
+  html += '<div style="background:linear-gradient(135deg,#0f3460,#16537e);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:18px;">';
+  html += '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;align-items:center;">';
+  html += '<div><div style="font-size:12px;font-weight:700;opacity:.8;text-transform:uppercase;letter-spacing:.5px;">Cycle ' + c.cycleNum + ' · ' + esc(c.lifeSkill || '') + '</div><div style="font-size:20px;font-weight:800;margin-top:2px;">Test: ' + formatTestDate(c.testDate) + '</div></div>';
+  html += '<div style="text-align:right;"><div style="font-size:26px;font-weight:800;color:' + (dut <= 7 ? '#fca5a5' : '#fff') + ';">' + Math.max(0, dut) + ' days</div><div style="font-size:11px;opacity:.85;">until testing</div></div>';
+  html += '</div>';
+  html += '<div style="margin-top:12px;height:8px;background:rgba(255,255,255,.2);border-radius:6px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:#22c55e;transition:width .3s;"></div></div>';
+  html += '<div style="font-size:11px;opacity:.9;margin-top:5px;">' + done + ' / ' + total + ' done · ' + pct + '%</div>';
+  html += '</div>';
+  const groups = [];
+  TESTING_STEPS.forEach(st => { if (!groups.includes(st.group)) groups.push(st.group); });
+  groups.forEach(g => {
+    html += '<div style="font-size:12px;font-weight:800;color:#0f3460;text-transform:uppercase;letter-spacing:.4px;margin:16px 0 8px;">' + g + '</div>';
+    html += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">';
+    const inGroup = TESTING_STEPS.filter(st => st.group === g);
+    inGroup.forEach((st, i) => {
+      const sd = data[st.id] || {};
+      html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 14px;border-bottom:' + (i < inGroup.length - 1 ? '1px solid #f1f3f9' : 'none') + ';">';
+      if (st.loc){
+        html += '<div style="display:flex;gap:5px;flex-shrink:0;">';
+        TP_LOCS.forEach(x => { const on = !!sd[x.k]; html += '<button onclick="tpToggle(\'' + ck + '\',\'' + st.id + '\',\'' + x.k + '\')" title="' + x.l + '" style="min-width:38px;height:26px;padding:0 4px;border-radius:6px;border:1px solid ' + (on ? '#16a34a' : '#d8dbe6') + ';background:' + (on ? '#16a34a' : '#fff') + ';color:' + (on ? '#fff' : '#999') + ';font-size:10px;font-weight:800;cursor:pointer;">' + (on ? '✓ ' : '') + x.l + '</button>'; });
+        html += '</div>';
+      } else {
+        const on = !!sd.x;
+        html += '<button onclick="tpToggle(\'' + ck + '\',\'' + st.id + '\',\'x\')" style="width:22px;height:22px;flex-shrink:0;border-radius:6px;border:1px solid ' + (on ? '#16a34a' : '#cbd0dc') + ';background:' + (on ? '#16a34a' : '#fff') + ';color:#fff;font-size:13px;font-weight:800;cursor:pointer;line-height:1;">' + (on ? '✓' : '') + '</button>';
+      }
+      html += '<div style="flex:1;min-width:150px;font-size:13px;color:#333;">' + esc(st.label) + (st.when ? ' <span style="font-size:10px;font-weight:700;color:#d97706;background:#fffbeb;padding:1px 6px;border-radius:5px;margin-left:4px;white-space:nowrap;">' + st.when + '</span>' : '') + '</div>';
+      html += '<input value="' + esc(sd.by || '') + '" maxlength="4" placeholder="by" onchange="tpSetBy(\'' + ck + '\',\'' + st.id + '\',this.value)" style="width:46px;flex-shrink:0;text-align:center;text-transform:uppercase;border:1px solid ' + (sd.by ? '#16a34a' : '#e3e6ef') + ';border-radius:6px;padding:4px;font-size:11px;font-weight:700;color:' + (sd.by ? '#16a34a' : '#999') + ';">';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
 }
 
 function renderMembersPage() {
@@ -2658,7 +2740,7 @@ function render() {
   app.innerHTML = renderHeader() +
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
-     ['tasks','scorecard','events'].includes(s)                               ? renderOpsPage()       :
+     ['tasks','scorecard','events','testing'].includes(s)                     ? renderOpsPage()       :
      ['feedback','watchlist','holds'].includes(s)                             ? renderMembersPage()   :
      ['goals','marketing'].includes(s)                                        ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
@@ -2671,7 +2753,7 @@ function renderHeader() {
   const cur = state.activeSection;
   const getGroup = s => {
     if (s === 'home') return 'home';
-    if (['tasks','scorecard','events','performance'].includes(s)) return 'ops';
+    if (['tasks','scorecard','events','performance','testing'].includes(s)) return 'ops';
     if (['feedback','watchlist','holds'].includes(s))          return 'members';
     if (['goals','marketing','monthlyGoals'].includes(s))      return 'growth';
     if (s === 'development')                                   return 'resources';
