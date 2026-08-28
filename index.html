@@ -2399,6 +2399,13 @@ function renderAppCard(a){
   h += '<input value="' + esc(a.by || '') + '" maxlength="4" placeholder="XX" onchange="appSetBy(\'' + a.id + '\',this.value)" style="width:46px;text-align:center;text-transform:uppercase;border:1px solid ' + (a.by ? '#16a34a' : '#e3e6ef') + ';border-radius:6px;padding:4px;font-size:11px;font-weight:700;color:' + (a.by ? '#16a34a' : '#999') + ';">';
   h += '<button onclick="appDelete(\'' + a.id + '\')" title="Delete" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 4px;" onmouseover="this.style.color=\'#dc2626\'" onmouseout="this.style.color=\'#ccc\'">🗑</button>';
   h += '</span></div>';
+  // Details captured from the ADP application form (uniform size + embroidery name)
+  if (a.uniformSize || a.embroider){
+    h += '<div style="font-size:11.5px;color:#555;background:#f7f5ff;border:1px solid #e9e3ff;border-radius:8px;padding:6px 11px;margin-bottom:9px;display:flex;flex-wrap:wrap;gap:14px;">';
+    if (a.uniformSize) h += '<span>🥋 <b style="color:#7c3aed;">Uniform size:</b> ' + esc(a.uniformSize) + '</span>';
+    if (a.embroider)   h += '<span>🧵 <b style="color:#7c3aed;">Embroider:</b> ' + esc(a.embroider) + '</span>';
+    h += '</div>';
+  }
   h += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
   t.steps.forEach(s => {
     const on = !!(a.steps || {})[s.id];
