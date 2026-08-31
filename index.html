@@ -882,6 +882,7 @@ const LOCATIONS = [
   { id: 'waunakee', name: 'LVLUP Waunakee', short: 'WAU', color: '#1a1a2e', revenueGoal: 80000 },
   { id: 'eastmad', name: 'LVLUP East Madison', short: 'E.MAD', color: '#0f3460', revenueGoal: 18920 },
   { id: 'verona', name: 'LVLUP Verona', short: 'VER', color: '#16537e', revenueGoal: 26445 },
+  { id: 'deforest', name: 'LVLUP DeForest', short: 'DEF', color: '#2d7d9a', revenueGoal: 0 },
   { id: 'goninjaW', name: 'Go Ninja Waunakee', short: 'GN-W', color: '#e94560', revenueGoal: 30000 },
   { id: 'goninjaV', name: 'Go Ninja Verona', short: 'GN-V', color: '#c73e54', revenueGoal: 5000 },
 ];
@@ -920,7 +921,7 @@ const ACQUISITION_METRICS = [
 ];
 
 /* Locations split by board relevance */
-const LVLUP_LOC_IDS   = ['waunakee', 'eastmad', 'verona'];
+const LVLUP_LOC_IDS   = ['waunakee', 'eastmad', 'verona', 'deforest'];
 const GONINJA_LOC_IDS = ['goninjaW', 'goninjaV'];
 
 const MONTHLY_METRICS = [
@@ -941,7 +942,8 @@ const SCORECARD_PEOPLE = {
 const TASK_EMPLOYEES = [
   { id: 'mirandaS', name: 'Go Ninja',       loc: 'goninjaW', label: 'Go Ninja',   bonus: true  },
   { id: 'nikkiB',   name: 'LVLUP EM - Lead', loc: 'eastmad',  label: 'E. Madison', bonus: true  },
-  { id: 'joeyZ',    name: 'LVLUP V - Lead',  loc: 'verona',   label: 'Verona',     bonus: true  },
+  { id: 'bryanG',   name: 'LVLUP V - Lead',  loc: 'verona',   label: 'Verona',     bonus: true  },
+  { id: 'joeyZ',    name: 'LVLUP DEF - Lead', loc: 'deforest', label: 'DeForest',   bonus: true  },
   { id: 'sueK',     name: 'FD Waunakee',    loc: 'waunakee', label: 'Waunakee',   bonus: true  },
   { id: 'andyR',    name: 'FD EastMad',     loc: 'eastmad',  label: 'E. Madison', bonus: false },
   { id: 'marioS',   name: 'FD Verona',      loc: 'verona',   label: 'Verona',     bonus: false },
@@ -1864,12 +1866,12 @@ function listenAll() {
   activeListeners.push({ ref: goalsRef, event: 'value' });
 
   // Financials for all 3 LVLUP locations
-  ['waunakee', 'eastmad', 'verona', 'goninjaW', 'goninjaV'].forEach(loc => {
+  ['waunakee', 'eastmad', 'verona', 'deforest', 'goninjaW', 'goninjaV'].forEach(loc => {
     const finRef = fbRef('financials/' + loc + '/2026');
     finRef.on('value', snap => { state.financials[loc] = snap.val() || {}; render(); });
     activeListeners.push({ ref: finRef, event: 'value' });
   });
-  ['waunakee', 'eastmad', 'verona', 'goninjaW', 'goninjaV'].forEach(loc => {
+  ['waunakee', 'eastmad', 'verona', 'deforest', 'goninjaW', 'goninjaV'].forEach(loc => {
     const memRef = fbRef('membership/' + loc + '/2026');
     memRef.on('value', snap => { state.membership[loc] = snap.val() || {}; render(); });
     activeListeners.push({ ref: memRef, event: 'value' });
@@ -2265,7 +2267,7 @@ const TESTING_STEPS = [
   { group:'Before Testing', id:'yellow_gear',     label:'Send yellow-belt gear order info', loc:true, when:'~1 wk before' },
   { group:'Before Testing', id:'tigers_juniors',  label:'Instructors: Tigers → Juniors rank talk + notify parents', when:'~2 wks before' },
 ];
-const TP_LOCS = [{ k:'wau', l:'WAU' }, { k:'emad', l:'EM' }, { k:'ver', l:'VER' }];
+const TP_LOCS = [{ k:'wau', l:'WAU' }, { k:'emad', l:'EM' }, { k:'ver', l:'VER' }, { k:'def', l:'DEF' }];
 
 function tpToggle(ck, id, target){ const cur = (((state.testingPrep || {})[ck] || {})[id] || {})[target]; fbSet('testingPrep/' + ck + '/' + id + '/' + target, cur ? null : true); }
 function tpSetBy(ck, id, val){ fbDebounce('testingPrep/' + ck + '/' + id + '/by', (val || '').trim().toUpperCase() || null); }
@@ -2342,7 +2344,7 @@ const APP_TYPES = {
   ] },
 };
 const APP_ORDER = ['leadership', 'legacy', 'rollover'];
-const APP_LOC = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+const APP_LOC = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
 
 function appAll(){ return Object.entries(state.applications || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
 function appIsDone(a){ const t = APP_TYPES[a.type]; return t ? t.steps.every(s => (a.steps || {})[s.id]) : false; }
@@ -2455,7 +2457,7 @@ const CRQ_STATUSES = [
   { id: 'canceled',  label: 'Canceled',  color: '#dc2626' },
   { id: 'frozen',    label: 'Frozen',    color: '#0891b2' },
 ];
-const CRQ_LOC = { waunakee: 'Waunakee', verona: 'Verona', eastmad: 'East Madison' };
+const CRQ_LOC = { waunakee: 'Waunakee', verona: 'Verona', eastmad: 'East Madison', deforest: 'DeForest' };
 
 function crqAll(){ return Object.entries(state.cancellationRequests || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
 function crqSetStatus(id, status){ const cur = ((state.cancellationRequests || {})[id] || {}).status; fbSet('cancellationRequests/' + id + '/status', cur === status ? null : status); }
@@ -2564,7 +2566,7 @@ function setMktTab(t){ state.mktTab = t; render(); }
 /*  -  -  Content Request Board (in-app replacement for the Asana social workflow)  -  -  */
 const CR_DRIVE_URL = 'https://drive.google.com/drive/folders/1Ml2RjT_pcEKqh_j9Wxd4c-R6mZGtyn-z?usp=sharing';
 const CR_BRANDS = ['LVLUP', 'GO NINJA'];
-const CR_LOCATIONS = { 'LVLUP': ['Waunakee', 'East Madison', 'Verona'], 'GO NINJA': ['Waunakee', 'Verona'] };
+const CR_LOCATIONS = { 'LVLUP': ['Waunakee', 'East Madison', 'Verona', 'DeForest'], 'GO NINJA': ['Waunakee', 'Verona'] };
 const CR_FORMATS = ['Reel', 'Static Post', 'Story', 'Carousel', 'Photo Album', 'Other'];
 const CR_CHANNELS = [
   { id: 'igPost', label: 'Instagram Post' }, { id: 'igReel', label: 'Instagram Reel' }, { id: 'igStory', label: 'Instagram Story' },
@@ -3479,6 +3481,7 @@ const LEAD_TRACK_LOCS = [
   { id: 'waunakee', name: 'Waunakee',     color: '#1d4ed8' },
   { id: 'eastmad',  name: 'East Madison', color: '#dc2626' },
   { id: 'verona',   name: 'Verona',       color: '#16a34a' },
+  { id: 'deforest', name: 'DeForest',     color: '#2d7d9a' },
   { id: 'goninja',  name: 'Go Ninja',     color: '#ea580c' },
 ];
 const LEAD_TRACK_COLS = [
@@ -3491,9 +3494,9 @@ const LEAD_TRACK_COLS = [
 ];
 // Roles are seat-based, not person-based — whoever holds the seat shows under the role.
 const LEAD_STAFF = [
-  { empId: 'bryanG',   name: 'Waunakee Lead',    loc: 'waunakee', branch: 'WNK',     color: '#1d4ed8' },
+  { empId: 'bryanG',   name: 'Verona Lead',      loc: 'verona',   branch: 'VRN',     color: '#1d4ed8' },
   { empId: 'nikkiB',   name: 'E. Madison Lead',  loc: 'eastmad',  branch: 'E.MAD',   color: '#dc2626' },
-  { empId: 'joeyZ',    name: 'Verona Lead',      loc: 'verona',   branch: 'VRN',     color: '#16a34a' },
+  { empId: 'joeyZ',    name: 'DeForest Lead',    loc: 'deforest', branch: 'DEF',     color: '#16a34a' },
   { empId: 'mirandaS', name: 'Go Ninja Lead',    loc: 'goninja',  branch: 'GONINJA', color: '#ea580c' },
 ];
 
@@ -3948,7 +3951,7 @@ function renderScorecardPage() {
 
 function renderScLocSelector(){
   const cur = state.scLoc || 'waunakee';
-  const opts = [{id:'waunakee',name:'Waunakee'},{id:'eastmad',name:'East Madison'},{id:'verona',name:'Verona'},{id:'goninja',name:'🥷 Go Ninja'}];
+  const opts = [{id:'waunakee',name:'Waunakee'},{id:'eastmad',name:'East Madison'},{id:'verona',name:'Verona'},{id:'deforest',name:'DeForest'},{id:'goninja',name:'🥷 Go Ninja'}];
   let h = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
   opts.forEach(o => { const a = cur === o.id; h += '<button onclick="setScLoc(\'' + o.id + '\')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (a ? '#1a1a2e' : '#f1f3f9') + ';color:' + (a ? '#fff' : '#555') + ';">' + o.name + '</button>'; });
   return h + '</div>';
@@ -5207,7 +5210,7 @@ function renderEventsPage() {
   html += '<input type="time" id="evtTime" title="Start time (optional)" style="max-width:130px;" />';
   html += '<input type="time" id="evtEndTime" title="End time (optional)" style="max-width:130px;" />';
   html += '<input type="date" id="evtEndDate" title="End date (optional — leave blank for single-day)" />';
-  html += '<select id="evtLoc"><option value="">All Locations</option><option value="waunakee">LVLUP Waunakee</option><option value="eastmad">LVLUP E.Mad</option><option value="verona">LVLUP Verona</option><option value="goninjaW">Go Ninja Waunakee</option><option value="goninjaV">Go Ninja Verona</option></select>';
+  html += '<select id="evtLoc"><option value="">All Locations</option><option value="waunakee">LVLUP Waunakee</option><option value="eastmad">LVLUP E.Mad</option><option value="verona">LVLUP Verona</option><option value="deforest">LVLUP DeForest</option><option value="goninjaW">Go Ninja Waunakee</option><option value="goninjaV">Go Ninja Verona</option></select>';
   html += '<select id="evtType"><option value="testing">Belt Test</option><option value="tournament">Tournament</option><option value="seminar">Seminar</option><option value="camp">Summer Camp</option><option value="special">Special Event</option></select>';
   html += '<input type="url" id="evtLink" placeholder="GymDesk link (optional)" />';
   html += '<textarea id="evtDesc" placeholder="Description (optional) — shows on the member site..." style="width:100%;border:1px solid var(--gray-200);border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit;resize:vertical;min-height:64px;color:var(--gray-700);background:var(--card)"></textarea>';
@@ -5360,7 +5363,7 @@ function renderGoalsPage() {
   const VACATION_GOAL = 1986100; // sum of all 5 locations' 2026 monthly goals
   const now = new Date();
   const currentMonthIdx = now.getMonth();
-  const allLocs = ['waunakee','eastmad','verona','goninjaW','goninjaV'];
+  const allLocs = ['waunakee','eastmad','verona','deforest','goninjaW','goninjaV'];
   const MFULL = ['january','february','march','april','may','june','july','august','september','october','november','december'];
   const MSHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -6595,11 +6598,12 @@ function renderWatchListPage() {
     return (b.flaggedAt || '').localeCompare(a.flaggedAt || '');
   });
 
-  // Group by location — always show all 3 LVLUP locations
+  // Group by location — always show all LVLUP locations
   const lvlupLocs = [
     { id: 'waunakee', name: 'LVLUP Waunakee', color: '#1a1a2e' },
     { id: 'eastmad', name: 'LVLUP East Madison', color: '#0f3460' },
-    { id: 'verona', name: 'LVLUP Verona', color: '#16537e' }
+    { id: 'verona', name: 'LVLUP Verona', color: '#16537e' },
+    { id: 'deforest', name: 'LVLUP DeForest', color: '#2d7d9a' }
   ];
 
   lvlupLocs.forEach(loc => {
@@ -9727,7 +9731,7 @@ function feedbackOpenSendModal(studentKey) {
   if (existing) existing.remove();
 
   const s = state.feedback.roster[studentKey] || {};
-  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
   const locLabel = LOC_LABELS[s.location] || s.location || '';
   const monthLabel = getFeedbackMonthLabel();
   const savedInstructor = localStorage.getItem('fbLastInstructor') || '';
@@ -9783,7 +9787,7 @@ function feedbackPublishMonthly(studentKey) {
   // Cache instructor name for next time
   localStorage.setItem('fbLastInstructor', instructor);
 
-  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
   const emailKey = email.replace(/[.#$[\]/]/g, '_');
   const monthKey = getFeedbackMonthKey();
   const monthLabel = getFeedbackMonthLabel();
@@ -9938,8 +9942,8 @@ function feedbackOpenSync(preselectedLoc) {
   const existing = document.getElementById('fbSyncModal');
   if (existing) existing.remove();
 
-  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
-  const locOptions = ['waunakee','eastmad','verona'].map(l =>
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
+  const locOptions = ['waunakee','eastmad','verona','deforest'].map(l =>
     '<option value="' + l + '"' + (preselectedLoc === l ? ' selected' : '') + '>' + LOC_LABELS[l] + '</option>'
   ).join('');
 
@@ -10279,9 +10283,9 @@ function attColumnCell(att) {
 function feedbackOpenAttendance(preselectedLoc) {
   const existing = document.getElementById('attSyncModal');
   if (existing) existing.remove();
-  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
   const defLoc = preselectedLoc || 'waunakee';
-  const locOptions = ['waunakee','eastmad','verona'].map(l => '<option value="' + l + '"' + (l === defLoc ? ' selected' : '') + '>' + LOC_LABELS[l] + '</option>').join('');
+  const locOptions = ['waunakee','eastmad','verona','deforest'].map(l => '<option value="' + l + '"' + (l === defLoc ? ' selected' : '') + '>' + LOC_LABELS[l] + '</option>').join('');
   const modal = document.createElement('div');
   modal.id = 'attSyncModal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;';
@@ -10376,7 +10380,7 @@ function attendancePreview() {
   const previewEl = document.getElementById('attPreview');
   const btn = document.getElementById('attConfirmBtn');
   const loc = (document.getElementById('attSyncLoc') || {}).value || 'waunakee';
-  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
   const active = attendanceActiveAtLoc(loc);
   let g = 0, y = 0, r = 0, matched = 0;
   active.forEach(s => {
@@ -10493,7 +10497,7 @@ function feedbackToggleTouchpoint(studentKey, tpId) {
 }
 
 function renderOnboardingSection(allStudents, locationFilter) {
-  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
   const list = allStudents
     .filter(s => s.active !== false)
     .map(s => ({ ...s, days: getDaysInJourney(s.startDate) }))
@@ -10793,7 +10797,7 @@ function renderFeedbackPage() {
   const currentMonth = getCurrentMonthKey();
   const isCurrentMonth = getFeedbackMonthKey() === currentMonth;
 
-  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona' };
+  const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
   const INTERACTIONS = [
     { field: 'postcard',   icon: '📬', label: 'Postcard', initials: true },
     { field: 'video',      icon: '🎥', label: 'Loom' },
@@ -10805,7 +10809,7 @@ function renderFeedbackPage() {
   const attSort = state.feedback.attSort || null; // null=status sort, 'away'=longest-away first, 'recent'=most-recent first
   let stalenessHTML = '';
   if (isCurrentMonth) {
-    ['waunakee', 'eastmad', 'verona'].forEach(loc => {
+    ['waunakee', 'eastmad', 'verona', 'deforest'].forEach(loc => {
       const meta = rosterMeta[loc] || {};
       const synced = meta.lastSyncedMonth === currentMonth;
       if (!synced) {
@@ -10821,7 +10825,7 @@ function renderFeedbackPage() {
       }
     });
     // Attendance staleness — same style of flag, for locations whose roster is current this month
-    ['waunakee', 'eastmad', 'verona'].forEach(loc => {
+    ['waunakee', 'eastmad', 'verona', 'deforest'].forEach(loc => {
       const meta = rosterMeta[loc] || {};
       if (meta.lastSyncedMonth !== currentMonth) return;
       const at = meta.lastAttendanceSyncAt;
@@ -10936,7 +10940,7 @@ function renderFeedbackPage() {
       return av !== bv ? (attSort === 'recent' ? bv - av : av - bv) : a.name.localeCompare(b.name);
     };
 
-    ['waunakee', 'eastmad', 'verona', ''].forEach(loc => {
+    ['waunakee', 'eastmad', 'verona', 'deforest', ''].forEach(loc => {
       const group = byLoc[loc];
       if (!group || !group.length) return;
       group.sort(attSort ? sortByAttendance : sortByStatus);
@@ -11034,7 +11038,7 @@ function renderFeedbackPage() {
         '<button onclick="feedbackChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 10px;border-radius:7px;color:#4169E1;font-weight:700;">›</button>' +
       '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-        pill('waunakee','Waunakee') + pill('eastmad','East Madison') + pill('verona','Verona') +
+        pill('waunakee','Waunakee') + pill('eastmad','East Madison') + pill('verona','Verona') + pill('deforest','DeForest') +
       '</div>' +
     '</div>' +
 
@@ -11080,7 +11084,7 @@ function renderFeedbackPage() {
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">' +
       '<input id="fbNewName" placeholder="Add student manually…" style="flex:1;min-width:150px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" onkeydown="if(event.key===\'Enter\')feedbackAddStudent()">' +
       '<select id="fbNewLoc" style="padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">' +
-        '<option value="waunakee">Waunakee</option><option value="eastmad">East Madison</option><option value="verona">Verona</option>' +
+        '<option value="waunakee">Waunakee</option><option value="eastmad">East Madison</option><option value="verona">Verona</option><option value="deforest">DeForest</option>' +
       '</select>' +
       '<button onclick="feedbackAddStudent()" style="padding:8px 14px;background:#f1f3f9;border:1px solid #ddd;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#4169E1;">+ Add</button>' +
       (inactiveStudents.length > 0 ?
