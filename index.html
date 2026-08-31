@@ -3472,7 +3472,7 @@ function renderAdLeaderboard(){
 }
 
 /* ═══════════════════════════════════════════════════════════
-   LEADERSHIP — PIN-gated owner page (you + Lou)
+   LEADERSHIP — PIN-gated owner page (owner-only)
    Daily location tracker + staff accountability & performance.
    ═══════════════════════════════════════════════════════════ */
 const LEAD_TRACK_LOCS = [
@@ -3506,7 +3506,7 @@ function leadToMin(t){ if (!t || !/^\d{1,2}:\d{2}$/.test(t)) return null; const 
 function leadTryUnlock(){ const el = document.getElementById('leadPinInput'); if (!el) return; if (el.value === state.leadership.pin) { state.leadership.unlocked = true; state.leadership.pinError = false; sessionStorage.setItem('leadershipUnlocked', '1'); render(); } else { state.leadership.pinError = true; render(); } }
 function leadLock(){ state.leadership.unlocked = false; sessionStorage.removeItem('leadershipUnlocked'); render(); }
 function leadConfirmSetPin(){ const p1 = document.getElementById('leadNewPin1'), p2 = document.getElementById('leadNewPin2'); if (!p1 || !p2) return; const pin = p1.value.trim(); if (pin.length < 4) { p1.style.borderColor = '#ef4444'; return; } if (pin !== p2.value.trim()) { p2.style.borderColor = '#ef4444'; return; } fbSet('leadership/pin', pin); state.leadership.pin = pin; state.leadership.pinLoaded = true; state.leadership.unlocked = true; sessionStorage.setItem('leadershipUnlocked', '1'); render(); }
-function leadResetPin(){ if (!confirm('Reset the Leadership PIN? You and Lou will need to create a new one.')) return; fbSet('leadership/pin', null); state.leadership.pin = null; state.leadership.unlocked = false; sessionStorage.removeItem('leadershipUnlocked'); render(); }
+function leadResetPin(){ if (!confirm('Reset the Leadership PIN? You will need to create a new one.')) return; fbSet('leadership/pin', null); state.leadership.pin = null; state.leadership.unlocked = false; sessionStorage.removeItem('leadershipUnlocked'); render(); }
 function leadSetView(v){ state.leadership.view = v; render(); }
 function leadSetTrackerLoc(l){ state.leadership.trackerLoc = l; render(); }
 function leadChangeMonth(d){ state.leadership.monthOffset += d; render(); }
@@ -3525,7 +3525,7 @@ function renderLeadLock(){
   return '<div style="max-width:320px;margin:80px auto;text-align:center;padding:0 20px;">' +
     '<div style="font-size:52px;margin-bottom:16px;">🔒</div>' +
     '<h2 style="font-size:20px;font-weight:800;color:#1a1a2e;margin:0 0 6px;">Leadership</h2>' +
-    '<p style="color:#aaa;font-size:12px;margin:0 0 24px;text-transform:uppercase;letter-spacing:.5px;">Owner-only · You &amp; Lou</p>' +
+    '<p style="color:#aaa;font-size:12px;margin:0 0 24px;text-transform:uppercase;letter-spacing:.5px;">Owner-only</p>' +
     '<input id="leadPinInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" onkeydown="if(event.key===\'Enter\')leadTryUnlock()" autofocus style="width:100%;padding:13px;font-size:22px;letter-spacing:8px;text-align:center;border:2px solid ' + (err ? '#ef4444' : '#e0e3ed') + ';border-radius:10px;font-family:inherit;margin-bottom:' + (err ? '6' : '14') + 'px;outline:none;box-sizing:border-box;">' +
     (err ? '<div style="color:#ef4444;font-size:12px;font-weight:600;margin-bottom:10px;">Incorrect PIN — try again</div>' : '') +
     '<button onclick="leadTryUnlock()" style="width:100%;padding:13px;background:#1a1a2e;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;">Unlock →</button>' +
@@ -3537,7 +3537,7 @@ function renderLeadSetPin(){
   return '<div style="max-width:320px;margin:80px auto;text-align:center;padding:0 20px;">' +
     '<div style="font-size:52px;margin-bottom:16px;">🔐</div>' +
     '<h2 style="font-size:20px;font-weight:800;color:#1a1a2e;margin:0 0 6px;">Set the Leadership PIN</h2>' +
-    '<p style="color:#888;font-size:13px;margin:0 0 24px;">Create a 4–6 digit PIN. Share it only with Lou.</p>' +
+    '<p style="color:#888;font-size:13px;margin:0 0 24px;">Create a 4–6 digit PIN. Keep it private.</p>' +
     '<input id="leadNewPin1" type="password" inputmode="numeric" maxlength="6" placeholder="Create PIN" style="width:100%;padding:13px;font-size:20px;letter-spacing:6px;text-align:center;border:2px solid #e0e3ed;border-radius:10px;font-family:inherit;margin-bottom:10px;outline:none;box-sizing:border-box;">' +
     '<input id="leadNewPin2" type="password" inputmode="numeric" maxlength="6" placeholder="Confirm PIN" onkeydown="if(event.key===\'Enter\')leadConfirmSetPin()" style="width:100%;padding:13px;font-size:20px;letter-spacing:6px;text-align:center;border:2px solid #e0e3ed;border-radius:10px;font-family:inherit;margin-bottom:14px;outline:none;box-sizing:border-box;">' +
     '<button onclick="leadConfirmSetPin()" style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Create PIN</button>' +
