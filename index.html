@@ -5158,8 +5158,11 @@ function duplicateEvent(key) {
 }
 
 function calNavMonth(offset) {
-  state.calMonth = (state.calMonth || new Date().getMonth()) + offset;
-  state.calYear = state.calYear || new Date().getFullYear();
+  // Use explicit undefined checks — calMonth can legitimately be 0 (January),
+  // which `||` would treat as falsy and reset to the current month.
+  if (state.calMonth === undefined) state.calMonth = new Date().getMonth();
+  if (state.calYear === undefined) state.calYear = new Date().getFullYear();
+  state.calMonth += offset;
   while (state.calMonth > 11) { state.calMonth -= 12; state.calYear++; }
   while (state.calMonth < 0) { state.calMonth += 12; state.calYear--; }
   render();
