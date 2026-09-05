@@ -2356,6 +2356,7 @@ function appAdd(){
 }
 function appToggleStep(id, stepId){ const cur = (((state.applications || {})[id] || {}).steps || {})[stepId]; fbSet('applications/' + id + '/steps/' + stepId, cur ? null : true); }
 function appSetBy(id, val){ fbDebounce('applications/' + id + '/by', (val || '').trim().toUpperCase() || null); }
+function appSetLocation(id, val){ fbSet('applications/' + id + '/location', val || null); }
 function appDelete(id){ if (!confirm('Remove this application from the tracker?')) return; fbSet('applications/' + id, null); }
 function appSetFilter(f){ state.appFilter = f; render(); }
 
@@ -2393,7 +2394,10 @@ function renderAppCard(a){
   h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">';
   h += '<span style="font-size:11px;font-weight:800;color:#fff;background:' + t.color + ';padding:2px 8px;border-radius:5px;">' + t.label + '</span>';
   h += '<span style="font-size:15px;font-weight:800;color:#1a1a2e;">' + esc(a.name || '—') + '</span>';
-  h += '<span style="font-size:11px;color:#888;">' + esc(APP_LOC[a.location] || a.location || '') + '</span>';
+  h += '<select onchange="appSetLocation(\'' + a.id + '\',this.value)" title="Location" style="font-size:11px;font-weight:600;color:' + (a.location ? '#555' : '#c0392b') + ';border:1px solid ' + (a.location ? '#e3e6ef' : '#f3c6c6') + ';border-radius:6px;padding:2px 6px;background:#fff;">' +
+    '<option value="">— set location —</option>' +
+    Object.keys(APP_LOC).map(function(k){ return '<option value="' + k + '"' + (a.location === k ? ' selected' : '') + '>' + APP_LOC[k] + '</option>'; }).join('') +
+    '</select>';
   h += complete ? '<span style="font-size:11px;font-weight:800;color:#16a34a;">✅ Complete</span>' : '<span style="font-size:11px;font-weight:700;color:#d97706;">' + doneSteps + '/' + t.steps.length + ' steps</span>';
   h += '<span style="margin-left:auto;display:flex;align-items:center;gap:6px;">';
   h += '<label style="font-size:11px;font-weight:700;color:#888;">By</label>';
@@ -2405,6 +2409,16 @@ function renderAppCard(a){
     h += '<div style="font-size:11.5px;color:#555;background:#f7f5ff;border:1px solid #e9e3ff;border-radius:8px;padding:6px 11px;margin-bottom:9px;display:flex;flex-wrap:wrap;gap:14px;">';
     if (a.uniformSize) h += '<span>🥋 <b style="color:#7c3aed;">Uniform size:</b> ' + esc(a.uniformSize) + '</span>';
     if (a.embroider)   h += '<span>🧵 <b style="color:#7c3aed;">Embroider:</b> ' + esc(a.embroider) + '</span>';
+    h += '</div>';
+  }
+  // Details captured from the Legacy application form
+  if (a.type === 'legacy' && (a.phone || a.email || a.ataNum || a.investment || a.address)){
+    h += '<div style="font-size:11.5px;color:#555;background:#ecfeff;border:1px solid #cff2f6;border-radius:8px;padding:6px 11px;margin-bottom:9px;display:flex;flex-wrap:wrap;gap:6px 14px;">';
+    if (a.phone)      h += '<span>📞 <b style="color:#0891b2;">' + esc(a.phone) + '</b></span>';
+    if (a.email)      h += '<span>✉️ ' + esc(a.email) + '</span>';
+    if (a.ataNum)     h += '<span><b style="color:#0891b2;">ATA#</b> ' + esc(a.ataNum) + '</span>';
+    if (a.investment) h += '<span>💳 ' + esc(a.investment) + '</span>';
+    if (a.address)    h += '<span>📍 ' + esc(a.address) + '</span>';
     h += '</div>';
   }
   h += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
