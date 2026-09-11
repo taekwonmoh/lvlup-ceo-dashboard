@@ -2325,7 +2325,8 @@ const APP_TYPES = {
     { id: 'ata',        label: 'Register in ATA as Leadership' },
     { id: 'uniform',    label: 'Order leadership uniform' },
     { id: 'bme',        label: 'Order combat weapon (BME)' },
-    { id: 'wallbelt',   label: 'Order embroidered Black Belt for wall' },
+    { id: 'belt_notified', label: 'R. Moh notified to make the embroidered belt', auto: function(a){ return a.source === 'adp-form'; } },
+    { id: 'belt_wall',  label: 'Embroidered belt is up on the wall' },
     { id: 'gymdesk',    label: 'Update GymDesk membership' },
     { id: 'gd_weapon',  label: 'Process combat weapon in GymDesk' },
     { id: 'gd_uniform', label: 'Process custom uniform in GymDesk' },
@@ -2346,7 +2347,8 @@ const APP_ORDER = ['leadership', 'legacy', 'rollover'];
 const APP_LOC = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
 
 function appAll(){ return Object.entries(state.applications || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
-function appIsDone(a){ const t = APP_TYPES[a.type]; return t ? t.steps.every(s => (a.steps || {})[s.id]) : false; }
+function appStepDone(a, s){ return (typeof s.auto === 'function' && s.auto(a)) || !!((a.steps || {})[s.id]); }
+function appIsDone(a){ const t = APP_TYPES[a.type]; return t ? t.steps.every(s => appStepDone(a, s)) : false; }
 function appAdd(){
   const nameEl = document.getElementById('appNewName');
   const name = (nameEl.value || '').trim(); if (!name) { nameEl.focus(); return; }
@@ -2390,7 +2392,7 @@ function renderApplicationsPage(){
 
 function renderAppCard(a){
   const t = APP_TYPES[a.type]; if (!t) return '';
-  const doneSteps = t.steps.filter(s => (a.steps || {})[s.id]).length;
+  const doneSteps = t.steps.filter(s => appStepDone(a, s)).length;
   const complete = doneSteps === t.steps.length;
   let h = '<div style="background:#fff;border:1px solid #e8eaf0;border-left:4px solid ' + t.color + ';border-radius:12px;padding:13px 15px;margin-bottom:10px;box-shadow:var(--shadow);' + (complete ? 'opacity:.7;' : '') + '">';
   h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">';
@@ -2425,6 +2427,12 @@ function renderAppCard(a){
   }
   h += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
   t.steps.forEach(s => {
+    const autoDone = typeof s.auto === 'function' && s.auto(a);
+    if (autoDone) {
+      // Auto-completed (e.g. Richelle notified automatically when the application came in) — locked, not clickable
+      h += '<span title="Done automatically when the application came in" style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:8px;border:1px dashed #16a34a;background:#f0fdf4;color:#15803d;font-size:12px;font-weight:600;">✅ ' + esc(s.label) + ' <span style="font-size:9px;font-weight:700;opacity:.6;text-transform:uppercase;letter-spacing:.4px;">auto</span></span>';
+      return;
+    }
     const on = !!(a.steps || {})[s.id];
     h += '<button onclick="appToggleStep(\'' + a.id + '\',\'' + s.id + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:8px;border:1px solid ' + (on ? '#16a34a' : '#dde1ec') + ';background:' + (on ? '#f0fdf4' : '#fff') + ';color:' + (on ? '#15803d' : '#555') + ';font-size:12px;font-weight:600;cursor:pointer;">' + (on ? '✅' : '⬜') + ' ' + esc(s.label) + '</button>';
   });
