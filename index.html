@@ -2325,7 +2325,17 @@ const APP_TYPES = {
     { id: 'ata',        label: 'Register in ATA as Leadership' },
     { id: 'uniform',    label: 'Order leadership uniform' },
     { id: 'bme',        label: 'Order combat weapon (BME)' },
-    { id: 'belt_notified', label: 'R. Moh notified to make the embroidered belt', auto: function(a){ return a.source === 'adp-form'; } },
+    { id: 'belt_notified', label: 'R. Moh notified to make the embroidered belt', auto: function(a){ return a.source === 'adp-form' || a.source === 'tiger-form'; } },
+    { id: 'belt_wall',  label: 'Embroidered belt is up on the wall' },
+    { id: 'gymdesk',    label: 'Update GymDesk membership' },
+    { id: 'gd_weapon',  label: 'Process combat weapon in GymDesk' },
+    { id: 'gd_uniform', label: 'Process custom uniform in GymDesk' },
+  ] },
+  tigerLeaders: { label: 'Tiger Leaders', color: '#ea580c', ata: true, steps: [
+    { id: 'ata',        label: 'Register in ATA as Leadership' },
+    { id: 'uniform',    label: 'Order leadership uniform' },
+    { id: 'bme',        label: 'Order combat weapon (BME)' },
+    { id: 'belt_notified', label: 'R. Moh notified to make the embroidered belt', auto: function(a){ return a.source === 'adp-form' || a.source === 'tiger-form'; } },
     { id: 'belt_wall',  label: 'Embroidered belt is up on the wall' },
     { id: 'gymdesk',    label: 'Update GymDesk membership' },
     { id: 'gd_weapon',  label: 'Process combat weapon in GymDesk' },
@@ -2343,7 +2353,7 @@ const APP_TYPES = {
     { id: 'gymdesk', label: 'Update GymDesk membership' },
   ] },
 };
-const APP_ORDER = ['leadership', 'legacy', 'rollover'];
+const APP_ORDER = ['leadership', 'tigerLeaders', 'legacy', 'rollover'];
 const APP_LOC = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
 
 function appAll(){ return Object.entries(state.applications || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
@@ -2382,7 +2392,7 @@ function renderApplicationsPage(){
   h += '<button onclick="appAdd()" style="padding:8px 16px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">+ Add</button>';
   h += '</div>';
   const chip = (id, label) => '<button onclick="appSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + label + '</button>';
-  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All (' + all.length + ')') + chip('open', 'Open (' + open.length + ')') + chip('done', 'Done') + chip('leadership', 'Leadership') + chip('legacy', 'Legacy') + chip('rollover', 'Rollover') + '</div>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All (' + all.length + ')') + chip('open', 'Open (' + open.length + ')') + chip('done', 'Done') + APP_ORDER.map(function(t){ return chip(t, APP_TYPES[t].label); }).join('') + '</div>';
   if (!all.length) { h += '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;">No applications yet. Add one above as they come in.</div>'; return h + '</div>'; }
   if (!filtered.length) h += '<div style="text-align:center;padding:28px;color:#aaa;font-size:13px;">Nothing here.</div>';
   filtered.forEach(a => { h += renderAppCard(a); });
