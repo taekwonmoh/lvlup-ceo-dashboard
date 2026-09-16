@@ -933,9 +933,9 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
 const SCORECARD_PEOPLE = {
-  waunakee: [{ id: 'goad', name: 'Mr. Goad', metrics: ['attrition','newMembers','leads','upgrades'] }, { id: 'msk', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
-  eastmad: [{ id: 'bein', name: 'Mrs. Bein', metrics: ['attrition','newMembers','leads','upgrades'] }, { id: 'msk_em', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
-  verona: [{ id: 'mrz', name: 'Mr. Z', metrics: ['attrition','newMembers','leads','upgrades'] }, { id: 'msk_v', name: 'Ms. K', metrics: ['trials','leadToTrial'] }],
+  waunakee: [{ id: 'goad', name: 'Mr. Goad', metrics: ['attrition','newMembers','leads','upgrades','trials','leadToTrial'] }],
+  eastmad: [{ id: 'bein', name: 'Mrs. Bein', metrics: ['attrition','newMembers','leads','upgrades','trials','leadToTrial'] }],
+  verona: [{ id: 'mrz', name: 'Mr. Z', metrics: ['attrition','newMembers','leads','upgrades','trials','leadToTrial'] }],
   goninjaW: [{ id: 'smith', name: 'Ms. Smith' }],
   goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
 };
@@ -1040,11 +1040,11 @@ const LVLUP_WEEKLY_REC = BRYAN_WEEKLY;
 const GONINJA_DAILY = MIRANDA_DAILY;
 const GONINJA_WEEKLY_REC = MIRANDA_WEEKLY;
 const LVLUP_MONTHLY = [];
-// Front desk managers (Sue K, Mario S) — tasks TBD
+// Front desk staff (Waunakee, Verona) — tasks TBD
 const FRONTDESK_DAILY = [
   {id:'fd_messages',    text:'Check and respond to all parent messages, emails, and missed calls.'},
   {id:'fd_followups',   text:'Log any follow-up action items.'},
-  {id:'fd_notify_msk',  text:'Notify Ms. K of any membership-related issues requiring follow-up.'},
+  {id:'fd_notify_msk',  text:'Notify the location lead instructor of any membership-related issues requiring follow-up.'},
   {id:'fd_questions',   text:'Answer parent questions at the front desk.'},
   {id:'fd_photos',      text:'Take and upload student photos to GymDesk as needed.'},
   {id:'fd_retail',      text:'Check and fulfill GymDesk for pending retail orders.'},
@@ -3993,10 +3993,10 @@ function setScLoc(l){ state.scLoc = l; render(); }
 // Lead instructor (retention owner) per LVLUP school
 const SCHOOL_LEADS = { waunakee:'Master Moh', verona:'Mr. Goad', eastmad:'Ms. Mouille' };
 const SC_WEEKLY_COLS = [
-  { id:'firstDayTrials', short:'First-Day Trials', agg:'sum', owner:'Ms. K' },
-  { id:'dayOneEnroll',   short:'Day-One Enroll',   agg:'sum', owner:'Ms. K' },
-  { id:'laterEnroll',    short:'Later Enroll',      agg:'sum', owner:'Ms. K' },
-  { id:'upgrades',       short:'Upgrades',          agg:'sum', owner:'Ms. K' },
+  { id:'firstDayTrials', short:'First-Day Trials', agg:'sum', ownerLead:true },
+  { id:'dayOneEnroll',   short:'Day-One Enroll',   agg:'sum', ownerLead:true },
+  { id:'laterEnroll',    short:'Later Enroll',      agg:'sum', ownerLead:true },
+  { id:'upgrades',       short:'Upgrades',          agg:'sum', ownerLead:true },
   { id:'attrition',      short:'Upcoming Cancellations', agg:'sum', ownerLead:true },
   { id:'revenue',        short:'Revenue',           agg:'latest', currency:true, note:'running total (MTD)', ownerLead:true },
   { id:'totalMembers',   short:'Total Members',     agg:'latest', note:'running total (MTD)', ownerLead:true },
@@ -4071,7 +4071,7 @@ function renderWeeklyScorecard(loc, colsArg){
 
   let h = '<div style="overflow-x:auto;margin-bottom:22px;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;overflow:hidden;">';
   h += '<thead><tr><th colspan="' + (cols.length + 2) + '" style="padding:12px;font-size:16px;font-weight:800;text-align:center;letter-spacing:1px;background:' + meta.color + ';color:#fff;">' + esc(meta.name).toUpperCase() + '</th></tr>';
-  // Responsibility band — group consecutive columns by their owner (Ms. K vs lead instructor)
+  // Responsibility band — group consecutive columns by their owner (lead instructor)
   const owners = cols.map(c => c.owner || (c.ownerLead ? (SCHOOL_LEADS[loc] || 'Lead Instructor') : ''));
   if (owners.some(o => o)) {
     let band = '<th style="border:none;background:#fafbff;"></th>';   // under Week (Sun)
@@ -4079,9 +4079,8 @@ function renderWeeklyScorecard(loc, colsArg){
     while (i < cols.length) {
       let j = i; while (j + 1 < cols.length && owners[j + 1] === owners[i]) j++;
       const span = j - i + 1, o = owners[i];
-      const isK = o === 'Ms. K';
-      const bg = !o ? '#fafbff' : (isK ? '#e8f0ff' : '#fff1e6');
-      const fg = !o ? '#bbb' : (isK ? '#1d4ed8' : '#c2410c');
+      const bg = !o ? '#fafbff' : '#fff1e6';
+      const fg = !o ? '#bbb' : '#c2410c';
       band += '<th colspan="' + span + '" style="padding:5px 6px;text-align:center;font-size:10px;font-weight:800;letter-spacing:.3px;background:' + bg + ';color:' + fg + ';border-left:2px solid #fff;">' + (o ? '👤 ' + esc(o) : '') + '</th>';
       i = j + 1;
     }
@@ -7232,7 +7231,7 @@ const LVLUP_PLAYBOOKS = [
       },
       {
         title:'Two Attempts — Then Escalate',
-        detail:'If you\'ve reached out twice and gotten no response, pass it to the Sales Director (Sue K) for a different approach. A new voice, a different channel, or a different angle sometimes gets through when a familiar one doesn\'t.',
+        detail:'If you\'ve reached out twice and gotten no response, pass it to the location\'s lead instructor for a different approach. A new voice, a different channel, or a different angle sometimes gets through when a familiar one doesn\'t.',
         points:['Hand off with context: "I\'ve tried twice — here\'s what I said. Can you try a different angle?"'],
         avoid:['More than 3 total attempts without a response — at that point give them space','Doing nothing after your second attempt']
       },
