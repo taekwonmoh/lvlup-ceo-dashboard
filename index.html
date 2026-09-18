@@ -3814,7 +3814,12 @@ async function leadDownloadBackup(){
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Preparing…'; }
   try {
     const [mainDb, eventsDb] = await Promise.all([
-      fetch(firebaseConfig.databaseURL + '/.json').then(r => r.json()),
+      // The members database no longer allows reading its root (student/family data
+      // needs a sign-in), so back up each dashboard node on its own.
+      Promise.all(['acq','ceo','config','feedbackCorrespondenceLog','feedbackRoster','feedbackRosterMeta',
+                   'feedbackTracking','financials','koc','legacy','payments','ratings','studentReports','tasks','weeks','cycleData']
+        .map(k => fetch(firebaseConfig.databaseURL + '/' + k + '.json').then(r => r.ok ? r.json() : null).then(v => [k, v])))
+        .then(pairs => Object.fromEntries(pairs.filter(p => p[1] != null))),
       fetch(EVENTS_DB_URL + '.json').then(r => r.json()).catch(() => null),
     ]);
     const payload = { exportedAt: new Date().toISOString(), mainDb, eventsDb };
