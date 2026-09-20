@@ -9,8 +9,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<!-- LVLUP staff sign-in (same accounts as the members app; access.dashboard or admin) -->
-<script src="https://www.lvlupma.com/staff-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <style>
 :root { 
@@ -11558,9 +11556,9 @@ function renderAcqDashboard() {
   return html;
 }
 
-// The members database only answers signed-in staff with dashboard access,
-// so nothing loads until the sign-in gate resolves.
-lvStaffGate({ access: 'dashboard', title: 'LVLUP CEO Dashboard' }).then(init);
+// Public dashboard — no sign-in gate. Requires the Firebase rules to allow
+// anonymous read/write on the `ceo/*` node (managed in the members app).
+init();
 </script>
 </body>
 </html>
