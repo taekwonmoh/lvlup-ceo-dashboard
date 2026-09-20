@@ -2886,8 +2886,8 @@ function render() {
   if (state.activeSection === 'acq') state.activeSection = 'scorecard';
   // L10 became the "Agenda" embedded on the Home page
   if (state.activeSection === 'l10') state.activeSection = 'home';
-  // Rocks moved into the (owner-only) Leadership tab
-  if (state.activeSection === 'rocks') state.activeSection = 'leadership';
+  // Leadership tab removed — send it (and the Rocks page that lived under it) to Home
+  if (state.activeSection === 'rocks' || state.activeSection === 'leadership') state.activeSection = 'home';
   // Scorecard moved to Ops — keep the Growth group's memory off it
   if (state.growthSection === 'scorecard' || state.growthSection === 'acq') state.growthSection = 'goals';
   const s = state.activeSection;
@@ -2922,7 +2922,6 @@ function renderHeader() {
     { group: 'members', label: '👥 Members',  target: () => 'feedback'            },
     { group: 'growth',  label: '📈 Growth',   target: () => state.growthSection  || 'goals'        },
     { group: 'resources', label: '📚 Resources', target: () => 'development' },
-    { group: 'leadership', label: '🔒 Leadership', target: () => 'leadership' },
   ];
   return '<div class="header">' +
     '<h1><span style="font-family:Arial Black,sans-serif;font-weight:900;color:#4169E1;letter-spacing:-1px;font-size:1.4rem">LVLUP</span> <span style="color:#999;font-weight:300">/</span> <span style="font-family:Arial Black,sans-serif;font-weight:900;color:#e94560;letter-spacing:-0.5px;font-size:1.4rem">Go Ninja</span> <span>HQ Dashboard</span></h1>' +
