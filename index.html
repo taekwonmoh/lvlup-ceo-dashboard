@@ -2942,7 +2942,7 @@ function renderHeader() {
     { group: 'ops',     label: '⚙️ Ops',      target: () => state.opsSection     || 'tasks'       },
     { group: 'members', label: '👥 Members',  target: () => 'feedback'            },
     { group: 'growth',  label: '📈 Growth',   target: () => state.growthSection  || 'goals'        },
-    { group: 'resources', label: '📚 Resources', target: () => 'development' },
+    { group: 'resources', label: '📚 Training', target: () => 'development' },
   ];
   return '<div class="header">' +
     '<h1><img src="images/lvlup-logo.png" alt="LVLUP" style="height:32px;width:auto;vertical-align:middle;"> <span style="color:#ccc;font-weight:300;font-size:1.5rem;">/</span> <img src="images/goninja-logo.png" alt="Go Ninja" style="height:30px;width:auto;vertical-align:middle;"> <span style="margin-left:2px;">HQ Dashboard</span></h1>' +
@@ -4183,7 +4183,6 @@ const GONINJA_COLS = [
 function cancelAdd(loc){ fbSet('cancellations/' + loc + '/c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), { name:'', date:'', reason:'', notes:'' }); }
 function cancelUpdate(loc, key, field, value){ fbDebounce('cancellations/' + loc + '/' + key + '/' + field, value === '' ? null : value); }
 function cancelRemove(loc, key){ if (!confirm('Remove this cancellation entry?')) return; fbSet('cancellations/' + loc + '/' + key, null); }
-function cxNotes(id, val){ fbDebounce('cancellationRequests/' + id + '/retentionNotes', val === '' ? null : val); }
 function renderCancellationDetails(loc){
   const meta = LOCATIONS.find(l => l.id === loc) || { name: loc, color: '#1a1a2e' };
   const rows = Object.entries((state.cancellations || {})[loc] || {})
@@ -4191,26 +4190,11 @@ function renderCancellationDetails(loc){
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));   // most recent first
   const inCss = 'width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;box-sizing:border-box;';
   let h = '<div class="section" style="margin-bottom:22px;">';
-  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📞 Cancellation Details — ' + esc(meta.name) + '</h2><span style="font-size:11px;color:var(--gray-400);font-weight:600;">Save list — work to keep these students</span></div>';
-  // Form-fed cancellations for this location (from the Google-form → Holds tracker).
-  const formRows = crqAll()
-    .filter(r => /cancel/i.test(r.action || '') && r.location === loc)
-    .sort((a, b) => (b.cancelDate || '').localeCompare(a.cancelDate || '') || (b.timestamp || 0) - (a.timestamp || 0));
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📞 Cancellation Details — ' + esc(meta.name) + '</h2><span style="font-size:11px;color:var(--gray-400);font-weight:600;">Save list — work to keep these students · form cancellations live on Members → Holds &amp; Cancellations</span></div>';
   h += '<div style="overflow-x:auto;"><table class="sc-table" style="width:100%;"><thead><tr>';
   h += '<th style="text-align:left;">Student Name</th><th style="text-align:center;width:140px;">Cancellation Date</th><th style="text-align:left;width:22%;">Reason</th><th style="text-align:left;">Notes for Next Steps</th><th style="width:36px;"></th>';
   h += '</tr></thead><tbody>';
-  if (!rows.length && !formRows.length){ h += '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--gray-400);font-size:13px;">No cancellations logged. Form submissions appear here automatically; add one manually when a student gives notice off-form.</td></tr>'; }
-  // Auto rows from the form — name/date/reason read-only, retention notes editable here.
-  formRows.forEach(r => {
-    const dateDisp = r.cancelDate ? fmtCancelDate(r.cancelDate) : (r.timestamp ? fmtReqDate(r.timestamp) + ' (submitted)' : '—');
-    h += '<tr style="background:#fbfdff;">';
-    h += '<td><div style="padding:6px 8px;font-size:13px;font-weight:700;color:#1a1a2e;">' + esc(r.name || '—') + ' <span style="font-size:9px;font-weight:800;color:#2563eb;background:#eff6ff;padding:1px 6px;border-radius:10px;vertical-align:middle;letter-spacing:.3px;">FORM</span></div></td>';
-    h += '<td style="text-align:center;font-size:12.5px;color:#555;">' + esc(dateDisp) + '</td>';
-    h += '<td><div style="padding:6px 8px;font-size:13px;color:#555;">' + esc(r.reasonCancel || r.reason || '') + '</div></td>';
-    h += '<td><input value="' + esc(r.retentionNotes || '') + '" placeholder="Next steps to save them..." onchange="cxNotes(\'' + r.id + '\',this.value)" style="' + inCss + '" /></td>';
-    h += '<td style="text-align:center;"><span title="Managed on the Holds & Cancellations page" style="color:var(--gray-300);font-size:12px;cursor:default;">🔗</span></td>';
-    h += '</tr>';
-  });
+  if (!rows.length){ h += '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--gray-400);font-size:13px;">No manual cancellations logged. Form submissions are tracked on Members → Holds &amp; Cancellations; add one here only for off-form notes.</td></tr>'; }
   rows.forEach(r => {
     h += '<tr>';
     h += '<td><input value="' + esc(r.name || '') + '" placeholder="Student name..." onchange="cancelUpdate(\'' + loc + '\',\'' + r.key + '\',\'name\',this.value)" style="' + inCss + '" /></td>';
@@ -9135,7 +9119,7 @@ function renderDevelopmentPage() {
     let html = '';
     html += '<div class="section" style="padding:20px 24px 16px">';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">';
-    html += '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">📚 Resources — Playbooks & SOPs</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">Role-based systems for every key situation</div></div>';
+    html += '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">📚 Training — Playbooks & SOPs</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">Role-based systems for every key situation</div></div>';
     html += '<div style="display:flex;gap:6px">';
     [['instructor','🥋 Instructor Dev'],['gymdesk','🖥️ GymDesk'],['playbooks','📖 Playbooks']].forEach(([t,lbl]) => {
       const active = state.devTab === t;
@@ -9178,7 +9162,7 @@ function renderDevelopmentPage() {
   // Hero + tab switcher
   html += '<div class="section" style="padding:20px 24px">';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">';
-  html += '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">📚 Resources — Staff Training</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">Complete modules and save your progress</div></div>';
+  html += '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">📚 Training — Staff Training</div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">Complete modules and save your progress</div></div>';
   html += '<div style="display:flex;gap:6px">';
   [['instructor','🥋 Instructor Dev'],['gymdesk','🖥️ GymDesk'],['playbooks','📖 Playbooks']].forEach(([t,lbl]) => {
     const active = tab === t;
