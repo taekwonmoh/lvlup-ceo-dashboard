@@ -2494,6 +2494,7 @@ function crqAll(){ return Object.entries(state.cancellationRequests || {}).map((
 function crqSetStatus(id, status){ const cur = ((state.cancellationRequests || {})[id] || {}).status; fbSet('cancellationRequests/' + id + '/status', cur === status ? null : status); }
 function crqSetCompletedBy(id, val){ fbDebounce('cancellationRequests/' + id + '/completedBy', (val || '').trim().toUpperCase() || null); }
 function crqSetCancelDate(id, val){ fbSet('cancellationRequests/' + id + '/cancelDate', val || null); }
+function crqSetNotes(id, val){ fbDebounce('cancellationRequests/' + id + '/retentionNotes', (val || '').trim() || null); }
 function crqSetResumeDate(id, val){ fbSet('cancellationRequests/' + id + '/resumeDate', val || null); }
 function fmtCancelDate(s){ if (!s) return ''; const d = new Date(s + 'T12:00:00'); if (isNaN(d.getTime())) return String(s); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
 function crqDelete(id){ if (!confirm('Delete this request from the tracker?')) return; fbSet('cancellationRequests/' + id, null); }
@@ -2551,6 +2552,12 @@ function renderHoldCard(r){
   if (isHold && r.resumeDate) h += '<div><b style="color:#0891b2;font-weight:700;">Resumes on:</b> ' + esc(fmtCancelDate(r.resumeDate)) + '</div>';
   if (r.feedback) h += '<div style="font-style:italic;color:#777;margin-top:2px;">“' + esc(r.feedback) + '”</div>';
   h += '</div>';
+  if (isCancel) {
+    h += '<div style="margin-top:10px;">';
+    h += '<label style="display:block;font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Next steps to save them</label>';
+    h += '<input value="' + esc(r.retentionNotes || '') + '" placeholder="Call/text plan, offer, follow-up date..." onchange="crqSetNotes(\'' + r.id + '\',this.value)" style="width:100%;box-sizing:border-box;border:1px solid ' + (r.retentionNotes ? '#16a34a' : '#e3e6ef') + ';border-radius:8px;padding:7px 10px;font-size:12.5px;font-family:inherit;color:#333;">';
+    h += '</div>';
+  }
   h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f1f3f9;margin-top:10px;padding-top:10px;">';
   CRQ_STATUSES.forEach(s => {
     const on = st === s.id;
