@@ -9459,16 +9459,16 @@ function feedbackToggleSelectAll() {
 
 // ── Shared proxy helper ──
 async function getReportProxyConfig() {
-  const snap = await db.ref('config').once('value').catch(() => ({ val: () => ({}) }));
-  const cfg = snap.val() || {};
-  let proxyUrl = (cfg.reportProxyUrl || '').trim().replace(/\/$/, '');
+  // Only reportProxyUrl is public; the rest of `config` (API keys, secrets) stays locked.
+  const snap = await db.ref('config/reportProxyUrl').once('value').catch(() => ({ val: () => null }));
+  let proxyUrl = (snap.val() || '').trim().replace(/\/$/, '');
   if (!proxyUrl) {
     proxyUrl = prompt('Enter your webhooks server URL to generate reports\n(e.g. https://your-server.com or http://localhost:3001)\n\nThis will be saved for future use:');
     if (!proxyUrl) throw new Error('No proxy URL configured');
     proxyUrl = proxyUrl.trim().replace(/\/$/, '');
     db.ref('config/reportProxyUrl').set(proxyUrl);
   }
-  const secret = cfg.webhookSecret || cfg.reportProxySecret || 'lvlup-watchlist-2026';
+  const secret = 'lvlup-watchlist-2026';
   return { proxyUrl, secret };
 }
 
