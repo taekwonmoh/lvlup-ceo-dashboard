@@ -2924,7 +2924,7 @@ function renderHeader() {
     { group: 'resources', label: '📚 Resources', target: () => 'development' },
   ];
   return '<div class="header">' +
-    '<h1><span style="font-family:Arial Black,sans-serif;font-weight:900;color:#4169E1;letter-spacing:-1px;font-size:1.4rem">LVLUP</span> <span style="color:#999;font-weight:300">/</span> <span style="font-family:Arial Black,sans-serif;font-weight:900;color:#e94560;letter-spacing:-0.5px;font-size:1.4rem">Go Ninja</span> <span>HQ Dashboard</span></h1>' +
+    '<h1><img src="images/lvlup-logo.png" alt="LVLUP" style="height:32px;width:auto;vertical-align:middle;"> <span style="color:#ccc;font-weight:300;font-size:1.5rem;">/</span> <img src="images/goninja-logo.png" alt="Go Ninja" style="height:30px;width:auto;vertical-align:middle;"> <span style="margin-left:2px;">HQ Dashboard</span></h1>' +
     '<div class="nav-tabs">' +
     tabs.map(t =>
       '<button class="nav-tab ' + (activeGroup === t.group ? 'active' : '') + '" onclick="setSection(\'' + t.target() + '\')">' + t.label + '</button>'
