@@ -2916,6 +2916,8 @@ function renderCrModal(){
 
 function render() {
   const app = document.getElementById('app');
+  // Kiosk mode — part-timer clock page only, no nav or dashboard content.
+  if (location.hash === '#clock') { app.innerHTML = renderClockKiosk(); return; }
   // Backward-compat: old links to removed tabs redirect into merged pages
   if (state.activeSection === 'performance') state.activeSection = 'scorecard';   // KPIs & Financials tab removed
   if (state.activeSection === 'monthlyGoals') { state.goalsTab = 'monthly'; state.activeSection = 'goals'; }
@@ -3853,9 +3855,12 @@ function renderTcPto(){
 
 function renderAccountabilityPage(){
   let h = '<div class="page" style="max-width:1100px;">';
-  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Accountability</h2><p style="margin:0;font-size:13px;color:#888;">Clock in and out with geo-fence verification. Times roll up into the weekly timesheet.</p></div>';
+  h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;"><div><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Accountability</h2><p style="margin:0;font-size:13px;color:#888;">Clock in/out with geo-fence, weekly timesheet, PTO, and the team schedule.</p></div>';
+  h += '<a href="#clock" target="_blank" style="flex-shrink:0;padding:9px 15px;background:#1a1a2e;color:#fff;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;">🖥 Open clock kiosk →</a></div>';
+  h += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:10px;padding:10px 14px;font-size:12px;color:#334;margin-bottom:16px;">Give part-timers the kiosk link — it shows only the clock and their schedule, not the rest of the dashboard: <b>' + esc(location.origin + location.pathname) + '#clock</b></div>';
   h += renderTcClock();
   h += renderTcTimesheet();
+  h += renderTcSchedule();
   h += renderTcPto();
   h += renderTcSetup();
   h += '</div>';
@@ -3952,6 +3957,77 @@ function renderTcSetup(){
     h += '</div>';
   }
   h += '</div>';
+  return h;
+}
+
+/* ── Schedule — weekly shifts (time + location) for the team ── */
+function tcSchedFor(id){ return (tcData().schedule || {})[id] || {}; }
+function tcFmtHM(hm){ if (!hm) return ''; const p = String(hm).split(':'); let H = parseInt(p[0]) || 0; const M = parseInt(p[1]) || 0; const ap = H < 12 ? 'a' : 'p'; H = (H % 12) || 12; return H + (M ? ':' + String(M).padStart(2, '0') : '') + ap; }
+function tcSchedDays(){ const base = new Date(); base.setHours(0, 0, 0, 0); const day = base.getDay(); const mon = new Date(base); mon.setDate(base.getDate() - day + (day === 0 ? -6 : 1) + (state.tcWeekOffset || 0) * 7); const out = []; for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); out.push(d); } return out; }
+function tcAddShift(id, dateKey){
+  const st = (tcData().staff || {})[id] || {};
+  const s = prompt('Shift START for ' + (st.name || '') + ' on ' + dateKey + ' (24h, e.g. 16:00):', '16:00'); if (s === null) return;
+  if (!/^\d{1,2}:\d{2}$/.test(s.trim())) { alert('Use HH:MM (24-hour), e.g. 16:00.'); return; }
+  const e = prompt('Shift END (24h, e.g. 19:00):', '19:00'); if (e === null) return;
+  if (!/^\d{1,2}:\d{2}$/.test(e.trim())) { alert('Use HH:MM (24-hour).'); return; }
+  const list = LOCATIONS.map((l, i) => (i + 1) + '. ' + l.name).join('\n');
+  const def = LOCATIONS.findIndex(l => l.id === st.loc); const pick = prompt('Location — enter number:\n' + list, String(def >= 0 ? def + 1 : 1)); const idx = parseInt(pick) - 1;
+  const loc = (!isNaN(idx) && LOCATIONS[idx]) ? LOCATIONS[idx].id : st.loc;
+  fbSet('timeclock/schedule/' + id + '/' + dateKey + '/s_' + Date.now().toString(36), { start: s.trim(), end: e.trim(), loc });
+}
+function tcRemoveShift(id, dateKey, sid){ if (!confirm('Remove this shift?')) return; fbSet('timeclock/schedule/' + id + '/' + dateKey + '/' + sid, null); }
+
+function renderTcSchedule(){
+  const staff = tcStaffList(); if (!staff.length) return '';
+  const days = tcSchedDays();
+  const wkLabel = (days[0].getMonth() + 1) + '/' + days[0].getDate() + ' – ' + (days[6].getMonth() + 1) + '/' + days[6].getDate();
+  const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const navBtn = 'background:none;border:none;cursor:pointer;font-size:18px;padding:2px 10px;color:#4169E1;font-weight:700;';
+  let h = '<div class="section" style="margin-bottom:22px;">';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📆 Schedule</h2><span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></div>';
+  h += '<div style="overflow-x:auto;"><table class="sc-table" style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;min-width:110px;">Staff</th>';
+  days.forEach(d => { h += '<th style="text-align:center;min-width:90px;">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#aaa;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span></th>'; });
+  h += '</tr></thead><tbody>';
+  staff.forEach(s => {
+    const sched = tcSchedFor(s.id);
+    h += '<tr><td style="text-align:left;font-weight:700;">' + esc(s.name) + '</td>';
+    days.forEach(d => {
+      const dk = tcDateKey(d); const shifts = Object.entries(sched[dk] || {}).map(([sid, sh]) => ({ sid, ...(sh || {}) })).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+      h += '<td style="text-align:center;vertical-align:top;padding:4px;">';
+      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; h += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:6px;padding:2px 5px;margin-bottom:3px;font-size:11px;line-height:1.3;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + '<br><span style="color:#7a8; color:#5b6b8c;">' + esc(loc.short || '') + '</span> <button onclick="tcRemoveShift(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" style="background:none;border:none;color:#bbb;cursor:pointer;padding:0;font-size:11px;">✕</button></div>'; });
+      h += '<button onclick="tcAddShift(\'' + s.id + '\',\'' + dk + '\')" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
+      h += '</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '</div>';
+  return h;
+}
+
+function renderTcMySchedule(id){
+  const st = (tcData().staff || {})[id] || {}; const sched = tcSchedFor(id);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const items = [];
+  for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const dk = tcDateKey(d); Object.values(sched[dk] || {}).forEach(sh => items.push({ d, sh })); }
+  items.sort((a, b) => (a.d - b.d) || (a.sh.start || '').localeCompare(b.sh.start || ''));
+  let h = '<div style="background:#fff;border-radius:16px;margin-top:14px;padding:16px;">';
+  h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">📅 ' + esc(st.name || '') + ' — next 7 days</div>';
+  if (!items.length) h += '<div style="color:#aaa;font-size:13px;">No shifts scheduled.</div>';
+  items.forEach(it => { const loc = LOCATIONS.find(l => l.id === it.sh.loc) || {}; h += '<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;font-size:13px;"><span style="font-weight:700;min-width:70px;">' + dow[it.d.getDay()] + ' ' + (it.d.getMonth() + 1) + '/' + it.d.getDate() + '</span><span>' + tcFmtHM(it.sh.start) + '–' + tcFmtHM(it.sh.end) + '</span><span style="color:#888;">' + esc(loc.short || loc.name || '') + '</span></div>'; });
+  h += '</div>';
+  return h;
+}
+
+function renderClockKiosk(){
+  let h = '<div style="min-height:100vh;background:#0b1220;padding:24px 14px;">';
+  h += '<div style="max-width:520px;margin:0 auto;">';
+  h += '<div style="text-align:center;margin-bottom:18px;"><img src="images/lvlup-logo.png" alt="LVLUP" style="height:42px;"> <img src="images/goninja-logo.png" alt="Go Ninja" style="height:38px;vertical-align:middle;"><div style="color:#cbd5e1;font-size:13px;margin-top:8px;font-weight:600;letter-spacing:.5px;">TEAM TIME CLOCK</div></div>';
+  h += '<div style="border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">' + renderTcClock() + '</div>';
+  if (state.tcSel && (tcData().staff || {})[state.tcSel]) h += renderTcMySchedule(state.tcSel);
+  h += '<div style="text-align:center;margin-top:16px;"><a href="#" onclick="location.hash=\'\';return false;" style="color:#64748b;font-size:12px;text-decoration:none;">Exit kiosk</a></div>';
+  h += '</div></div>';
   return h;
 }
 
@@ -11918,6 +11994,7 @@ function renderAcqDashboard() {
 
 // Public dashboard — no sign-in gate. Requires the Firebase rules to allow
 // anonymous read/write on the `ceo/*` node (managed in the members app).
+window.addEventListener('hashchange', () => { state.tcSel = null; render(); });
 init();
 </script>
 </body>
