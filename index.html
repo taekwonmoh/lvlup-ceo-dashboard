@@ -10,6 +10,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<!-- Leaflet — geofence map picker (free, no API key) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 :root { 
   --bg: #f0f2f5;
@@ -2935,6 +2938,7 @@ function render() {
      s === 'development'                                                      ? renderResourcesPage() :
      '');
   requestAnimationFrame(initSortable);
+  if (state.tcMapLoc) requestAnimationFrame(tcInitMap);
 }
 
 function renderHeader() {
@@ -3705,15 +3709,115 @@ async function tcSetGeofenceHere(loc){
   state.tcMsg = { type: 'ok', text: 'Geofence set for ' + meta.name + ' (±' + (parseInt(r) || 150) + 'm).' }; render();
 }
 function tcClearGeofence(loc){ const meta = LOCATIONS.find(l => l.id === loc) || { name: loc }; if (!confirm('Clear the geofence for ' + meta.name + '?')) return; fbSet('timeclock/config/' + loc, null); }
+
+/* ── Geofence map picker (Leaflet) — set fences remotely without being on-site ── */
+let _tcMap = null;
+function tcOpenMap(loc){ state.tcMapLoc = loc; render(); }
+function tcCloseMap(){ if (_tcMap && _tcMap.map) { try { _tcMap.map.remove(); } catch (e) {} } _tcMap = null; state.tcMapLoc = null; render(); }
+function tcInitMap(){
+  const loc = state.tcMapLoc; if (!loc || !window.L) return;
+  const el = document.getElementById('tcMap'); if (!el || el._inited) return; el._inited = true;
+  const cfg = tcCfg(loc);
+  const lat = cfg && cfg.lat != null ? cfg.lat : 43.1897;   // default: Waunakee, WI area
+  const lng = cfg && cfg.lng != null ? cfg.lng : -89.4562;
+  const radius = cfg && cfg.radiusM ? cfg.radiusM : 150;
+  const map = L.map(el).setView([lat, lng], cfg ? 17 : 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+  const circle = L.circle([lat, lng], { radius, color: '#2563eb', fillColor: '#2563eb', fillOpacity: 0.12 }).addTo(map);
+  marker.on('drag', e => circle.setLatLng(e.latlng));
+  map.on('click', e => { marker.setLatLng(e.latlng); circle.setLatLng(e.latlng); });
+  _tcMap = { map, marker, circle };
+  const ri = document.getElementById('tcMapRadius');
+  if (ri) ri.oninput = () => { const r = parseInt(ri.value) || 150; circle.setRadius(r); const lbl = document.getElementById('tcMapRadiusLbl'); if (lbl) lbl.textContent = r + 'm'; };
+  setTimeout(() => map.invalidateSize(), 120);
+}
+function tcMapSearch(){
+  const q = (document.getElementById('tcMapSearch') || {}).value; if (!q || !_tcMap) return;
+  fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(d => { if (d && d[0]) { const la = +d[0].lat, ln = +d[0].lon; _tcMap.map.setView([la, ln], 17); _tcMap.marker.setLatLng([la, ln]); _tcMap.circle.setLatLng([la, ln]); } else alert('No match found — try a fuller address.'); })
+    .catch(() => alert('Address search failed.'));
+}
+function tcSaveMap(){
+  const loc = state.tcMapLoc; if (!loc || !_tcMap) return;
+  const ll = _tcMap.marker.getLatLng();
+  const r = parseInt((document.getElementById('tcMapRadius') || {}).value) || 150;
+  const meta = LOCATIONS.find(l => l.id === loc) || { name: loc };
+  fbSet('timeclock/config/' + loc, { lat: ll.lat, lng: ll.lng, radiusM: r, label: meta.short || meta.name, setAt: Date.now() });
+  tcCloseMap();
+  state.tcMsg = { type: 'ok', text: 'Geofence set for ' + meta.name + ' (±' + r + 'm).' }; render();
+}
+function renderTcMapModal(){
+  if (!state.tcMapLoc) return '';
+  const meta = LOCATIONS.find(l => l.id === state.tcMapLoc) || { name: state.tcMapLoc };
+  const cfg = tcCfg(state.tcMapLoc); const radius = cfg && cfg.radiusM ? cfg.radiusM : 150;
+  let h = '<div onclick="if(event.target===this)tcCloseMap()" style="position:fixed;inset:0;background:rgba(10,15,25,.55);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;">';
+  h += '<div style="background:#fff;border-radius:16px;width:100%;max-width:640px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);">';
+  h += '<div style="padding:14px 18px;border-bottom:1px solid #eef0f6;"><div style="font-size:16px;font-weight:800;color:#1a1a2e;">📍 Set geofence — ' + esc(meta.name) + '</div><div style="font-size:12px;color:#888;margin-top:2px;">Search an address or drag the pin, then set the radius.</div></div>';
+  h += '<div style="padding:12px 18px;">';
+  h += '<div style="display:flex;gap:6px;margin-bottom:10px;"><input id="tcMapSearch" placeholder="Search address (e.g. 123 Main St, Waunakee WI)" onkeydown="if(event.key===\'Enter\')tcMapSearch()" style="flex:1;border:1px solid #e3e6ef;border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;"><button onclick="tcMapSearch()" style="padding:8px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Search</button></div>';
+  h += '<div id="tcMap" style="height:340px;border-radius:12px;overflow:hidden;border:1px solid #e3e6ef;"></div>';
+  h += '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;"><label style="font-size:13px;font-weight:700;color:#555;">Radius: <span id="tcMapRadiusLbl">' + radius + 'm</span></label><input id="tcMapRadius" type="range" min="30" max="500" step="10" value="' + radius + '" style="flex:1;min-width:140px;"></div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:10px;padding:14px 18px;border-top:1px solid #eef0f6;"><button onclick="tcSaveMap()" style="flex:1;padding:11px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Save geofence</button><button onclick="tcCloseMap()" style="padding:11px 18px;background:#f1f3f9;color:#555;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Cancel</button></div>';
+  h += '</div></div>';
+  return h;
+}
 function tcDeleteEntry(id, dk, eid){ if (!confirm('Delete this punch from the record?')) return; fbSet('timeclock/entries/' + id + '/' + dk + '/' + eid, null); }
+
+/* ── PTO — fixed annual allotment (days) for full-time employees, log-only ── */
+function tcFmtDays(n){ n = +n || 0; return n % 1 ? n.toFixed(1) : String(n); }
+function tcPtoEntries(id){ return (tcData().pto || {})[id] || {}; }
+function tcPtoUsed(id, year){ let sum = 0; Object.values(tcPtoEntries(id)).forEach(e => { if (e && String(e.date || '').startsWith(String(year))) sum += (+e.days || 0); }); return sum; }
+function tcSetFullTime(id){ const cur = !!((tcData().staff || {})[id] || {}).fullTime; fbSet('timeclock/staff/' + id + '/fullTime', cur ? null : true); }
+function tcSetPtoAllot(id, val){ const n = parseFloat(val); fbSet('timeclock/staff/' + id + '/ptoDays', isNaN(n) || n <= 0 ? null : n); }
+function tcAddPto(id){
+  const st = (tcData().staff || {})[id] || {};
+  const date = prompt('PTO date for ' + (st.name || '') + ' (YYYY-MM-DD):', tcDateKey()); if (!date) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) { alert('Use the date format YYYY-MM-DD.'); return; }
+  const d = prompt('How many days? (use 0.5 for a half day):', '1'); if (d === null) return;
+  const days = parseFloat(d); if (isNaN(days) || days <= 0) { alert('Enter a positive number of days.'); return; }
+  const note = prompt('Note (optional):') || '';
+  fbSet('timeclock/pto/' + id + '/p_' + Date.now().toString(36), { date: date.trim(), days, note: note.trim() || null, enteredAt: Date.now() });
+}
+function tcRemovePto(id, eid){ if (!confirm('Remove this PTO entry?')) return; fbSet('timeclock/pto/' + id + '/' + eid, null); }
+
+function renderTcPto(){
+  const ft = tcStaffList().filter(s => s.fullTime); if (!ft.length) return '';
+  const year = new Date().getFullYear();
+  let h = '<div class="section" style="margin-bottom:22px;">';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>🌴 PTO — ' + year + '</h2><span style="font-size:11px;color:#aaa;font-weight:600;">Full-time employees · days off</span></div>';
+  h += '<div style="padding:8px 20px 16px;">';
+  ft.forEach(s => {
+    const allot = parseFloat(s.ptoDays) || 0, used = tcPtoUsed(s.id, year), rem = allot - used;
+    const pct = allot > 0 ? Math.min(100, Math.round(used / allot * 100)) : 0;
+    const remColor = rem < 0 ? '#dc2626' : rem <= 2 ? '#d97706' : '#16a34a';
+    h += '<div style="border:1px solid #e8eaf0;border-radius:12px;padding:14px 16px;margin-bottom:10px;">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">';
+    h += '<div style="font-size:15px;font-weight:800;color:#1a1a2e;">' + esc(s.name) + ' <span style="font-size:11px;font-weight:600;color:#aaa;">· ' + esc((LOCATIONS.find(l => l.id === s.loc) || {}).short || s.loc) + '</span></div>';
+    h += '<div style="font-size:13px;color:#555;"><b style="color:' + remColor + ';font-size:16px;">' + tcFmtDays(rem) + '</b> of ' + tcFmtDays(allot) + ' days left <span style="color:#aaa;">(' + tcFmtDays(used) + ' used)</span></div>';
+    h += '</div>';
+    h += '<div style="height:8px;background:#eef0f6;border-radius:6px;overflow:hidden;margin:10px 0;"><div style="height:100%;width:' + pct + '%;background:' + remColor + ';"></div></div>';
+    const entries = Object.entries(tcPtoEntries(s.id)).map(([eid, e]) => ({ eid, ...(e || {}) })).filter(e => String(e.date || '').startsWith(String(year))).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    if (entries.length) { h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">'; entries.forEach(e => { h += '<span style="display:inline-flex;align-items:center;gap:6px;background:#f1f5ff;border:1px solid #dce4ff;border-radius:8px;padding:3px 9px;font-size:12px;color:#334;">📅 ' + esc(fmtCancelDate(e.date)) + ' · ' + tcFmtDays(e.days) + 'd' + (e.note ? ' · ' + esc(e.note) : '') + ' <button onclick="tcRemovePto(\'' + s.id + '\',\'' + e.eid + '\')" style="background:none;border:none;color:#aab;cursor:pointer;font-size:12px;padding:0;" title="Remove">✕</button></span>'; }); h += '</div>'; }
+    if (allot <= 0) h += '<div style="font-size:11px;color:#d97706;margin-bottom:8px;">No annual allotment set — add it in Setup.</div>';
+    h += '<button onclick="tcAddPto(\'' + s.id + '\')" style="padding:6px 12px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">+ Log PTO</button>';
+    h += '</div>';
+  });
+  h += '</div></div>';
+  return h;
+}
 
 function renderAccountabilityPage(){
   let h = '<div class="page" style="max-width:1100px;">';
   h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Accountability</h2><p style="margin:0;font-size:13px;color:#888;">Clock in and out with geo-fence verification. Times roll up into the weekly timesheet.</p></div>';
   h += renderTcClock();
   h += renderTcTimesheet();
+  h += renderTcPto();
   h += renderTcSetup();
   h += '</div>';
+  h += renderTcMapModal();
   return h;
 }
 
@@ -3790,11 +3894,19 @@ function renderTcSetup(){
     h += '<div style="font-size:13px;font-weight:800;color:#1a1a2e;margin:8px 0;">Staff on the clock</div>';
     const staff = tcStaffList();
     if (!staff.length) h += '<div style="color:#aaa;font-size:12px;">None yet.</div>';
-    staff.forEach(s => { const hasPin = !!(tcData().pins || {})[s.id]; h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;"><span style="flex:1;min-width:140px;font-size:13px;">' + esc(s.name) + ' <span style="color:#aaa;font-size:11px;">· ' + esc((LOCATIONS.find(l => l.id === s.loc) || {}).short || s.loc) + '</span></span><span style="font-size:11px;font-weight:700;color:' + (hasPin ? '#16a34a' : '#d97706') + ';">' + (hasPin ? 'PIN set' : 'no PIN') + '</span><button onclick="tcSetPin(\'' + s.id + '\')" style="' + btn + '">' + (hasPin ? 'Reset PIN' : 'Set PIN') + '</button><button onclick="tcRemoveStaff(\'' + s.id + '\')" style="' + btn + 'color:#dc2626;">Remove</button></div>'; });
+    staff.forEach(s => {
+      const hasPin = !!(tcData().pins || {})[s.id];
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;">';
+      h += '<span style="flex:1;min-width:140px;font-size:13px;">' + esc(s.name) + ' <span style="color:#aaa;font-size:11px;">· ' + esc((LOCATIONS.find(l => l.id === s.loc) || {}).short || s.loc) + '</span></span>';
+      h += '<button onclick="tcSetFullTime(\'' + s.id + '\')" title="Full-time = PTO-eligible" style="padding:5px 11px;border-radius:7px;border:1px solid ' + (s.fullTime ? '#16a34a' : '#e3e6ef') + ';background:' + (s.fullTime ? '#16a34a' : '#fff') + ';color:' + (s.fullTime ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (s.fullTime ? '✓ Full-time' : 'Full-time') + '</button>';
+      if (s.fullTime) h += '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#555;">PTO <input type="number" min="0" step="0.5" value="' + (s.ptoDays != null ? esc(String(s.ptoDays)) : '') + '" placeholder="0" onchange="tcSetPtoAllot(\'' + s.id + '\',this.value)" style="width:56px;text-align:center;border:1px solid #e3e6ef;border-radius:6px;padding:4px;font-size:12px;font-family:inherit;"> days/yr</span>';
+      h += '<span style="font-size:11px;font-weight:700;color:' + (hasPin ? '#16a34a' : '#d97706') + ';">' + (hasPin ? 'PIN set' : 'no PIN') + '</span><button onclick="tcSetPin(\'' + s.id + '\')" style="' + btn + '">' + (hasPin ? 'Reset PIN' : 'Set PIN') + '</button><button onclick="tcRemoveStaff(\'' + s.id + '\')" style="' + btn + 'color:#dc2626;">Remove</button>';
+      h += '</div>';
+    });
     h += '<button onclick="tcAddStaff()" class="l10-add-btn" style="margin-top:10px;">+ Add staff</button>';
     h += '<div style="font-size:13px;font-weight:800;color:#1a1a2e;margin:20px 0 4px;">Geofences</div>';
     h += '<div style="font-size:11px;color:#999;margin-bottom:8px;">Stand at each school and tap “Set from here” to capture its GPS + radius.</div>';
-    LOCATIONS.forEach(loc => { const cfg = tcCfg(loc.id); h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;"><span style="flex:1;min-width:150px;font-size:13px;">' + esc(loc.name) + '</span>' + (cfg ? '<span style="font-size:11px;font-weight:700;color:#16a34a;">✓ set ±' + (cfg.radiusM || 150) + 'm</span>' : '<span style="font-size:11px;font-weight:700;color:#d97706;">not set</span>') + '<button onclick="tcSetGeofenceHere(\'' + loc.id + '\')" style="' + btn + '">Set from here</button>' + (cfg ? '<button onclick="tcClearGeofence(\'' + loc.id + '\')" style="' + btn + 'color:#dc2626;">Clear</button>' : '') + '</div>'; });
+    LOCATIONS.forEach(loc => { const cfg = tcCfg(loc.id); h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;"><span style="flex:1;min-width:150px;font-size:13px;">' + esc(loc.name) + '</span>' + (cfg ? '<span style="font-size:11px;font-weight:700;color:#16a34a;">✓ set ±' + (cfg.radiusM || 150) + 'm</span>' : '<span style="font-size:11px;font-weight:700;color:#d97706;">not set</span>') + '<button onclick="tcOpenMap(\'' + loc.id + '\')" style="' + btn + '">Set on map</button><button onclick="tcSetGeofenceHere(\'' + loc.id + '\')" style="' + btn + '">Set from here</button>' + (cfg ? '<button onclick="tcClearGeofence(\'' + loc.id + '\')" style="' + btn + 'color:#dc2626;">Clear</button>' : '') + '</div>'; });
     h += '</div>';
   }
   h += '</div>';
@@ -5767,6 +5879,7 @@ state.tcPin          = '';           // clock UI: PIN entry buffer
 state.tcMsg          = null;         // clock UI: transient status message {type,text}
 state.tcWeekOffset   = 0;            // timesheet week navigation
 state.tcSetup        = false;        // show/hide admin setup panel
+state.tcMapLoc       = null;         // geofence map picker: location id whose map modal is open
 state.adLabTab     = 'playbook';     // Ad Creative: 'playbook' | 'tracker' | 'leaderboard'
 state.adLabFilter  = 'all';          // Hook bank avatar filter
 state.adCreative   = state.adCreative || {};
