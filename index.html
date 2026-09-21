@@ -2494,6 +2494,7 @@ function crqAll(){ return Object.entries(state.cancellationRequests || {}).map((
 function crqSetStatus(id, status){ const cur = ((state.cancellationRequests || {})[id] || {}).status; fbSet('cancellationRequests/' + id + '/status', cur === status ? null : status); }
 function crqSetCompletedBy(id, val){ fbDebounce('cancellationRequests/' + id + '/completedBy', (val || '').trim().toUpperCase() || null); }
 function crqSetCancelDate(id, val){ fbSet('cancellationRequests/' + id + '/cancelDate', val || null); }
+function crqSetResumeDate(id, val){ fbSet('cancellationRequests/' + id + '/resumeDate', val || null); }
 function fmtCancelDate(s){ if (!s) return ''; const d = new Date(s + 'T12:00:00'); if (isNaN(d.getTime())) return String(s); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
 function crqDelete(id){ if (!confirm('Delete this request from the tracker?')) return; fbSet('cancellationRequests/' + id, null); }
 function crqSetFilter(f){ state.holdsFilter = f; render(); }
@@ -2547,6 +2548,7 @@ function renderHoldCard(r){
   if (isHold && r.holdStart) h += '<div><b style="color:#999;font-weight:700;">Hold starts:</b> ' + esc(r.holdStart) + '</div>';
   if (r.timestamp) h += '<div><b style="color:#999;font-weight:700;">Submitted:</b> ' + esc(fmtReqDate(r.timestamp)) + '</div>';
   if (isCancel && r.cancelDate) h += '<div><b style="color:#dc2626;font-weight:700;">Cancels on:</b> ' + esc(fmtCancelDate(r.cancelDate)) + '</div>';
+  if (isHold && r.resumeDate) h += '<div><b style="color:#0891b2;font-weight:700;">Resumes on:</b> ' + esc(fmtCancelDate(r.resumeDate)) + '</div>';
   if (r.feedback) h += '<div style="font-style:italic;color:#777;margin-top:2px;">“' + esc(r.feedback) + '”</div>';
   h += '</div>';
   h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f1f3f9;margin-top:10px;padding-top:10px;">';
@@ -2558,6 +2560,12 @@ function renderHoldCard(r){
     h += '<span style="display:flex;align-items:center;gap:6px;">';
     h += '<label style="font-size:11px;font-weight:700;color:#888;">Cancels on</label>';
     h += '<input type="date" value="' + esc(r.cancelDate || '') + '" onchange="crqSetCancelDate(\'' + r.id + '\',this.value)" style="border:1px solid ' + (r.cancelDate ? '#dc2626' : '#e3e6ef') + ';border-radius:6px;padding:4px 6px;font-size:12px;font-weight:700;color:' + (r.cancelDate ? '#dc2626' : '#555') + ';font-family:inherit;">';
+    h += '</span>';
+  }
+  if (isHold) {
+    h += '<span style="display:flex;align-items:center;gap:6px;">';
+    h += '<label style="font-size:11px;font-weight:700;color:#888;">Resumes on</label>';
+    h += '<input type="date" value="' + esc(r.resumeDate || '') + '" onchange="crqSetResumeDate(\'' + r.id + '\',this.value)" style="border:1px solid ' + (r.resumeDate ? '#0891b2' : '#e3e6ef') + ';border-radius:6px;padding:4px 6px;font-size:12px;font-weight:700;color:' + (r.resumeDate ? '#0891b2' : '#555') + ';font-family:inherit;">';
     h += '</span>';
   }
   h += '<span style="margin-left:auto;display:flex;align-items:center;gap:6px;">';
