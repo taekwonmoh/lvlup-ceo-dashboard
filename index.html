@@ -2011,8 +2011,8 @@ function migrateFeedbackTrackingToAll() {
 function setSection(s) {
   state.activeSection = s;
   // Remember last-visited sub-section per group so tabs restore correctly
-  if (['tasks','scorecard','events','testing'].includes(s)) state.opsSection   = s;
-  if (['goals','marketing'].includes(s))                     state.growthSection  = s;
+  if (['tasks','events','testing','accountability'].includes(s)) state.opsSection = s;
+  if (['goals','marketing','scorecard','rocks','financials'].includes(s)) state.growthSection = s;
   render();
 }
 function changeWeek(d) { state.weekOffset += d; listenAll(); }
@@ -2233,15 +2233,15 @@ function renderGroupSubNav(tabs) {
 function renderOpsPage() {
   const s = state.activeSection;
   const nav = renderGroupSubNav([
-    { id: 'tasks',     label: '✅ Tasks'     },
-    { id: 'scorecard', label: '📊 Scorecard' },
-    { id: 'events',    label: '📅 Events'    },
-    { id: 'testing',   label: '🥋 Testing'   },
+    { id: 'tasks',          label: '✅ Tasks'         },
+    { id: 'events',         label: '📅 Events'        },
+    { id: 'testing',        label: '🥋 Testing'       },
+    { id: 'accountability', label: '⏱ Accountability' },
   ]);
   const pulse = renderPulseBar();
-  if (s === 'scorecard') return pulse + nav + renderScorecardPage();
-  if (s === 'events')    return pulse + nav + renderEventsPage();
-  if (s === 'testing')   return pulse + nav + renderTestingPrepPage();
+  if (s === 'events')         return pulse + nav + renderEventsPage();
+  if (s === 'testing')        return pulse + nav + renderTestingPrepPage();
+  if (s === 'accountability') return pulse + nav + renderAccountabilityPage();
   return pulse + nav + renderTasksPage();
 }
 
@@ -2580,11 +2580,17 @@ function renderHoldCard(r){
 function renderGrowthPage() {
   const s = state.activeSection;
   const nav = renderGroupSubNav([
+    { id: 'scorecard',  label: '📊 Scorecard'   },
     { id: 'goals',      label: '🎯 Goals'       },
+    { id: 'rocks',      label: '🪨 Rocks'       },
     { id: 'marketing',  label: '📱 Marketing'   },
+    { id: 'financials', label: '💰 Financials'  },
     // Scale (PIN-gated ACQ.com dashboard) hidden for now — re-add this tab to restore.
   ]);
-  if (s === 'marketing') return nav + renderMarketingPage();
+  if (s === 'scorecard')  return nav + renderScorecardPage();
+  if (s === 'rocks')      return nav + renderRocksPage();
+  if (s === 'financials') return nav + renderPerformancePage();
+  if (s === 'marketing')  return nav + renderMarketingPage();
   return nav + renderGoalsPage();
 }
 
@@ -2902,20 +2908,19 @@ function render() {
   if (state.activeSection === 'acq') state.activeSection = 'scorecard';
   // L10 became the "Agenda" embedded on the Home page
   if (state.activeSection === 'l10') state.activeSection = 'home';
-  // Leadership tab removed — send it (and the Rocks page that lived under it) to Home
-  if (state.activeSection === 'rocks' || state.activeSection === 'leadership') state.activeSection = 'home';
-  // Scorecard moved to Ops — keep the Growth group's memory off it
-  if (state.growthSection === 'scorecard' || state.growthSection === 'acq') state.growthSection = 'goals';
+  // Leadership tab removed — its accountability view now lives under Ops, Rocks under Growth
+  if (state.activeSection === 'leadership') state.activeSection = 'accountability';
+  if (state.opsSection === 'scorecard') state.opsSection = 'tasks';   // Scorecard moved to Growth
+  if (state.growthSection === 'acq') state.growthSection = 'goals';
   const s = state.activeSection;
 
   app.innerHTML = renderHeader() +
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
-     ['tasks','scorecard','events','testing'].includes(s)                     ? renderOpsPage()       :
+     ['tasks','events','testing','accountability'].includes(s)                ? renderOpsPage()       :
      ['feedback','watchlist','holds','applications'].includes(s)              ? renderMembersPage()   :
-     ['goals','marketing'].includes(s)                                        ? renderGrowthPage()    :
+     ['goals','marketing','scorecard','rocks','financials'].includes(s)       ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
-     s === 'leadership'                                                       ? renderLeadershipPage() :
      '');
   requestAnimationFrame(initSortable);
 }
@@ -2924,9 +2929,9 @@ function renderHeader() {
   const cur = state.activeSection;
   const getGroup = s => {
     if (s === 'home') return 'home';
-    if (['tasks','scorecard','events','performance','testing'].includes(s)) return 'ops';
+    if (['tasks','events','testing','accountability'].includes(s)) return 'ops';
     if (['feedback','watchlist','holds','applications'].includes(s)) return 'members';
-    if (['goals','marketing','monthlyGoals'].includes(s))      return 'growth';
+    if (['goals','marketing','monthlyGoals','scorecard','rocks','financials','performance'].includes(s)) return 'growth';
     if (s === 'development')                                   return 'resources';
     if (s === 'leadership')                                    return 'leadership';
     return null;
@@ -3612,6 +3617,21 @@ function renderLeadDashboard(){
   h += '<h2 style="margin:0 0 14px;font-size:18px;font-weight:800;color:#1a1a2e;">🪨 Rocks</h2>';
   h += renderRocksPage();
   h += '</div>';
+  h += '</div>';
+  h += renderHbImportModal();
+  return h;
+}
+
+function renderAccountabilityPage(){
+  const monthLabel = leadMonthDate().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  let h = '<div class="page" style="max-width:1100px;">';
+  h += '<div style="margin-bottom:12px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Accountability</h2><p style="margin:0;font-size:13px;color:#888;">Clock-in / clock-out hours and variance from the Homebase timesheet import.</p></div>';
+  h += '<div style="display:flex;align-items:center;gap:6px;background:#f1f3f9;border-radius:10px;padding:3px;width:fit-content;margin-bottom:16px;">';
+  h += '<button onclick="leadChangeMonth(-1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">‹</button>';
+  h += '<span style="font-size:14px;font-weight:700;color:#1a1a2e;min-width:150px;text-align:center;">' + monthLabel + '</span>';
+  h += '<button onclick="leadChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">›</button>';
+  h += '</div>';
+  h += renderHbImportBar() + renderLeadAccountability();
   h += '</div>';
   h += renderHbImportModal();
   return h;
