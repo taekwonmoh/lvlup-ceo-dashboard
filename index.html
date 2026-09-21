@@ -1835,6 +1835,11 @@ function listenAll() {
   trialRef.on('value', snap => { state.trialPipeline = snap.val() || {}; render(); });
   activeListeners.push({ ref: trialRef, event: 'value' });
 
+  // Time clock (staff roster, per-person PIN hashes, geofence config, punches)
+  const tcRef = fbRef('timeclock');
+  tcRef.on('value', snap => { state.timeclock = snap.val() || {}; render(); });
+  activeListeners.push({ ref: tcRef, event: 'value' });
+
   // Leadership backup timestamp (shared across owners)
   const ldBackupRef = fbRef('leadership/lastBackup');
   ldBackupRef.on('value', snap => { state.leadership.lastBackup = snap.val(); render(); });
@@ -3629,18 +3634,170 @@ function renderLeadDashboard(){
   return h;
 }
 
+/* ── Time Clock — staff clock-in/out with geo-fence (replaces the Homebase CSV import) ── */
+function tcData(){ return state.timeclock || {}; }
+function tcStaffList(){ const s = tcData().staff || {}; return Object.entries(s).map(([id, v]) => ({ id, ...(v || {}) })).sort((a, b) => (a.name || '').localeCompare(b.name || '')); }
+function tcCfg(loc){ return (tcData().config || {})[loc] || null; }
+function tcEmpEntries(id){ return (tcData().entries || {})[id] || {}; }
+async function tcHash(pin){ const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lvlup:' + pin)); return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); }
+function tcDistM(aLat, aLng, bLat, bLng){ const R = 6371000, toR = x => x * Math.PI / 180; const dLat = toR(bLat - aLat), dLng = toR(bLng - aLng); const s = Math.sin(dLat / 2) ** 2 + Math.cos(toR(aLat)) * Math.cos(toR(bLat)) * Math.sin(dLng / 2) ** 2; return Math.round(2 * R * Math.asin(Math.sqrt(s))); }
+function tcDateKey(d){ d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function tcFmtTime(ts){ if (!ts) return ''; const d = new Date(ts); let hh = d.getHours(); const m = d.getMinutes(); const ap = hh < 12 ? 'AM' : 'PM'; hh = hh % 12 || 12; return hh + ':' + String(m).padStart(2, '0') + ' ' + ap; }
+function tcDistLabel(d){ return d == null ? '' : (d > 1000 ? (d / 1000).toFixed(1) + 'km' : d + 'm'); }
+function tcOpenEntry(id){ const es = tcEmpEntries(id); for (const dk of Object.keys(es)) { for (const [eid, e] of Object.entries(es[dk] || {})) { if (e && e.inAt && !e.outAt) return { dateKey: dk, entryId: eid, entry: e }; } } return null; }
+function tcGetPosition(){ return new Promise(resolve => { if (!navigator.geolocation) return resolve({ error: 'no-geo' }); navigator.geolocation.getCurrentPosition(p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }), err => resolve({ error: err.code === 1 ? 'denied' : 'unavailable' }), { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }); }); }
+
+function tcSelect(id){ state.tcSel = (state.tcSel === id ? null : id); state.tcPin = ''; state.tcMsg = null; render(); }
+function tcToggleSetup(){ state.tcSetup = !state.tcSetup; render(); }
+function tcWeek(off){ state.tcWeekOffset = (state.tcWeekOffset || 0) + off; render(); }
+function tcAddStaff(){
+  const name = prompt('Staff member name:'); if (!name || !name.trim()) return;
+  const list = LOCATIONS.map((l, i) => (i + 1) + '. ' + l.name).join('\n');
+  const pick = prompt('Home location — enter the number:\n' + list); const idx = parseInt(pick) - 1;
+  if (isNaN(idx) || !LOCATIONS[idx]) { alert('No valid location chosen.'); return; }
+  const id = 'tc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  fbSet('timeclock/staff/' + id, { name: name.trim(), loc: LOCATIONS[idx].id });
+}
+function tcRemoveStaff(id){ const st = (tcData().staff || {})[id] || {}; if (!confirm('Remove ' + (st.name || 'this person') + ' from the clock? Past punches stay in the records.')) return; fbSet('timeclock/staff/' + id, null); fbSet('timeclock/pins/' + id, null); }
+async function tcSetPin(id){
+  const st = (tcData().staff || {})[id] || {};
+  const p1 = prompt('Set a 4-digit PIN for ' + (st.name || '') + ':'); if (p1 === null) return;
+  if (!/^\d{4}$/.test(p1)) { alert('PIN must be exactly 4 digits.'); return; }
+  const p2 = prompt('Re-enter the PIN to confirm:'); if (p2 !== p1) { alert('PINs did not match.'); return; }
+  fbSet('timeclock/pins/' + id, await tcHash(p1)); alert('PIN set for ' + (st.name || '') + '.');
+}
+async function tcPunch(id, dir){
+  const st = (tcData().staff || {})[id] || {};
+  const storedPin = (tcData().pins || {})[id];
+  const el = document.getElementById('tcPinInput'); const pin = (el ? el.value : '') || '';
+  if (!storedPin) { state.tcMsg = { type: 'warn', text: 'No PIN set yet — tap “Set your PIN” first.' }; render(); return; }
+  if (!/^\d{4}$/.test(pin)) { state.tcMsg = { type: 'warn', text: 'Enter your 4-digit PIN.' }; render(); return; }
+  if (await tcHash(pin) !== storedPin) { state.tcMsg = { type: 'error', text: 'Incorrect PIN.' }; if (el) el.value = ''; render(); return; }
+  state.tcMsg = { type: 'info', text: 'Getting your location…' }; render();
+  const pos = await tcGetPosition();
+  const cfg = tcCfg(st.loc);
+  let dist = null, ok = null, geoNote = '';
+  if (pos.error) { geoNote = pos.error === 'denied' ? '⚠ location permission denied' : '⚠ location unavailable'; ok = false; }
+  else if (cfg && typeof cfg.lat === 'number') { dist = tcDistM(pos.lat, pos.lng, cfg.lat, cfg.lng); ok = dist <= (cfg.radiusM || 150); geoNote = (ok ? '✓ ' : '⚠ ') + tcDistLabel(dist) + ' from ' + (cfg.label || 'site'); }
+  else { geoNote = 'geofence not set for this school'; }
+  const now = Date.now();
+  if (dir === 'in') {
+    if (tcOpenEntry(id)) { state.tcMsg = { type: 'warn', text: (st.name || '') + ' is already clocked in.' }; render(); return; }
+    const dk = tcDateKey(); const eid = 'e_' + now.toString(36);
+    fbSet('timeclock/entries/' + id + '/' + dk + '/' + eid, { inAt: now, inLat: pos.lat || null, inLng: pos.lng || null, inDist: dist, inOk: ok });
+    state.tcMsg = { type: ok === false ? 'warn' : 'ok', text: (st.name || '') + ' clocked IN · ' + tcFmtTime(now) + ' · ' + geoNote };
+  } else {
+    const open = tcOpenEntry(id);
+    if (!open) { state.tcMsg = { type: 'warn', text: 'No open clock-in found for ' + (st.name || '') + '.' }; render(); return; }
+    const base = 'timeclock/entries/' + id + '/' + open.dateKey + '/' + open.entryId + '/';
+    fbSet(base + 'outAt', now); fbSet(base + 'outLat', pos.lat || null); fbSet(base + 'outLng', pos.lng || null); fbSet(base + 'outDist', dist); fbSet(base + 'outOk', ok);
+    state.tcMsg = { type: ok === false ? 'warn' : 'ok', text: (st.name || '') + ' clocked OUT · ' + tcFmtTime(now) + ' · ' + geoNote };
+  }
+  state.tcSel = null; state.tcPin = ''; render();
+}
+async function tcSetGeofenceHere(loc){
+  const meta = LOCATIONS.find(l => l.id === loc) || { name: loc };
+  state.tcMsg = { type: 'info', text: 'Capturing GPS for ' + meta.name + '…' }; render();
+  const pos = await tcGetPosition();
+  if (pos.error) { alert('Could not get location (' + pos.error + '). Make sure location permission is allowed.'); state.tcMsg = null; render(); return; }
+  const r = prompt('Geofence radius in meters for ' + meta.name + ' (how far from the door still counts as “here”):', '150'); if (r === null) { state.tcMsg = null; render(); return; }
+  fbSet('timeclock/config/' + loc, { lat: pos.lat, lng: pos.lng, radiusM: parseInt(r) || 150, label: meta.short || meta.name, setAt: Date.now() });
+  state.tcMsg = { type: 'ok', text: 'Geofence set for ' + meta.name + ' (±' + (parseInt(r) || 150) + 'm).' }; render();
+}
+function tcClearGeofence(loc){ const meta = LOCATIONS.find(l => l.id === loc) || { name: loc }; if (!confirm('Clear the geofence for ' + meta.name + '?')) return; fbSet('timeclock/config/' + loc, null); }
+function tcDeleteEntry(id, dk, eid){ if (!confirm('Delete this punch from the record?')) return; fbSet('timeclock/entries/' + id + '/' + dk + '/' + eid, null); }
+
 function renderAccountabilityPage(){
-  const monthLabel = leadMonthDate().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   let h = '<div class="page" style="max-width:1100px;">';
-  h += '<div style="margin-bottom:12px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Accountability</h2><p style="margin:0;font-size:13px;color:#888;">Clock-in / clock-out hours and variance from the Homebase timesheet import.</p></div>';
-  h += '<div style="display:flex;align-items:center;gap:6px;background:#f1f3f9;border-radius:10px;padding:3px;width:fit-content;margin-bottom:16px;">';
-  h += '<button onclick="leadChangeMonth(-1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">‹</button>';
-  h += '<span style="font-size:14px;font-weight:700;color:#1a1a2e;min-width:150px;text-align:center;">' + monthLabel + '</span>';
-  h += '<button onclick="leadChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">›</button>';
+  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Accountability</h2><p style="margin:0;font-size:13px;color:#888;">Clock in and out with geo-fence verification. Times roll up into the weekly timesheet.</p></div>';
+  h += renderTcClock();
+  h += renderTcTimesheet();
+  h += renderTcSetup();
   h += '</div>';
-  h += renderHbImportBar() + renderLeadAccountability();
+  return h;
+}
+
+function renderTcClock(){
+  const staff = tcStaffList();
+  let h = '<div class="section" style="margin-bottom:22px;padding:0;overflow:hidden;">';
+  h += '<div style="background:#1a1a2e;color:#fff;padding:16px 20px;"><div style="font-size:16px;font-weight:800;">Clock In / Out</div><div style="font-size:12px;opacity:.75;margin-top:2px;">Tap your name, enter your PIN, and clock in. Your location is checked against the school.</div></div>';
+  h += '<div style="padding:16px 20px;">';
+  if (state.tcMsg) { const c = { ok: ['#dcfce7', '#166534'], warn: ['#fef3c7', '#92400e'], error: ['#fee2e2', '#b91c1c'], info: ['#e0f2fe', '#075985'] }[state.tcMsg.type] || ['#f1f3f9', '#555']; h += '<div style="background:' + c[0] + ';color:' + c[1] + ';border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:14px;">' + esc(state.tcMsg.text) + '</div>'; }
+  if (!staff.length) { h += '<div style="color:#aaa;font-size:13px;padding:8px 0;">No staff on the clock yet — open <b>Setup</b> below to add your team.</div>'; }
+  else if (state.tcSel && (tcData().staff || {})[state.tcSel]) {
+    const st = (tcData().staff || {})[state.tcSel]; const open = tcOpenEntry(state.tcSel); const hasPin = !!(tcData().pins || {})[state.tcSel];
+    h += '<div style="max-width:360px;">';
+    h += '<div style="font-size:18px;font-weight:800;color:#1a1a2e;margin-bottom:2px;">' + esc(st.name || '') + '</div>';
+    h += '<div style="font-size:12px;color:#888;margin-bottom:12px;">' + esc((LOCATIONS.find(l => l.id === st.loc) || {}).name || '') + (open ? ' · 🟢 clocked in since ' + tcFmtTime(open.entry.inAt) : ' · ⚪ clocked out') + '</div>';
+    if (!hasPin) { h += '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px;font-size:12px;color:#92400e;margin-bottom:12px;">No PIN yet. <button onclick="tcSetPin(\'' + state.tcSel + '\')" style="background:none;border:none;color:#b45309;font-weight:700;text-decoration:underline;cursor:pointer;font-size:12px;">Set your PIN</button> first.</div>'; }
+    h += '<input id="tcPinInput" type="password" inputmode="numeric" maxlength="4" placeholder="PIN" onkeydown="if(event.key===\'Enter\')tcPunch(\'' + state.tcSel + '\',\'' + (open ? 'out' : 'in') + '\')" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:12px;font-size:22px;padding:12px;border:2px solid #e0e3ed;border-radius:10px;margin-bottom:12px;font-family:inherit;" autofocus>';
+    h += '<div style="display:flex;gap:10px;">';
+    h += '<button onclick="tcPunch(\'' + state.tcSel + '\',\'' + (open ? 'out' : 'in') + '\')" style="flex:1;padding:14px;background:' + (open ? '#dc2626' : '#16a34a') + ';color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;">' + (open ? 'Clock Out' : 'Clock In') + '</button>';
+    h += '<button onclick="tcSelect(\'' + state.tcSel + '\')" style="padding:14px 16px;background:#f1f3f9;color:#555;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Cancel</button>';
+    h += '</div></div>';
+  } else {
+    let any = false;
+    LOCATIONS.forEach(loc => {
+      const ppl = staff.filter(s => s.loc === loc.id); if (!ppl.length) return; any = true;
+      h += '<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">' + esc(loc.name) + (tcCfg(loc.id) ? '' : ' <span style="color:#d97706;">· geofence not set</span>') + '</div><div style="display:flex;flex-wrap:wrap;gap:8px;">';
+      ppl.forEach(s => { const open = tcOpenEntry(s.id); h += '<button onclick="tcSelect(\'' + s.id + '\')" style="padding:10px 16px;border-radius:10px;border:1px solid ' + (open ? '#16a34a' : '#e3e6ef') + ';background:' + (open ? '#dcfce7' : '#fff') + ';color:#1a1a2e;font-size:14px;font-weight:700;cursor:pointer;">' + (open ? '🟢 ' : '') + esc(s.name) + '</button>'; });
+      h += '</div></div>';
+    });
+    const orphans = staff.filter(s => !LOCATIONS.find(l => l.id === s.loc));
+    if (orphans.length) { h += '<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Other</div><div style="display:flex;flex-wrap:wrap;gap:8px;">'; orphans.forEach(s => { const open = tcOpenEntry(s.id); h += '<button onclick="tcSelect(\'' + s.id + '\')" style="padding:10px 16px;border-radius:10px;border:1px solid ' + (open ? '#16a34a' : '#e3e6ef') + ';background:' + (open ? '#dcfce7' : '#fff') + ';color:#1a1a2e;font-size:14px;font-weight:700;cursor:pointer;">' + (open ? '🟢 ' : '') + esc(s.name) + '</button>'; }); h += '</div></div>'; any = true; }
+    if (!any) h += '<div style="color:#aaa;font-size:13px;">No staff on the clock yet — open Setup below.</div>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+function renderTcTimesheet(){
+  const staff = tcStaffList(); if (!staff.length) return '';
+  const base = new Date(); base.setHours(0, 0, 0, 0); const day = base.getDay();
+  const monDiff = base.getDate() - day + (day === 0 ? -6 : 1) + (state.tcWeekOffset || 0) * 7;
+  const mon = new Date(base); mon.setDate(monDiff);
+  const days = []; for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); days.push(d); }
+  const wkLabel = (mon.getMonth() + 1) + '/' + mon.getDate() + ' – ' + (days[6].getMonth() + 1) + '/' + days[6].getDate();
+  const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const navBtn = 'background:none;border:none;cursor:pointer;font-size:18px;padding:2px 10px;color:#4169E1;font-weight:700;';
+  let h = '<div class="section" style="margin-bottom:22px;">';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>🗓 Timesheet</h2><span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></div>';
+  h += '<div style="overflow-x:auto;"><table class="sc-table" style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;">Staff</th>';
+  days.forEach(d => { h += '<th style="text-align:center;">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#aaa;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span></th>'; });
+  h += '<th style="text-align:center;">Total</th></tr></thead><tbody>';
+  staff.forEach(s => {
+    const es = tcEmpEntries(s.id); let wkMin = 0; let cells = '';
+    days.forEach(d => {
+      const dk = tcDateKey(d); const dayE = es[dk] || {}; let mins = 0, flag = false, openDay = false;
+      Object.values(dayE).forEach(e => { if (!e) return; if (e.inAt && e.outAt) mins += (e.outAt - e.inAt) / 60000; else if (e.inAt && !e.outAt) openDay = true; if (e.inOk === false || e.outOk === false) flag = true; });
+      wkMin += mins; const hrs = mins ? (mins / 60).toFixed(1) : '';
+      cells += '<td style="text-align:center;' + (flag ? 'background:#fef3c7;' : '') + '">' + (openDay ? '🟢' : '') + (hrs || '·') + (flag ? ' ⚠' : '') + '</td>';
+    });
+    h += '<tr><td style="text-align:left;font-weight:700;">' + esc(s.name) + '</td>' + cells + '<td style="text-align:center;font-weight:800;">' + (wkMin ? (wkMin / 60).toFixed(1) + 'h' : '0') + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div style="font-size:11px;color:#999;margin-top:8px;">🟢 currently clocked in · ⚠ a punch was outside the geofence — review</div>';
   h += '</div>';
-  h += renderHbImportModal();
+  return h;
+}
+
+function renderTcSetup(){
+  const btn = 'padding:5px 11px;border:1px solid #e3e6ef;background:#fff;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;color:#555;';
+  let h = '<div class="section" style="margin-bottom:22px;">';
+  h += '<div class="section-header" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="tcToggleSetup()"><h2>⚙ Setup ' + (state.tcSetup ? '▾' : '▸') + '</h2><span style="font-size:11px;color:#aaa;font-weight:600;">Manage staff &amp; geofences</span></div>';
+  if (state.tcSetup) {
+    h += '<div style="padding:6px 20px 18px;">';
+    h += '<div style="font-size:13px;font-weight:800;color:#1a1a2e;margin:8px 0;">Staff on the clock</div>';
+    const staff = tcStaffList();
+    if (!staff.length) h += '<div style="color:#aaa;font-size:12px;">None yet.</div>';
+    staff.forEach(s => { const hasPin = !!(tcData().pins || {})[s.id]; h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;"><span style="flex:1;min-width:140px;font-size:13px;">' + esc(s.name) + ' <span style="color:#aaa;font-size:11px;">· ' + esc((LOCATIONS.find(l => l.id === s.loc) || {}).short || s.loc) + '</span></span><span style="font-size:11px;font-weight:700;color:' + (hasPin ? '#16a34a' : '#d97706') + ';">' + (hasPin ? 'PIN set' : 'no PIN') + '</span><button onclick="tcSetPin(\'' + s.id + '\')" style="' + btn + '">' + (hasPin ? 'Reset PIN' : 'Set PIN') + '</button><button onclick="tcRemoveStaff(\'' + s.id + '\')" style="' + btn + 'color:#dc2626;">Remove</button></div>'; });
+    h += '<button onclick="tcAddStaff()" class="l10-add-btn" style="margin-top:10px;">+ Add staff</button>';
+    h += '<div style="font-size:13px;font-weight:800;color:#1a1a2e;margin:20px 0 4px;">Geofences</div>';
+    h += '<div style="font-size:11px;color:#999;margin-bottom:8px;">Stand at each school and tap “Set from here” to capture its GPS + radius.</div>';
+    LOCATIONS.forEach(loc => { const cfg = tcCfg(loc.id); h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;"><span style="flex:1;min-width:150px;font-size:13px;">' + esc(loc.name) + '</span>' + (cfg ? '<span style="font-size:11px;font-weight:700;color:#16a34a;">✓ set ±' + (cfg.radiusM || 150) + 'm</span>' : '<span style="font-size:11px;font-weight:700;color:#d97706;">not set</span>') + '<button onclick="tcSetGeofenceHere(\'' + loc.id + '\')" style="' + btn + '">Set from here</button>' + (cfg ? '<button onclick="tcClearGeofence(\'' + loc.id + '\')" style="' + btn + 'color:#dc2626;">Clear</button>' : '') + '</div>'; });
+    h += '</div>';
+  }
+  h += '</div>';
   return h;
 }
 
@@ -5604,6 +5761,12 @@ state.scdMonthOffset = 0;            // instructor nightly grid month offset
 state.scorecardDaily = {};           // nightly instructor counts (Firebase-synced)
 state.enrollModal    = null;         // name-capture prompt for direct grid enrollment entry
 state.trialPipeline  = {};           // open trials awaiting follow-up (Firebase-synced)
+state.timeclock      = {};           // clock-in/out: staff, pins, config, entries (Firebase-synced)
+state.tcSel          = null;         // clock UI: selected employee id
+state.tcPin          = '';           // clock UI: PIN entry buffer
+state.tcMsg          = null;         // clock UI: transient status message {type,text}
+state.tcWeekOffset   = 0;            // timesheet week navigation
+state.tcSetup        = false;        // show/hide admin setup panel
 state.adLabTab     = 'playbook';     // Ad Creative: 'playbook' | 'tracker' | 'leaderboard'
 state.adLabFilter  = 'all';          // Hook bank avatar filter
 state.adCreative   = state.adCreative || {};
