@@ -3997,7 +3997,7 @@ function renderScorecardPage() {
   html += renderScBoardNote('🥋', 'Instructor', 'Owned by Instructors — entered weekly (by Sunday) before Monday\'s meeting', '#e94560');
   html += renderScLocSelector();
   html += renderScdMonthNav();
-  pickLvlup.forEach(l => html += renderOpenTrials(l.id) + renderWeeklyScorecard(l.id) + renderCancellationDetails(l.id));
+  pickLvlup.forEach(l => html += renderWeeklyScorecard(l.id) + renderCancellationDetails(l.id));
   return html;
 }
 
