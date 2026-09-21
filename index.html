@@ -3679,22 +3679,28 @@ async function tcPunch(id, dir){
   if (await tcHash(pin) !== storedPin) { state.tcMsg = { type: 'error', text: 'Incorrect PIN.' }; if (el) el.value = ''; render(); return; }
   state.tcMsg = { type: 'info', text: 'Getting your location…' }; render();
   const pos = await tcGetPosition();
-  const cfg = tcCfg(st.loc);
-  let dist = null, ok = null, geoNote = '';
+  // Match against ALL configured geofences — staff may work at any location. Nearest wins.
+  let dist = null, ok = null, geoNote = '', punchLoc = null;
+  const cfgs = tcData().config || {};
+  const configured = Object.entries(cfgs).filter(([, c]) => c && typeof c.lat === 'number');
   if (pos.error) { geoNote = pos.error === 'denied' ? '⚠ location permission denied' : '⚠ location unavailable'; ok = false; }
-  else if (cfg && typeof cfg.lat === 'number') { dist = tcDistM(pos.lat, pos.lng, cfg.lat, cfg.lng); ok = dist <= (cfg.radiusM || 150); geoNote = (ok ? '✓ ' : '⚠ ') + tcDistLabel(dist) + ' from ' + (cfg.label || 'site'); }
-  else { geoNote = 'geofence not set for this school'; }
+  else if (configured.length) {
+    let best = null;
+    configured.forEach(([lid, c]) => { const d = tcDistM(pos.lat, pos.lng, c.lat, c.lng); if (best === null || d < best.d) best = { lid, d, radius: c.radiusM || 150, label: c.label || lid }; });
+    dist = best.d; ok = best.d <= best.radius; punchLoc = best.lid;
+    geoNote = (ok ? '✓ ' : '⚠ ') + tcDistLabel(best.d) + ' from ' + best.label + (ok ? '' : ' (nearest site)');
+  } else { geoNote = 'no geofences set yet'; }
   const now = Date.now();
   if (dir === 'in') {
     if (tcOpenEntry(id)) { state.tcMsg = { type: 'warn', text: (st.name || '') + ' is already clocked in.' }; render(); return; }
     const dk = tcDateKey(); const eid = 'e_' + now.toString(36);
-    fbSet('timeclock/entries/' + id + '/' + dk + '/' + eid, { inAt: now, inLat: pos.lat || null, inLng: pos.lng || null, inDist: dist, inOk: ok });
+    fbSet('timeclock/entries/' + id + '/' + dk + '/' + eid, { inAt: now, inLat: pos.lat || null, inLng: pos.lng || null, inDist: dist, inOk: ok, inLoc: punchLoc });
     state.tcMsg = { type: ok === false ? 'warn' : 'ok', text: (st.name || '') + ' clocked IN · ' + tcFmtTime(now) + ' · ' + geoNote };
   } else {
     const open = tcOpenEntry(id);
     if (!open) { state.tcMsg = { type: 'warn', text: 'No open clock-in found for ' + (st.name || '') + '.' }; render(); return; }
     const base = 'timeclock/entries/' + id + '/' + open.dateKey + '/' + open.entryId + '/';
-    fbSet(base + 'outAt', now); fbSet(base + 'outLat', pos.lat || null); fbSet(base + 'outLng', pos.lng || null); fbSet(base + 'outDist', dist); fbSet(base + 'outOk', ok);
+    fbSet(base + 'outAt', now); fbSet(base + 'outLat', pos.lat || null); fbSet(base + 'outLng', pos.lng || null); fbSet(base + 'outDist', dist); fbSet(base + 'outOk', ok); fbSet(base + 'outLoc', punchLoc);
     state.tcMsg = { type: ok === false ? 'warn' : 'ok', text: (st.name || '') + ' clocked OUT · ' + tcFmtTime(now) + ' · ' + geoNote };
   }
   state.tcSel = null; state.tcPin = ''; render();
@@ -3769,9 +3775,44 @@ function tcDeleteEntry(id, dk, eid){ if (!confirm('Delete this punch from the re
 /* ── PTO — fixed annual allotment (days) for full-time employees, log-only ── */
 function tcFmtDays(n){ n = +n || 0; return n % 1 ? n.toFixed(1) : String(n); }
 function tcPtoEntries(id){ return (tcData().pto || {})[id] || {}; }
-function tcPtoUsed(id, year){ let sum = 0; Object.values(tcPtoEntries(id)).forEach(e => { if (e && String(e.date || '').startsWith(String(year))) sum += (+e.days || 0); }); return sum; }
+function tcFmtDate(d){ return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+// Current PTO year (anchored on an anniversary date) + the allotment that applies to it.
+function tcPtoPeriod(emp){
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const anchor = /^\d{2}-\d{2}$/.test(emp.ptoAnchor || '') ? emp.ptoAnchor : '01-01';   // MM-DD
+  const am = parseInt(anchor.slice(0, 2)), ad = parseInt(anchor.slice(3, 5));
+  let start = new Date(now.getFullYear(), am - 1, ad);
+  if (now < start) start = new Date(now.getFullYear() - 1, am - 1, ad);
+  const end = new Date(start.getFullYear() + 1, am - 1, ad);
+  let allot = parseFloat(emp.ptoDays) || 0;
+  if (emp.hireDate && emp.ptoFirstYearDays != null) {
+    const hd = new Date(emp.hireDate + 'T00:00:00');
+    let firstStart = new Date(hd.getFullYear(), am - 1, ad);
+    if (hd < firstStart) firstStart = new Date(hd.getFullYear() - 1, am - 1, ad);
+    if (start.getFullYear() - firstStart.getFullYear() <= 0) allot = parseFloat(emp.ptoFirstYearDays) || allot;
+  }
+  return { start, end, allot };
+}
+function tcPtoUsedInPeriod(id, start, end){ let sum = 0; Object.values(tcPtoEntries(id)).forEach(e => { if (!e || !e.date) return; const d = new Date(e.date + 'T00:00:00'); if (d >= start && d < end) sum += (+e.days || 0); }); return sum; }
 function tcSetFullTime(id){ const cur = !!((tcData().staff || {})[id] || {}).fullTime; fbSet('timeclock/staff/' + id + '/fullTime', cur ? null : true); }
 function tcSetPtoAllot(id, val){ const n = parseFloat(val); fbSet('timeclock/staff/' + id + '/ptoDays', isNaN(n) || n <= 0 ? null : n); }
+function tcSetPtoRules(id){
+  const st = (tcData().staff || {})[id] || {};
+  const a = prompt('PTO year start for ' + (st.name || '') + ' as MM-DD (e.g. 05-12 for May 12; 01-01 = calendar year):', st.ptoAnchor || '01-01');
+  if (a === null) return;
+  if (!/^\d{2}-\d{2}$/.test(a.trim())) { alert('Use MM-DD, e.g. 05-12.'); return; }
+  fbSet('timeclock/staff/' + id + '/ptoAnchor', a.trim() === '01-01' ? null : a.trim());
+  const hd = prompt('Hire date (YYYY-MM-DD) — only needed for a first-year step-up. Leave blank to skip:', st.hireDate || '');
+  if (hd === null) return;
+  if (hd.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(hd.trim())) { alert('Use YYYY-MM-DD.'); return; }
+  fbSet('timeclock/staff/' + id + '/hireDate', hd.trim() || null);
+  if (hd.trim()) {
+    const fy = prompt('First-year PTO days (e.g. 8). Leave blank if first year is the same as the normal allotment:', st.ptoFirstYearDays != null ? String(st.ptoFirstYearDays) : '');
+    if (fy === null) return;
+    fbSet('timeclock/staff/' + id + '/ptoFirstYearDays', fy.trim() ? (parseFloat(fy) || null) : null);
+  } else { fbSet('timeclock/staff/' + id + '/ptoFirstYearDays', null); }
+  alert('PTO rules saved for ' + (st.name || '') + '.');
+}
 function tcAddPto(id){
   const st = (tcData().staff || {})[id] || {};
   const date = prompt('PTO date for ' + (st.name || '') + ' (YYYY-MM-DD):', tcDateKey()); if (!date) return;
@@ -3785,21 +3826,22 @@ function tcRemovePto(id, eid){ if (!confirm('Remove this PTO entry?')) return; f
 
 function renderTcPto(){
   const ft = tcStaffList().filter(s => s.fullTime); if (!ft.length) return '';
-  const year = new Date().getFullYear();
   let h = '<div class="section" style="margin-bottom:22px;">';
-  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>🌴 PTO — ' + year + '</h2><span style="font-size:11px;color:#aaa;font-weight:600;">Full-time employees · days off</span></div>';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>🌴 PTO</h2><span style="font-size:11px;color:#aaa;font-weight:600;">Full-time employees · days off</span></div>';
   h += '<div style="padding:8px 20px 16px;">';
   ft.forEach(s => {
-    const allot = parseFloat(s.ptoDays) || 0, used = tcPtoUsed(s.id, year), rem = allot - used;
+    const per = tcPtoPeriod(s); const allot = per.allot, used = tcPtoUsedInPeriod(s.id, per.start, per.end), rem = allot - used;
     const pct = allot > 0 ? Math.min(100, Math.round(used / allot * 100)) : 0;
     const remColor = rem < 0 ? '#dc2626' : rem <= 2 ? '#d97706' : '#16a34a';
+    const periodLabel = tcFmtDate(per.start) + ' – ' + tcFmtDate(new Date(per.end.getTime() - 86400000));
     h += '<div style="border:1px solid #e8eaf0;border-radius:12px;padding:14px 16px;margin-bottom:10px;">';
     h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">';
     h += '<div style="font-size:15px;font-weight:800;color:#1a1a2e;">' + esc(s.name) + ' <span style="font-size:11px;font-weight:600;color:#aaa;">· ' + esc((LOCATIONS.find(l => l.id === s.loc) || {}).short || s.loc) + '</span></div>';
     h += '<div style="font-size:13px;color:#555;"><b style="color:' + remColor + ';font-size:16px;">' + tcFmtDays(rem) + '</b> of ' + tcFmtDays(allot) + ' days left <span style="color:#aaa;">(' + tcFmtDays(used) + ' used)</span></div>';
     h += '</div>';
+    h += '<div style="font-size:11px;color:#aaa;margin-top:2px;">PTO year: ' + periodLabel + '</div>';
     h += '<div style="height:8px;background:#eef0f6;border-radius:6px;overflow:hidden;margin:10px 0;"><div style="height:100%;width:' + pct + '%;background:' + remColor + ';"></div></div>';
-    const entries = Object.entries(tcPtoEntries(s.id)).map(([eid, e]) => ({ eid, ...(e || {}) })).filter(e => String(e.date || '').startsWith(String(year))).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const entries = Object.entries(tcPtoEntries(s.id)).map(([eid, e]) => ({ eid, ...(e || {}) })).filter(e => { if (!e.date) return false; const d = new Date(e.date + 'T00:00:00'); return d >= per.start && d < per.end; }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     if (entries.length) { h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">'; entries.forEach(e => { h += '<span style="display:inline-flex;align-items:center;gap:6px;background:#f1f5ff;border:1px solid #dce4ff;border-radius:8px;padding:3px 9px;font-size:12px;color:#334;">📅 ' + esc(fmtCancelDate(e.date)) + ' · ' + tcFmtDays(e.days) + 'd' + (e.note ? ' · ' + esc(e.note) : '') + ' <button onclick="tcRemovePto(\'' + s.id + '\',\'' + e.eid + '\')" style="background:none;border:none;color:#aab;cursor:pointer;font-size:12px;padding:0;" title="Remove">✕</button></span>'; }); h += '</div>'; }
     if (allot <= 0) h += '<div style="font-size:11px;color:#d97706;margin-bottom:8px;">No annual allotment set — add it in Setup.</div>';
     h += '<button onclick="tcAddPto(\'' + s.id + '\')" style="padding:6px 12px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">+ Log PTO</button>';
@@ -3899,7 +3941,7 @@ function renderTcSetup(){
       h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;">';
       h += '<span style="flex:1;min-width:140px;font-size:13px;">' + esc(s.name) + ' <span style="color:#aaa;font-size:11px;">· ' + esc((LOCATIONS.find(l => l.id === s.loc) || {}).short || s.loc) + '</span></span>';
       h += '<button onclick="tcSetFullTime(\'' + s.id + '\')" title="Full-time = PTO-eligible" style="padding:5px 11px;border-radius:7px;border:1px solid ' + (s.fullTime ? '#16a34a' : '#e3e6ef') + ';background:' + (s.fullTime ? '#16a34a' : '#fff') + ';color:' + (s.fullTime ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (s.fullTime ? '✓ Full-time' : 'Full-time') + '</button>';
-      if (s.fullTime) h += '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#555;">PTO <input type="number" min="0" step="0.5" value="' + (s.ptoDays != null ? esc(String(s.ptoDays)) : '') + '" placeholder="0" onchange="tcSetPtoAllot(\'' + s.id + '\',this.value)" style="width:56px;text-align:center;border:1px solid #e3e6ef;border-radius:6px;padding:4px;font-size:12px;font-family:inherit;"> days/yr</span>';
+      if (s.fullTime) h += '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#555;">PTO <input type="number" min="0" step="0.5" value="' + (s.ptoDays != null ? esc(String(s.ptoDays)) : '') + '" placeholder="0" onchange="tcSetPtoAllot(\'' + s.id + '\',this.value)" style="width:56px;text-align:center;border:1px solid #e3e6ef;border-radius:6px;padding:4px;font-size:12px;font-family:inherit;"> days/yr</span><button onclick="tcSetPtoRules(\'' + s.id + '\')" title="PTO year start, hire date, first-year step-up" style="padding:5px 11px;border:1px solid #e3e6ef;background:#fff;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;color:#555;">PTO rules</button>';
       h += '<span style="font-size:11px;font-weight:700;color:' + (hasPin ? '#16a34a' : '#d97706') + ';">' + (hasPin ? 'PIN set' : 'no PIN') + '</span><button onclick="tcSetPin(\'' + s.id + '\')" style="' + btn + '">' + (hasPin ? 'Reset PIN' : 'Set PIN') + '</button><button onclick="tcRemoveStaff(\'' + s.id + '\')" style="' + btn + 'color:#dc2626;">Remove</button>';
       h += '</div>';
     });
