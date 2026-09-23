@@ -5114,7 +5114,27 @@ function initKPICharts(){
     const isAttrition = m.field === 'attrition';
     const datasets=LOCATIONS.map((loc,li)=>{
       const memData=state.membership[loc.id]||{};
-      const data=labels.map((lbl,i)=>{const md=memData[monthFull[i]]||{};const v=md[m.field]||0;return isAttrition?+(v*100).toFixed(1):v;});
+      const derivedLost=function(i){
+        // lost = last month's total + new members this month − this month's total
+        const prev=i>0?parseFloat((memData[monthFull[i-1]]||{}).total):NaN;
+        const cur=parseFloat((memData[monthFull[i]]||{}).total);
+        const nw=parseFloat((memData[monthFull[i]]||{}).newMem)||0;
+        return (isFinite(prev)&&isFinite(cur))?Math.max(0,Math.round(prev+nw-cur)):null;
+      };
+      const data=labels.map((lbl,i)=>{
+        const md=memData[monthFull[i]]||{};
+        if(m.field==='lost'){
+          if(md.lost!=null&&md.lost!=='')return parseFloat(md.lost)||0;
+          const d=derivedLost(i);return d==null?0:d;
+        }
+        if(m.field==='attrition'){
+          if(md.attrition!=null&&md.attrition!==''){const a=parseFloat(md.attrition)||0;return +((a<=1?a*100:a)).toFixed(1);}
+          const prev=i>0?parseFloat((memData[monthFull[i-1]]||{}).total):NaN;
+          let lost=(md.lost!=null&&md.lost!=='')?(parseFloat(md.lost)||0):derivedLost(i);
+          return (isFinite(prev)&&prev>0&&lost!=null)?+((lost/prev)*100).toFixed(1):0;
+        }
+        return md[m.field]||0;
+      });
       return{label:loc.short,data,backgroundColor:colors[li%colors.length],borderRadius:4};
     });
     const chartOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:8,font:{size:11}}},tooltip:{callbacks:isAttrition?{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toFixed(1)+'%';}}:{}}},scales:{y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.06)'},ticks:isAttrition?{callback:function(v){return v+'%';}}:{}},x:{grid:{display:false}}}};
