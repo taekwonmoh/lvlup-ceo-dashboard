@@ -1843,6 +1843,11 @@ function listenAll() {
   tcRef.on('value', snap => { state.timeclock = snap.val() || {}; render(); });
   activeListeners.push({ ref: tcRef, event: 'value' });
 
+  // Inventory — Items to Order (owned by Cat)
+  const invRef = fbRef('inventory');
+  invRef.on('value', snap => { state.inventory = snap.val() || {}; render(); });
+  activeListeners.push({ ref: invRef, event: 'value' });
+
   // Leadership backup timestamp (shared across owners)
   const ldBackupRef = fbRef('leadership/lastBackup');
   ldBackupRef.on('value', snap => { state.leadership.lastBackup = snap.val(); render(); });
@@ -2019,7 +2024,7 @@ function migrateFeedbackTrackingToAll() {
 function setSection(s) {
   state.activeSection = s;
   // Remember last-visited sub-section per group so tabs restore correctly
-  if (['tasks','events','testing','accountability'].includes(s)) state.opsSection = s;
+  if (['tasks','events','testing','accountability','inventory'].includes(s)) state.opsSection = s;
   if (['goals','marketing','scorecard','rocks','financials'].includes(s)) state.growthSection = s;
   render();
 }
@@ -2245,11 +2250,13 @@ function renderOpsPage() {
     { id: 'events',         label: '📅 Events'        },
     { id: 'testing',        label: '🥋 Testing'       },
     { id: 'accountability', label: '⏱ Accountability' },
+    { id: 'inventory',      label: '📦 Inventory'     },
   ]);
   const pulse = renderPulseBar();
   if (s === 'events')         return pulse + nav + renderEventsPage();
   if (s === 'testing')        return pulse + nav + renderTestingPrepPage();
   if (s === 'accountability') return pulse + nav + renderAccountabilityPage();
+  if (s === 'inventory')      return pulse + nav + renderInventoryPage();
   return pulse + nav + renderTasksPage();
 }
 
@@ -2508,6 +2515,59 @@ function fmtCancelDate(s){ if (!s) return ''; const d = new Date(s + 'T12:00:00'
 function crqDelete(id){ if (!confirm('Delete this request from the tracker?')) return; fbSet('cancellationRequests/' + id, null); }
 function crqSetFilter(f){ state.holdsFilter = f; render(); }
 function fmtReqDate(ts){ if (!ts) return ''; const d = new Date(ts); if (isNaN(d.getTime())) return String(ts); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+
+/* ── Inventory — Items to Order (owned by Cat) ── */
+const INV_STATUS = [
+  { id: 'needed',   label: 'Needed',   color: '#d97706' },
+  { id: 'ordered',  label: 'Ordered',  color: '#2563eb' },
+  { id: 'received', label: 'Received', color: '#16a34a' },
+];
+function invAll(){ return Object.entries(state.inventory || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
+function invAdd(){ const id = 'inv_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); fbSet('inventory/' + id, { name: '', qty: '', location: '', vendor: '', status: 'needed', notes: '', createdAt: Date.now() }); }
+function invUpdate(id, field, val){ fbDebounce('inventory/' + id + '/' + field, val === '' ? null : val); }
+function invSetStatus(id, status){ fbSet('inventory/' + id + '/status', status); fbSet('inventory/' + id + '/statusAt', Date.now()); }
+function invDelete(id){ if (!confirm('Remove this item from the list?')) return; fbSet('inventory/' + id, null); }
+function invSetFilter(f){ state.invFilter = f; render(); }
+
+function renderInventoryPage(){
+  const order = { needed: 0, ordered: 1, received: 2 };
+  const all = invAll().sort((a, b) => (order[a.status || 'needed'] - order[b.status || 'needed']) || ((b.createdAt || 0) - (a.createdAt || 0)));
+  const filter = state.invFilter || 'all';
+  const counts = { needed: 0, ordered: 0, received: 0 };
+  all.forEach(i => { const st = i.status || 'needed'; counts[st] = (counts[st] || 0) + 1; });
+  const shown = filter === 'all' ? all : all.filter(i => (i.status || 'needed') === filter);
+  const inCss = 'width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;box-sizing:border-box;';
+  let h = '<div class="page" style="max-width:1040px;">';
+  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">📦 Items to Order</h2><p style="margin:0;font-size:13px;color:#888;">Inventory reorder list · owned by Cat. Add anything running low, mark it Ordered, then Received.</p></div>';
+  const stat = (n, l, c) => '<div style="flex:1;min-width:88px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:12px 14px;text-align:center;box-shadow:var(--shadow);"><div style="font-size:20px;font-weight:800;color:' + c + ';">' + n + '</div><div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;">' + l + '</div></div>';
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' + stat(all.length, 'Total', '#1a1a2e') + stat(counts.needed, 'Needed', '#d97706') + stat(counts.ordered, 'Ordered', '#2563eb') + stat(counts.received, 'Received', '#16a34a') + '</div>';
+  const chip = (id, l) => '<button onclick="invSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + l + '</button>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All') + chip('needed', 'Needed') + chip('ordered', 'Ordered') + chip('received', 'Received') + '</div>';
+  h += '<div style="overflow-x:auto;"><table class="sc-table" style="width:100%;"><thead><tr>';
+  h += '<th style="text-align:left;">Item</th><th style="width:80px;">Qty</th><th style="width:110px;">Location</th><th style="text-align:left;">Vendor / Link</th><th style="width:220px;">Status</th><th style="text-align:left;">Notes</th><th style="width:34px;"></th>';
+  h += '</tr></thead><tbody>';
+  if (!shown.length) h += '<tr><td colspan="7" style="padding:16px;text-align:center;color:#aaa;font-size:13px;">' + (all.length ? 'No ' + filter + ' items.' : 'Nothing on the list yet — tap “+ Add item” to start.') + '</td></tr>';
+  shown.forEach(it => {
+    const locOpts = '<option value="">—</option>' + LOCATIONS.map(l => '<option value="' + l.id + '"' + (it.location === l.id ? ' selected' : '') + '>' + esc(l.short || l.name) + '</option>').join('');
+    const isUrl = /^https?:\/\//i.test(it.vendor || '');
+    h += '<tr>';
+    h += '<td><input value="' + esc(it.name || '') + '" placeholder="Item name..." onchange="invUpdate(\'' + it.id + '\',\'name\',this.value)" style="' + inCss + 'font-weight:600;" /></td>';
+    h += '<td><input value="' + esc(it.qty || '') + '" placeholder="2" onchange="invUpdate(\'' + it.id + '\',\'qty\',this.value)" style="' + inCss + '" /></td>';
+    h += '<td><select onchange="invUpdate(\'' + it.id + '\',\'location\',this.value)" style="' + inCss + '">' + locOpts + '</select></td>';
+    h += '<td><div style="display:flex;gap:5px;align-items:center;"><input value="' + esc(it.vendor || '') + '" placeholder="Vendor or paste link" onchange="invUpdate(\'' + it.id + '\',\'vendor\',this.value)" style="' + inCss + '" />' + (isUrl ? '<a href="' + esc(it.vendor) + '" target="_blank" title="Open link" style="text-decoration:none;font-size:16px;flex-shrink:0;">↗</a>' : '') + '</div></td>';
+    let sb = '<div style="display:flex;gap:4px;">';
+    INV_STATUS.forEach(s => { const on = (it.status || 'needed') === s.id; sb += '<button onclick="invSetStatus(\'' + it.id + '\',\'' + s.id + '\')" style="padding:4px 8px;border-radius:7px;border:1px solid ' + (on ? s.color : '#e3e6ef') + ';background:' + (on ? s.color : '#fff') + ';color:' + (on ? '#fff' : '#666') + ';font-size:11px;font-weight:700;cursor:pointer;">' + (on ? '✓ ' : '') + s.label + '</button>'; });
+    sb += '</div>';
+    h += '<td>' + sb + '</td>';
+    h += '<td><input value="' + esc(it.notes || '') + '" placeholder="Notes..." onchange="invUpdate(\'' + it.id + '\',\'notes\',this.value)" style="' + inCss + '" /></td>';
+    h += '<td style="text-align:center;"><button onclick="invDelete(\'' + it.id + '\')" title="Remove" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;">&times;</button></td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<button class="l10-add-btn" onclick="invAdd()" style="margin-top:12px;">+ Add item</button>';
+  h += '</div>';
+  return h;
+}
 
 function renderHoldsPage(){
   const all = crqAll().sort((a, b) => (b.receivedAt || 0) - (a.receivedAt || 0));
@@ -2934,7 +2994,7 @@ function render() {
   app.innerHTML = renderHeader() +
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
-     ['tasks','events','testing','accountability'].includes(s)                ? renderOpsPage()       :
+     ['tasks','events','testing','accountability','inventory'].includes(s)    ? renderOpsPage()       :
      ['feedback','watchlist','holds','applications'].includes(s)              ? renderMembersPage()   :
      ['goals','marketing','scorecard','rocks','financials'].includes(s)       ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
@@ -2947,7 +3007,7 @@ function renderHeader() {
   const cur = state.activeSection;
   const getGroup = s => {
     if (s === 'home') return 'home';
-    if (['tasks','events','testing','accountability'].includes(s)) return 'ops';
+    if (['tasks','events','testing','accountability','inventory'].includes(s)) return 'ops';
     if (['feedback','watchlist','holds','applications'].includes(s)) return 'members';
     if (['goals','marketing','monthlyGoals','scorecard','rocks','financials','performance'].includes(s)) return 'growth';
     if (s === 'development')                                   return 'resources';
@@ -6070,6 +6130,8 @@ state.scorecardDaily = {};           // nightly instructor counts (Firebase-sync
 state.enrollModal    = null;         // name-capture prompt for direct grid enrollment entry
 state.trialPipeline  = {};           // open trials awaiting follow-up (Firebase-synced)
 state.timeclock      = {};           // clock-in/out: staff, pins, config, entries (Firebase-synced)
+state.inventory      = {};           // Items to Order (Firebase-synced)
+state.invFilter      = 'all';        // inventory status filter
 state.tcSel          = null;         // clock UI: selected employee id
 state.tcPin          = '';           // clock UI: PIN entry buffer
 state.tcMsg          = null;         // clock UI: transient status message {type,text}
