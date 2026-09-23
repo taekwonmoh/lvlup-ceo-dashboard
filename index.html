@@ -4947,6 +4947,56 @@ function renderScoreboardTables(metrics, locs) {
 }
 
 /*  -  -  KPIs Page (Monthly KPIs for 3 LVLUP locations)  -  -  */
+/* ── GymDesk member-export importer → fills Total + New-per-month per location ── */
+function kpiParseCSV(text){
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(cur); cur = ''; }
+    else if (c === '\r') { /* skip */ }
+    else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+    else cur += c;
+  }
+  if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+function kpiImportGymdesk(input){
+  const locSel = document.getElementById('kpiImportLoc');
+  const loc = locSel ? locSel.value : '';
+  const file = input.files && input.files[0];
+  if (!loc) { alert('Pick a location first.'); input.value = ''; return; }
+  if (!file) return;
+  const rdr = new FileReader();
+  rdr.onload = function(){
+    try {
+      const rows = kpiParseCSV(rdr.result);
+      if (!rows.length) { alert('Empty file.'); return; }
+      const hdr = rows[0].map(h => String(h || '').trim().toLowerCase());
+      const iStatus = hdr.indexOf('status'), iJoined = hdr.indexOf('joined');
+      if (iJoined < 0) { alert('Could not find a "Joined" column — is this the GymDesk member export?'); input.value = ''; return; }
+      const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+      let active = 0; const newByMonth = {}; const yr = new Date().getFullYear();
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r]; if (!row || (row.length < 2 && !(row[0] || '').trim())) continue;
+        const status = iStatus >= 0 ? (row[iStatus] || '').trim().toLowerCase() : 'active';
+        if (status === 'active') active++;
+        const m = (row[iJoined] || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (m && parseInt(m[3]) === yr) { const mo = parseInt(m[1]); newByMonth[mo] = (newByMonth[mo] || 0) + 1; }
+      }
+      const base = 'membership/' + loc + '/' + yr + '/';
+      const curName = months[new Date().getMonth()];
+      fbSet(base + curName + '/total', active);
+      let summary = 'Active total: ' + active + '  →  set on ' + curName + '\nNew members (' + yr + '):';
+      Object.keys(newByMonth).map(Number).sort((a, b) => a - b).forEach(mo => { fbSet(base + months[mo - 1] + '/newMem', newByMonth[mo]); summary += '\n  ' + months[mo - 1] + ': ' + newByMonth[mo]; });
+      alert('Imported for ' + ((LOCATIONS.find(l => l.id === loc) || {}).name || loc) + '\n\n' + summary + '\n\n(Members Lost isn’t in this export — enter it in the table or it stays as-is.)');
+    } catch (e) { alert('Import failed: ' + e.message); }
+    input.value = '';
+  };
+  rdr.readAsText(file);
+}
+
 function renderKPIsPage() {
       const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       const monthKeys=['january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -4954,7 +5004,13 @@ function renderKPIsPage() {
       const curMonthIdx = now.getMonth();
       let html = '';
 
-      html += '<div class="kpi-charts-section" style="margin-top:24px"><h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--primary)">Trend Charts</h3>';
+      html += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:10px;padding:12px 14px;margin:16px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+      html += '<b style="font-size:13px;color:#1a1a2e;">⬆ Import from GymDesk</b>';
+      html += '<span style="font-size:12px;color:#555;flex:1;min-width:200px;">Export your member list (GymDesk → Members → Export → CSV), pick the location, and upload. Fills <b>Total</b> + <b>New/month</b>.</span>';
+      html += '<select id="kpiImportLoc" style="border:1px solid #cbd3e6;border-radius:8px;padding:6px 8px;font-size:12px;font-family:inherit;">' + LOCATIONS.map(function(l){return '<option value="'+l.id+'">'+esc(l.name)+'</option>';}).join('') + '</select>';
+      html += '<input type="file" accept=".csv" onchange="kpiImportGymdesk(this)" style="font-size:12px;">';
+      html += '</div>';
+      html += '<div class="kpi-charts-section" style="margin-top:8px"><h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--primary)">Trend Charts</h3>';
       html += '<div class="kpi-charts-grid">';
       html += '<div class="kpi-chart-box"><h3 style="margin:0 0 8px 0;font-size:14px;font-weight:600;color:var(--gray-700);">New Members</h3><canvas id="chartNewMembers"></canvas></div>';
       html += '<div class="kpi-chart-box"><h3 style="margin:0 0 8px 0;font-size:14px;font-weight:600;color:var(--gray-700);">Members Lost</h3><canvas id="chartLost"></canvas></div>';
@@ -5034,7 +5090,9 @@ function renderKPIsPage() {
         initKPICharts();
         document.querySelectorAll('.kpi-input').forEach(function(inp) {
           inp.addEventListener('change', function() {
-            firebase.database().ref('ceo/membership/' + this.dataset.loc + '/' + this.dataset.month + '/' + this.dataset.field).set(this.value);
+            var raw = this.value;
+            var val = raw === '' ? null : (isNaN(+raw) ? raw : +raw);
+            firebase.database().ref('ceo/membership/' + this.dataset.loc + '/2026/' + this.dataset.month + '/' + this.dataset.field).set(val);
           });
         });
       }, 0);
