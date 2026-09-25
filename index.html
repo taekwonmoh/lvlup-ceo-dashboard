@@ -4242,12 +4242,40 @@ function renderTcKioskActions(id){
   return h;
 }
 
+function renderTcTeamSchedule(){
+  const staff = tcStaffList(); if (!staff.length) return '';
+  const days = tcSchedDays();
+  const wkLabel = (days[0].getMonth() + 1) + '/' + days[0].getDate() + ' – ' + (days[6].getMonth() + 1) + '/' + days[6].getDate();
+  const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const nav = 'background:none;border:none;cursor:pointer;font-size:18px;padding:2px 10px;color:#4169E1;font-weight:700;';
+  let h = '<div style="background:#fff;border-radius:16px;margin-top:14px;padding:16px;">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><div style="font-size:14px;font-weight:800;color:#1a1a2e;">📆 Team schedule</div><span style="display:flex;align-items:center;gap:2px;"><button onclick="tcWeek(-1)" style="' + nav + '">‹</button><b style="font-size:12px;min-width:96px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + nav + '">›</button></span></div>';
+  h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr><th style="text-align:left;padding:4px;position:sticky;left:0;background:#fff;">Staff</th>';
+  days.forEach(d => { h += '<th style="text-align:center;padding:4px;min-width:64px;color:#888;font-weight:700;">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#bbb;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span></th>'; });
+  h += '</tr></thead><tbody>';
+  staff.forEach(s => {
+    const sched = tcSchedFor(s.id);
+    h += '<tr style="border-top:1px solid #f1f3f9;"><td style="text-align:left;padding:4px;font-weight:700;position:sticky;left:0;background:#fff;white-space:nowrap;">' + esc(s.name) + '</td>';
+    days.forEach(d => {
+      const dk = tcDateKey(d); const shifts = Object.values(sched[dk] || {}).filter(Boolean).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+      h += '<td style="text-align:center;padding:3px;vertical-align:top;">';
+      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; h += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:5px;padding:1px 3px;margin-bottom:2px;line-height:1.25;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="color:#5b6b8c;">' + esc(loc.short) + '</span>' : '') + '</div>'; });
+      if (!shifts.length) h += '<span style="color:#e0e0e0;">·</span>';
+      h += '</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div></div>';
+  return h;
+}
+
 function renderClockKiosk(){
   let h = '<div style="min-height:100vh;background:#0b1220;padding:24px 14px;">';
-  h += '<div style="max-width:520px;margin:0 auto;">';
+  h += '<div style="max-width:640px;margin:0 auto;">';
   h += '<div style="text-align:center;margin-bottom:18px;"><img src="images/lvlup-logo.png" alt="LVLUP" style="height:42px;"> <img src="images/goninja-logo.png" alt="Go Ninja" style="height:38px;vertical-align:middle;"><div style="color:#cbd5e1;font-size:13px;margin-top:8px;font-weight:600;letter-spacing:.5px;">TEAM TIME CLOCK</div></div>';
   h += '<div style="border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">' + renderTcClock() + '</div>';
   if (state.tcSel && (tcData().staff || {})[state.tcSel]) { h += renderTcKioskActions(state.tcSel); h += renderTcMySchedule(state.tcSel); }
+  h += renderTcTeamSchedule();
   h += '<div style="text-align:center;margin-top:16px;"><a href="#" onclick="location.hash=\'\';return false;" style="color:#64748b;font-size:12px;text-decoration:none;">Exit kiosk</a></div>';
   h += '</div></div>';
   return h;
