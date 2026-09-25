@@ -3758,6 +3758,11 @@ async function tcPunch(id, dir){
   const now = Date.now();
   if (dir === 'in') {
     if (tcOpenEntry(id)) { state.tcMsg = { type: 'warn', text: (st.name || '') + ' is already clocked in.' }; render(); return; }
+    // Enforce the geofence on clock-IN when locations are configured — block off-site punches.
+    if (configured.length) {
+      if (pos.error) { state.tcMsg = { type: 'error', text: '📍 Location required to clock in — turn on location access for this site and try again.' }; render(); return; }
+      if (ok === false) { state.tcMsg = { type: 'error', text: '🚫 You\'re ' + tcDistLabel(dist) + ' from ' + (LOCATIONS.find(l => l.id === punchLoc) || {}).name + ' — clock-in blocked. You must be on-site.' }; render(); return; }
+    }
     const dk = tcDateKey(); const eid = 'e_' + now.toString(36);
     fbSet('timeclock/entries/' + id + '/' + dk + '/' + eid, { inAt: now, inLat: pos.lat || null, inLng: pos.lng || null, inDist: dist, inOk: ok, inLoc: punchLoc });
     state.tcMsg = { type: ok === false ? 'warn' : 'ok', text: (st.name || '') + ' clocked IN · ' + tcFmtTime(now) + ' · ' + geoNote };
@@ -4304,7 +4309,7 @@ function renderAccessGate(){
   const inp = 'width:100%;box-sizing:border-box;background:#0b1220;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:11px 12px;color:#fff;font-size:15px;font-family:inherit;margin-bottom:10px;';
   let h = '<div style="min-height:100vh;background:#0b1220;display:flex;align-items:center;justify-content:center;padding:16px;">';
   h += '<div style="width:100%;max-width:380px;background:#111a2e;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:26px 22px;">';
-  h += '<div style="text-align:center;margin-bottom:14px;"><img src="images/lvlup-logo.png" alt="LVLUP" style="height:36px;"> <img src="images/goninja-logo.png" alt="Go Ninja" style="height:32px;vertical-align:middle;"></div>';
+  h += '<div style="text-align:center;margin-bottom:16px;"><div style="display:inline-flex;align-items:center;gap:14px;"><img src="images/lvlup-logo-white.png" alt="LVLUP" style="height:26px;"><span style="width:1px;height:22px;background:rgba(255,255,255,.18);display:inline-block;"></span><img src="images/goninja-logo-white.png" alt="Go Ninja" style="height:20px;"></div></div>';
   h += '<h1 style="color:#fff;font-size:1.15rem;font-weight:800;margin:0 0 2px;text-align:center;">LVLUP Staff</h1>';
   if (state.gateMsg) h += '<div style="background:rgba(239,68,68,.15);color:#fca5a5;border-radius:8px;padding:8px 10px;font-size:12px;margin:10px 0 4px;text-align:center;">' + esc(state.gateMsg) + '</div>';
   if (!state.tcLoaded) { h += '<p style="color:#94a3b8;font-size:13px;text-align:center;margin-top:14px;">Loading…</p></div></div>'; return h; }
@@ -4331,7 +4336,15 @@ function renderAccessGate(){
 function renderClockKiosk(){
   let h = '<div style="min-height:100vh;background:#0b1220;padding:24px 14px;">';
   h += '<div style="max-width:640px;margin:0 auto;">';
-  h += '<div style="text-align:center;margin-bottom:18px;"><img src="images/lvlup-logo.png" alt="LVLUP" style="height:42px;"> <img src="images/goninja-logo.png" alt="Go Ninja" style="height:38px;vertical-align:middle;"><div style="color:#cbd5e1;font-size:13px;margin-top:8px;font-weight:600;letter-spacing:.5px;">TEAM TIME CLOCK</div></div>';
+  h += '<div style="text-align:center;margin-bottom:22px;">';
+  h += '<div style="display:inline-flex;align-items:center;gap:16px;">';
+  h += '<img src="images/lvlup-logo-white.png" alt="LVLUP" style="height:30px;">';
+  h += '<span style="width:1px;height:26px;background:rgba(255,255,255,.18);display:inline-block;"></span>';
+  h += '<img src="images/goninja-logo-white.png" alt="Go Ninja" style="height:23px;">';
+  h += '</div>';
+  h += '<div style="color:#8aa0c0;font-size:11px;margin-top:14px;font-weight:800;letter-spacing:2.5px;">TEAM TIME CLOCK</div>';
+  h += '<div style="color:#5b6b8c;font-size:12px;margin-top:3px;">' + new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + '</div>';
+  h += '</div>';
   h += '<div style="border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">' + renderTcClock() + '</div>';
   if (state.tcSel && (tcData().staff || {})[state.tcSel]) { h += renderTcKioskActions(state.tcSel); h += renderTcMySchedule(state.tcSel); }
   h += renderTcTeamSchedule();
