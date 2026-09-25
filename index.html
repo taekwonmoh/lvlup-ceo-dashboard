@@ -1840,7 +1840,7 @@ function listenAll() {
 
   // Time clock (staff roster, per-person PIN hashes, geofence config, punches)
   const tcRef = fbRef('timeclock');
-  tcRef.on('value', snap => { state.timeclock = snap.val() || {}; render(); });
+  tcRef.on('value', snap => { state.timeclock = snap.val() || {}; state.tcLoaded = true; render(); });
   activeListeners.push({ ref: tcRef, event: 'value' });
 
   // Inventory — Items to Order (owned by Cat)
@@ -2976,6 +2976,8 @@ function renderCrModal(){
 
 function render() {
   const app = document.getElementById('app');
+  // Access gate — name + 4-digit PIN (reuses the time-clock identity, remembered per device).
+  if (!state.gateOk) { app.innerHTML = renderAccessGate(); return; }
   // Kiosk mode — part-timer clock page only, no nav or dashboard content.
   if (location.hash === '#clock') { app.innerHTML = renderClockKiosk(); return; }
   // Backward-compat: old links to removed tabs redirect into merged pages
@@ -3028,6 +3030,7 @@ function renderHeader() {
     tabs.map(t =>
       '<button class="nav-tab ' + (activeGroup === t.group ? 'active' : '') + '" onclick="setSection(\'' + t.target() + '\')">' + t.label + '</button>'
     ).join('') +
+    '<button class="nav-tab" title="Lock this device" onclick="gateLock()" style="color:#94a3b8;">🔒</button>' +
     '</div></div>';
 }
 
@@ -4266,6 +4269,62 @@ function renderTcTeamSchedule(){
     h += '</tr>';
   });
   h += '</tbody></table></div></div>';
+  return h;
+}
+
+/* ── Access gate — name + 4-digit PIN (reuses time-clock identity) ── */
+function gateSetMode(m){ state.gateMode = m; state.gateMsg = null; render(); }
+function gateFinish(id){ try { localStorage.setItem('lvlupGate', id); } catch (e) {} state.gateOk = true; state.gateUser = id; state.gateMsg = null; state.gateMode = null; render(); }
+function gateLock(){ try { localStorage.removeItem('lvlupGate'); } catch (e) {} state.gateOk = false; state.gateUser = null; state.gateMode = null; render(); }
+async function gateTryUnlock(){
+  const sel = document.getElementById('gateSel'); const id = sel ? sel.value : '';
+  const pinEl = document.getElementById('gatePin'); const pin = (pinEl ? pinEl.value : '') || '';
+  if (!id) { state.gateMsg = 'Pick your name.'; render(); return; }
+  if (!/^\d{4}$/.test(pin)) { state.gateMsg = 'Enter a 4-digit PIN.'; render(); return; }
+  const stored = (tcData().pins || {})[id];
+  if (!stored) { fbSet('timeclock/pins/' + id, await tcHash(pin)); gateFinish(id); return; }   // first time — set it
+  if (await tcHash(pin) !== stored) { state.gateMsg = 'Incorrect PIN.'; render(); return; }
+  gateFinish(id);
+}
+async function gateRegister(){
+  const name = ((document.getElementById('gateName') || {}).value || '').trim();
+  const loc = (document.getElementById('gateLoc') || {}).value || '';
+  const p1 = (document.getElementById('gatePin1') || {}).value || '';
+  const p2 = (document.getElementById('gatePin2') || {}).value || '';
+  if (!name) { state.gateMsg = 'Enter your name.'; render(); return; }
+  if (!/^\d{4}$/.test(p1)) { state.gateMsg = 'PIN must be exactly 4 digits.'; render(); return; }
+  if (p1 !== p2) { state.gateMsg = 'PINs did not match.'; render(); return; }
+  const id = 'tc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  fbSet('timeclock/staff/' + id, { name: name, loc: loc || null });
+  fbSet('timeclock/pins/' + id, await tcHash(p1));
+  gateFinish(id);
+}
+function renderAccessGate(){
+  const staff = tcStaffList();
+  const inp = 'width:100%;box-sizing:border-box;background:#0b1220;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:11px 12px;color:#fff;font-size:15px;font-family:inherit;margin-bottom:10px;';
+  let h = '<div style="min-height:100vh;background:#0b1220;display:flex;align-items:center;justify-content:center;padding:16px;">';
+  h += '<div style="width:100%;max-width:380px;background:#111a2e;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:26px 22px;">';
+  h += '<div style="text-align:center;margin-bottom:14px;"><img src="images/lvlup-logo.png" alt="LVLUP" style="height:36px;"> <img src="images/goninja-logo.png" alt="Go Ninja" style="height:32px;vertical-align:middle;"></div>';
+  h += '<h1 style="color:#fff;font-size:1.15rem;font-weight:800;margin:0 0 2px;text-align:center;">LVLUP Staff</h1>';
+  if (state.gateMsg) h += '<div style="background:rgba(239,68,68,.15);color:#fca5a5;border-radius:8px;padding:8px 10px;font-size:12px;margin:10px 0 4px;text-align:center;">' + esc(state.gateMsg) + '</div>';
+  if (!state.tcLoaded) { h += '<p style="color:#94a3b8;font-size:13px;text-align:center;margin-top:14px;">Loading…</p></div></div>'; return h; }
+  const mode = state.gateMode || (staff.length ? 'login' : 'register');
+  if (mode === 'register') {
+    h += '<p style="color:#cbd5e1;font-size:13px;text-align:center;margin:6px 0 14px;">Add your name and create a 4-digit PIN.</p>';
+    h += '<input id="gateName" placeholder="Your name" style="' + inp + '">';
+    h += '<select id="gateLoc" style="' + inp + '"><option value="">Home location (optional)</option>' + LOCATIONS.map(l => '<option value="' + l.id + '">' + esc(l.name) + '</option>').join('') + '</select>';
+    h += '<input id="gatePin1" type="password" inputmode="numeric" maxlength="4" placeholder="Create 4-digit PIN" style="' + inp + 'text-align:center;letter-spacing:8px;">';
+    h += '<input id="gatePin2" type="password" inputmode="numeric" maxlength="4" placeholder="Confirm PIN" onkeydown="if(event.key===\'Enter\')gateRegister()" style="' + inp + 'text-align:center;letter-spacing:8px;">';
+    h += '<button onclick="gateRegister()" style="width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;">Create &amp; enter</button>';
+    if (staff.length) h += '<div style="text-align:center;margin-top:12px;"><a href="#" onclick="gateSetMode(\'login\');return false;" style="color:#94a3b8;font-size:12px;text-decoration:none;">Already set up? Sign in</a></div>';
+  } else {
+    h += '<p style="color:#cbd5e1;font-size:13px;text-align:center;margin:6px 0 14px;">Select your name and enter your PIN.<br><span style="color:#64748b;font-size:11px;">First time? Just choose a PIN — it saves.</span></p>';
+    h += '<select id="gateSel" style="' + inp + '">' + staff.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('') + '</select>';
+    h += '<input id="gatePin" type="password" inputmode="numeric" maxlength="4" placeholder="PIN" onkeydown="if(event.key===\'Enter\')gateTryUnlock()" style="' + inp + 'text-align:center;letter-spacing:10px;font-size:20px;" autofocus>';
+    h += '<button onclick="gateTryUnlock()" style="width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;">Unlock</button>';
+    h += '<div style="text-align:center;margin-top:12px;"><a href="#" onclick="gateSetMode(\'register\');return false;" style="color:#94a3b8;font-size:12px;text-decoration:none;">New here? Add yourself</a></div>';
+  }
+  h += '</div></div>';
   return h;
 }
 
@@ -6320,6 +6379,11 @@ state.scorecardDaily = {};           // nightly instructor counts (Firebase-sync
 state.enrollModal    = null;         // name-capture prompt for direct grid enrollment entry
 state.trialPipeline  = {};           // open trials awaiting follow-up (Firebase-synced)
 state.timeclock      = {};           // clock-in/out: staff, pins, config, entries (Firebase-synced)
+state.tcLoaded       = false;         // timeclock data has loaded at least once
+state.gateOk         = false;         // access gate unlocked on this device
+state.gateUser       = null;          // gate: unlocked staff id
+state.gateMode       = null;          // gate screen: 'login' | 'register'
+state.gateMsg        = null;          // gate screen error message
 state.inventory      = {};           // Items to Order (Firebase-synced)
 state.invFilter      = 'all';        // inventory status filter
 state.tcSel          = null;         // clock UI: selected employee id
@@ -6334,6 +6398,7 @@ state.adCreative   = state.adCreative || {};
 // Leadership (PIN-gated owner page)
 state.leadership   = { pin: null, pinLoaded: false, unlocked: false, pinError: false, view: 'tracker', trackerLoc: 'waunakee', monthOffset: 0, tracker: {}, homebase: {}, homebaseMap: {}, perf: {}, signoffs: {}, hbImport: { open:false }, lastBackup: null };
 if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('leadershipUnlocked') === '1') state.leadership.unlocked = true;
+try { const g = localStorage.getItem('lvlupGate'); if (g) { state.gateOk = true; state.gateUser = g; } } catch (e) {}
 state.goalsTab     = 'annual';   // 'annual' | 'monthly'
 state.devTab        = 'instructor'; // 'instructor' | 'gymdesk' | 'playbooks'
 state.gdActiveModule = null;
