@@ -4009,13 +4009,13 @@ function renderTcSetup(){
       h += '<span style="flex:1;min-width:140px;font-size:13px;">' + esc(s.name) + ' <span style="color:#aaa;font-size:11px;">· ' + esc((LOCATIONS.find(l => l.id === s.loc) || {}).short || s.loc) + '</span></span>';
       h += '<button onclick="tcSetFullTime(\'' + s.id + '\')" title="Full-time = PTO-eligible" style="padding:5px 11px;border-radius:7px;border:1px solid ' + (s.fullTime ? '#16a34a' : '#e3e6ef') + ';background:' + (s.fullTime ? '#16a34a' : '#fff') + ';color:' + (s.fullTime ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (s.fullTime ? '✓ Full-time' : 'Full-time') + '</button>';
       if (s.fullTime) h += '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#555;">PTO <input type="number" min="0" step="0.5" value="' + (s.ptoDays != null ? esc(String(s.ptoDays)) : '') + '" placeholder="0" onchange="tcSetPtoAllot(\'' + s.id + '\',this.value)" style="width:56px;text-align:center;border:1px solid #e3e6ef;border-radius:6px;padding:4px;font-size:12px;font-family:inherit;"> days/yr</span><button onclick="tcSetPtoRules(\'' + s.id + '\')" title="PTO year start, hire date, first-year step-up" style="padding:5px 11px;border:1px solid #e3e6ef;background:#fff;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;color:#555;">PTO rules</button>';
-      h += '<input value="' + esc(s.phone || '') + '" placeholder="phone" onchange="tcSetPhone(\'' + s.id + '\',this.value)" style="width:108px;border:1px solid #e3e6ef;border-radius:6px;padding:4px 6px;font-size:12px;font-family:inherit;">';
-      h += '<button onclick="tcToggleSms(\'' + s.id + '\')" title="Text shift reminders" style="padding:5px 10px;border-radius:7px;border:1px solid ' + (s.smsReminders ? '#2563eb' : '#e3e6ef') + ';background:' + (s.smsReminders ? '#2563eb' : '#fff') + ';color:' + (s.smsReminders ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (s.smsReminders ? '🔔 Texts on' : 'Texts off') + '</button>';
+      h += '<input value="' + esc(s.slackId || '') + '" placeholder="@slack / member ID" title="Optional — for @mention in the reminder" onchange="tcSetSlack(\'' + s.id + '\',this.value)" style="width:120px;border:1px solid #e3e6ef;border-radius:6px;padding:4px 6px;font-size:12px;font-family:inherit;">';
+      h += '<button onclick="tcToggleSlack(\'' + s.id + '\')" title="Slack shift reminders" style="padding:5px 10px;border-radius:7px;border:1px solid ' + (s.slackReminders ? '#2563eb' : '#e3e6ef') + ';background:' + (s.slackReminders ? '#2563eb' : '#fff') + ';color:' + (s.slackReminders ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (s.slackReminders ? '🔔 Slack on' : 'Slack off') + '</button>';
       h += '<span style="font-size:11px;font-weight:700;color:' + (hasPin ? '#16a34a' : '#d97706') + ';">' + (hasPin ? 'PIN set' : 'no PIN') + '</span><button onclick="tcSetPin(\'' + s.id + '\')" style="' + btn + '">' + (hasPin ? 'Reset PIN' : 'Set PIN') + '</button><button onclick="tcRemoveStaff(\'' + s.id + '\')" style="' + btn + 'color:#dc2626;">Remove</button>';
       h += '</div>';
     });
     h += '<button onclick="tcAddStaff()" class="l10-add-btn" style="margin-top:10px;">+ Add staff</button>';
-    h += '<div style="font-size:11px;color:#999;margin-top:8px;">🔔 <b>Text reminders:</b> toggle per person (needs their mobile number). Delivery runs from the webhooks server + Twilio — turn the toggles on now; I\'ll wire the actual texting when the SMS account is connected.</div>';
+    h += '<div style="font-size:11px;color:#999;margin-top:8px;">🔔 <b>Slack shift reminders:</b> toggle per person (optional @handle for a mention). Reminders post to Slack from the webhooks server on a schedule — free, no Twilio. Turn toggles on now; I\'ll wire the scheduled job to your Slack.</div>';
     h += '<div style="font-size:13px;font-weight:800;color:#1a1a2e;margin:20px 0 4px;">Geofences</div>';
     h += '<div style="font-size:11px;color:#999;margin-bottom:8px;">Stand at each school and tap “Set from here” to capture its GPS + radius.</div>';
     LOCATIONS.forEach(loc => { const cfg = tcCfg(loc.id); h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;"><span style="flex:1;min-width:150px;font-size:13px;">' + esc(loc.name) + '</span>' + (cfg ? '<span style="font-size:11px;font-weight:700;color:#16a34a;">✓ set ±' + (cfg.radiusM || 150) + 'm</span>' : '<span style="font-size:11px;font-weight:700;color:#d97706;">not set</span>') + '<button onclick="tcOpenMap(\'' + loc.id + '\')" style="' + btn + '">Set on map</button><button onclick="tcSetGeofenceHere(\'' + loc.id + '\')" style="' + btn + '">Set from here</button>' + (cfg ? '<button onclick="tcClearGeofence(\'' + loc.id + '\')" style="' + btn + 'color:#dc2626;">Clear</button>' : '') + '</div>'; });
@@ -4095,9 +4095,9 @@ async function tcCheckPin(id){
   return { ok: true };
 }
 
-/* ── Staff contact + SMS reminder opt-in ── */
-function tcSetPhone(id, val){ fbDebounce('timeclock/staff/' + id + '/phone', (val || '').trim() || null); }
-function tcToggleSms(id){ const cur = !!((tcData().staff || {})[id] || {}).smsReminders; fbSet('timeclock/staff/' + id + '/smsReminders', cur ? null : true); }
+/* ── Staff contact + Slack reminder opt-in ── */
+function tcSetSlack(id, val){ fbDebounce('timeclock/staff/' + id + '/slackId', (val || '').trim() || null); }
+function tcToggleSlack(id){ const cur = !!((tcData().staff || {})[id] || {}).slackReminders; fbSet('timeclock/staff/' + id + '/slackReminders', cur ? null : true); }
 
 /* ── Time-off requests ── */
 function tcTimeoffAll(){ return Object.entries((tcData().timeoff) || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
