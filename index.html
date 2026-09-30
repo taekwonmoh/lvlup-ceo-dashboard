@@ -1828,6 +1828,12 @@ function listenAll() {
   activeListeners.push({ ref: tpRef, event: 'value' });
 
   // Applications & rollovers processing queue
+  // First 5 completions, written by /api/first5-complete on the members site.
+  // students/ is auth-gated and this dashboard has no sign-in, so the server
+  // publishes a summary row here instead.
+  const f5Ref = fbRef('firstFive');
+  f5Ref.on('value', snap => { state.firstFive = snap.val() || {}; render(); });
+
   const appRef = fbRef('applications');
   appRef.on('value', snap => { state.applications = snap.val() || {}; render(); });
   activeListeners.push({ ref: appRef, event: 'value' });
@@ -2390,6 +2396,51 @@ function appSetLocation(id, val){ fbSet('applications/' + id + '/location', val 
 function appDelete(id){ if (!confirm('Remove this application from the tracker?')) return; fbSet('applications/' + id, null); }
 function appSetFilter(f){ state.appFilter = f; render(); }
 
+function f5All(){ return Object.entries(state.firstFive || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
+function f5SetGiven(id, given){ fbSet('firstFive/' + id + '/shirtGiven', !!given); }
+
+function renderFirstFivePage(){
+  const all = f5All().sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+  const waiting = all.filter(r => !r.shirtGiven);
+
+  let h = '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">\u{1F94B} First 5</h2>'
+    + '<p style="margin:0;font-size:13px;color:#888;">Students who finished all five missions. Each one has a free LVLUP shirt waiting \u2014 and told us why they train.</p></div>';
+
+  if (!all.length) {
+    h += '<p style="font-size:14px;color:#888;padding:24px 0;text-align:center;">Nobody has finished their First 5 yet.</p>';
+    return h;
+  }
+
+  h += '<div style="display:flex;gap:10px;margin-bottom:14px;">'
+    + '<div style="flex:1;background:#fff;border:1px solid #e3e6ef;border-radius:10px;padding:14px;text-align:center;">'
+    + '<div style="font-size:22px;font-weight:800;color:#d97706;">' + waiting.length + '</div>'
+    + '<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#888;">Shirt to hand out</div></div>'
+    + '<div style="flex:1;background:#fff;border:1px solid #e3e6ef;border-radius:10px;padding:14px;text-align:center;">'
+    + '<div style="font-size:22px;font-weight:800;color:#16a34a;">' + (all.length - waiting.length) + '</div>'
+    + '<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#888;">Given</div></div>'
+    + '<div style="flex:1;background:#fff;border:1px solid #e3e6ef;border-radius:10px;padding:14px;text-align:center;">'
+    + '<div style="font-size:22px;font-weight:800;color:#1a1a2e;">' + all.length + '</div>'
+    + '<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#888;">Completed</div></div></div>';
+
+  for (const r of all) {
+    const when = r.completedAt ? new Date(r.completedAt).toLocaleDateString() : '';
+    h += '<div style="background:#fff;border:1px solid ' + (r.shirtGiven ? '#e3e6ef' : '#fcd34d') + ';border-radius:10px;padding:14px 16px;margin-bottom:10px;">'
+      + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+      + '<span style="font-size:15px;font-weight:800;color:#1a1a2e;">' + esc(r.name || '') + '</span>'
+      + (r.schoolName ? '<span style="font-size:11px;font-weight:700;color:#666;background:#f1f3f8;border-radius:20px;padding:2px 9px;">' + esc(r.schoolName) + '</span>' : '')
+      + (r.shirtSize ? '<span style="font-size:11px;font-weight:700;color:#0f3460;background:#e8eefc;border-radius:20px;padding:2px 9px;">Size ' + esc(r.shirtSize) + '</span>' : '')
+      + '<span style="font-size:11px;color:#999;margin-left:auto;">' + when + '</span></div>'
+      + (r.why
+          ? '<div style="margin-top:10px;padding:10px 12px;background:#faf9f6;border-left:3px solid #d97706;border-radius:4px;font-size:13.5px;color:#444;line-height:1.55;">\u201C' + esc(r.why) + '\u201D</div>'
+          : '<div style="margin-top:8px;font-size:12px;color:#aaa;font-style:italic;">No \u201Cwhy\u201D on record.</div>')
+      + '<div style="margin-top:10px;">'
+      + '<button onclick="f5SetGiven(\'' + r.id + '\',' + (r.shirtGiven ? 'false' : 'true') + ')" style="padding:6px 12px;border-radius:7px;border:1px solid ' + (r.shirtGiven ? '#e3e6ef' : '#16a34a') + ';background:' + (r.shirtGiven ? '#fff' : '#16a34a') + ';color:' + (r.shirtGiven ? '#666' : '#fff') + ';font-size:12px;font-weight:700;cursor:pointer;">'
+      + (r.shirtGiven ? '\u2713 Shirt given \u2014 undo' : 'Mark shirt given') + '</button></div>'
+      + '</div>';
+  }
+  return h;
+}
+
 function renderApplicationsPage(){
   const all = appAll().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   const filter = state.appFilter || 'all';
@@ -2488,13 +2539,16 @@ function renderMembersPage() {
   const s = state.activeSection;
   const pending = crqAll().filter(r => !r.status).length;
   const openApps = appAll().filter(a => !appIsDone(a)).length;
+  const openShirts = f5All().filter(r => !r.shirtGiven).length;
   const nav = renderGroupSubNav([
     { id: 'feedback',     label: '👥 Students' },
     { id: 'holds',        label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') },
     { id: 'applications', label: '📋 Applications' + (openApps ? ' (' + openApps + ')' : '') },
+    { id: 'firstfive',    label: '🥋 First 5' + (openShirts ? ' (' + openShirts + ')' : '') },
   ]);
   if (s === 'holds') return nav + renderHoldsPage();
   if (s === 'applications') return nav + renderApplicationsPage();
+  if (s === 'firstfive') return nav + renderFirstFivePage();
   return nav + renderFeedbackPage();
 }
 
@@ -2997,7 +3051,7 @@ function render() {
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
      ['tasks','events','testing','accountability','inventory'].includes(s)    ? renderOpsPage()       :
-     ['feedback','watchlist','holds','applications'].includes(s)              ? renderMembersPage()   :
+     ['feedback','watchlist','holds','applications','firstfive'].includes(s)              ? renderMembersPage()   :
      ['goals','marketing','scorecard','rocks','financials'].includes(s)       ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
      '');
@@ -3010,7 +3064,7 @@ function renderHeader() {
   const getGroup = s => {
     if (s === 'home') return 'home';
     if (['tasks','events','testing','accountability','inventory'].includes(s)) return 'ops';
-    if (['feedback','watchlist','holds','applications'].includes(s)) return 'members';
+    if (['feedback','watchlist','holds','applications','firstfive'].includes(s)) return 'members';
     if (['goals','marketing','monthlyGoals','scorecard','rocks','financials','performance'].includes(s)) return 'growth';
     if (s === 'development')                                   return 'resources';
     if (s === 'leadership')                                    return 'leadership';
@@ -6409,6 +6463,7 @@ state.gateUser       = null;          // gate: unlocked staff id
 state.gateMode       = null;          // gate screen: 'login' | 'register'
 state.gateMsg        = null;          // gate screen error message
 state.inventory      = {};           // Items to Order (Firebase-synced)
+state.firstFive      = {};           // First 5 completions (Firebase-synced)
 state.invFilter      = 'all';        // inventory status filter
 state.schedLoc       = 'all';        // master schedule location filter
 state.tcSel          = null;         // clock UI: selected employee id
