@@ -1909,6 +1909,11 @@ function listenAll() {
   cyclesRef.on('value', snap => { state.cycles = snap.val() || {}; render(); });
   activeListeners.push({ ref: cyclesRef, event: 'value' });
 
+  // 30-Second Story overrides (per life skill)
+  const matStoryRef = fbRef('matStory');
+  matStoryRef.on('value', snap => { state.matStory = snap.val() || {}; render(); });
+  activeListeners.push({ ref: matStoryRef, event: 'value' });
+
   // L10 meetings
   const l10Ref = fbRef('l10');
   l10Ref.on('value', snap => { state.l10 = snap.val() || {}; render(); });
@@ -3262,10 +3267,66 @@ function renderHomePage() {
 
   html += '</div>'; // close home-grid
 
+  // 30-Second Story — a kid-friendly story tied to this cycle's life skill / mat chat
+  html += renderMatStory(cycle);
+
   // Weekly Agenda (formerly the L10 meeting) embedded on Home
   html += '<div style="margin-top:8px">' + renderL10Page() + '</div>';
 
   return html;
+}
+
+/*  -  -  30-Second Story — one per life skill, told to kids alongside the mat chat  -  -  */
+const MAT_STORIES = {
+  discipline: {
+    title: 'The Bamboo That Waited',
+    story: `A farmer planted a bamboo seed and watered it every single day. Week after week — nothing. His neighbors laughed: "Give up, nothing's growing!" But he kept watering, all through year one, two, three, four… still nothing above the ground. Then in year five, the bamboo shot up ninety feet in just six weeks! What the neighbors never saw was that for four years it was growing deep, strong roots underground. Discipline is just like that. When you do the right thing every day — even when nobody claps and you can't see results yet — you're building your roots. One day, you'll shoot up.`,
+    prompt: `This week: do one right thing every day, even when no one is watching.`
+  },
+  honesty: {
+    title: 'The Empty Pot',
+    story: `An emperor gave every child in the kingdom one seed. "Whoever grows the most beautiful plant will be the next ruler." A boy named Ling planted his and watered it daily — but nothing grew. On the big day, every child arrived with huge, gorgeous flowers… except Ling, who carried an empty pot, cheeks red with embarrassment. The emperor walked past all the flowers and stopped at Ling. "This boy will be the next emperor. I gave everyone a boiled seed that could never grow. Only Ling had the honesty to show me the truth." Honesty always grows into something greater.`,
+    prompt: `This week: tell the truth, even when it's the hard thing to do.`
+  },
+  respect: {
+    title: 'The Two Students',
+    story: `Two new students joined the dojang. The first one knew all the words — "Yes sir! Respect! Honor! Discipline!" — and he said them loudly. The second didn't say much. But he bowed at the door, listened with his eyes, picked up a belt that had fallen, and helped a smaller kid tie his shoes. At the end of class, the master gave the leadership stripe to the second student. "But I said all the respect words!" said the first. The master smiled: "Respect isn't what you say or what you know — it's what you do." Actions bow louder than words.`,
+    prompt: `This week: show respect with an action nobody asked you to do.`
+  },
+  'self-esteem': {
+    title: 'The Cracked Pot',
+    story: `A water carrier had two pots. One was perfect; the other had a crack and leaked half its water on every trip. The cracked pot felt ashamed: "I'm a failure — you lose half your water because of me." The carrier smiled. "Did you notice the flowers on your side of the path? I planted seeds there, and every day your 'leak' watered them. For two years I've picked beautiful flowers for the table — because of your crack." Every one of us has cracks. Self-esteem is knowing your cracks are part of what makes you you — and being proud of exactly who you are.`,
+    prompt: `This week: say one kind thing to yourself out loud every day.`
+  },
+  communication: {
+    title: 'The Whisper Down the Line',
+    story: `A general sent an urgent message down a long line of soldiers: "Send reinforcements, we're going to advance." Each soldier whispered it to the next, ear to ear, down the line. By the time it reached the end, the message came out: "Send three and fourpence, we're going to a dance!" The reinforcements never came. Good communication isn't just talking — it's speaking clearly AND really listening. When you look someone in the eyes, listen all the way to the end, and repeat back what you heard, the message never gets lost.`,
+    prompt: `This week: listen all the way to the end before you answer.`
+  },
+  belief: {
+    title: `The Board That Wouldn't Break`,
+    story: `A young student stood in front of her very first board. She struck it — nothing. Again — nothing. She turned away: "I can't. It's too hard." Her instructor knelt down. "You're not aiming at the board — you're stopping AT it. Aim past it. Believe your hand is already on the other side." She closed her eyes, pictured her hand going all the way through, believed it was already done… and struck. CRACK — the board split clean in two. Nothing changed about her hand. The only thing that changed was her belief.`,
+    prompt: `This week: aim past the board — believe it's already done.`
+  }
+};
+function matStorySet(key, val){ fbDebounce('matStory/' + key, (val || '').trim() || null); }
+function renderMatStory(cycle){
+  const key = (cycle.lifeSkill || '').toLowerCase().trim();
+  const def = MAT_STORIES[key];
+  const saved = (state.matStory || {})[key];
+  const text = saved != null ? saved : (def ? def.story : '');
+  const title = def ? def.title : '';
+  const prompt = def ? def.prompt : '';
+  const color = (MAT_CHATS[key] || {}).color || '#7c3aed';
+  let h = '<div class="home-card" style="margin-top:8px;">';
+  h += '<div class="home-card-header"><span class="card-icon">📖</span><h3>30-Second Story — for Kids</h3></div>';
+  h += '<div class="home-card-body">';
+  h += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:' + color + ';margin-bottom:8px;">' + esc(cycle.lifeSkill || '') + (title ? ' · ' + esc(title) : '') + '</div>';
+  h += '<textarea oninput="matStorySet(\'' + key + '\',this.value)" placeholder="A short story instructors can tell this cycle to bring the life skill to life…" style="width:100%;box-sizing:border-box;min-height:150px;border:1px solid var(--gray-200);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.65;font-family:Georgia,\'Times New Roman\',serif;color:#333;resize:vertical;">' + esc(text) + '</textarea>';
+  if (prompt) h += '<div style="margin-top:10px;font-size:12.5px;font-weight:700;color:' + color + ';">🎯 ' + esc(prompt) + '</div>';
+  h += '<div style="margin-top:6px;font-size:11px;color:var(--gray-400);">Tell it at the start or end of class to bring the ' + esc(cycle.lifeSkill || 'life skill') + ' mat chat to life. Edit above to use your own — it saves automatically.</div>';
+  h += '</div></div>';
+  return h;
 }
 
 /*  -  -  Class Playbook (per-week run-of-class, editable, complements the Mat Chat)  -  -  */
@@ -6466,6 +6527,7 @@ state.inventory      = {};           // Items to Order (Firebase-synced)
 state.firstFive      = {};           // First 5 completions (Firebase-synced)
 state.invFilter      = 'all';        // inventory status filter
 state.schedLoc       = 'all';        // master schedule location filter
+state.matStory       = {};           // 30-second story overrides per life skill (Firebase-synced)
 state.tcSel          = null;         // clock UI: selected employee id
 state.tcPin          = '';           // clock UI: PIN entry buffer
 state.tcMsg          = null;         // clock UI: transient status message {type,text}
