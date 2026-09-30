@@ -3276,55 +3276,87 @@ function renderHomePage() {
   return html;
 }
 
-/*  -  -  30-Second Story — one per life skill, told to kids alongside the mat chat  -  -  */
+/*  -  -  30-Second Story — one per WEEK per life skill, told to kids alongside the mat chat  -  -  */
 const MAT_STORIES = {
-  discipline: {
-    title: 'The Bamboo That Waited',
-    story: `A farmer planted a bamboo seed and watered it every single day. Week after week — nothing. His neighbors laughed: "Give up, nothing's growing!" But he kept watering, all through year one, two, three, four… still nothing above the ground. Then in year five, the bamboo shot up ninety feet in just six weeks! What the neighbors never saw was that for four years it was growing deep, strong roots underground. Discipline is just like that. When you do the right thing every day — even when nobody claps and you can't see results yet — you're building your roots. One day, you'll shoot up.`,
-    prompt: `This week: do one right thing every day, even when no one is watching.`
-  },
-  honesty: {
-    title: 'The Empty Pot',
-    story: `An emperor gave every child in the kingdom one seed. "Whoever grows the most beautiful plant will be the next ruler." A boy named Ling planted his and watered it daily — but nothing grew. On the big day, every child arrived with huge, gorgeous flowers… except Ling, who carried an empty pot, cheeks red with embarrassment. The emperor walked past all the flowers and stopped at Ling. "This boy will be the next emperor. I gave everyone a boiled seed that could never grow. Only Ling had the honesty to show me the truth." Honesty always grows into something greater.`,
-    prompt: `This week: tell the truth, even when it's the hard thing to do.`
-  },
-  respect: {
-    title: 'The Two Students',
-    story: `Two new students joined the dojang. The first one knew all the words — "Yes sir! Respect! Honor! Discipline!" — and he said them loudly. The second didn't say much. But he bowed at the door, listened with his eyes, picked up a belt that had fallen, and helped a smaller kid tie his shoes. At the end of class, the master gave the leadership stripe to the second student. "But I said all the respect words!" said the first. The master smiled: "Respect isn't what you say or what you know — it's what you do." Actions bow louder than words.`,
-    prompt: `This week: show respect with an action nobody asked you to do.`
-  },
-  'self-esteem': {
-    title: 'The Cracked Pot',
-    story: `A water carrier had two pots. One was perfect; the other had a crack and leaked half its water on every trip. The cracked pot felt ashamed: "I'm a failure — you lose half your water because of me." The carrier smiled. "Did you notice the flowers on your side of the path? I planted seeds there, and every day your 'leak' watered them. For two years I've picked beautiful flowers for the table — because of your crack." Every one of us has cracks. Self-esteem is knowing your cracks are part of what makes you you — and being proud of exactly who you are.`,
-    prompt: `This week: say one kind thing to yourself out loud every day.`
-  },
-  communication: {
-    title: 'The Whisper Down the Line',
-    story: `A general sent an urgent message down a long line of soldiers: "Send reinforcements, we're going to advance." Each soldier whispered it to the next, ear to ear, down the line. By the time it reached the end, the message came out: "Send three and fourpence, we're going to a dance!" The reinforcements never came. Good communication isn't just talking — it's speaking clearly AND really listening. When you look someone in the eyes, listen all the way to the end, and repeat back what you heard, the message never gets lost.`,
-    prompt: `This week: listen all the way to the end before you answer.`
-  },
-  belief: {
-    title: `The Board That Wouldn't Break`,
-    story: `A young student stood in front of her very first board. She struck it — nothing. Again — nothing. She turned away: "I can't. It's too hard." Her instructor knelt down. "You're not aiming at the board — you're stopping AT it. Aim past it. Believe your hand is already on the other side." She closed her eyes, pictured her hand going all the way through, believed it was already done… and struck. CRACK — the board split clean in two. Nothing changed about her hand. The only thing that changed was her belief.`,
-    prompt: `This week: aim past the board — believe it's already done.`
-  }
+  discipline: [
+    { w:1, title:'Right Away', story:`A coach told two players to run a lap. One took off right away; the other said "in a minute" and finished his snack first. When it was time to pick a captain, the coach chose the one who moved immediately. "I need people who go when it's time — not when they feel like it." Doing the right thing right away IS the right way.`, prompt:`This week: when a parent or coach asks, move immediately — no "in a minute."` },
+    { w:2, title:'The Bridge to Nowhere', story:`A town started building a bridge, then quit halfway when it got hard. For years everyone stared at a bridge to nowhere. The next town over finished theirs — and their town grew and thrived. Commitment means finishing what you start, even when it stops being fun. Following through is what turns a plan into success.`, prompt:`This week: finish one thing you'd normally quit halfway.` },
+    { w:3, title:'One Percent Better', story:`A young runner was the slowest on her team. Instead of trying to be the best overnight, she promised herself one thing: "Just beat yesterday's me — a little." One second faster each week. A year later, she won the city race. You don't have to be the best today. Just be better than you were yesterday.`, prompt:`This week: beat yesterday's you by one small thing each day.` },
+    { w:4, title:'Three More Feet', story:`A miner dug for gold for months, then gave up and sold his tools. The man who bought them dug just three more feet — and struck gold. The first miner quit three feet from success and never knew it. When it feels hardest, you're often the closest. Never quit.`, prompt:`This week: when you want to quit, do three more.` },
+    { w:5, title:'The Borrowed Bike', story:`A boy borrowed his friend's bike and left it out in the rain — it rusted, and his friend never lent him anything again. Another kid always returned things clean and on time, so everyone trusted him with everything. Being responsible for your things is how people learn they can count on you.`, prompt:`This week: put every one of your things back in its proper place.` },
+    { w:6, title:'The First Jump', story:`At the pool, a whole line of kids stood at the high dive — but nobody jumped. Finally one small kid climbed up, heart pounding, and jumped. Then everyone followed. Courage isn't feeling unafraid — it's being scared and doing it anyway. And your courage gives courage to everyone watching.`, prompt:`This week: do one thing that scares you a little.` },
+    { w:7, title:`The Archer's Eyes`, story:`A master asked his student, "What do you see?" "The tree, the sky, the target," said the student. "Come back," said the master, "when you see only the target." Champions picture exactly what they want — then move toward it. See your goal clearly, then take action.`, prompt:`This week: picture your goal every morning, then take one step toward it.` },
+    { w:8, title:'The Last Lap', story:`Two runners were tied at the final lap. One thought, "Eh, good enough." The other lit up — "This is my favorite part!" — and sprinted with a grin. Passion finishes strong. When you truly love what you do, you give your best all the way to the very end.`, prompt:`This week: finish every class with your biggest energy.` }
+  ],
+  honesty: [
+    { w:1, title:'The Cookie Crumbs', story:`A boy swore he didn't touch the cookies — with crumbs all down his shirt. His mom said, "It's not the cookie that upsets me. It's that now I have to wonder if you're telling the truth." One little lie costs the trust it took years to build. Your best effort and your honesty go hand in hand.`, prompt:`This week: tell the truth even about the small stuff.` },
+    { w:2, title:'Two Report Cards', story:`Two students got the same low grade. One said, "The teacher hates me." The other said, "I didn't give my best — I'll fix it." A month later, guess who improved? Being honest with YOURSELF about your effort is the very first step to getting better.`, prompt:`This week: be honest about whether you gave your best — then give more.` },
+    { w:3, title:'The Boy Who Cried Wolf', story:`For fun, a shepherd boy cried "Wolf!" twice, and the villagers came running for nothing. The third time, a real wolf came — and no one believed him. When you keep your word, people come running when you truly need them. When you don't, they stop listening.`, prompt:`This week: keep every promise you make, even the tiny ones.` },
+    { w:4, title:'When No One Is Watching', story:`A gym had one rule: rack your weights. One kid always did — even alone, late at night. The owner saw it on the cameras and made him team captain. Honesty is doing the right thing when nobody is watching. Every rep, every rule — do it right.`, prompt:`This week: follow the rules even when no one is watching.` },
+    { w:5, title:'Pick It Up', story:`A leader and his team walked past a piece of trash on the floor. The leader didn't say a word — he just bent down and picked it up. The next day, the whole team was picking things up. Honest leaders don't just talk. They take action, and others follow.`, prompt:`This week: lead by doing — take action without being told.` },
+    { w:6, title:'The Broken Vase', story:`A student broke a vase and hid the pieces — and the mess only got worse. Another student broke one, admitted it right away, and learned to glue it back even stronger. Mistakes aren't the problem — hiding them is. Own it, learn from it, and stay humble enough to grow.`, prompt:`This week: admit one mistake and learn from it.` },
+    { w:7, title:'Two Doors', story:`Every choice is like a door. One boy always chose the easy door — copy the homework, skip the chore, tell a little fib. Another chose the honest door, even when it was harder. Years later, the honest one had real friends, real trust, and real pride. Your choices build who you become.`, prompt:`This week: at every choice, pick the honest door.` },
+    { w:8, title:'The Two Builders', story:`Two builders heard a big storm was coming. One prepared honestly, checking every single nail. The other faked it and cut corners. When the storm hit, one house stood strong and one fell. Being honest in your training is how you're truly ready when the test comes.`, prompt:`This week: prepare honestly for your test — no shortcuts.` }
+  ],
+  respect: [
+    { w:1, title:'Look Me In The Eyes', story:`A boy met a real champion and stared at the floor, mumbling hello. The champion knelt down: "Look me in the eyes. That's how you tell someone they matter." Eye contact says 'I respect you.' Give people your eyes and your full 100 percent.`, prompt:`This week: look people in the eyes when they talk to you.` },
+    { w:2, title:'The Wrinkled Uniform', story:`Two students tested on the same day. One's uniform was crisp and clean; the other's was crumpled from the floor. Same skills — but one looked ready and one looked careless. How you care for your gear and your room shows the respect you have for yourself.`, prompt:`This week: keep your uniform sharp and your room clean.` },
+    { w:3, title:'The Echo', story:`A boy yelled "I hate this!" into a canyon, and it echoed back at him. His dad said, "Try again — kinder." He yelled "You're awesome!" and the canyon echoed "You're awesome!" The world gives back what you give it. Respect echoes.`, prompt:`This week: answer up kindly — respect comes right back to you.` },
+    { w:4, title:'The Loudest Cheer', story:`A player sat on the bench and could have sulked. Instead he cheered louder than anyone for his teammates. The coach said, "He makes the whole team better." Respect means following the rules AND lifting others up — even when it isn't your turn.`, prompt:`This week: encourage a teammate every class.` },
+    { w:5, title:'Leave It Better', story:`An old man had one rule: "Leave every place better than you found it." His grandson started picking up one piece of trash everywhere he went — and soon his friends did too. Respect isn't just for people. It's for places. Leave it better than you found it.`, prompt:`This week: leave every room better than you found it.` },
+    { w:6, title:'The Trusted Key', story:`A shop owner handed one worker the key to the whole store. Why him? "He keeps his cool, tells the truth, and does the right thing." Respect and self-control earn trust — and trust opens every door.`, prompt:`This week: keep your cool — self-control earns trust.` },
+    { w:7, title:'Stand Tall', story:`A student slouched, certain she would fail. Her coach said, "Stand like someone who respects herself." She lifted her chin and squared her shoulders — and nailed it. Believing in yourself is self-respect. And when you lift others up, you rise right along with them.`, prompt:`This week: stand tall and lift someone up.` },
+    { w:8, title:`The Firefighter's Ears`, story:`When the bell rings, firefighters move instantly — no "one more minute." Listening fast is what saves the day. In class and at home, hearing something and reacting right away is one of the biggest signs of respect there is.`, prompt:`This week: listen and react the first time, right away.` }
+  ],
+  'self-esteem': [
+    { w:1, title:'The Little Fish', story:`A little fish wished he were a shark, a dolphin — anything but himself. A wise old turtle said, "The reef needs exactly one of you. Be the best YOU, and watch what happens." He tried swimming his own way and ended up leading the whole school. Self-esteem is the joy of being you.`, prompt:`This week: try something new as your awesome self.` },
+    { w:2, title:'The Bucket', story:`Every word you hear drops into a bucket — kind words fill it up, mean words poke holes. A girl practiced filling her own bucket: "I can do this." By recital night she was overflowing with confidence. The words you say to yourself matter most of all.`, prompt:`This week: say "I can do it" out loud to every challenge.` },
+    { w:3, title:'The Cheer That Grew', story:`A boy clapped for a classmate who finally did his first push-up. That kid smiled — and clapped for the next person. By the end of class, everyone was cheering each other on. When you lift others up, your own self-esteem grows too.`, prompt:`This week: celebrate a classmate's win out loud.` },
+    { w:4, title:'Getting Closer', story:`Learning to ride her bike, a girl fell six times. On the seventh try she said, "I'm getting closer!" — and rode away. Falling isn't failing. Confidence is the little voice that says 'try again,' with a smile.`, prompt:`This week: when you fall, say "I'm getting closer" and try again.` },
+    { w:5, title:'Eyes Up', story:`"Champions know what's around them," a coach taught. A boy who kept his eyes up noticed a little kid wandering toward the street — and helped him back. Being aware of your surroundings keeps you and others safe. Confident kids keep their eyes up.`, prompt:`This week: keep your eyes up and know what's around you.` },
+    { w:6, title:'The Thank-You Jar', story:`Every night, a family wrote one thing they were grateful for and dropped it in a jar. On the hard days, they read them out loud and smiled. Gratitude turns what you already have into more than enough. Say thank you, and watch your joy grow.`, prompt:`This week: name one thing you're grateful for every day.` },
+    { w:7, title:'The Full Cup', story:`A student bragged that he already knew everything. His master poured tea into his cup until it overflowed all over the table. "A full cup can't hold any more. Empty your cup, and you can always learn." Humility keeps you growing. There's always more to learn from others.`, prompt:`This week: ask someone to teach you something new.` },
+    { w:8, title:'The Heavy Backpack', story:`A boy dropped a rock into his backpack for every grudge he held — soon it was too heavy to even lift. His grandma said gently, "Set them down." Forgiveness — for others AND yourself — is setting the rocks down so you can run free again.`, prompt:`This week: forgive yourself for one mistake and let it go.` }
+  ],
+  communication: [
+    { w:1, title:'The Lighthouse', story:`A ship was lost in thick fog until it spotted the lighthouse's clear, steady signal — and found its way home. Good communication is your lighthouse. It's the link between you and the whole world. How you carry yourself and speak is the light others follow.`, prompt:`This week: stand and speak like a leader others can follow.` },
+    { w:2, title:'The Mumble and the Message', story:`Two kids gave the exact same speech. One stared at his shoes and mumbled. The other stood tall, made eye contact, and spoke up. Same words — but only one was actually heard. HOW you deliver a message matters as much as the message itself.`, prompt:`This week: stand tall and make eye contact when you speak.` },
+    { w:3, title:'Two Ears, One Mouth', story:`We have two ears and only one mouth for a reason. A boy who listened first always knew exactly what to do. The one who talked over everyone kept missing the instructions. Answering up loud and clear shows that you truly listened.`, prompt:`This week: listen fully, then answer up loud and clear.` },
+    { w:4, title:'The Baton', story:`A relay team lost the race because one runner wasn't listening for the handoff — and dropped the baton. Communication is a handoff: you have to listen AND react at exactly the right moment. Miss it, and the whole team stumbles.`, prompt:`This week: listen and react right away, at home and in class.` },
+    { w:5, title:'The Inside Voice', story:`A climber almost quit halfway up — until she changed her inside voice from "I can't" to "I can." Same mountain, different words, and she made it to the top. The way you talk to yourself, and your tone with others, changes everything.`, prompt:`This week: swap "I can't" for "I can" — and use a kind tone.` },
+    { w:6, title:'The Magic Words', story:`A new kid walked in, looked everyone in the eye, and said, "Hi, I'm Sam — nice to meet you." By lunchtime he had ten new friends. A confident greeting and good manners are magic words that open every single door.`, prompt:`This week: greet three people with confidence and good manners.` },
+    { w:7, title:'The Quiet Captain', story:`The loudest kid on the team wanted to be captain. The coach picked the quiet one instead. Why? "He shows up early, helps everyone, and never complains. He leads by example." The most powerful communication is your actions.`, prompt:`This week: lead by example — let your actions do the talking.` },
+    { w:8, title:'The Open Door', story:`A leader saw a teammate with their arms full and quietly opened the door — without being asked. A small thing, but everyone noticed. Leaders don't wait to be told. They see what's needed, and they act.`, prompt:`This week: help someone without being asked.` }
+  ],
+  belief: [
+    { w:1, title:'I Think I Can', story:`A tiny train faced a giant hill. The big, powerful engines said, "Impossible." But the little one chugged, "I think I can, I think I can…" — and made it right over the top. Belief starts with three simple words: Yes, I can.`, prompt:`This week: say "Yes, I can!" before every challenge.` },
+    { w:2, title:'Trust the Catch', story:`A trapeze flyer froze in mid-air, too afraid to let go. Her coach called out, "I've got you — trust the catch!" She let go… and was caught. Belief is trusting yourself, your coaches, and your training enough to let go and fly.`, prompt:`This week: trust your training — commit fully to each move.` },
+    { w:3, title:'The Dripping Faucet', story:`A single drip seems like nothing at all. But a dripping faucet quietly fills an entire bucket overnight. Small, consistent effort adds up to huge results. Show up and try, drip by drip, and you'll fill the bucket.`, prompt:`This week: do a little every day — consistency wins.` },
+    { w:4, title:'The Tug of War', story:`One super-strong kid can't win a tug-of-war against five kids who pull together and shout encouragement to each other. Belief grows when we lift one another. Cheer for your team — and let them cheer for you.`, prompt:`This week: encourage a teammate, and accept their encouragement.` },
+    { w:5, title:'The Sculptor', story:`Someone asked a sculptor how he carved a horse from a block of stone. "Simple," he said. "I just remove everything that isn't the horse. I could see it the whole time." Champions see the finished picture first, then carve toward it.`, prompt:`This week: picture your black-belt self, then act like them today.` },
+    { w:6, title:'Two Oars', story:`A boat with just one person rowing goes in circles. But with two people believing in each other and pulling together, it flies straight and fast. Determination plus belief in each other is what moves you forward. Finish every task you start.`, prompt:`This week: believe in a teammate and finish what you start.` },
+    { w:7, title:'The Candle', story:`One lit candle in a dark room can light a hundred other candles — without ever losing its own flame. Your courage and your good actions inspire everyone around you, and you lose nothing by sharing them. Be the candle.`, prompt:`This week: let your courage light the way for someone else.` },
+    { w:8, title:'The Endless Staircase', story:`A master black belt was asked, "You know everything now, right?" He just smiled. "The higher I climb, the more staircase I see." True champions stay humble. They say 'thank you,' not 'I know.' There is always more to learn.`, prompt:`This week: say "thank you" instead of "I know."` }
+  ]
 };
-function matStorySet(key, val){ fbDebounce('matStory/' + key, (val || '').trim() || null); }
+function matStorySet(key, week, val){ fbDebounce('matStory/' + key + '/' + week, (val || '').trim() || null); }
 function renderMatStory(cycle){
   const key = (cycle.lifeSkill || '').toLowerCase().trim();
-  const def = MAT_STORIES[key];
-  const saved = (state.matStory || {})[key];
+  const week = cycle.weekNum || 1;
+  const arr = MAT_STORIES[key];
+  const def = arr ? arr.find(x => x.w === week) : null;
+  const saved = ((state.matStory || {})[key] || {})[week];
   const text = saved != null ? saved : (def ? def.story : '');
   const title = def ? def.title : '';
   const prompt = def ? def.prompt : '';
   const color = (MAT_CHATS[key] || {}).color || '#7c3aed';
   let h = '<div class="home-card" style="margin-top:8px;">';
-  h += '<div class="home-card-header"><span class="card-icon">📖</span><h3>30-Second Story — for Kids</h3></div>';
+  h += '<div class="home-card-header"><span class="card-icon">📖</span><h3>30-Second Story — Week ' + week + '</h3></div>';
   h += '<div class="home-card-body">';
-  h += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:' + color + ';margin-bottom:8px;">' + esc(cycle.lifeSkill || '') + (title ? ' · ' + esc(title) : '') + '</div>';
-  h += '<textarea oninput="matStorySet(\'' + key + '\',this.value)" placeholder="A short story instructors can tell this cycle to bring the life skill to life…" style="width:100%;box-sizing:border-box;min-height:150px;border:1px solid var(--gray-200);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.65;font-family:Georgia,\'Times New Roman\',serif;color:#333;resize:vertical;">' + esc(text) + '</textarea>';
+  h += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:' + color + ';margin-bottom:8px;">' + esc(cycle.lifeSkill || '') + ' · Week ' + week + (title ? ' · ' + esc(title) : '') + '</div>';
+  h += '<textarea oninput="matStorySet(\'' + key + '\',' + week + ',this.value)" placeholder="A short story instructors can tell this week to bring the mat chat to life…" style="width:100%;box-sizing:border-box;min-height:150px;border:1px solid var(--gray-200);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.65;font-family:Georgia,\'Times New Roman\',serif;color:#333;resize:vertical;">' + esc(text) + '</textarea>';
   if (prompt) h += '<div style="margin-top:10px;font-size:12.5px;font-weight:700;color:' + color + ';">🎯 ' + esc(prompt) + '</div>';
-  h += '<div style="margin-top:6px;font-size:11px;color:var(--gray-400);">Tell it at the start or end of class to bring the ' + esc(cycle.lifeSkill || 'life skill') + ' mat chat to life. Edit above to use your own — it saves automatically.</div>';
+  h += '<div style="margin-top:6px;font-size:11px;color:var(--gray-400);">Tell it at the start or end of class to bring this week\'s ' + esc(cycle.lifeSkill || 'life skill') + ' mat chat to life. Edit above to use your own — it saves automatically for this week.</div>';
   h += '</div></div>';
   return h;
 }
