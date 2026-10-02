@@ -160,6 +160,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .home-event-item.loc-goninjaV .home-event-date{background:rgba(217,119,6,0.12);color:#d97706}
 .home-event-item.loc-goninjaW{border-left:3px solid #dc2626;padding-left:10px}
 .home-event-item.loc-goninjaV{border-left:3px solid #d97706;padding-left:10px}
+.cal-evt.loc-deforest { background: #2d7d9a; }
+.cal-list-item.loc-deforest { border-left-color: #2d7d9a; }
+.cal-list-item.loc-deforest .cal-list-date { color: #2d7d9a; }
+.cal-has-event.loc-deforest { border-color: #2d7d9a; }
+.home-event-item.loc-deforest .home-event-date{background:rgba(45,125,154,0.12);color:#2d7d9a}
+.home-event-item.loc-deforest{border-left:3px solid #2d7d9a;padding-left:10px}
 .evt-add-form { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px; background: var(--card); border-radius: 10px; margin-bottom: 16px; align-items: flex-end; }
 .evt-add-form input, .evt-add-form select { padding: 8px 12px; border: 1px solid var(--gray-200); border-radius: 8px; font-size: 13px; background: var(--body); color: var(--primary); }
 .evt-add-form input[type="text"] { flex: 1; min-width: 160px; }
@@ -5939,7 +5945,7 @@ function updateInitiative(path, val) {
 
 /*  -  -  Events Page (Calendar View)  -  -  */
 function getEvtLocClass(loc) { return loc ? 'loc-' + loc : ''; }
-function getEvtLocLabel(loc) { return loc === 'waunakee' ? 'LVLUP Waunakee' : loc === 'eastmad' ? 'LVLUP E.Mad' : loc === 'verona' ? 'LVLUP Verona' : loc === 'goninjaW' ? 'GN Waunakee' : loc === 'goninjaV' ? 'GN Verona' : 'All'; }
+function getEvtLocLabel(loc) { return loc === 'waunakee' ? 'LVLUP Waunakee' : loc === 'eastmad' ? 'LVLUP E.Mad' : loc === 'verona' ? 'LVLUP Verona' : loc === 'deforest' ? 'LVLUP DeForest' : loc === 'goninjaW' ? 'GN Waunakee' : loc === 'goninjaV' ? 'GN Verona' : 'All'; }
 function formatEvtTime(t) {
   if (!t) return '';
   const [hStr, mStr] = t.split(':');
