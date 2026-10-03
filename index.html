@@ -654,9 +654,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .home-empty{text-align:center;color:var(--gray-400);font-size:13px;padding:20px}
 
 /* --- Core Values --- */
-.cv-strip { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:20px; }
-@media(max-width:900px){ .cv-strip { grid-template-columns:repeat(3,1fr); } }
-@media(max-width:560px){ .cv-strip { grid-template-columns:1fr 1fr; } }
+.cv-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+@media(max-width:560px){ .cv-strip { grid-template-columns:1fr; } }
 .cv-card { background:var(--card); border:1px solid var(--gray-100); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:6px; }
 .cv-icon { font-size:20px; }
 .cv-name { font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:var(--accent); }
@@ -798,11 +797,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <script>
 /*  -  -  Core Values  -  -  */
 const CORE_VALUES = [
-  { name:'RELENTLESS', icon:'🔥', desc:'The refusal to stop. Whether it\'s your passion or your work ethic, you are an unstoppable force moving toward the goal.' },
-  { name:'DISCIPLINED', icon:'🛡️', desc:'The mastery of self. You do what needs to be done, own your actions, and maintain the highest standard of conduct.' },
-  { name:'HONORABLE',  icon:'⭐', desc:'The warrior\'s code. You treat the mats, your teammates, and your opponents with a baseline of high-level respect and integrity.' },
-  { name:'EVOLVABLE',  icon:'📈', desc:'The white-belt mindset. You are never finished — always seeking the next level through feedback and constant learning.' },
-  { name:'MAGNETIC',   icon:'✨', desc:'The power of your presence. You bring energy that attracts others, lifts the room, and drives the culture forward.' },
+  { name:'HONORABLE', icon:'⭐', desc:'The warrior\'s code. You treat the mats, your teammates, and your opponents with a baseline of high-level respect and integrity.' },
+  { name:'ICAN',      icon:'📈', desc:'Improvement that is Constant And Neverending. You carry the white-belt mindset — never finished, always chasing the next level with discipline, feedback, and relentless effort. Two words say it all: I CAN.' },
+  { name:'MAGNETIC',  icon:'✨', desc:'The power of your presence. You bring energy that attracts others, lifts the room, and drives the culture forward.' },
 ];
 
 /*  -  -  Firebase Config  -  -  */
@@ -3421,7 +3418,7 @@ function cpUpdate(cn, wk, section, value) {
 }
 
 function startCVQuiz() {
-  const order = [0,1,2,3,4].sort(() => Math.random() - 0.5);
+  const order = CORE_VALUES.map((_, i) => i).sort(() => Math.random() - 0.5);
   state._cvQuiz = { order, current: 0, score: 0, answered: null, complete: false };
   render();
 }
@@ -3437,7 +3434,7 @@ function nextCVQuiz() {
   if (!quiz) return;
   quiz.answered = null;
   quiz.current++;
-  if (quiz.current >= 5) quiz.complete = true;
+  if (quiz.current >= CORE_VALUES.length) quiz.complete = true;
   render();
 }
 
