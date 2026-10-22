@@ -2742,20 +2742,38 @@ function renderResourcesPage() {
 }
 
 function renderMarketingPage() {
-  const tab = state.mktTab || 'content';
-  const wide = tab === 'content';
-  let html = '<div class="page" style="max-width:' + (wide ? '1180px' : '920px') + ';">';
+  let tab = state.mktTab || 'buffer';
+  if (tab === 'content') tab = 'buffer';   // old Drive Content Request board retired → Buffer
+  let html = '<div class="page" style="max-width:920px;">';
   html += '<div style="margin-bottom:16px;">';
   html += '<h2 style="margin:0 0 4px;font-size:18px;font-weight:800;color:#1a1a2e;">📱 Marketing</h2>';
-  html += '<p style="margin:0;font-size:13px;color:#888;">Content requests, ad creative testing, and campaign tracking.</p>';
+  html += '<p style="margin:0;font-size:13px;color:#888;">Social posting via Buffer, ad creative testing, and campaign tracking.</p>';
   html += '</div>';
   const tb = (id, label) => '<button onclick="setMktTab(\'' + id + '\')" style="padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;' + (tab === id ? 'background:#1a1a2e;color:#fff;' : 'background:#f1f3f9;color:#555;') + '">' + label + '</button>';
-  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;">' + tb('content', '📋 Content Board') + tb('adlab', '🎬 Ad Creative Lab') + '</div>';
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;">' + tb('buffer', '📲 Buffer') + tb('adlab', '🎬 Ad Creative Lab') + '</div>';
   if (tab === 'adlab') html += renderAdCreative();
-  else html += renderContentBoard();
+  else html += renderBufferHub();
   html += '</div>';
-  if (state.crDraft) html += renderCrModal();
   return html;
+}
+
+/* ── Buffer hub — where all social content is scheduled & posted (retired the old Drive content-request board) ── */
+const BUFFER_RESPONSIBLE = ['Joey', 'Miranda', 'Ash', 'Bryan', 'Tarik'];
+function renderBufferHub(){
+  let h = '<div style="display:flex;flex-direction:column;gap:16px;max-width:760px;">';
+  h += '<div style="background:linear-gradient(135deg,#2c4bff,#1a1a2e);color:#fff;border-radius:14px;padding:22px 24px;">';
+  h += '<div style="font-size:18px;font-weight:800;">📲 Social posting runs through Buffer</div>';
+  h += '<div style="font-size:13px;opacity:.9;margin-top:6px;line-height:1.5;">Capture content, then schedule &amp; post it in Buffer. Goal: <b>3 posts per week</b>.</div>';
+  h += '<a href="' + CAPTURE_CONTENT_BUFFER_URL + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;margin-top:14px;padding:11px 20px;background:#fff;color:#1a1a2e;text-decoration:none;border-radius:9px;font-size:14px;font-weight:800;">📲 Open Buffer →</a>';
+  h += '</div>';
+  h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);">';
+  h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:4px;">👥 Responsible each week</div>';
+  h += '<div style="font-size:12px;color:#888;margin-bottom:12px;">Each schedules &amp; posts 3 pieces of content per week. Tracked on the weekly <b>Capture Content</b> task.</div>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+  BUFFER_RESPONSIBLE.forEach(n => { h += '<span style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#eef2ff;color:#0f3460;border-radius:999px;font-size:13px;font-weight:700;">👤 ' + esc(n) + '</span>'; });
+  h += '</div></div>';
+  h += '</div>';
+  return h;
 }
 
 function setMktTab(t){ state.mktTab = t; render(); }
