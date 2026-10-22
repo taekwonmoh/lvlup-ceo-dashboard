@@ -919,7 +919,7 @@ const INSTRUCTOR_METRICS = [
   { id: 'attrition',    label: 'Attrition', invert: true, hint: 'Members who cancelled this week. Lower is better.' },
 ];
 
-/* Acquisition board — top of funnel (owned by Ivy / Sales & Marketing) */
+/* Acquisition board — top of funnel (owned by Sales & Marketing) */
 const ACQUISITION_METRICS = [
   { id: 'leads',        label: 'Leads', hint: 'New people who inquired this week, across all sources.' },
   { id: 'trials',       label: 'Trials Booked', hint: 'Free trial classes booked this week.' },
@@ -2801,7 +2801,7 @@ function renderContentBoard(){
   h += '</div>';
   h += '</div>';
   // Google Drive helper note
-  h += '<div style="background:#f0f6ff;border:1px solid #cfe1ff;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#0a4bb0;line-height:1.5;">📤 <b>Upload all media to Google Drive</b> — both content-request assets and your weekly media-capture goal. Drop your photos &amp; videos in the shared folder, then paste the Drive link into your request below so Ivy can find and edit it.</div>';
+  h += '<div style="background:#f0f6ff;border:1px solid #cfe1ff;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#0a4bb0;line-height:1.5;">📤 <b>Upload all media to Google Drive</b> — both content-request assets and your weekly media-capture goal. Drop your photos &amp; videos in the shared folder, then paste the Drive link into your request below so the marketing team can find and edit it.</div>';
   // Brand filter
   const chip = (id, label) => '<button onclick="crSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + label + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All Brands') + CR_BRANDS.map(b => chip(b, b)).join('') + '</div>';
@@ -2992,7 +2992,7 @@ function renderCrModal(){
   h += '</div>';
   // Attachments
   h += '<label style="' + fieldLbl + '">Attachments / Media</label>';
-  h += '<div style="font-size:11px;color:#999;margin:-2px 0 8px;">Upload your photos &amp; videos to <b>Google Drive</b>, then paste the shareable link(s) below so Ivy can find and edit them.</div>';
+  h += '<div style="font-size:11px;color:#999;margin:-2px 0 8px;">Upload your photos &amp; videos to <b>Google Drive</b>, then paste the shareable link(s) below so the marketing team can find and edit them.</div>';
   h += '<a href="' + CR_DRIVE_URL + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#4169E1;color:#fff;text-decoration:none;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:10px;">📤 Open Google Drive</a>';
   (d.attachments || []).forEach((a, i) => {
     h += '<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">';
@@ -9142,7 +9142,7 @@ const LVLUP_PLAYBOOKS = [
     ]
   },
 
-  // ── CONTENT PILLARS (owned by Ivy — formalization in progress) ──
+  // ── CONTENT PILLARS (owned by Marketing — formalization in progress) ──
   { id:'content_structure', role:'sales', category:'Content & Marketing', icon:'🧱', title:'Content Structure — The 4 Pillars', tagline:'Every post ladders back to one of four pillars.',
     checklist:[
       '🏆 Pillar 1 — Student Wins',
