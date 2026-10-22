@@ -1007,7 +1007,7 @@ const BRYAN_WEEKLY = [
   {id:'b_ad_invites',       text:'Program Growth: Invite 2 students to try the AD class + post names to #LVLUPHQ.'},
   {id:'b_lifelinks',        text:'Student Milestones: Review LifeLinks, award belt clips + post to #LVLUPHQ.'},
   {id:'b_scorecard',        text:'Update your scorecard numbers in the dashboard for this week.'},
-  {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
+  {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
 ];
 const NIKKI_WEEKLY = [
   {id:'n_homebase',        text:'Monday Schedule Check: Verify the Homebase schedule to ensure proper coverage of classes and assistants.'},
@@ -1020,7 +1020,7 @@ const NIKKI_WEEKLY = [
   {id:'n_lifelinks',       text:'Student Milestones: Review LifeLinks, award belt clips + post to #LVLUPHQ.'},
   {id:'n_instructor_stn',  text:'Instructor Station: Clean instructor station + take photo for #LVLUPHQ.'},
   {id:'n_scorecard',       text:'Update your scorecard numbers in the dashboard for this week.'},
-  {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
+  {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
 ];
 const JOEY_WEEKLY = [
   {id:'j_homebase',        text:'Monday Schedule Check: Review the Homebase schedule to confirm proper class coverage for the week.'},
@@ -1031,7 +1031,7 @@ const JOEY_WEEKLY = [
   {id:'j_lifelinks',       text:'Student Milestones: Review LifeLinks and award belt clips + post to #LVLUPHQ.'},
   {id:'j_instructor_stn',  text:'Instructor Station Deep Clean: Clean instructor station + take photo for #LVLUPHQ.'},
   {id:'j_scorecard',       text:'Update your scorecard numbers in the dashboard for this week.'},
-  {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
+  {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
 ];
 const MIRANDA_WEEKLY = [
   {id:'m_party_reset',    text:'Friday Event Prep: Reset the party room for weekend birthday parties + post verification photo to #LVLUPHQ.'},
@@ -1039,7 +1039,7 @@ const MIRANDA_WEEKLY = [
   {id:'m_mop_mats',       text:'Mat Maintenance: Mop mats and sanitize obstacles + post photo to #LVLUPHQ.'},
   {id:'m_dust',           text:'Facility Inspection: Dust all facility trim and cabinets.'},
   {id:'m_party_supplies', text:'Inventory Control: Check party supplies inventory and message #LVLUPHQ if items are running low.'},
-  {id:'cc_content', icon:'📸', contentPillars:true, text:'Capture Content: Take photos & videos for this week’s rotating brand content pillars.'},
+  {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
 ];
 // ── Routing maps (fallback to legacy shared arrays if no per-emp entry) ───
 const EMP_DAILY  = {bryanG:BRYAN_DAILY, nikkiB:NIKKI_DAILY, joeyZ:JOEY_DAILY, mirandaS:MIRANDA_DAILY};
@@ -7484,7 +7484,7 @@ function taskPlaybook(task){
   return null;
 }
 /* ── Brand content pillars — rotates two pillars per week for the weekly Capture Content task ── */
-const CAPTURE_CONTENT_DRIVE_URL = 'https://drive.google.com/drive/folders/1Ml2RjT_pcEKqh_j9Wxd4c-R6mZGtyn-z?usp=sharing';
+const CAPTURE_CONTENT_BUFFER_URL = 'https://publish.buffer.com/home';
 const CONTENT_PILLARS = [
   { name:'Student Wins',         icon:'🏆', ideas:['Stripe promotions','Competition results','First class stories','Confidence transformations','Perseverance moment'] },
   { name:'Family Culture',       icon:'🏠', ideas:['Parent testimonials','Birthday parties','Community events','Summer camp moments','Friendship moments'] },
@@ -7544,7 +7544,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   let _title, _detail;
   if(_cpActive){
     _title='Capture Content';
-    _detail='This week’s pillars: '+_cpActive.map(p=>p.name).join(' & ')+' — tap a pillar below for capture ideas.';
+    _detail='This week’s pillars: '+_cpActive.map(p=>p.name).join(' & ')+' — schedule & post 3 this week in Buffer. Tap a pillar for ideas.';
   } else {
     const _tx=String(task.text||''), _ci=_tx.indexOf(': ');
     _title=_ci>2?_tx.slice(0,_ci):_tx; _detail=_ci>2?_tx.slice(_ci+2):'';
@@ -7578,7 +7578,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     }
   }
   if(_cpActive){
-    html+='<div style="margin-left:34px;margin-top:6px;"><a href="'+CAPTURE_CONTENT_DRIVE_URL+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#4169E1;color:#fff;text-decoration:none;border-radius:8px;font-size:12px;font-weight:700;">📤 Upload to Google Drive</a></div>';
+    html+='<div style="margin-left:34px;margin-top:6px;"><a href="'+CAPTURE_CONTENT_BUFFER_URL+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#2c4bff;color:#fff;text-decoration:none;border-radius:8px;font-size:12px;font-weight:700;">📲 Schedule in Buffer</a></div>';
     html+=renderContentPillarsBlock(_cpActive);
   }
   if(task.subs&&task.subs.length){ html+='<ul style="margin:0 0 0 34px;padding-left:18px;color:var(--gray-500);font-size:12px;line-height:1.75;">'+task.subs.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>'; }
