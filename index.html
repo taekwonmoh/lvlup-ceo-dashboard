@@ -942,19 +942,20 @@ const MONTHS_SHORT = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT
 
 const SCORECARD_PEOPLE = {
   waunakee: [{ id: 'goad', name: 'Mr. Goad', metrics: ['attrition','newMembers','leads','upgrades','trials','leadToTrial'] }],
-  eastmad: [{ id: 'bein', name: 'Mrs. Bein', metrics: ['attrition','newMembers','leads','upgrades','trials','leadToTrial'] }],
+  eastmad: [{ id: 'bein', name: 'Ash', metrics: ['attrition','newMembers','leads','upgrades','trials','leadToTrial'] }],
   verona: [{ id: 'mrz', name: 'Mr. Z', metrics: ['attrition','newMembers','leads','upgrades','trials','leadToTrial'] }],
   goninjaW: [{ id: 'smith', name: 'Ms. Smith' }],
   goninjaV: [{ id: 'smith_v', name: 'Ms. Smith' }],
 };
 const TASK_EMPLOYEES = [
-  { id: 'mirandaS', name: 'Go Ninja',       loc: 'goninjaW', label: 'Go Ninja',   bonus: true  },
-  { id: 'nikkiB',   name: 'LVLUP EM - Lead', loc: 'eastmad',  label: 'E. Madison', bonus: true  },
-  { id: 'bryanG',   name: 'LVLUP V - Lead',  loc: 'verona',   label: 'Verona',     bonus: true  },
-  { id: 'joeyZ',    name: 'LVLUP DEF - Lead', loc: 'deforest', label: 'DeForest',   bonus: true  },
-  { id: 'sueK',     name: 'FD Waunakee',    loc: 'waunakee', label: 'Waunakee',   bonus: true  },
-  { id: 'andyR',    name: 'FD EastMad',     loc: 'eastmad',  label: 'E. Madison', bonus: false },
-  { id: 'marioS',   name: 'FD Verona',      loc: 'verona',   label: 'Verona',     bonus: false },
+  { id: 'mirandaS', name: 'Go Ninja (Miranda)',     loc: 'goninjaW', label: 'Go Ninja',   bonus: true  },
+  { id: 'ash',      name: 'E. Madison (Ash)',       loc: 'eastmad',  label: 'E. Madison', bonus: true  },
+  { id: 'bryanG',   name: 'Verona (Bryan)',         loc: 'verona',   label: 'Verona',     bonus: true  },
+  { id: 'joeyZ',    name: 'DeForest (Joey)',        loc: 'deforest', label: 'DeForest',   bonus: true  },
+  { id: 'tarikM',   name: 'Waunakee (Tarik)',       loc: 'waunakee', label: 'Waunakee',   bonus: true  },
+  { id: 'sueK',     name: 'Waunakee (Front Desk)',  loc: 'waunakee', label: 'Waunakee',   bonus: true  },
+  { id: 'andyR',    name: 'E. Madison (Front Desk)', loc: 'eastmad', label: 'E. Madison', bonus: false },
+  { id: 'marioS',   name: 'Verona (Front Desk)',    loc: 'verona',   label: 'Verona',     bonus: false },
 ];
 
 /*  -  -  Team Wall  -  -  */
@@ -974,7 +975,7 @@ const BRYAN_DAILY = [
   {id:'b_stoplight', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Send a minimum of 2 Loom videos or 2 postcards to keep members connected — log how many you sent today.'},
   {id:'b_closing',   text:'Closing Routine & Venue Check: Spot check/freshen up the men\'s bathroom, straighten the training floor, review rosters, update location Slack regarding new students, and submit the EOS report.'},
 ];
-const NIKKI_DAILY = [
+const ASH_DAILY = [
   {id:'n_opening',   text:'Opening Routine: Turn on TV announcements and ensure the EMAD facility is ready for students.'},
   {id:'n_stoplight', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Send a minimum of 2 Loom videos or 2 postcards to keep EMAD members connected — log how many you sent today.'},
   {id:'n_closing',   text:'Closing Routine: Spot check/freshen up EMAD bathrooms, review rosters, update location Slack, and submit the EOS report.'},
@@ -1009,7 +1010,7 @@ const BRYAN_WEEKLY = [
   {id:'b_scorecard',        text:'Update your scorecard numbers in the dashboard for this week.'},
   {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
 ];
-const NIKKI_WEEKLY = [
+const ASH_WEEKLY = [
   {id:'n_homebase',        text:'Monday Schedule Check: Verify the Homebase schedule to ensure proper coverage of classes and assistants.'},
   {id:'n_bathroom_photos', text:'Bathroom Photo Verification: Post 1 photo of toilets + 1 showing overall cleanliness to #LVLUPHQ.'},
   {id:'n_announcements',   text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
@@ -1042,8 +1043,27 @@ const MIRANDA_WEEKLY = [
   {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
 ];
 // ── Routing maps (fallback to legacy shared arrays if no per-emp entry) ───
-const EMP_DAILY  = {bryanG:BRYAN_DAILY, nikkiB:NIKKI_DAILY, joeyZ:JOEY_DAILY, mirandaS:MIRANDA_DAILY};
-const EMP_WEEKLY = {bryanG:BRYAN_WEEKLY,nikkiB:NIKKI_WEEKLY,joeyZ:JOEY_WEEKLY,mirandaS:MIRANDA_WEEKLY};
+// Tarik — LVLUP Waunakee lead (mirrors the Ash/Joey/Bryan lead checklist)
+const TARIK_DAILY = [
+  {id:'t_opening',   cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the Waunakee instructor station is clean, organized, and ready.'},
+  {id:'t_stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Review the stoplight report, then send a minimum of 2 Loom videos or 2 postcards — log how many you sent today.'},
+  {id:'t_rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students/class counts, check attendance, and post in your location channel about anyone starting today.'},
+  {id:'t_closing',   cat:'Closing & EOS',   text:'Closing Routine & Venue Check: Spot check/freshen up the bathrooms, straighten the training floor, review rosters, update location Slack, and submit the EOS report.'},
+  {id:'t_eos',       cat:'Closing & EOS',   text:'Post your EOS report in Slack at clockout.'},
+];
+const TARIK_WEEKLY = [
+  {id:'t_homebase',        text:'Monday Schedule Check: Review the week’s schedule to confirm proper class coverage.'},
+  {id:'t_announcements',   text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
+  {id:'t_mop_mats',        text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
+  {id:'t_supplies',        text:'Inventory Control: Check facility supplies and message #inventory with restocking needs.'},
+  {id:'t_ad_invites',      text:'Program Growth: Invite 2 students to try the AD class + post their names to #LVLUPHQ.'},
+  {id:'t_lifelinks',       text:'Student Milestones: Review LifeLinks and award belt clips + post to #LVLUPHQ.'},
+  {id:'t_instructor_stn',  text:'Instructor Station Deep Clean: Clean instructor station + take photo for #LVLUPHQ.'},
+  {id:'t_scorecard',       text:'Update your scorecard numbers in the dashboard for this week.'},
+  {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
+];
+const EMP_DAILY  = {bryanG:BRYAN_DAILY, ash:ASH_DAILY, joeyZ:JOEY_DAILY, mirandaS:MIRANDA_DAILY, tarikM:TARIK_DAILY};
+const EMP_WEEKLY = {bryanG:BRYAN_WEEKLY,ash:ASH_WEEKLY,joeyZ:JOEY_WEEKLY,mirandaS:MIRANDA_WEEKLY, tarikM:TARIK_WEEKLY};
 // Legacy shared arrays kept as fallback ────────────────────────────────────
 const LVLUP_DAILY = BRYAN_DAILY;
 const LVLUP_WEEKLY_REC = BRYAN_WEEKLY;
@@ -1993,7 +2013,7 @@ function listenAll() {
   const ldPerfRef = fbRef('leadership/perf');
   ldPerfRef.on('value', snap => { state.leadership.perf = snap.val() || {}; render(); });
   activeListeners.push({ ref: ldPerfRef, event: 'value' });
-  ['bryanG', 'nikkiB', 'joeyZ', 'mirandaS'].forEach(eid => {
+  ['bryanG', 'ash', 'joeyZ', 'mirandaS', 'tarikM'].forEach(eid => {
     const soRef = fbRef('tasks/emp/' + eid + '/weekly_signoff');
     soRef.on('value', snap => { state.leadership.signoffs[eid] = snap.val() || {}; render(); });
     activeListeners.push({ ref: soRef, event: 'value' });
@@ -3802,8 +3822,9 @@ const LEAD_TRACK_COLS = [
 // Roles are seat-based, not person-based — whoever holds the seat shows under the role.
 const LEAD_STAFF = [
   { empId: 'bryanG',   name: 'Verona Lead',      loc: 'verona',   branch: 'VRN',     color: '#1d4ed8' },
-  { empId: 'nikkiB',   name: 'E. Madison Lead',  loc: 'eastmad',  branch: 'E.MAD',   color: '#dc2626' },
+  { empId: 'ash',      name: 'E. Madison Lead',  loc: 'eastmad',  branch: 'E.MAD',   color: '#dc2626' },
   { empId: 'joeyZ',    name: 'DeForest Lead',    loc: 'deforest', branch: 'DEF',     color: '#16a34a' },
+  { empId: 'tarikM',   name: 'Waunakee Lead',    loc: 'waunakee', branch: 'WAU',     color: '#7c3aed' },
   { empId: 'mirandaS', name: 'Go Ninja Lead',    loc: 'goninja',  branch: 'GONINJA', color: '#ea580c' },
 ];
 
@@ -4678,7 +4699,8 @@ function hbGuessSeat(name){
   if (map[hbKey(name)]) return map[hbKey(name)];
   const n = (name || '').toLowerCase();
   if (n.includes('goad')) return 'bryanG';
-  if (n.includes('bein')) return 'nikkiB';
+  if (n.includes('ash')) return 'ash';
+  if (n.includes('murrell') || n.includes('tarik')) return 'tarikM';
   if (n.includes('zaworski')) return 'joeyZ';
   if (n.includes('smith')) return 'mirandaS';
   return '';
@@ -4933,7 +4955,7 @@ function setScLoc(l){ state.scLoc = l; render(); }
 
 /* ── Weekly instructor scorecard (one row per Sunday, monthly goal + auto total) ── */
 // Lead instructor (retention owner) per LVLUP school
-const SCHOOL_LEADS = { waunakee:'Master Moh', verona:'Mr. Goad', eastmad:'Ms. Mouille' };
+const SCHOOL_LEADS = { waunakee:'Master Moh', verona:'Mr. Goad', eastmad:'Ash' };
 const SC_WEEKLY_COLS = [
   { id:'firstDayTrials', short:'First-Day Trials', agg:'sum', ownerLead:true },
   { id:'dayOneEnroll',   short:'Day-One Enroll',   agg:'sum', ownerLead:true },
