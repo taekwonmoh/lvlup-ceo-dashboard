@@ -5586,7 +5586,7 @@ function kpiImportGymdesk(input){
       fbSet(base + curName + '/total', active);
       let summary = 'Active total: ' + active + '  →  set on ' + curName + '\nNew members (' + yr + '):';
       Object.keys(newByMonth).map(Number).sort((a, b) => a - b).forEach(mo => { fbSet(base + months[mo - 1] + '/newMem', newByMonth[mo]); summary += '\n  ' + months[mo - 1] + ': ' + newByMonth[mo]; });
-      alert('Imported for ' + ((LOCATIONS.find(l => l.id === loc) || {}).name || loc) + '\n\n' + summary + '\n\nNEXT: click "Update members app roster" and upload this same file \u2014 otherwise families cannot find their kids in the members app.\n\n(Members Lost isn’t in this export — enter it in the table or it stays as-is.)');
+      alert('Imported for ' + ((LOCATIONS.find(l => l.id === loc) || {}).name || loc) + '\n\n' + summary + '\n\nThis updated the KPIs only. To update the members app as well \u2014 belts, sign-in, the First 5 \u2014 upload the same file at "Update members app roster"; that one writes these KPIs back here too, so it does both.\n\n(Members Lost isn’t in this export — enter it in the table or it stays as-is.)');
     } catch (e) { alert('Import failed: ' + e.message); }
     input.value = '';
   };
@@ -5606,7 +5606,7 @@ function renderKPIsPage() {
       html += '<select id="kpiImportLoc" style="border:1px solid #cbd3e6;border-radius:8px;padding:6px 8px;font-size:12px;font-family:inherit;">' + LOCATIONS.map(function(l){return '<option value="'+l.id+'">'+esc(l.name)+'</option>';}).join('') + '</select>';
       html += '<input type="file" accept=".csv" onchange="kpiImportGymdesk(this)" style="font-size:12px;">';
       html += '<button onclick="kpiOpenRosterImport()" style="border:1px solid #1a1a2e;background:#1a1a2e;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;">Update members app roster &rarr;</button>';
-      html += '<span style="flex-basis:100%;font-size:11px;color:#666;">The same export also keeps the members app current \u2014 belts, sign-in and the First 5. Upload it there too, same location.</span>';
+      html += '<span style="flex-basis:100%;font-size:11px;color:#666;">Uploading the export <b>there</b> does both \u2014 it refreshes the members app (belts, sign-in, the First 5) <i>and</i> writes these membership KPIs. Uploading here does the KPIs only.</span>';
       html += '</div>';
       html += '<div class="kpi-charts-section" style="margin-top:8px"><h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--primary)">Trend Charts</h3>';
       html += '<div class="kpi-charts-grid">';
