@@ -875,6 +875,7 @@ let state = {
   acq: { pinLoaded: false, pin: null, unlocked: false, monthOffset: 0, data: {}, _listeningMk: null, pinError: false },
   mktTab: 'content',
   contentRequests: {},
+  taskPhotoFeed: {},
   crDraft: null,
   crFilter: 'all',
   classPlaybook: {},
@@ -1985,6 +1986,9 @@ function listenAll() {
 
   const crRef = fbRef('contentRequests');
   crRef.on('value', snap => { state.contentRequests = snap.val() || {}; render(); });
+
+  const photoFeedRef = fbRef('taskPhotoFeed');
+  photoFeedRef.on('value', snap => { state.taskPhotoFeed = snap.val() || {}; render(); });
   activeListeners.push({ ref: crRef, event: 'value' });
 
   // Leadership (PIN-gated owner page): PIN, daily tracker, homebase clock, perf, sign-offs
@@ -2054,7 +2058,7 @@ function migrateFeedbackTrackingToAll() {
 function setSection(s) {
   state.activeSection = s;
   // Remember last-visited sub-section per group so tabs restore correctly
-  if (['tasks','events','testing','accountability','inventory'].includes(s)) state.opsSection = s;
+  if (['tasks','events','testing','accountability','inventory','photos'].includes(s)) state.opsSection = s;
   if (['goals','marketing','scorecard','rocks','financials'].includes(s)) state.growthSection = s;
   render();
 }
@@ -2281,12 +2285,14 @@ function renderOpsPage() {
     { id: 'testing',        label: '🥋 Testing'       },
     { id: 'accountability', label: '⏱ Accountability' },
     { id: 'inventory',      label: '📦 Inventory'     },
+    { id: 'photos',         label: '📸 Photos'        },
   ]);
   const pulse = renderPulseBar();
   if (s === 'events')         return pulse + nav + renderEventsPage();
   if (s === 'testing')        return pulse + nav + renderTestingPrepPage();
   if (s === 'accountability') return pulse + nav + renderAccountabilityPage();
   if (s === 'inventory')      return pulse + nav + renderInventoryPage();
+  if (s === 'photos')         return pulse + nav + renderPhotosGallery();
   return pulse + nav + renderTasksPage();
 }
 
@@ -2646,6 +2652,36 @@ function renderInventoryPage(){
   h += '</tbody></table></div>';
   h += '<button class="l10-add-btn" onclick="invAdd()" style="margin-top:12px;">+ Add item</button>';
   h += '</div>';
+  return h;
+}
+
+/* ── Facility Photos gallery — recent daily/weekly photos across all schools ── */
+function photoSetFilter(f){ state.photoFilter = f; render(); }
+function photoDayLabel(d){ const t=new Date(); t.setHours(0,0,0,0); const dd=new Date(d); dd.setHours(0,0,0,0); const diff=Math.round((t-dd)/86400000); if(diff===0) return 'Today'; if(diff===1) return 'Yesterday'; return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
+function renderPhotosGallery(){
+  const feed = Object.entries(state.taskPhotoFeed || {}).map(([id,v]) => ({id,...(v||{})})).filter(x => x && x.url);
+  feed.sort((a,b) => (b.at||0)-(a.at||0));
+  const filter = state.photoFilter || 'all';
+  const people = [...new Set(feed.map(f => f.who).filter(Boolean))];
+  const shown = (filter==='all' ? feed : feed.filter(f => f.who===filter)).slice(0,150);
+  let h = '<div class="page" style="max-width:1100px;">';
+  h += '<div style="margin-bottom:14px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">📸 Facility Photos</h2><p style="margin:0;font-size:13px;color:#888;">Recent daily & weekly photos uploaded from the team’s task sheets — bathrooms, training floor, instructor stations, announcements & event signage.</p></div>';
+  const chip = (id,l) => '<button onclick="photoSetFilter(\'' + id.replace(/'/g,"\\'") + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter===id?'#1a1a2e':'#f1f3f9') + ';color:' + (filter===id?'#fff':'#555') + ';">' + esc(l) + '</button>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + chip('all','All') + people.map(p => chip(p,p)).join('') + '</div>';
+  if(!shown.length){ h += '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;margin-top:8px;">No photos yet. They’ll appear here as the team taps “Add Photo” on their daily and weekly task sheets.</div>'; return h + '</div>'; }
+  let lastDay='';
+  shown.forEach(f => {
+    const d=new Date(f.at||0), dayKey=d.toDateString();
+    if(dayKey!==lastDay){ if(lastDay) h+='</div>'; h+='<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin:16px 0 8px;">'+esc(photoDayLabel(d))+'</div><div style="display:flex;flex-wrap:wrap;gap:12px;">'; lastDay=dayKey; }
+    const tm=d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    h+='<a href="'+esc(f.url)+'" target="_blank" rel="noopener" style="width:150px;text-decoration:none;color:inherit;display:block;">';
+    h+='<img src="'+esc(f.url)+'" loading="lazy" style="width:150px;height:150px;object-fit:cover;border-radius:10px;border:1px solid #e8eaf0;display:block;">';
+    h+='<div style="font-size:11px;font-weight:700;color:#0f3460;margin-top:5px;line-height:1.3;">'+esc(f.label||'Photo')+'</div>';
+    h+='<div style="font-size:10px;color:#888;">'+esc(f.who||'')+' · '+tm+'</div>';
+    h+='</a>';
+  });
+  h+='</div>'; // close last day grid
+  h+='</div>';
   return h;
 }
 
@@ -3094,7 +3130,7 @@ function render() {
   app.innerHTML = renderHeader() +
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
-     ['tasks','events','testing','accountability','inventory'].includes(s)    ? renderOpsPage()       :
+     ['tasks','events','testing','accountability','inventory','photos'].includes(s)    ? renderOpsPage()       :
      ['feedback','watchlist','holds','applications','firstfive'].includes(s)              ? renderMembersPage()   :
      ['goals','marketing','scorecard','rocks','financials'].includes(s)       ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
@@ -3107,7 +3143,7 @@ function renderHeader() {
   const cur = state.activeSection;
   const getGroup = s => {
     if (s === 'home') return 'home';
-    if (['tasks','events','testing','accountability','inventory'].includes(s)) return 'ops';
+    if (['tasks','events','testing','accountability','inventory','photos'].includes(s)) return 'ops';
     if (['feedback','watchlist','holds','applications','firstfive'].includes(s)) return 'members';
     if (['goals','marketing','monthlyGoals','scorecard','rocks','financials','performance'].includes(s)) return 'growth';
     if (s === 'development')                                   return 'resources';
@@ -6856,6 +6892,11 @@ async function taskPhotoUpload(section,taskId,input){
     const {base}=taskPathFor(section);
     const photos=(taskDoneRec(section,taskId).photos||[]).concat(url);
     fbSet(base+taskId,{ts:Date.now(),photos});
+    // Index into the recent-photos feed (cross-school gallery)
+    const list=section==='weekly'?getWeeklyRec(state.tasksLoc):getDailyTasks(state.tasksLoc);
+    const t=(list||[]).find(x=>x.id===taskId); const label=((t&&t.text)||taskId).split(':')[0].trim();
+    const emp=getEmpById(state.tasksLoc)||{};
+    fbSet('taskPhotoFeed/f_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),{empId:state.tasksLoc,who:emp.name||state.tasksLoc,label,url,section,at:Date.now()});
   }catch(e){ if(stat)stat.textContent=''; alert('Photo upload failed: '+(e.message||e)); }
 }
 function taskPhotoRemove(section,taskId,idx){
