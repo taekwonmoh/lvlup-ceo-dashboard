@@ -2615,21 +2615,22 @@ function renderInventoryPage(){
   all.forEach(i => { const st = i.status || 'needed'; counts[st] = (counts[st] || 0) + 1; });
   const shown = filter === 'all' ? all : all.filter(i => (i.status || 'needed') === filter);
   const inCss = 'width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;box-sizing:border-box;';
-  let h = '<div class="page" style="max-width:1040px;">';
+  let h = '<div class="page" style="max-width:1180px;">';
   h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">📦 Items to Order</h2><p style="margin:0;font-size:13px;color:#888;">Inventory reorder list · owned by Cat. Add anything running low, mark it Ordered, then Received.</p></div>';
   const stat = (n, l, c) => '<div style="flex:1;min-width:88px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:12px 14px;text-align:center;box-shadow:var(--shadow);"><div style="font-size:20px;font-weight:800;color:' + c + ';">' + n + '</div><div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;">' + l + '</div></div>';
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' + stat(all.length, 'Total', '#1a1a2e') + stat(counts.needed, 'Needed', '#d97706') + stat(counts.ordered, 'Ordered', '#2563eb') + stat(counts.received, 'Received', '#16a34a') + '</div>';
   const chip = (id, l) => '<button onclick="invSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + l + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All') + chip('needed', 'Needed') + chip('ordered', 'Ordered') + chip('received', 'Received') + '</div>';
   h += '<div style="overflow-x:auto;"><table class="sc-table" style="width:100%;"><thead><tr>';
-  h += '<th style="text-align:left;">Item</th><th style="width:80px;">Qty</th><th style="width:110px;">Location</th><th style="text-align:left;">Vendor / Link</th><th style="width:220px;">Status</th><th style="text-align:left;">Notes</th><th style="width:34px;"></th>';
+  h += '<th style="text-align:left;min-width:170px;">Item</th><th style="width:80px;">Qty</th><th style="width:110px;">Location</th><th style="text-align:left;">Vendor / Link</th><th style="width:220px;">Status</th><th style="text-align:left;min-width:240px;">Notes</th><th style="width:34px;"></th>';
   h += '</tr></thead><tbody>';
   if (!shown.length) h += '<tr><td colspan="7" style="padding:16px;text-align:center;color:#aaa;font-size:13px;">' + (all.length ? 'No ' + filter + ' items.' : 'Nothing on the list yet — tap “+ Add item” to start.') + '</td></tr>';
   shown.forEach(it => {
     const locOpts = '<option value="">—</option>' + LOCATIONS.map(l => '<option value="' + l.id + '"' + (it.location === l.id ? ' selected' : '') + '>' + esc(l.short || l.name) + '</option>').join('');
     const isUrl = /^https?:\/\//i.test(it.vendor || '');
     h += '<tr>';
-    h += '<td><input value="' + esc(it.name || '') + '" placeholder="Item name..." onchange="invUpdate(\'' + it.id + '\',\'name\',this.value)" style="' + inCss + 'font-weight:600;" /></td>';
+    const nameRows = Math.min(8, Math.max(1, Math.ceil((it.name || '').length / 22)));
+    h += '<td><textarea rows="' + nameRows + '" placeholder="Item name..." onchange="invUpdate(\'' + it.id + '\',\'name\',this.value)" oninput="this.style.height=\'auto\';this.style.height=(this.scrollHeight+2)+\'px\'" style="width:100%;min-width:160px;border:1px solid var(--gray-200);border-radius:6px;padding:6px 8px;font-size:13px;font-weight:600;font-family:inherit;box-sizing:border-box;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;resize:vertical;field-sizing:content;">' + esc(it.name || '') + '</textarea></td>';
     h += '<td><input value="' + esc(it.qty || '') + '" placeholder="2" onchange="invUpdate(\'' + it.id + '\',\'qty\',this.value)" style="' + inCss + '" /></td>';
     h += '<td><select onchange="invUpdate(\'' + it.id + '\',\'location\',this.value)" style="' + inCss + '">' + locOpts + '</select></td>';
     h += '<td><div style="display:flex;gap:5px;align-items:center;"><input value="' + esc(it.vendor || '') + '" placeholder="Vendor or paste link" onchange="invUpdate(\'' + it.id + '\',\'vendor\',this.value)" style="' + inCss + '" />' + (isUrl ? '<a href="' + esc(it.vendor) + '" target="_blank" title="Open link" style="text-decoration:none;font-size:16px;flex-shrink:0;">↗</a>' : '') + '</div></td>';
@@ -2637,7 +2638,8 @@ function renderInventoryPage(){
     INV_STATUS.forEach(s => { const on = (it.status || 'needed') === s.id; sb += '<button onclick="invSetStatus(\'' + it.id + '\',\'' + s.id + '\')" style="padding:4px 8px;border-radius:7px;border:1px solid ' + (on ? s.color : '#e3e6ef') + ';background:' + (on ? s.color : '#fff') + ';color:' + (on ? '#fff' : '#666') + ';font-size:11px;font-weight:700;cursor:pointer;">' + (on ? '✓ ' : '') + s.label + '</button>'; });
     sb += '</div>';
     h += '<td>' + sb + '</td>';
-    h += '<td><input value="' + esc(it.notes || '') + '" placeholder="Notes..." onchange="invUpdate(\'' + it.id + '\',\'notes\',this.value)" style="' + inCss + '" /></td>';
+    const noteRows = Math.min(14, Math.max(2, Math.ceil((it.notes || '').length / 34) + ((it.notes || '').match(/\n/g) || []).length));
+    h += '<td><textarea rows="' + noteRows + '" placeholder="Notes..." onchange="invUpdate(\'' + it.id + '\',\'notes\',this.value)" oninput="this.style.height=\'auto\';this.style.height=(this.scrollHeight+2)+\'px\'" style="width:100%;min-width:230px;border:1px solid var(--gray-200);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;box-sizing:border-box;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;resize:vertical;field-sizing:content;">' + esc(it.notes || '') + '</textarea></td>';
     h += '<td style="text-align:center;"><button onclick="invDelete(\'' + it.id + '\')" title="Remove" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;">&times;</button></td>';
     h += '</tr>';
   });
