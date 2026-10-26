@@ -5192,18 +5192,39 @@ const GONINJA_COLS = [
 function cancelAdd(loc){ fbSet('cancellations/' + loc + '/c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), { name:'', date:'', reason:'', notes:'' }); }
 function cancelUpdate(loc, key, field, value){ fbDebounce('cancellations/' + loc + '/' + key + '/' + field, value === '' ? null : value); }
 function cancelRemove(loc, key){ if (!confirm('Remove this cancellation entry?')) return; fbSet('cancellations/' + loc + '/' + key, null); }
+function cancelFmtDate(s){ if(!s) return '—'; const d=new Date(String(s).slice(0,10)+'T00:00:00'); if(isNaN(d)) return esc(String(s).slice(0,10)); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getDate(); }
 function renderCancellationDetails(loc){
   const meta = LOCATIONS.find(l => l.id === loc) || { name: loc, color: '#1a1a2e' };
+  const mk = scdMonthKey();   // the scorecard's selected month
+  const monthLabel = scdMonthDate().toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  // Auto-imported: this month's form cancellations for this location
+  const auto = Object.entries(state.cancellationRequests || {})
+    .map(([id, v]) => ({ id, ...(v || {}) }))
+    .filter(r => r && (r.location || '') === loc && /cancel/i.test(r.action || '') && (r.cancelDate || r.timestamp || '').slice(0, 7) === mk)
+    .sort((a, b) => (b.cancelDate || b.timestamp || '').localeCompare(a.cancelDate || a.timestamp || ''));
+  // Manual off-form save-list entries
   const rows = Object.entries((state.cancellations || {})[loc] || {})
     .map(([k, v]) => ({ key: k, ...(v || {}) }))
-    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));   // most recent first
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const inCss = 'width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;box-sizing:border-box;';
   let h = '<div class="section" style="margin-bottom:22px;">';
-  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📞 Cancellation Details — ' + esc(meta.name) + '</h2><span style="font-size:11px;color:var(--gray-400);font-weight:600;">Save list — work to keep these students · form cancellations live on Members → Holds &amp; Cancellations</span></div>';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📞 Cancellation Details — ' + esc(meta.name) + '</h2><span style="font-size:11px;color:var(--gray-400);font-weight:600;">Auto-imported from ' + esc(monthLabel) + ' form cancellations · add your save-the-student next steps</span></div>';
   h += '<div style="overflow-x:auto;"><table class="sc-table" style="width:100%;"><thead><tr>';
-  h += '<th style="text-align:left;">Student Name</th><th style="text-align:center;width:140px;">Cancellation Date</th><th style="text-align:left;width:22%;">Reason</th><th style="text-align:left;">Notes for Next Steps</th><th style="width:36px;"></th>';
+  h += '<th style="text-align:left;">Student Name</th><th style="text-align:center;width:130px;">Cancellation Date</th><th style="text-align:left;width:30%;">Reason</th><th style="text-align:left;">Notes for Next Steps</th><th style="width:36px;"></th>';
   h += '</tr></thead><tbody>';
-  if (!rows.length){ h += '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--gray-400);font-size:13px;">No manual cancellations logged. Form submissions are tracked on Members → Holds &amp; Cancellations; add one here only for off-form notes.</td></tr>'; }
+  if (!auto.length && !rows.length){ h += '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--gray-400);font-size:13px;">No cancellations for ' + esc(monthLabel) + '. Form submissions appear here automatically; use “+ Add” for an off-form note.</td></tr>'; }
+  // Auto rows (from the Google Form → read-only student/date/reason, editable next steps)
+  auto.forEach(r => {
+    const reason = [r.reasonCancel, r.feedback].filter(x => x && String(x).trim()).join(' — ');
+    h += '<tr style="background:#f8fbff;">';
+    h += '<td style="font-weight:600;color:#0f3460;">' + esc(r.name || '—') + ' <span title="From the cancellation form" style="font-size:9px;font-weight:800;color:#2563eb;background:#dbeafe;padding:1px 6px;border-radius:999px;vertical-align:middle;">FORM</span>' + (r.rank ? '<div style="font-size:10px;color:#94a3b8;font-weight:600;">' + esc(r.rank) + '</div>' : '') + '</td>';
+    h += '<td style="text-align:center;color:#555;">' + cancelFmtDate(r.cancelDate || r.timestamp) + '</td>';
+    h += '<td style="color:#555;font-size:12.5px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;">' + (reason ? esc(reason) : '<span style="color:#bbb;">—</span>') + '</td>';
+    h += '<td><input value="' + esc(r.retentionNotes || '') + '" placeholder="Next steps to save them..." onchange="crqSetNotes(\'' + r.id + '\',this.value)" style="' + inCss + 'border-color:' + (r.retentionNotes ? '#16a34a' : 'var(--gray-200)') + ';" /></td>';
+    h += '<td style="text-align:center;"><a href="#" onclick="setSection(\'holds\');return false;" title="Open in Holds &amp; Cancellations" style="text-decoration:none;color:#94a3b8;font-size:14px;">↗</a></td>';
+    h += '</tr>';
+  });
+  // Manual off-form rows (fully editable + removable)
   rows.forEach(r => {
     h += '<tr>';
     h += '<td><input value="' + esc(r.name || '') + '" placeholder="Student name..." onchange="cancelUpdate(\'' + loc + '\',\'' + r.key + '\',\'name\',this.value)" style="' + inCss + '" /></td>';
@@ -5214,7 +5235,7 @@ function renderCancellationDetails(loc){
     h += '</tr>';
   });
   h += '</tbody></table></div>';
-  h += '<button class="l10-add-btn" onclick="cancelAdd(\'' + loc + '\')">+ Add Cancellation</button>';
+  h += '<button class="l10-add-btn" onclick="cancelAdd(\'' + loc + '\')">+ Add off-form cancellation</button>';
   h += '</div>';
   return h;
 }
