@@ -4298,7 +4298,7 @@ function renderTcSchedule(){
     days.forEach(d => {
       const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
       h += '<td style="text-align:center;vertical-align:top;padding:4px;">';
-      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div style="background:' + c + ';color:#fff;border-radius:6px;padding:3px 5px;margin-bottom:3px;font-size:11px;line-height:1.25;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + ' <button onclick="tcRemoveShift(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="Remove" style="background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;padding:0;font-size:11px;">✕</button></div>'; });
+      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div style="background:' + c + ';color:#fff;border-radius:6px;padding:3px 5px;margin-bottom:3px;font-size:11px;line-height:1.25;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + ' <button onclick="tcRemoveShift(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="Remove" style="background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;padding:0;font-size:11px;">✕</button></div>'; });
       h += '<button onclick="tcAddShift(\'' + s.id + '\',\'' + dk + '\',\'' + (filter !== 'all' ? filter : '') + '\')" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
       h += '</td>';
     });
@@ -4319,7 +4319,7 @@ function renderTcMySchedule(id){
   let h = '<div style="background:#fff;border-radius:16px;margin-top:14px;padding:16px;">';
   h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">📅 ' + esc(st.name || '') + ' — next 7 days</div>';
   if (!items.length) h += '<div style="color:#aaa;font-size:13px;">No shifts scheduled.</div>';
-  items.forEach(it => { const loc = LOCATIONS.find(l => l.id === it.sh.loc) || {}; h += '<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;font-size:13px;"><span style="font-weight:700;min-width:70px;">' + dow[it.d.getDay()] + ' ' + (it.d.getMonth() + 1) + '/' + it.d.getDate() + '</span><span>' + tcFmtHM(it.sh.start) + '–' + tcFmtHM(it.sh.end) + '</span><span style="color:#888;">' + esc(loc.short || loc.name || '') + '</span></div>'; });
+  items.forEach(it => { const loc = LOCATIONS.find(l => l.id === it.sh.loc) || {}; h += '<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;font-size:13px;"><span style="font-weight:700;min-width:70px;">' + dow[it.d.getDay()] + ' ' + (it.d.getMonth() + 1) + '/' + it.d.getDate() + '</span><span>' + tcFmtHM(it.sh.start) + '–' + tcFmtHM(it.sh.end) + (it.sh.role ? ' <span style="color:#aaa;">' + esc(it.sh.role) + '</span>' : '') + '</span><span style="color:#888;">' + esc(loc.short || loc.name || '') + '</span></div>'; });
   h += '</div>';
   return h;
 }
@@ -4498,7 +4498,7 @@ function renderTcTeamSchedule(){
     days.forEach(d => {
       const dk = tcDateKey(d); const shifts = Object.values(sched[dk] || {}).filter(Boolean).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
       h += '<td style="text-align:center;padding:3px;vertical-align:top;">';
-      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div style="background:' + c + ';color:#fff;border-radius:5px;padding:2px 3px;margin-bottom:2px;line-height:1.2;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + '</div>'; });
+      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div style="background:' + c + ';color:#fff;border-radius:5px;padding:2px 3px;margin-bottom:2px;line-height:1.2;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.9;font-size:9px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
       if (!shifts.length) h += '<span style="color:#e0e0e0;">·</span>';
       h += '</td>';
     });
