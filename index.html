@@ -969,98 +969,88 @@ const WALL_TYPES = [
 ];
 
 /*  -  -  Task Definitions  -  -  */
+// ── Shared task building blocks ────────────────────────────────────────────
+const TASK_STOPLIGHT = {id:'stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Review the stoplight report, then send a minimum of 2 Loom videos or 2 postcards — log how many you sent today.'};
+const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students / class counts, check attendance, and post in your location channel about anyone starting today.'};
+const TASK_EOS       = {id:'eos',       cat:'Closing & EOS',   text:'Post your EOS report in Slack at clockout.'};
+// Daily facility-refresh photos — tap to upload straight to the dashboard
+const DAILY_PHOTOS = [
+  {id:'ph_bathroom', cat:'Facility Refresh', photo:true, multi:true, icon:'📸', text:'Bathroom Refresh: freshen up each bathroom, then snap a photo.'},
+  {id:'ph_floor',    cat:'Facility Refresh', photo:true,            icon:'📸', text:'Training Floor: wide photo of the floor + bag racks showing a clean, professional look.'},
+];
+// Weekly facility photos — announcement board differs by school (whiteboard at Waunakee, mirror elsewhere)
+function weeklyPhotos(board){ return [
+  {id:'ph_announce', photo:true, icon:'📸', text:'Announcements: refresh the ' + board + ' with upcoming events, then snap a photo.'},
+  {id:'ph_station',  photo:true, icon:'📸', text:'Instructor Station: deep clean & organize it, then snap a photo.'},
+  {id:'ph_signage',  photo:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
+]; }
+// Weekly Buffer content — 3 scheduled posts, each described for accountability
+const TASK_BUFFER = {id:'cc_content', icon:'📱', contentPillars:true, posts:3, text:'Capture Content: schedule & post 3 pieces of content this week in Buffer — describe each one below.'};
+
 // ── Per-employee daily task lists ──────────────────────────────────────────
 const BRYAN_DAILY = [
-  {id:'b_opening',   text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
-  {id:'b_stoplight', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Send a minimum of 2 Loom videos or 2 postcards to keep members connected — log how many you sent today.'},
-  {id:'b_closing',   text:'Closing Routine & Venue Check: Spot check/freshen up the men\'s bathroom, straighten the training floor, review rosters, update location Slack regarding new students, and submit the EOS report.'},
+  {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
+  TASK_STOPLIGHT,
+  TASK_ROSTERS,
+  ...DAILY_PHOTOS,
+  {id:'closing', cat:'Closing & EOS', text:'Closing Routine & Venue Check: Straighten the training floor, review rosters, and update the location Slack.'},
+  TASK_EOS,
 ];
 const ASH_DAILY = [
-  {id:'n_opening',   text:'Opening Routine: Turn on TV announcements and ensure the EMAD facility is ready for students.'},
-  {id:'n_stoplight', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Send a minimum of 2 Loom videos or 2 postcards to keep EMAD members connected — log how many you sent today.'},
-  {id:'n_closing',   text:'Closing Routine: Spot check/freshen up EMAD bathrooms, review rosters, update location Slack, and submit the EOS report.'},
+  {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the facility is ready for students.'},
+  TASK_STOPLIGHT,
+  TASK_ROSTERS,
+  ...DAILY_PHOTOS,
+  {id:'closing', cat:'Closing & EOS', text:'Closing Routine: Review rosters, straighten the floor, and update the location Slack.'},
+  TASK_EOS,
 ];
 const JOEY_DAILY = [
-  {id:'j_tv',        cat:'Pre-Class Admin', text:'Turn on TV announcements (message @jam in #LVLUPHQ if anything needs updating).'},
-  {id:'j_stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Review the stoplight report, then send a minimum of 2 Loom videos or 2 postcards — log how many you sent today.'},
-  {id:'j_rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students/class counts, check attendance numbers, and post in your location channel about anyone starting today.'},
-  {id:'j_wetmop',    cat:'Pre-Class Admin', days:[1,2,3], text:'Wet mop the training floors before classes.'},
-  {id:'j_greenmachine', cat:'Pre-Class Admin', days:[4], icon:'📸', text:'Run the green machine on the training floors, then post a photo to #LVLUPHQ.'},
-  {id:'j_spray',     cat:'Closing & EOS',   text:'Spray mop the training floors.'},
-  {id:'j_eos',       cat:'Closing & EOS',   text:'Post your EOS report in Slack at clockout.'},
+  {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Ensure the instructor station is clean, organized, and ready.'},
+  TASK_STOPLIGHT,
+  TASK_ROSTERS,
+  {id:'j_wetmop', cat:'Pre-Class Admin', days:[1,2,3], text:'Wet mop the training floors before classes.'},
+  {id:'j_greenmachine', cat:'Pre-Class Admin', days:[4], photo:true, icon:'📸', text:'Run the green machine on the training floors, then snap a photo.'},
+  ...DAILY_PHOTOS,
+  {id:'j_spray', cat:'Closing & EOS', text:'Spray mop the training floors.'},
+  TASK_EOS,
+];
+const TARIK_DAILY = [
+  {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
+  TASK_STOPLIGHT,
+  TASK_ROSTERS,
+  ...DAILY_PHOTOS,
+  {id:'closing', cat:'Closing & EOS', text:'Closing Routine & Venue Check: Straighten the training floor, review rosters, and update the location Slack.'},
+  TASK_EOS,
 ];
 const MIRANDA_DAILY = [
-  {id:'m_opening',  text:'Opening Routine: Clock in and prep the Waunakee GoNinja facility for daily operations.'},
-  {id:'m_floor',    text:'Floor Maintenance: Spot clean / mop training areas if needed.'},
-  {id:'m_closing',  text:'Closing Routine & Girl\'s Bathroom Refresh: Wipe down sinks/counters, sweep floor, empty trash, check soap/paper towels, ensure the front desk is organized, and submit the EOS report via Slack.'},
+  {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Clock in and prep the Go Ninja facility for daily operations.'},
+  {id:'ph_bathroom', cat:'Facility Refresh', photo:true, multi:true, icon:'📸', text:'Bathroom Refresh: freshen up each bathroom, then snap a photo.'},
+  {id:'ph_floor',    cat:'Facility Refresh', photo:true,            icon:'📸', text:'Gym Floor: wide photo of the obstacle / training area showing a clean, professional look.'},
+  {id:'closing', cat:'Closing & EOS', text:'Closing Routine & Bathroom Refresh: Wipe down sinks/counters, sweep floor, empty trash, check soap/paper towels, ensure the front desk is organized, and submit the EOS report via Slack.'},
 ];
 // ── Per-employee weekly task lists ─────────────────────────────────────────
-const BRYAN_WEEKLY = [
-  {id:'b_saturday',         text:'Saturday Morning Standards: Arrive a minimum of 30 minutes before the first class to prep the facility and greet early students.'},
-  {id:'b_instructor_audit', text:'Instructor Station Audit: Deep clean the instructor station, organize all gear, and post a verification photo to #LVLUPHQ.'},
-  {id:'b_mirror_detail',    text:'Training Floor & Mirror Detail: Dust/wipe down the training area mirrors and ensure all floor equipment is perfectly organized.'},
-  {id:'b_homebase',         text:'Monday Schedule Check: Verify the Homebase schedule to ensure proper coverage of classes and assistants.'},
-  {id:'b_bathroom_photos',  text:'Bathroom Photo Verification: Post 1 photo of toilets + 1 showing overall cleanliness to #LVLUPHQ.'},
-  {id:'b_announcements',    text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
-  {id:'b_mop_mats',         text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
-  {id:'b_dots',             text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
-  {id:'b_supplies',         text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
-  {id:'b_ad_invites',       text:'Program Growth: Invite 2 students to try the AD class + post names to #LVLUPHQ.'},
-  {id:'b_lifelinks',        text:'Student Milestones: Review LifeLinks, award belt clips + post to #LVLUPHQ.'},
-  {id:'b_scorecard',        text:'Update your scorecard numbers in the dashboard for this week.'},
-  {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
-];
-const ASH_WEEKLY = [
-  {id:'n_homebase',        text:'Monday Schedule Check: Verify the Homebase schedule to ensure proper coverage of classes and assistants.'},
-  {id:'n_bathroom_photos', text:'Bathroom Photo Verification: Post 1 photo of toilets + 1 showing overall cleanliness to #LVLUPHQ.'},
-  {id:'n_announcements',   text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
-  {id:'n_mop_mats',        text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
-  {id:'n_dots',            text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
-  {id:'n_supplies',        text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
-  {id:'n_ad_invites',      text:'Program Growth: Invite 2 students to try the AD class + post names to #LVLUPHQ.'},
-  {id:'n_lifelinks',       text:'Student Milestones: Review LifeLinks, award belt clips + post to #LVLUPHQ.'},
-  {id:'n_instructor_stn',  text:'Instructor Station: Clean instructor station + take photo for #LVLUPHQ.'},
-  {id:'n_scorecard',       text:'Update your scorecard numbers in the dashboard for this week.'},
-  {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
-];
-const JOEY_WEEKLY = [
-  {id:'j_homebase',        text:'Monday Schedule Check: Review the Homebase schedule to confirm proper class coverage for the week.'},
-  {id:'j_announcements',   text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
-  {id:'j_mop_mats',        text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
-  {id:'j_supplies',        text:'Inventory Control: Check front desk/facility supplies and message #inventory with restocking needs.'},
-  {id:'j_ad_invites',      text:'Program Growth: Invite 2 students to try the AD class + post their names to #LVLUPHQ.'},
-  {id:'j_lifelinks',       text:'Student Milestones: Review LifeLinks and award belt clips + post to #LVLUPHQ.'},
-  {id:'j_instructor_stn',  text:'Instructor Station Deep Clean: Clean instructor station + take photo for #LVLUPHQ.'},
-  {id:'j_scorecard',       text:'Update your scorecard numbers in the dashboard for this week.'},
-  {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
-];
+function lvlupWeekly(board){ return [
+  {id:'schedule',  text:'Monday Schedule Check: Review the week’s schedule to confirm proper class & assistant coverage.'},
+  ...weeklyPhotos(board),
+  {id:'mop_mats',  text:'Mat Maintenance: Wet mop the mats.'},
+  {id:'dots',      text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
+  {id:'supplies',  text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
+  {id:'ad_invites',text:'Program Growth: Invite 2 students to try the AD class + post names to #LVLUPHQ.'},
+  {id:'lifelinks', text:'Student Milestones: Review LifeLinks and award belt clips + post to #LVLUPHQ.'},
+  TASK_BUFFER,
+]; }
+const BRYAN_WEEKLY = lvlupWeekly('mirror');
+const ASH_WEEKLY   = lvlupWeekly('mirror');
+const JOEY_WEEKLY  = lvlupWeekly('mirror');
+const TARIK_WEEKLY = lvlupWeekly('whiteboard');
 const MIRANDA_WEEKLY = [
   {id:'m_party_reset',    text:'Friday Event Prep: Reset the party room for weekend birthday parties + post verification photo to #LVLUPHQ.'},
   {id:'m_party_cleanup',  text:'Party Room Breakdown: Clean up the party room post-event + post photo to #LVLUPHQ.'},
   {id:'m_mop_mats',       text:'Mat Maintenance: Mop mats and sanitize obstacles + post photo to #LVLUPHQ.'},
-  {id:'m_dust',           text:'Facility Inspection: Dust all facility trim and cabinets.'},
+  {id:'ph_station',  photo:true, icon:'📸', text:'Front Desk / Instructor Station: clean & organize it, then snap a photo.'},
+  {id:'ph_signage',  photo:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
   {id:'m_party_supplies', text:'Inventory Control: Check party supplies inventory and message #LVLUPHQ if items are running low.'},
-  {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
-];
-// ── Routing maps (fallback to legacy shared arrays if no per-emp entry) ───
-// Tarik — LVLUP Waunakee lead (mirrors the Ash/Joey/Bryan lead checklist)
-const TARIK_DAILY = [
-  {id:'t_opening',   cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the Waunakee instructor station is clean, organized, and ready.'},
-  {id:'t_stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Review the stoplight report, then send a minimum of 2 Loom videos or 2 postcards — log how many you sent today.'},
-  {id:'t_rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students/class counts, check attendance, and post in your location channel about anyone starting today.'},
-  {id:'t_closing',   cat:'Closing & EOS',   text:'Closing Routine & Venue Check: Spot check/freshen up the bathrooms, straighten the training floor, review rosters, update location Slack, and submit the EOS report.'},
-  {id:'t_eos',       cat:'Closing & EOS',   text:'Post your EOS report in Slack at clockout.'},
-];
-const TARIK_WEEKLY = [
-  {id:'t_homebase',        text:'Monday Schedule Check: Review the week’s schedule to confirm proper class coverage.'},
-  {id:'t_announcements',   text:'Update Announcements: Refresh mirror/board announcements + post photo to #LVLUPHQ.'},
-  {id:'t_mop_mats',        text:'Mat Maintenance: Wet mop mats + post photo to #LVLUPHQ.'},
-  {id:'t_supplies',        text:'Inventory Control: Check facility supplies and message #inventory with restocking needs.'},
-  {id:'t_ad_invites',      text:'Program Growth: Invite 2 students to try the AD class + post their names to #LVLUPHQ.'},
-  {id:'t_lifelinks',       text:'Student Milestones: Review LifeLinks and award belt clips + post to #LVLUPHQ.'},
-  {id:'t_instructor_stn',  text:'Instructor Station Deep Clean: Clean instructor station + take photo for #LVLUPHQ.'},
-  {id:'t_scorecard',       text:'Update your scorecard numbers in the dashboard for this week.'},
-  {id:'cc_content', icon:'📸', contentPillars:true, count:true, min:3, unit:'scheduled', text:'Capture Content: Capture, schedule & post 3 pieces of content this week in Buffer.'},
+  TASK_BUFFER,
 ];
 const EMP_DAILY  = {bryanG:BRYAN_DAILY, ash:ASH_DAILY, joeyZ:JOEY_DAILY, mirandaS:MIRANDA_DAILY, tarikM:TARIK_DAILY};
 const EMP_WEEKLY = {bryanG:BRYAN_WEEKLY,ash:ASH_WEEKLY,joeyZ:JOEY_WEEKLY,mirandaS:MIRANDA_WEEKLY, tarikM:TARIK_WEEKLY};
@@ -6841,6 +6831,42 @@ function completeTask(section,taskId){
   const sKey=section==='cycle_checklist'||section==='cycle'?cycleKey:section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
   fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,{ts});
 }
+// Resolve the Firebase path + current completion record for a task in a section
+function taskPathFor(section){
+  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),monthKey=getTaskMonthKey(),cycleKey=getCycleChecklistKey();
+  const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
+  const sKey=(section==='cycle_checklist'||section==='cycle')?cycleKey:section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
+  return {sPath,sKey,base:empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'};
+}
+function taskDoneRec(section,taskId){
+  const {sPath,sKey}=taskPathFor(section);
+  return (((((state.tasksData||{})[state.tasksLoc]||{})[sPath]||{})[sKey]||{})[taskId])||{};
+}
+// Photo-upload task: compress, upload to Storage, append the URL to the task record
+async function taskPhotoUpload(section,taskId,input){
+  const file=input.files&&input.files[0]; if(!file) return; input.value='';
+  const stat=document.getElementById('phstat_'+section+'_'+taskId); if(stat)stat.textContent='Uploading…';
+  try{
+    const blob=await compressImage(file);
+    const ref=storage.ref('taskPhotos/'+state.tasksLoc+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.jpg');
+    if(blob!==file){ await ref.put(blob,{contentType:'image/jpeg'}); } else { await ref.put(blob); }
+    const url=await ref.getDownloadURL();
+    const {base}=taskPathFor(section);
+    const photos=(taskDoneRec(section,taskId).photos||[]).concat(url);
+    fbSet(base+taskId,{ts:Date.now(),photos});
+  }catch(e){ if(stat)stat.textContent=''; alert('Photo upload failed: '+(e.message||e)); }
+}
+function taskPhotoRemove(section,taskId,idx){
+  const {base}=taskPathFor(section); const rec=taskDoneRec(section,taskId);
+  const photos=(rec.photos||[]).slice(); photos.splice(idx,1);
+  if(photos.length) fbSet(base+taskId,{ts:rec.ts||Date.now(),photos}); else fbSet(base+taskId,null);
+}
+// Social-post accountability task: save each post description + keep the record "done" when all are filled
+function taskPostSave(section,taskId,n,value){
+  const {base}=taskPathFor(section);
+  fbSet(base+taskId+'/posts/'+n,(value||'').trim()||null);
+  fbSet(base+taskId+'/ts',Date.now());
+}
 function completeTaskWithNotes(section,taskId){
   const el=document.getElementById('notes_'+section+'_'+taskId);
   const notes=(el?el.value.trim():'');
@@ -7565,13 +7591,21 @@ function renderContentPillarsBlock(active){
   return h + '</div>';
 }
 function renderTaskItem(section,task,doneData,isCustom,locked){
-  const isDone=!!doneData;
   const hasNotes=!!task.hasNotes;
   const isCount=!!task.count;
+  const isPhoto=!!task.photo;
+  const isPosts=!!task.posts;
+  const photos=(doneData&&doneData.photos)||[];
+  const postVals=(doneData&&doneData.posts)||{};
+  let postsFilled=0; if(isPosts){ for(let i=1;i<=task.posts;i++){ if(String(postVals[i]||'').trim()) postsFilled++; } }
+  let isDone;
+  if(isPhoto) isDone=photos.length>0;
+  else if(isPosts) isDone=postsFilled>=task.posts;
+  else isDone=!!doneData;
   const pb=taskPlaybook(task);
   const hasPlaybook=!!pb;
   let cls='task-item'+(isDone?' done':'')+(locked?' locked':'');
-  const blockStyle=(hasNotes||isCount||task.contentPillars||(task.subs&&task.subs.length))?'flex-direction:column;align-items:stretch;gap:8px':'';
+  const blockStyle=(hasNotes||isCount||isPhoto||isPosts||task.contentPillars||(task.subs&&task.subs.length))?'flex-direction:column;align-items:stretch;gap:8px':'';
   let html='<div class="'+cls+'" data-task-id="'+task.id+'"'+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
   // Top row: drag handle + checkbox + text + extras
   html+='<div style="display:flex;align-items:flex-start;gap:10px">';
@@ -7579,8 +7613,14 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   if(isDone){
     html+='<div class="task-check checked"'+(locked?'':' onclick="undoTask(\''+section+'\',\''+task.id+'\')" title="Click to undo"')+'>✓</div>';
   }else{
-    const completeFn=isCount?'completeTaskCount(\''+section+'\',\''+task.id+'\')':hasNotes?'completeTaskWithNotes(\''+section+'\',\''+task.id+'\')':'completeTask(\''+section+'\',\''+task.id+'\')';
-    html+='<div class="task-check"'+(locked?'':' onclick="'+completeFn+'" title="Click to complete"')+'></div>';
+    let completeFn;
+    if(isPhoto) completeFn='document.getElementById(\'ph_'+section+'_'+task.id+'\').click()';
+    else if(isPosts) completeFn='';
+    else if(isCount) completeFn='completeTaskCount(\''+section+'\',\''+task.id+'\')';
+    else if(hasNotes) completeFn='completeTaskWithNotes(\''+section+'\',\''+task.id+'\')';
+    else completeFn='completeTask(\''+section+'\',\''+task.id+'\')';
+    const attr=(locked||!completeFn)?'':' onclick="'+completeFn+'" title="Click to complete"';
+    html+='<div class="task-check"'+attr+'></div>';
   }
   // Split "Action: detail" into a bold action line + a lighter how/done line
   const _cpActive = task.contentPillars ? contentPillarsForWeek(getContentWeekIndex()) : null;
@@ -7598,6 +7638,14 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     const min=task.min||0;
     const ok=n>=min;
     html+='<span title="Logged today" style="flex-shrink:0;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+(ok?'#dcfce7':'#fef3c7')+';color:'+(ok?'#15803d':'#b45309')+';">'+n+' '+esc(task.unit||'logged')+(min&&!ok?' · below min':'')+'</span>';
+  }
+  if(isPosts){
+    const ok=postsFilled>=task.posts;
+    html+='<span title="Posts described" style="flex-shrink:0;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+(ok?'#dcfce7':'#fef3c7')+';color:'+(ok?'#15803d':'#b45309')+';">'+postsFilled+'/'+task.posts+' described</span>';
+  }
+  if(isPhoto){
+    const ok=photos.length>0;
+    html+='<span title="Photos uploaded" style="flex-shrink:0;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+(ok?'#dcfce7':'#fef3c7')+';color:'+(ok?'#15803d':'#b45309')+';">'+(ok?(photos.length+' 📷'):'needs photo')+'</span>';
   }
   if(hasPlaybook&&!locked){
     html+='<button onclick="openTaskPlaybook(\''+pb+'\')" title="How to do this" style="background:var(--blue-light);border:none;border-radius:6px;cursor:pointer;color:var(--blue);font-size:10px;font-weight:700;padding:3px 8px;white-space:nowrap;flex-shrink:0">📖 How-to</button>';
@@ -7622,7 +7670,30 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   }
   if(_cpActive){
     html+='<div style="margin-left:34px;margin-top:6px;"><a href="'+CAPTURE_CONTENT_BUFFER_URL+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#2c4bff;color:#fff;text-decoration:none;border-radius:8px;font-size:12px;font-weight:700;">📲 Schedule in Buffer</a></div>';
-    html+=renderContentPillarsBlock(_cpActive);
+  }
+  // Social-post accountability — describe each scheduled post
+  if(isPosts){
+    html+='<div style="margin-left:34px;display:flex;flex-direction:column;gap:6px;">';
+    for(let i=1;i<=task.posts;i++){
+      const v=String(postVals[i]||'');
+      if(locked){ if(v) html+='<div style="font-size:12px;color:var(--gray-600);padding:5px 10px;background:var(--gray-50);border-radius:6px;"><b>Post '+i+':</b> '+esc(v)+'</div>'; }
+      else html+='<input type="text" value="'+esc(v)+'" placeholder="Post '+i+' — describe what you scheduled…" onchange="taskPostSave(\''+section+'\',\''+task.id+'\','+i+',this.value)" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;color:var(--gray-700);background:#fff;">';
+    }
+    html+='</div>';
+  }
+  if(_cpActive){ html+=renderContentPillarsBlock(_cpActive); }
+  // Photo-upload task — tap to add a photo straight to the dashboard
+  if(isPhoto){
+    html+='<div style="margin-left:34px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">';
+    photos.forEach((url,idx)=>{
+      html+='<div style="position:relative;"><a href="'+esc(url)+'" target="_blank" rel="noopener"><img src="'+esc(url)+'" style="width:58px;height:58px;object-fit:cover;border-radius:8px;border:1px solid var(--gray-200);display:block;"></a>'+(locked?'':'<button onclick="taskPhotoRemove(\''+section+'\',\''+task.id+'\','+idx+')" title="Remove" style="position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border:none;border-radius:999px;width:18px;height:18px;font-size:12px;line-height:1;cursor:pointer;padding:0;">×</button>')+'</div>';
+    });
+    if(!locked&&(task.multi||!photos.length)){
+      html+='<input type="file" accept="image/*" capture="environment" id="ph_'+section+'_'+task.id+'" style="display:none" onchange="taskPhotoUpload(\''+section+'\',\''+task.id+'\',this)">';
+      html+='<button onclick="document.getElementById(\'ph_'+section+'_'+task.id+'\').click()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#4169E1;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">📸 '+(photos.length?'Add Another':'Add Photo')+'</button>';
+    }
+    html+='<span id="phstat_'+section+'_'+task.id+'" style="font-size:11px;color:#888;"></span>';
+    html+='</div>';
   }
   if(task.subs&&task.subs.length){ html+='<ul style="margin:0 0 0 34px;padding-left:18px;color:var(--gray-500);font-size:12px;line-height:1.75;">'+task.subs.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>'; }
   html+='</div>';return html;
