@@ -12109,7 +12109,9 @@ function renderFeedbackPage() {
   // ── Staleness banners (only for current month view) ──
   const attSort = state.feedback.attSort || null; // null=status sort, 'away'=longest-away first, 'recent'=most-recent first
   let stalenessHTML = '';
-  if (isCurrentMonth) {
+  // Roster + attendance are now auto-synced daily by GrokBot (lvlupma.com/roster-import),
+  // so the manual "not synced" reminder banners are disabled.
+  if (false && isCurrentMonth) {
     ['waunakee', 'eastmad', 'verona', 'deforest'].forEach(loc => {
       const meta = rosterMeta[loc] || {};
       const synced = meta.lastSyncedMonth === currentMonth;
