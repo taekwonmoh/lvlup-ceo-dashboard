@@ -2773,13 +2773,11 @@ function renderGrowthPage() {
   const nav = renderGroupSubNav([
     { id: 'scorecard',  label: '📊 Scorecard'   },
     { id: 'goals',      label: '🎯 Goals'       },
-    { id: 'rocks',      label: '🪨 Rocks'       },
     { id: 'marketing',  label: '📱 Marketing'   },
     { id: 'financials', label: '💰 Financials'  },
     // Scale (PIN-gated ACQ.com dashboard) hidden for now — re-add this tab to restore.
   ]);
   if (s === 'scorecard')  return nav + renderScorecardPage();
-  if (s === 'rocks')      return nav + renderRocksPage();
   if (s === 'financials') return nav + renderPerformancePage();
   if (s === 'marketing')  return nav + renderMarketingPage();
   return nav + renderGoalsPage();
@@ -3125,6 +3123,7 @@ function render() {
   if (state.activeSection === 'leadership') state.activeSection = 'accountability';
   if (state.opsSection === 'scorecard') state.opsSection = 'tasks';   // Scorecard moved to Growth
   if (state.growthSection === 'acq') state.growthSection = 'goals';
+  if (state.growthSection === 'rocks') state.growthSection = 'scorecard';   // Rocks removed
   const s = state.activeSection;
 
   app.innerHTML = renderHeader() +
@@ -3916,11 +3915,6 @@ function renderLeadDashboard(){
   h += '<button onclick="leadChangeMonth(1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 12px;color:#4169E1;font-weight:700;">›</button>';
   h += '</div>';
   h += renderLeadBackupBar() + renderHbImportBar() + renderLeadAccountability();
-  // Rocks — moved here from Ops (owner-only)
-  h += '<div style="margin-top:28px;border-top:2px solid #e8eaf0;padding-top:20px;">';
-  h += '<h2 style="margin:0 0 14px;font-size:18px;font-weight:800;color:#1a1a2e;">🪨 Rocks</h2>';
-  h += renderRocksPage();
-  h += '</div>';
   h += '</div>';
   h += renderHbImportModal();
   return h;
