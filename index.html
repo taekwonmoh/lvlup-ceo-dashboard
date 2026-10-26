@@ -3901,6 +3901,9 @@ function renderLeadDashboard(){
 /* ── Time Clock — staff clock-in/out with geo-fence (replaces the Homebase CSV import) ── */
 function tcData(){ return state.timeclock || {}; }
 function tcStaffList(){ const s = tcData().staff || {}; return Object.entries(s).map(([id, v]) => ({ id, ...(v || {}) })).sort((a, b) => (a.name || '').localeCompare(b.name || '')); }
+// Admins / bots that shouldn't appear on the schedule grids
+const TC_NO_SCHEDULE = new Set(['tc_jam', 'tc_grokbot']);
+function tcSchedStaff(){ return tcStaffList().filter(s => !TC_NO_SCHEDULE.has(s.id) && !/^(jam|grok bot)$/i.test((s.name || '').trim())); }
 function tcCfg(loc){ return (tcData().config || {})[loc] || null; }
 function tcEmpEntries(id){ return (tcData().entries || {})[id] || {}; }
 async function tcHash(pin){ const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lvlup:' + pin)); return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); }
@@ -4250,7 +4253,7 @@ function tcRemoveShift(id, dateKey, sid){ if (!confirm('Remove this shift?')) re
 
 function tcSchedSetLoc(loc){ state.schedLoc = loc; render(); }
 function renderTcSchedule(){
-  const staff = tcStaffList(); if (!staff.length) return '';
+  const staff = tcSchedStaff(); if (!staff.length) return '';
   const days = tcSchedDays();
   const filter = state.schedLoc || 'all';
   const wkLabel = (days[0].getMonth() + 1) + '/' + days[0].getDate() + ' – ' + (days[6].getMonth() + 1) + '/' + days[6].getDate();
@@ -4457,7 +4460,7 @@ function renderTcKioskActions(id){
 }
 
 function renderTcTeamSchedule(){
-  const staff = tcStaffList(); if (!staff.length) return '';
+  const staff = tcSchedStaff(); if (!staff.length) return '';
   const days = tcSchedDays();
   const wkLabel = (days[0].getMonth() + 1) + '/' + days[0].getDate() + ' – ' + (days[6].getMonth() + 1) + '/' + days[6].getDate();
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
