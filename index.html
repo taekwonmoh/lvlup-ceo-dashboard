@@ -4698,22 +4698,30 @@ function renderTcKioskActions(id){
   return h;
 }
 
+function tcTeamSetLoc(loc){ state.tcTeamLoc = loc; render(); }
 function renderTcTeamSchedule(){
   const staff = tcSchedStaff(); if (!staff.length) return '';
   const days = tcSchedDays();
+  const filter = state.tcTeamLoc || 'all';
   const wkLabel = (days[0].getMonth() + 1) + '/' + days[0].getDate() + ' – ' + (days[6].getMonth() + 1) + '/' + days[6].getDate();
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const nav = 'background:none;border:none;cursor:pointer;font-size:18px;padding:2px 10px;color:#4169E1;font-weight:700;';
+  const shiftsOf = (s, dk) => Object.values((tcSchedFor(s.id)[dk]) || {}).filter(Boolean).filter(sh => filter === 'all' || sh.loc === filter).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+  // When a location is selected, only show staff who actually work there this week.
+  const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length));
   let h = '<div style="background:#fff;border-radius:16px;margin-top:14px;padding:16px;">';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><div style="font-size:14px;font-weight:800;color:#1a1a2e;">📆 Team schedule</div><span style="display:flex;align-items:center;gap:2px;"><button onclick="tcWeek(-1)" style="' + nav + '">‹</button><b style="font-size:12px;min-width:96px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + nav + '">›</button></span></div>';
+  // Location filter tabs
+  const chip = (id, label, color) => '<button onclick="tcTeamSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:16px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">' + (color ? '<span style="width:8px;height:8px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
+  h += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">' + chip('all', 'All locations', null) + LOCATIONS.map(l => chip(l.id, l.name, l.color)).join('') + '</div>';
   h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr><th style="text-align:left;padding:4px;position:sticky;left:0;background:#fff;">Staff</th>';
   days.forEach(d => { h += '<th style="text-align:center;padding:4px;min-width:64px;color:#888;font-weight:700;">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#bbb;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span></th>'; });
   h += '</tr></thead><tbody>';
-  staff.forEach(s => {
-    const sched = tcSchedFor(s.id);
+  if (!rows.length) h += '<tr><td colspan="8" style="padding:14px;text-align:center;color:#aaa;">No shifts at this location this week.</td></tr>';
+  rows.forEach(s => {
     h += '<tr style="border-top:1px solid #f1f3f9;"><td style="text-align:left;padding:4px;font-weight:700;position:sticky;left:0;background:#fff;white-space:nowrap;">' + esc(s.name) + '</td>';
     days.forEach(d => {
-      const dk = tcDateKey(d); const shifts = Object.values(sched[dk] || {}).filter(Boolean).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+      const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
       h += '<td style="text-align:center;padding:3px;vertical-align:top;">';
       shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div style="background:' + c + ';color:#fff;border-radius:5px;padding:2px 3px;margin-bottom:2px;line-height:1.2;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.9;font-size:9px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
       if (!shifts.length) h += '<span style="color:#e0e0e0;">·</span>';
