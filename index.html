@@ -4338,6 +4338,32 @@ function tcAddShift(id, dateKey, defLoc){
   fbSet('timeclock/schedule/' + id + '/' + dateKey + '/s_' + Date.now().toString(36), { start: s.trim(), end: e.trim(), loc });
 }
 function tcRemoveShift(id, dateKey, sid){ if (!confirm('Remove this shift?')) return; fbSet('timeclock/schedule/' + id + '/' + dateKey + '/' + sid, null); }
+// ── Copy last week → fill the current week from the week before (additive) ──
+function tcCopyLastWeek(){
+  const staff = tcSchedStaff(); if (!staff.length) return;
+  const days = tcSchedDays();
+  const prev = days.map(d => { const p = new Date(d); p.setDate(d.getDate() - 7); return p; });
+  const filter = state.schedLoc || 'all';
+  const match = sh => filter === 'all' || sh.loc === filter;
+  let srcCount = 0, destHas = 0;
+  staff.forEach(s => days.forEach((d, i) => {
+    destHas  += Object.values((tcSchedFor(s.id)[tcDateKey(d)])       || {}).filter(match).length;
+    srcCount += Object.values((tcSchedFor(s.id)[tcDateKey(prev[i])]) || {}).filter(match).length;
+  }));
+  const scope = filter === 'all' ? '' : ' (' + ((LOCATIONS.find(l => l.id === filter) || {}).name || filter) + ' only)';
+  if (!srcCount){ alert('No shifts in the previous week' + (filter !== 'all' ? ' for this location' : '') + ' to copy.'); return; }
+  let msg = 'Copy ' + srcCount + ' shift' + (srcCount === 1 ? '' : 's') + ' from last week into this week' + scope + '?';
+  if (destHas) msg += '\n\nThis week already has ' + destHas + ' shift' + (destHas === 1 ? '' : 's') + ' — the copies are added alongside them (nothing is deleted).';
+  if (!confirm(msg)) return;
+  const updates = {};
+  staff.forEach(s => days.forEach((d, i) => {
+    Object.values((tcSchedFor(s.id)[tcDateKey(prev[i])]) || {}).filter(match).forEach(sh => {
+      const nsid = 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      updates[s.id + '/' + tcDateKey(d) + '/' + nsid] = { start: sh.start, end: sh.end, loc: sh.loc, role: sh.role || null };
+    });
+  }));
+  fbRef('timeclock/schedule').update(updates);
+}
 // ── Drag & drop: move a shift to another day / person ──
 let _tcDrag = null;
 function tcDragStart(e, staffId, dk, sid){ _tcDrag = { staffId, dk, sid }; try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', sid); } catch (_) {} }
@@ -4417,6 +4443,13 @@ function tcShiftSave(){
   state.tcShiftEdit = null; render();
 }
 function tcShiftDelete(){ const e = state.tcShiftEdit; if (e && e.sid) fbSet('timeclock/schedule/' + e.staffId + '/' + e.dateKey + '/' + e.sid, null); state.tcShiftEdit = null; render(); }
+function tcShiftDuplicate(){
+  const e = state.tcShiftEdit; if (!e) return;
+  if (!/^\d{1,2}:\d{2}$/.test(e.start) || !/^\d{1,2}:\d{2}$/.test(e.end)) { alert('Enter a valid start and end time.'); return; }
+  const nsid = 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  fbSet('timeclock/schedule/' + e.staffId + '/' + e.dateKey + '/' + nsid, { start: e.start, end: e.end, loc: e.loc, role: (e.role || '').trim() || null });
+  state.tcShiftEdit = null; render();
+}
 function renderTcShiftModal(){
   const e = state.tcShiftEdit; if (!e) return '';
   const st = (tcData().staff || {})[e.staffId] || {};
@@ -4433,6 +4466,7 @@ function renderTcShiftModal(){
   h += '</div>';
   h += '<div style="display:flex;gap:10px;padding:14px 18px;border-top:1px solid #eef0f6;">';
   h += '<button onclick="tcShiftSave()" style="flex:1;padding:11px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Save</button>';
+  if (e.sid) h += '<button onclick="tcShiftDuplicate()" title="Add a copy of this shift on the same day" style="padding:11px 14px;background:#fff;color:#4169E1;border:1px solid #b9c6f5;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Duplicate</button>';
   if (e.sid) h += '<button onclick="tcShiftDelete()" style="padding:11px 14px;background:#fff;color:#dc2626;border:1px solid #fca5a5;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Delete</button>';
   h += '<button onclick="tcShiftClose()" style="padding:11px 14px;background:#f1f3f9;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>';
   h += '</div></div></div>';
@@ -4451,7 +4485,8 @@ function renderTcSchedule(){
   // In a filtered view, only show staff who have a shift at that location this week.
   const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length));
   let h = '<div class="section" style="margin-bottom:22px;">';
-  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📆 Master Schedule</h2><span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></div>';
+  const copyBtn = '<button onclick="tcCopyLastWeek()" title="Copy last week\'s shifts into this week" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4169E1;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 11px;">⧉ Copy last week</button>';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📆 Master Schedule</h2><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + copyBtn + '<span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></span></div>';
   // Location filter / legend
   const chip = (id, label, color) => '<button onclick="tcSchedSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (color ? '<span style="width:9px;height:9px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:12px 20px 4px;">' + chip('all', 'All locations', null) + LOCATIONS.map(l => chip(l.id, l.name, l.color)).join('') + '</div>';
