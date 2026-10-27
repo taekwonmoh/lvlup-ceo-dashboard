@@ -3968,14 +3968,19 @@ async function tcPunch(id, dir){
   const pos = await tcGetPosition();
   // Match against ALL configured geofences — staff may work at any location. Nearest wins.
   let dist = null, ok = null, geoNote = '', punchLoc = null;
+  const acc = pos.acc != null ? Math.round(pos.acc) : null;   // GPS accuracy (m); indoors this can be large
   const cfgs = tcData().config || {};
   const configured = Object.entries(cfgs).filter(([, c]) => c && typeof c.lat === 'number');
   if (pos.error) { geoNote = pos.error === 'denied' ? '⚠ location permission denied' : '⚠ location unavailable'; ok = false; }
   else if (configured.length) {
     let best = null;
     configured.forEach(([lid, c]) => { const d = tcDistM(pos.lat, pos.lng, c.lat, c.lng); if (best === null || d < best.d) best = { lid, d, radius: c.radiusM || 150, label: c.label || lid }; });
-    dist = best.d; ok = best.d <= best.radius; punchLoc = best.lid;
-    geoNote = (ok ? '✓ ' : '⚠ ') + tcDistLabel(best.d) + ' from ' + best.label + (ok ? '' : ' (nearest site)');
+    // Honour GPS uncertainty: if the reading could put you inside the fence (distance − accuracy),
+    // treat it as on-site. Phones indoors routinely report 100–300m of error, which was blocking
+    // legit staff standing in the building.
+    const effDist = Math.max(0, best.d - (acc || 0));
+    dist = best.d; ok = effDist <= best.radius; punchLoc = best.lid;
+    geoNote = (ok ? '✓ ' : '⚠ ') + tcDistLabel(best.d) + ' from ' + best.label + (acc ? ' (±' + tcDistLabel(acc) + ' GPS)' : '') + (ok ? '' : ' (nearest site)');
   } else { geoNote = 'no geofences set yet'; }
   const now = Date.now();
   if (dir === 'in') {
@@ -3986,13 +3991,13 @@ async function tcPunch(id, dir){
       if (ok === false) { state.tcMsg = { type: 'error', text: '🚫 You\'re ' + tcDistLabel(dist) + ' from ' + (LOCATIONS.find(l => l.id === punchLoc) || {}).name + ' — clock-in blocked. You must be on-site.' }; render(); return; }
     }
     const dk = tcDateKey(); const eid = 'e_' + now.toString(36);
-    fbSet('timeclock/entries/' + id + '/' + dk + '/' + eid, { inAt: now, inLat: pos.lat || null, inLng: pos.lng || null, inDist: dist, inOk: ok, inLoc: punchLoc });
+    fbSet('timeclock/entries/' + id + '/' + dk + '/' + eid, { inAt: now, inLat: pos.lat || null, inLng: pos.lng || null, inDist: dist, inAcc: acc, inOk: ok, inLoc: punchLoc });
     state.tcMsg = { type: ok === false ? 'warn' : 'ok', text: (st.name || '') + ' clocked IN · ' + tcFmtTime(now) + ' · ' + geoNote };
   } else {
     const open = tcOpenEntry(id);
     if (!open) { state.tcMsg = { type: 'warn', text: 'No open clock-in found for ' + (st.name || '') + '.' }; render(); return; }
     const base = 'timeclock/entries/' + id + '/' + open.dateKey + '/' + open.entryId + '/';
-    fbSet(base + 'outAt', now); fbSet(base + 'outLat', pos.lat || null); fbSet(base + 'outLng', pos.lng || null); fbSet(base + 'outDist', dist); fbSet(base + 'outOk', ok); fbSet(base + 'outLoc', punchLoc);
+    fbSet(base + 'outAt', now); fbSet(base + 'outLat', pos.lat || null); fbSet(base + 'outLng', pos.lng || null); fbSet(base + 'outDist', dist); fbSet(base + 'outAcc', acc); fbSet(base + 'outOk', ok); fbSet(base + 'outLoc', punchLoc);
     state.tcMsg = { type: ok === false ? 'warn' : 'ok', text: (st.name || '') + ' clocked OUT · ' + tcFmtTime(now) + ' · ' + geoNote };
   }
   state.tcSel = null; state.tcPin = ''; render();
