@@ -4148,6 +4148,7 @@ function renderAccountabilityPage(){
   h += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:10px;padding:10px 14px;font-size:12px;color:#334;margin-bottom:16px;">Give part-timers the kiosk link — it shows only the clock and their schedule, not the rest of the dashboard: <b>' + esc(location.origin + location.pathname) + '#clock</b></div>';
   h += renderTcClock();
   h += renderTcTimesheet();
+  h += renderTcPayroll();
   h += renderTcSchedule();
   h += renderTcTimeoff();
   h += renderTcTrades();
@@ -4222,6 +4223,68 @@ function renderTcTimesheet(){
   return h;
 }
 
+/* ── Payroll Timesheet — detailed clock in/out + totals for a pay period, CSV export ── */
+function tcPayDefault(){ const d=new Date();d.setHours(0,0,0,0);const day=d.getDay();const mon=new Date(d);mon.setDate(d.getDate()-day+(day===0?-6:1));const sun=new Date(mon);sun.setDate(mon.getDate()+6);return {start:tcDateKey(mon),end:tcDateKey(sun)}; }
+function tcPayStart(){ return state.payStart || tcPayDefault().start; }
+function tcPayEnd(){ return state.payEnd || tcPayDefault().end; }
+function tcPaySet(which,val){ if(which==='start')state.payStart=val||tcPayDefault().start; else state.payEnd=val||tcPayDefault().end; render(); }
+function tcPayPreset(p){
+  const d=new Date();d.setHours(0,0,0,0);const day=d.getDay();const mon=new Date(d);mon.setDate(d.getDate()-day+(day===0?-6:1));
+  let s,e;
+  if(p==='lastweek'){s=new Date(mon);s.setDate(mon.getDate()-7);e=new Date(s);e.setDate(s.getDate()+6);}
+  else if(p==='2weeks'){s=new Date(mon);s.setDate(mon.getDate()-7);e=new Date(mon);e.setDate(mon.getDate()+6);}
+  else if(p==='thismonth'){s=new Date(d.getFullYear(),d.getMonth(),1);e=new Date(d.getFullYear(),d.getMonth()+1,0);}
+  else {s=new Date(mon);e=new Date(mon);e.setDate(mon.getDate()+6);}
+  state.payStart=tcDateKey(s);state.payEnd=tcDateKey(e);render();
+}
+function tcPayDayLabel(dk){ const d=new Date(dk+'T12:00:00'); return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate(); }
+function tcPayData(){
+  const dates=[]; let s=new Date(tcPayStart()+'T00:00:00'), e=new Date(tcPayEnd()+'T00:00:00');
+  if(e>=s){ for(let d=new Date(s); d<=e; d.setDate(d.getDate()+1)) dates.push(tcDateKey(d)); }
+  return tcSchedStaff().map(st=>{
+    const es=tcEmpEntries(st.id); let total=0; const days=[];
+    dates.forEach(dk=>{ const dayE=es[dk]||{}; const punches=[]; let dmins=0;
+      Object.values(dayE).forEach(e2=>{ if(!e2||!e2.inAt) return; const open=!e2.outAt; const mins=open?0:(e2.outAt-e2.inAt)/60000; dmins+=mins; punches.push({in:e2.inAt,out:e2.outAt,mins,open,flag:(e2.inOk===false||e2.outOk===false)}); });
+      if(punches.length){ punches.sort((a,b)=>a.in-b.in); days.push({dk,punches,mins:dmins}); total+=dmins; }
+    });
+    return {id:st.id,name:st.name,days,totalMins:total};
+  }).filter(r=>r.days.length);
+}
+function tcPayCsv(){
+  const data=tcPayData(); const rows=[['Employee','Date','Clock In','Clock Out','Hours']];
+  data.forEach(r=>{ r.days.forEach(d=>{ d.punches.forEach(p=>{ rows.push([r.name, d.dk, tcFmtTime(p.in), p.open?'(still in)':tcFmtTime(p.out), p.open?'':(p.mins/60).toFixed(2)]); }); }); rows.push([r.name,'TOTAL '+tcPayStart()+'→'+tcPayEnd(),'','',(r.totalMins/60).toFixed(2)]); });
+  const csv=rows.map(r=>r.map(c=>/[",\n]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(',')).join('\n');
+  (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(csv):Promise.reject()).then(()=>alert('Payroll CSV copied — '+data.length+' staff, '+tcPayStart()+' to '+tcPayEnd()+'.')).catch(()=>prompt('Copy the payroll CSV:',csv));
+}
+function renderTcPayroll(){
+  const data=tcPayData();
+  const inStyle='border:1px solid #e3e6ef;border-radius:7px;padding:6px 9px;font-size:13px;font-family:inherit;';
+  const pbtn='padding:5px 11px;border:1px solid #e3e6ef;background:#fff;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;color:#555;';
+  let h='<div class="section" style="margin-bottom:22px;">';
+  h+='<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>💵 Payroll Timesheet</h2><button onclick="tcPayCsv()" style="padding:7px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">⧉ Copy CSV for payroll</button></div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 18px;">';
+  h+='<label style="font-size:12px;color:#555;font-weight:600;">From <input type="date" value="'+esc(tcPayStart())+'" onchange="tcPaySet(\'start\',this.value)" style="'+inStyle+'"></label>';
+  h+='<label style="font-size:12px;color:#555;font-weight:600;">To <input type="date" value="'+esc(tcPayEnd())+'" onchange="tcPaySet(\'end\',this.value)" style="'+inStyle+'"></label>';
+  h+='<span style="width:6px;"></span>';
+  h+='<button onclick="tcPayPreset(\'thisweek\')" style="'+pbtn+'">This week</button><button onclick="tcPayPreset(\'lastweek\')" style="'+pbtn+'">Last week</button><button onclick="tcPayPreset(\'2weeks\')" style="'+pbtn+'">Last 2 wks</button><button onclick="tcPayPreset(\'thismonth\')" style="'+pbtn+'">This month</button>';
+  h+='</div>';
+  h+='<div style="overflow-x:auto;padding:0 0 4px;"><table class="sc-table" style="width:100%;font-size:13px;"><thead><tr><th style="text-align:left;">Staff</th><th style="text-align:center;">Days</th><th style="text-align:right;">Total Hours</th></tr></thead><tbody>';
+  if(!data.length) h+='<tr><td colspan="3" style="padding:14px;text-align:center;color:#aaa;font-size:13px;">No punches in this range.</td></tr>';
+  let grand=0;
+  data.forEach(r=>{ grand+=r.totalMins; h+='<tr><td style="text-align:left;font-weight:700;">'+esc(r.name)+'</td><td style="text-align:center;">'+r.days.length+'</td><td style="text-align:right;font-weight:800;">'+(r.totalMins/60).toFixed(2)+'h</td></tr>'; });
+  if(data.length) h+='<tr style="border-top:2px solid #e8eaf0;background:#fafbff;"><td style="text-align:left;font-weight:800;">All staff</td><td></td><td style="text-align:right;font-weight:800;">'+(grand/60).toFixed(2)+'h</td></tr>';
+  h+='</tbody></table></div>';
+  h+='<details style="padding:4px 18px 10px;"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#4169E1;">Show daily clock in / out detail</summary>';
+  data.forEach(r=>{
+    h+='<div style="margin-top:12px;"><div style="font-weight:800;font-size:13px;color:#1a1a2e;margin-bottom:4px;">'+esc(r.name)+' — '+(r.totalMins/60).toFixed(2)+'h</div><table class="sc-table" style="width:100%;font-size:12px;"><tbody>';
+    r.days.forEach(d=>{ d.punches.forEach((p,i)=>{ h+='<tr><td style="text-align:left;color:#555;min-width:72px;">'+(i===0?esc(tcPayDayLabel(d.dk)):'')+'</td><td style="text-align:center;">'+tcFmtTime(p.in)+' – '+(p.open?'<span style="color:#d97706;">still in</span>':tcFmtTime(p.out))+(p.flag?' <span title="punch outside geofence" style="color:#dc2626;">⚠</span>':'')+'</td><td style="text-align:right;font-weight:700;min-width:54px;">'+(p.open?'—':(p.mins/60).toFixed(2)+'h')+'</td></tr>'; }); });
+    h+='</tbody></table></div>';
+  });
+  h+='</details>';
+  h+='<div style="font-size:11px;color:#999;padding:0 18px 14px;">Decimal hours. ⚠ = a punch was outside the geofence — review before running payroll. (Breaks are not tracked.)</div>';
+  h+='</div>';
+  return h;
+}
 function renderTcSetup(){
   const btn = 'padding:5px 11px;border:1px solid #e3e6ef;background:#fff;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;color:#555;';
   let h = '<div class="section" style="margin-bottom:22px;">';
@@ -4359,9 +4422,16 @@ function tcTimeoffDecision(id, status){
   const t = ((tcData().timeoff) || {})[id]; if (!t) return;
   const base = 'timeclock/timeoff/' + id + '/';
   fbSet(base + 'status', status); fbSet(base + 'decidedAt', Date.now());
-  if (status === 'approved' && t.type === 'pto') {
-    // auto-log against the PTO balance
-    fbSet('timeclock/pto/' + t.empId + '/' + ('p_' + Date.now().toString(36)), { date: t.start, days: t.days || 1, note: 'Approved time off' + (t.end && t.end !== t.start ? ' (' + t.start + '→' + t.end + ')' : ''), enteredAt: Date.now(), fromRequest: id });
+  // Approved PTO auto-deducts from the full-timer's PTO balance (once — guarded against re-approve).
+  if (status === 'approved' && t.type === 'pto' && !t.ptoLogged) {
+    const eid = 'p_' + Date.now().toString(36);
+    fbSet('timeclock/pto/' + t.empId + '/' + eid, { date: t.start, days: t.days || 1, note: 'Approved time off' + (t.end && t.end !== t.start ? ' (' + t.start + '→' + t.end + ')' : ''), enteredAt: Date.now(), fromRequest: id });
+    fbSet(base + 'ptoLogged', eid);
+  }
+  // Un-approving (deny/cancel) a previously-logged PTO request restores the balance.
+  if (status !== 'approved' && t.ptoLogged) {
+    fbSet('timeclock/pto/' + t.empId + '/' + t.ptoLogged, null);
+    fbSet(base + 'ptoLogged', null);
   }
 }
 function tcTimeoffDelete(id){ if (!confirm('Remove this time-off request?')) return; fbSet('timeclock/timeoff/' + id, null); }
