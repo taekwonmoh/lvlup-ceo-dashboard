@@ -3926,6 +3926,8 @@ function tcStaffList(){ const s = tcData().staff || {}; return Object.entries(s)
 // Admins / bots that shouldn't appear on the schedule grids
 const TC_NO_SCHEDULE = new Set(['tc_jam', 'tc_grokbot']);
 function tcSchedStaff(){ return tcStaffList().filter(s => !TC_NO_SCHEDULE.has(s.id) && !/^(jam|grok bot)$/i.test((s.name || '').trim())); }
+// People who actually punch the clock (schedule-only staff appear on the schedule but don't clock in/out).
+function tcClockStaff(){ return tcStaffList().filter(s => !s.scheduleOnly && !TC_NO_SCHEDULE.has(s.id)); }
 function tcCfg(loc){ return (tcData().config || {})[loc] || null; }
 function tcEmpEntries(id){ return (tcData().entries || {})[id] || {}; }
 async function tcHash(pin){ const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lvlup:' + pin)); return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); }
@@ -4160,7 +4162,7 @@ function renderAccountabilityPage(){
 }
 
 function renderTcClock(){
-  const staff = tcStaffList();
+  const staff = tcClockStaff();
   let h = '<div class="section" style="margin-bottom:22px;padding:0;overflow:hidden;">';
   h += '<div style="background:#1a1a2e;color:#fff;padding:16px 20px;"><div style="font-size:16px;font-weight:800;">Clock In / Out</div><div style="font-size:12px;opacity:.75;margin-top:2px;">Tap your name, enter your PIN, and clock in. Your location is checked against the school.</div></div>';
   h += '<div style="padding:16px 20px;">';
@@ -4194,7 +4196,7 @@ function renderTcClock(){
 }
 
 function renderTcTimesheet(){
-  const staff = tcStaffList(); if (!staff.length) return '';
+  const staff = tcClockStaff(); if (!staff.length) return '';
   const base = new Date(); base.setHours(0, 0, 0, 0); const day = base.getDay();
   const monDiff = base.getDate() - day + (day === 0 ? -6 : 1) + (state.tcWeekOffset || 0) * 7;
   const mon = new Date(base); mon.setDate(monDiff);
@@ -4241,7 +4243,7 @@ function tcPayDayLabel(dk){ const d=new Date(dk+'T12:00:00'); return ['Sun','Mon
 function tcPayData(){
   const dates=[]; let s=new Date(tcPayStart()+'T00:00:00'), e=new Date(tcPayEnd()+'T00:00:00');
   if(e>=s){ for(let d=new Date(s); d<=e; d.setDate(d.getDate()+1)) dates.push(tcDateKey(d)); }
-  return tcSchedStaff().map(st=>{
+  return tcClockStaff().map(st=>{
     const es=tcEmpEntries(st.id); let total=0; const days=[];
     dates.forEach(dk=>{ const dayE=es[dk]||{}; const punches=[]; let dmins=0;
       Object.values(dayE).forEach(e2=>{ if(!e2||!e2.inAt) return; const open=!e2.outAt; const mins=open?0:(e2.outAt-e2.inAt)/60000; dmins+=mins; punches.push({in:e2.inAt,out:e2.outAt,mins,open,flag:(e2.inOk===false||e2.outOk===false)}); });
