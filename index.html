@@ -4158,6 +4158,7 @@ function renderAccountabilityPage(){
   h += renderTcSetup();
   h += '</div>';
   h += renderTcMapModal();
+  h += renderTcShiftModal();
   return h;
 }
 
@@ -4337,6 +4338,57 @@ function tcAddShift(id, dateKey, defLoc){
   fbSet('timeclock/schedule/' + id + '/' + dateKey + '/s_' + Date.now().toString(36), { start: s.trim(), end: e.trim(), loc });
 }
 function tcRemoveShift(id, dateKey, sid){ if (!confirm('Remove this shift?')) return; fbSet('timeclock/schedule/' + id + '/' + dateKey + '/' + sid, null); }
+// ── Drag & drop: move a shift to another day / person ──
+let _tcDrag = null;
+function tcDragStart(e, staffId, dk, sid){ _tcDrag = { staffId, dk, sid }; try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', sid); } catch (_) {} }
+function tcDragEnd(e){ _tcDrag = null; }
+function tcDragOver(e){ e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (_) {} e.currentTarget.style.outline = '2px dashed #4169E1'; e.currentTarget.style.outlineOffset = '-2px'; }
+function tcDragLeave(e){ e.currentTarget.style.outline = ''; }
+function tcDrop(e, staffId, dk){ e.preventDefault(); e.currentTarget.style.outline = ''; const d = _tcDrag; _tcDrag = null; if (!d) return; if (d.staffId === staffId && d.dk === dk) return;
+  const sh = ((tcSchedFor(d.staffId)[d.dk]) || {})[d.sid]; if (!sh) return;
+  const nsid = 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  fbSet('timeclock/schedule/' + staffId + '/' + dk + '/' + nsid, { start: sh.start, end: sh.end, loc: sh.loc, role: sh.role || null });
+  fbSet('timeclock/schedule/' + d.staffId + '/' + d.dk + '/' + d.sid, null);
+}
+// ── Click-to-edit shift modal (add + edit) ──
+function tcPadTime(t){ if (!t) return ''; const p = String(t).split(':'); return String(parseInt(p[0]) || 0).padStart(2, '0') + ':' + String(p[1] || '00').padStart(2, '0'); }
+function tcShiftOpen(staffId, dateKey, sid, defaultLoc){
+  const sh = sid ? (((tcSchedFor(staffId)[dateKey]) || {})[sid] || {}) : {};
+  const st = (tcData().staff || {})[staffId] || {};
+  state.tcShiftEdit = { staffId, dateKey, sid: sid || '', start: tcPadTime(sh.start) || '16:00', end: tcPadTime(sh.end) || '19:00', loc: sh.loc || defaultLoc || st.loc || 'waunakee', role: sh.role || '' };
+  render();
+}
+function tcShiftField(f, v){ if (state.tcShiftEdit) state.tcShiftEdit[f] = v; }
+function tcShiftClose(){ state.tcShiftEdit = null; render(); }
+function tcShiftSave(){
+  const e = state.tcShiftEdit; if (!e) return;
+  if (!/^\d{1,2}:\d{2}$/.test(e.start) || !/^\d{1,2}:\d{2}$/.test(e.end)) { alert('Enter a valid start and end time.'); return; }
+  const sid = e.sid || ('s_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5));
+  fbSet('timeclock/schedule/' + e.staffId + '/' + e.dateKey + '/' + sid, { start: e.start, end: e.end, loc: e.loc, role: (e.role || '').trim() || null });
+  state.tcShiftEdit = null; render();
+}
+function tcShiftDelete(){ const e = state.tcShiftEdit; if (e && e.sid) fbSet('timeclock/schedule/' + e.staffId + '/' + e.dateKey + '/' + e.sid, null); state.tcShiftEdit = null; render(); }
+function renderTcShiftModal(){
+  const e = state.tcShiftEdit; if (!e) return '';
+  const st = (tcData().staff || {})[e.staffId] || {};
+  const dLabel = new Date(e.dateKey + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const locOpts = LOCATIONS.map(l => '<option value="' + l.id + '"' + (e.loc === l.id ? ' selected' : '') + '>' + esc(l.name) + '</option>').join('');
+  const fld = 'width:100%;box-sizing:border-box;border:1px solid #e3e6ef;border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit;margin-top:4px;';
+  let h = '<div onclick="if(event.target===this)tcShiftClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:400;padding:16px;">';
+  h += '<div style="background:#fff;border-radius:14px;max-width:360px;width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">';
+  h += '<div style="padding:16px 18px;border-bottom:1px solid #eef0f6;"><div style="font-size:16px;font-weight:800;color:#1a1a2e;">' + (e.sid ? 'Edit shift' : 'Add shift') + '</div><div style="font-size:12px;color:#888;margin-top:2px;">' + esc(st.name || '') + ' · ' + esc(dLabel) + '</div></div>';
+  h += '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;">';
+  h += '<div style="display:flex;gap:10px;"><label style="flex:1;font-size:12px;font-weight:700;color:#555;">Start<input type="time" value="' + esc(e.start) + '" onchange="tcShiftField(\'start\',this.value)" style="' + fld + '"></label><label style="flex:1;font-size:12px;font-weight:700;color:#555;">End<input type="time" value="' + esc(e.end) + '" onchange="tcShiftField(\'end\',this.value)" style="' + fld + '"></label></div>';
+  h += '<label style="font-size:12px;font-weight:700;color:#555;">Location<select onchange="tcShiftField(\'loc\',this.value)" style="' + fld + '">' + locOpts + '</select></label>';
+  h += '<label style="font-size:12px;font-weight:700;color:#555;">Role / title <span style="font-weight:400;color:#aaa;">(optional)</span><input type="text" value="' + esc(e.role) + '" placeholder="e.g. Lead Instructor" onchange="tcShiftField(\'role\',this.value)" style="' + fld + '"></label>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:10px;padding:14px 18px;border-top:1px solid #eef0f6;">';
+  h += '<button onclick="tcShiftSave()" style="flex:1;padding:11px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Save</button>';
+  if (e.sid) h += '<button onclick="tcShiftDelete()" style="padding:11px 14px;background:#fff;color:#dc2626;border:1px solid #fca5a5;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Delete</button>';
+  h += '<button onclick="tcShiftClose()" style="padding:11px 14px;background:#f1f3f9;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>';
+  h += '</div></div></div>';
+  return h;
+}
 
 function tcSchedSetLoc(loc){ state.schedLoc = loc; render(); }
 function renderTcSchedule(){
@@ -4362,9 +4414,9 @@ function renderTcSchedule(){
     h += '<tr><td style="text-align:left;font-weight:700;position:sticky;left:0;background:#fff;white-space:nowrap;">' + esc(s.name) + '</td>';
     days.forEach(d => {
       const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
-      h += '<td style="text-align:center;vertical-align:top;padding:4px;">';
-      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div style="background:' + c + ';color:#fff;border-radius:6px;padding:3px 5px;margin-bottom:3px;font-size:11px;line-height:1.25;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + ' <button onclick="tcRemoveShift(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="Remove" style="background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;padding:0;font-size:11px;">✕</button></div>'; });
-      h += '<button onclick="tcAddShift(\'' + s.id + '\',\'' + dk + '\',\'' + (filter !== 'all' ? filter : '') + '\')" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
+      h += '<td class="tc-cell" ondragover="tcDragOver(event)" ondragleave="tcDragLeave(event)" ondrop="tcDrop(event,\'' + s.id + '\',\'' + dk + '\')" style="text-align:center;vertical-align:top;padding:4px;">';
+      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div draggable="true" ondragstart="tcDragStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragend="tcDragEnd(event)" onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="Click to edit · drag to move" style="background:' + c + ';color:#fff;border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:11px;line-height:1.25;cursor:grab;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
+      h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'\',\'' + (filter !== 'all' ? filter : '') + '\')" title="Add shift" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
       h += '</td>';
     });
     h += '</tr>';
@@ -6802,6 +6854,7 @@ state.tcMsg          = null;         // clock UI: transient status message {type
 state.tcWeekOffset   = 0;            // timesheet week navigation
 state.tcSetup        = false;        // show/hide admin setup panel
 state.tcMapLoc       = null;         // geofence map picker: location id whose map modal is open
+state.tcShiftEdit    = null;         // schedule shift add/edit modal state
 state.adLabTab     = 'playbook';     // Ad Creative: 'playbook' | 'tracker' | 'leaderboard'
 state.adLabFilter  = 'all';          // Hook bank avatar filter
 state.adCreative   = state.adCreative || {};
