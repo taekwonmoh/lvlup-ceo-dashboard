@@ -4350,6 +4350,55 @@ function tcDrop(e, staffId, dk){ e.preventDefault(); e.currentTarget.style.outli
   fbSet('timeclock/schedule/' + staffId + '/' + dk + '/' + nsid, { start: sh.start, end: sh.end, loc: sh.loc, role: sh.role || null });
   fbSet('timeclock/schedule/' + d.staffId + '/' + d.dk + '/' + d.sid, null);
 }
+// ── Touch drag (mobile): long-move to pick up a shift, drop on a cell ──
+let _tcTouch = null;
+function tcCellAt(x, y){ const el = document.elementFromPoint(x, y); return el ? el.closest('.tc-cell') : null; }
+function tcTouchStart(e, staffId, dk, sid){
+  if (!e.touches || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  _tcTouch = { staffId, dk, sid, x0: t.clientX, y0: t.clientY, dragging: false, ghost: null, el: e.currentTarget, lastCell: null };
+  document.addEventListener('touchmove', tcTouchMove, { passive: false });
+  document.addEventListener('touchend', tcTouchEnd);
+  document.addEventListener('touchcancel', tcTouchEnd);
+}
+function tcTouchMove(e){
+  const d = _tcTouch; if (!d) return; const t = e.touches[0]; if (!t) return;
+  if (!d.dragging){
+    if (Math.hypot(t.clientX - d.x0, t.clientY - d.y0) < 10) return;   // still a tap — let it be
+    d.dragging = true;
+    const g = d.el.cloneNode(true);
+    g.style.position = 'fixed'; g.style.zIndex = '500'; g.style.pointerEvents = 'none'; g.style.opacity = '0.9';
+    g.style.width = d.el.offsetWidth + 'px'; g.style.margin = '0'; g.style.boxShadow = '0 8px 24px rgba(0,0,0,.4)';
+    document.body.appendChild(g); d.ghost = g; d.el.style.opacity = '0.35';
+  }
+  e.preventDefault();   // stop the page scrolling while dragging a shift
+  d.ghost.style.left = (t.clientX - d.el.offsetWidth / 2) + 'px';
+  d.ghost.style.top = (t.clientY - 18) + 'px';
+  const cell = tcCellAt(t.clientX, t.clientY);
+  if (d.lastCell && d.lastCell !== cell) d.lastCell.style.outline = '';
+  if (cell){ cell.style.outline = '2px dashed #4169E1'; cell.style.outlineOffset = '-2px'; }
+  d.lastCell = cell;
+}
+function tcTouchEnd(e){
+  const d = _tcTouch; _tcTouch = null;
+  document.removeEventListener('touchmove', tcTouchMove, { passive: false });
+  document.removeEventListener('touchend', tcTouchEnd);
+  document.removeEventListener('touchcancel', tcTouchEnd);
+  if (!d) return;
+  if (d.ghost) d.ghost.remove();
+  if (d.el) d.el.style.opacity = '';
+  if (d.lastCell) d.lastCell.style.outline = '';
+  if (!d.dragging) return;              // was a tap → allow the click (edit) to fire
+  if (e.cancelable) e.preventDefault(); // a real drag — suppress the synthetic click
+  const t = e.changedTouches && e.changedTouches[0]; if (!t) return;
+  const cell = tcCellAt(t.clientX, t.clientY); if (!cell) return;
+  const toId = cell.getAttribute('data-staff'), toDk = cell.getAttribute('data-dk');
+  if (!toId || !toDk || (toId === d.staffId && toDk === d.dk)) return;
+  const sh = ((tcSchedFor(d.staffId)[d.dk]) || {})[d.sid]; if (!sh) return;
+  const nsid = 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  fbSet('timeclock/schedule/' + toId + '/' + toDk + '/' + nsid, { start: sh.start, end: sh.end, loc: sh.loc, role: sh.role || null });
+  fbSet('timeclock/schedule/' + d.staffId + '/' + d.dk + '/' + d.sid, null);
+}
 // ── Click-to-edit shift modal (add + edit) ──
 function tcPadTime(t){ if (!t) return ''; const p = String(t).split(':'); return String(parseInt(p[0]) || 0).padStart(2, '0') + ':' + String(p[1] || '00').padStart(2, '0'); }
 function tcShiftOpen(staffId, dateKey, sid, defaultLoc){
@@ -4414,8 +4463,8 @@ function renderTcSchedule(){
     h += '<tr><td style="text-align:left;font-weight:700;position:sticky;left:0;background:#fff;white-space:nowrap;">' + esc(s.name) + '</td>';
     days.forEach(d => {
       const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
-      h += '<td class="tc-cell" ondragover="tcDragOver(event)" ondragleave="tcDragLeave(event)" ondrop="tcDrop(event,\'' + s.id + '\',\'' + dk + '\')" style="text-align:center;vertical-align:top;padding:4px;">';
-      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div draggable="true" ondragstart="tcDragStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragend="tcDragEnd(event)" onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="Click to edit · drag to move" style="background:' + c + ';color:#fff;border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:11px;line-height:1.25;cursor:grab;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
+      h += '<td class="tc-cell" data-staff="' + s.id + '" data-dk="' + dk + '" ondragover="tcDragOver(event)" ondragleave="tcDragLeave(event)" ondrop="tcDrop(event,\'' + s.id + '\',\'' + dk + '\')" style="text-align:center;vertical-align:top;padding:4px;">';
+      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div class="tc-shift" draggable="true" ontouchstart="tcTouchStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragstart="tcDragStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragend="tcDragEnd(event)" onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="Tap to edit · drag to move" style="background:' + c + ';color:#fff;border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:11px;line-height:1.25;cursor:grab;touch-action:none;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
       h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'\',\'' + (filter !== 'all' ? filter : '') + '\')" title="Add shift" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
       h += '</td>';
     });
