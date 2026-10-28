@@ -4228,12 +4228,12 @@ function renderTcTimesheet(){
       const dk = tcDateKey(d); const dayE = es[dk] || {}; let mins = 0, flag = false, openDay = false;
       Object.values(dayE).forEach(e => { if (!e) return; if (e.inAt && e.outAt) mins += (e.outAt - e.inAt) / 60000; else if (e.inAt && !e.outAt) openDay = true; if (e.inOk === false || e.outOk === false) flag = true; });
       wkMin += mins; const hrs = mins ? (mins / 60).toFixed(1) : '';
-      cells += '<td onclick="tcCardOpen(\'' + s.id + '\',\'' + dk + '\')" title="Tap to edit time card" style="text-align:center;cursor:pointer;' + (flag ? 'background:#fef3c7;' : '') + '">' + (openDay ? '🟢' : '') + (hrs || '·') + (flag ? ' ⚠' : '') + '</td>';
+      cells += '<td onclick="tcStaffFocus(\'' + s.id + '\')" title="Tap to edit the week\'s time cards" style="text-align:center;cursor:pointer;' + (flag ? 'background:#fef3c7;' : '') + '">' + (openDay ? '🟢' : '') + (hrs || '·') + (flag ? ' ⚠' : '') + '</td>';
     });
     h += '<tr><td style="text-align:left;font-weight:700;"><span onclick="tcStaffFocus(\'' + s.id + '\')" title="Edit ' + esc(s.name) + '’s clock in/out" style="cursor:pointer;border-bottom:1px dotted #b9c0d0;">' + esc(s.name) + '</span></td>' + cells + '<td style="text-align:center;font-weight:800;">' + (wkMin ? (wkMin / 60).toFixed(1) + 'h' : '0') + '</td></tr>';
   });
   h += '</tbody></table></div>';
-  h += '<div style="font-size:11px;color:#999;margin-top:8px;">✏️ Tap a name to edit the whole week, or a day to edit that time card · 🟢 currently clocked in · ⚠ a punch was outside the geofence — review</div>';
+  h += '<div style="font-size:11px;color:#999;margin-top:8px;">✏️ Tap anyone\'s row to edit their whole week of clock times · 🟢 currently clocked in · ⚠ a punch was outside the geofence — review</div>';
   h += '</div>';
   return h;
 }
