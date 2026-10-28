@@ -4162,11 +4162,16 @@ function renderAccountabilityPage(){
   h += renderTcPto();
   h += renderTcSetup();
   h += '</div>';
+  // First visit to this page in a browser → auto-open the tutorial once.
+  if (!_tcGuideChecked) { _tcGuideChecked = true; try { if (!localStorage.getItem('lvlupSchedGuideSeen')) state.tcGuide = true; } catch (e) {} }
   h += renderTcMapModal();
   h += renderTcShiftModal();
   h += renderTcCardModal();
+  h += renderTcGuideModal();
+  h += renderTcStaffModal();
   return h;
 }
+let _tcGuideChecked = false;
 
 function renderTcClock(){
   const staff = tcClockStaff();
@@ -4545,6 +4550,88 @@ function renderTcShiftModal(){
 }
 
 function tcSchedSetLoc(loc){ state.schedLoc = loc; render(); }
+/* ── In-app manager tutorial (schedule / time off / time cards) ── */
+function tcGuideOpen(){ state.tcGuide = true; render(); }
+function tcGuideClose(){ state.tcGuide = false; try { localStorage.setItem('lvlupSchedGuideSeen', '1'); } catch (e) {} render(); }
+function renderTcGuideModal(){
+  if (!state.tcGuide) return '';
+  const bt = (t, go) => '<b style="font-family:inherit;font-weight:700;font-size:12px;background:' + (go ? '#e7f7ec' : '#f1f3f9') + ';border:1px solid ' + (go ? 'transparent' : '#e3e6ef') + ';color:' + (go ? '#16a34a' : '#334') + ';border-radius:5px;padding:1px 6px;white-space:nowrap;">' + t + '</b>';
+  const sec = (n, title, where, steps, note) => {
+    let s = '<div style="padding:16px 0;border-top:1px solid #eef0f6;">';
+    s += '<div style="display:flex;gap:11px;align-items:flex-start;margin-bottom:9px;"><div style="flex:none;width:30px;height:30px;border-radius:9px;background:#2f54d6;color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;">' + n + '</div><div><div style="font-size:16px;font-weight:800;color:#1a1a2e;">' + title + '</div><div style="font-size:11.5px;color:#8894b0;margin-top:1px;">' + where + '</div></div></div>';
+    s += '<ol style="margin:0;padding-left:30px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;color:#333;">' + steps.map(x => '<li>' + x + '</li>').join('') + '</ol>';
+    if (note) s += '<div style="display:flex;gap:8px;margin-top:11px;padding:10px 12px;border-radius:10px;font-size:12.5px;background:' + (note.warn ? '#fdf0e6' : '#f1f5ff') + ';color:#334;">' + (note.warn ? '⚠️' : '💡') + '<div>' + note.text + '</div></div>';
+    return s + '</div>';
+  };
+  let h = '<div onclick="if(event.target===this)tcGuideClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:450;padding:16px;">';
+  h += '<div style="background:#fff;border-radius:16px;max-width:540px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 14px 50px rgba(0,0,0,.35);">';
+  h += '<div style="padding:18px 20px;border-bottom:1px solid #eef0f6;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;"><div><div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#2f54d6;">Manager quick guide</div><div style="font-size:19px;font-weight:800;color:#1a1a2e;margin-top:3px;">Running the schedule &amp; time clock</div></div><button onclick="tcGuideClose()" style="flex:none;background:#f1f3f9;border:none;border-radius:8px;width:30px;height:30px;font-size:16px;color:#667;cursor:pointer;">✕</button></div>';
+  h += '<div style="padding:4px 20px 8px;overflow-y:auto;">';
+  h += '<p style="font-size:13px;color:#667;margin:12px 0 2px;">The three things leads do day to day. Everything lives on this <b>Accountability</b> page.</p>';
+  h += sec('1', 'Build the schedule', 'Here on the Master Schedule', [
+    'Use the ' + bt('‹ ›') + ' arrows to pick the week.',
+    'In a person’s day box tap ' + bt('+') + ' → set <b>Start</b>, <b>End</b>, <b>Location</b>, optional <b>Role</b> → ' + bt('Save', 1) + '.',
+    'Repeat a week fast with ' + bt('⧉ Copy last week') + ', then tweak what changed.',
+    '<b>Drag</b> a shift to another day or person to move it — works on a phone too.',
+    'Tap a shift to edit. ' + bt('Duplicate') + ' copies it to the same day; ' + bt('Delete') + ' removes it.',
+    'Filter with the location chips, or ' + bt('All locations') + ' to see everyone.',
+  ], { text: 'Any LVLUP staffer can be scheduled at any LVLUP location — same for Go Ninja. Pick the location on each shift.' });
+  h += sec('2', 'Approve time off &amp; covers', 'Time off  ·  Trades &amp; covers sections', [
+    'Requests show up under <b>Time off</b> as <b>Pending</b>.',
+    'Tap ' + bt('Approve', 1) + ' or ' + bt('Deny') + ' — the person sees it on their kiosk.',
+    'For swaps/covers, use <b>Trades &amp; covers</b> → ' + bt('Approve swap', 1) + '.',
+  ], { text: 'Approving <b>paid</b> time off for a full-timer (Joey, Ash, Tarik, Bryan, Miranda) auto-subtracts it from their PTO balance. Denying later adds the days back.' });
+  h += sec('3', 'Edit a time card', 'Timesheet section', [
+    'Tap the day box for the person you need to fix.',
+    'Correct the <b>In</b> / <b>Out</b> times (e.g. a missed clock-out) → ' + bt('Save', 1) + '.',
+    'Missed a punch? ' + bt('+ Add entry') + ' and enter the times.',
+    'Bad punch? Tap ' + bt('✕') + ' on that row to delete it.',
+    'For payroll: ' + bt('💵 Payroll Timesheet') + ' → set the dates → ' + bt('⧉ Copy CSV', 1) + '.',
+  ], { warn: true, text: 'A ' + bt('⚠') + ' on a day means a punch was off-site — review before payroll. Edited cards are stamped, so there’s a record.' });
+  h += '</div>';
+  h += '<div style="padding:14px 20px;border-top:1px solid #eef0f6;"><button onclick="tcGuideClose()" style="width:100%;padding:12px;background:#1a1a2e;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Got it</button></div>';
+  h += '</div></div>';
+  return h;
+}
+/* ── Single-staff focus view — tap a name to see just their week, any location ── */
+function tcStaffFocus(id){ state.tcStaffView = id; render(); }
+function tcStaffClose(){ state.tcStaffView = null; render(); }
+function tcStaffEditShift(id, dk, sid){ state.tcStaffView = null; tcShiftOpen(id, dk, sid); }
+function tcShiftMins(sh){ const p = t => { const a = String(t || '').split(':'); return (parseInt(a[0]) || 0) * 60 + (parseInt(a[1]) || 0); }; let m = p(sh.end) - p(sh.start); if (m < 0) m += 1440; return m; }
+function renderTcStaffModal(){
+  const id = state.tcStaffView; if (!id) return '';
+  const st = (tcData().staff || {})[id] || {};
+  const days = tcSchedDays();
+  const wkLabel = (days[0].getMonth() + 1) + '/' + days[0].getDate() + ' – ' + (days[6].getMonth() + 1) + '/' + days[6].getDate();
+  const dow = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  let totalMin = 0, body = '';
+  days.forEach(d => {
+    const dk = tcDateKey(d);
+    const shifts = Object.entries((tcSchedFor(id)[dk]) || {}).map(([sid, sh]) => ({ sid, ...(sh || {}) })).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+    body += '<div style="display:flex;gap:12px;padding:10px 0;border-top:1px solid #f1f3f9;">';
+    body += '<div style="flex:none;width:86px;"><div style="font-weight:800;font-size:13px;color:#1a1a2e;">' + dow[d.getDay()] + '</div><div style="font-size:11px;color:#aab;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</div></div>';
+    body += '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;">';
+    if (!shifts.length) body += '<div style="font-size:12px;color:#c3c9d6;">Off</div>';
+    shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; totalMin += tcShiftMins(sh);
+      body += '<button onclick="tcStaffEditShift(\'' + id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="Tap to edit" style="text-align:left;border:1px solid #e9ecf5;border-left:4px solid ' + c + ';background:#fff;border-radius:9px;padding:8px 11px;cursor:pointer;display:flex;flex-direction:column;gap:1px;">';
+      body += '<span style="font-weight:700;font-size:13px;color:#1a1a2e;">' + tcFmtHM(sh.start) + ' – ' + tcFmtHM(sh.end) + '</span>';
+      body += '<span style="font-size:11.5px;color:#667;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + ';margin-right:5px;"></span>' + esc(loc.name || sh.loc || '') + (sh.role ? ' · ' + esc(sh.role) : '') + '</span>';
+      body += '</button>';
+    });
+    body += '</div></div>';
+  });
+  const hrs = (totalMin / 60).toFixed(1).replace(/\.0$/, '');
+  let h = '<div onclick="if(event.target===this)tcStaffClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:420;padding:16px;">';
+  h += '<div style="background:#fff;border-radius:16px;max-width:460px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 14px 50px rgba(0,0,0,.35);">';
+  h += '<div style="padding:16px 20px;border-bottom:1px solid #eef0f6;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">';
+  h += '<div><div style="font-size:19px;font-weight:800;color:#1a1a2e;">' + esc(st.name || '') + '</div><div style="font-size:12px;color:#8894b0;margin-top:2px;">Week of ' + wkLabel + ' · ' + hrs + 'h scheduled</div></div>';
+  h += '<span style="display:flex;gap:2px;align-items:center;"><button onclick="tcWeek(-1)" title="Previous week" style="background:none;border:none;cursor:pointer;font-size:18px;color:#4169E1;font-weight:700;padding:2px 8px;">‹</button><button onclick="tcWeek(1)" title="Next week" style="background:none;border:none;cursor:pointer;font-size:18px;color:#4169E1;font-weight:700;padding:2px 8px;">›</button><button onclick="tcStaffClose()" style="background:#f1f3f9;border:none;border-radius:8px;width:30px;height:30px;font-size:16px;color:#667;cursor:pointer;margin-left:4px;">✕</button></span>';
+  h += '</div>';
+  h += '<div style="padding:4px 20px 12px;overflow-y:auto;">' + body + '</div>';
+  h += '<div style="padding:12px 20px;border-top:1px solid #eef0f6;"><button onclick="tcStaffClose()" style="width:100%;padding:11px;background:#1a1a2e;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Done</button></div>';
+  h += '</div></div>';
+  return h;
+}
 function renderTcSchedule(){
   const staff = tcSchedStaff(); if (!staff.length) return '';
   const days = tcSchedDays();
@@ -4557,16 +4644,18 @@ function renderTcSchedule(){
   const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length));
   let h = '<div class="section" style="margin-bottom:22px;">';
   const copyBtn = '<button onclick="tcCopyLastWeek()" title="Copy last week\'s shifts into this week" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4169E1;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 11px;">⧉ Copy last week</button>';
-  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📆 Master Schedule</h2><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + copyBtn + '<span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></span></div>';
+  const guideBtn = '<button onclick="tcGuideOpen()" title="How to run the schedule, time off, and time cards" style="background:#fff;border:1px solid #e3e6ef;color:#555;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 11px;">❔ How-to</button>';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📆 Master Schedule</h2><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + guideBtn + copyBtn + '<span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></span></div>';
   // Location filter / legend
   const chip = (id, label, color) => '<button onclick="tcSchedSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (color ? '<span style="width:9px;height:9px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:12px 20px 4px;">' + chip('all', 'All locations', null) + LOCATIONS.map(l => chip(l.id, l.name, l.color)).join('') + '</div>';
+  h += '<div style="padding:4px 20px 0;font-size:11.5px;color:#9aa3b5;">Tap a name to see one person’s week · tap a shift to edit · drag a shift to move it</div>';
   h += '<div style="overflow-x:auto;padding:8px 0 0;"><table class="sc-table" style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;min-width:120px;position:sticky;left:0;background:#fff;">Staff</th>';
   days.forEach(d => { h += '<th style="text-align:center;min-width:92px;">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#aaa;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span></th>'; });
   h += '</tr></thead><tbody>';
   if (!rows.length) h += '<tr><td colspan="8" style="padding:16px;text-align:center;color:#aaa;font-size:13px;">No shifts at this location this week.</td></tr>';
   rows.forEach(s => {
-    h += '<tr><td style="text-align:left;font-weight:700;position:sticky;left:0;background:#fff;white-space:nowrap;">' + esc(s.name) + '</td>';
+    h += '<tr><td style="text-align:left;font-weight:700;position:sticky;left:0;background:#fff;white-space:nowrap;"><span onclick="tcStaffFocus(\'' + s.id + '\')" title="View ' + esc(s.name) + '’s week" style="cursor:pointer;border-bottom:1px dotted #b9c0d0;">' + esc(s.name) + '</span></td>';
     days.forEach(d => {
       const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
       h += '<td class="tc-cell" data-staff="' + s.id + '" data-dk="' + dk + '" ondragover="tcDragOver(event)" ondragleave="tcDragLeave(event)" ondrop="tcDrop(event,\'' + s.id + '\',\'' + dk + '\')" style="text-align:center;vertical-align:top;padding:4px;">';
@@ -7019,6 +7108,8 @@ state.tcSetup        = false;        // show/hide admin setup panel
 state.tcMapLoc       = null;         // geofence map picker: location id whose map modal is open
 state.tcShiftEdit    = null;         // schedule shift add/edit modal state
 state.tcCardEdit     = null;         // time-card editor modal state
+state.tcGuide        = false;        // manager tutorial popup
+state.tcStaffView    = null;         // single-staff week view
 state.adLabTab     = 'playbook';     // Ad Creative: 'playbook' | 'tracker' | 'leaderboard'
 state.adLabFilter  = 'all';          // Hook bank avatar filter
 state.adCreative   = state.adCreative || {};
