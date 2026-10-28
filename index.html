@@ -4162,8 +4162,6 @@ function renderAccountabilityPage(){
   h += renderTcPto();
   h += renderTcSetup();
   h += '</div>';
-  // First visit to this page in a browser → auto-open the tutorial once.
-  if (!_tcGuideChecked) { _tcGuideChecked = true; try { if (!localStorage.getItem('lvlupSchedGuideSeen')) state.tcGuide = true; } catch (e) {} }
   h += renderTcMapModal();
   h += renderTcShiftModal();
   h += renderTcCardModal();
@@ -4171,7 +4169,6 @@ function renderAccountabilityPage(){
   h += renderTcStaffModal();
   return h;
 }
-let _tcGuideChecked = false;
 
 function renderTcClock(){
   const staff = tcClockStaff();
@@ -4552,7 +4549,7 @@ function renderTcShiftModal(){
 function tcSchedSetLoc(loc){ state.schedLoc = loc; render(); }
 /* ── In-app manager tutorial (schedule / time off / time cards) ── */
 function tcGuideOpen(){ state.tcGuide = true; render(); }
-function tcGuideClose(){ state.tcGuide = false; try { localStorage.setItem('lvlupSchedGuideSeen', '1'); } catch (e) {} render(); }
+function tcGuideClose(){ state.tcGuide = false; render(); }
 function renderTcGuideModal(){
   if (!state.tcGuide) return '';
   const bt = (t, go) => '<b style="font-family:inherit;font-weight:700;font-size:12px;background:' + (go ? '#e7f7ec' : '#f1f3f9') + ';border:1px solid ' + (go ? 'transparent' : '#e3e6ef') + ';color:' + (go ? '#16a34a' : '#334') + ';border-radius:5px;padding:1px 6px;white-space:nowrap;">' + t + '</b>';
@@ -4644,7 +4641,7 @@ function renderTcSchedule(){
   const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length));
   let h = '<div class="section" style="margin-bottom:22px;">';
   const copyBtn = '<button onclick="tcCopyLastWeek()" title="Copy last week\'s shifts into this week" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4169E1;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 11px;">⧉ Copy last week</button>';
-  const guideBtn = '<button onclick="tcGuideOpen()" title="How to run the schedule, time off, and time cards" style="background:#fff;border:1px solid #e3e6ef;color:#555;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 11px;">❔ How-to</button>';
+  const guideBtn = '<button onclick="tcGuideOpen()" title="How to run the schedule, time off, and time cards" style="background:#2f54d6;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 13px;box-shadow:0 1px 3px rgba(47,84,214,.35);">❔ How to use the scheduler</button>';
   h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📆 Master Schedule</h2><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + guideBtn + copyBtn + '<span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></span></div>';
   // Location filter / legend
   const chip = (id, label, color) => '<button onclick="tcSchedSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (color ? '<span style="width:9px;height:9px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
