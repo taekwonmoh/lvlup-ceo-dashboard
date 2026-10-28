@@ -4230,10 +4230,10 @@ function renderTcTimesheet(){
       wkMin += mins; const hrs = mins ? (mins / 60).toFixed(1) : '';
       cells += '<td onclick="tcCardOpen(\'' + s.id + '\',\'' + dk + '\')" title="Tap to edit time card" style="text-align:center;cursor:pointer;' + (flag ? 'background:#fef3c7;' : '') + '">' + (openDay ? '🟢' : '') + (hrs || '·') + (flag ? ' ⚠' : '') + '</td>';
     });
-    h += '<tr><td style="text-align:left;font-weight:700;">' + esc(s.name) + '</td>' + cells + '<td style="text-align:center;font-weight:800;">' + (wkMin ? (wkMin / 60).toFixed(1) + 'h' : '0') + '</td></tr>';
+    h += '<tr><td style="text-align:left;font-weight:700;"><span onclick="tcStaffFocus(\'' + s.id + '\')" title="Edit ' + esc(s.name) + '’s clock in/out" style="cursor:pointer;border-bottom:1px dotted #b9c0d0;">' + esc(s.name) + '</span></td>' + cells + '<td style="text-align:center;font-weight:800;">' + (wkMin ? (wkMin / 60).toFixed(1) + 'h' : '0') + '</td></tr>';
   });
   h += '</tbody></table></div>';
-  h += '<div style="font-size:11px;color:#999;margin-top:8px;">✏️ Tap any day to edit a time card · 🟢 currently clocked in · ⚠ a punch was outside the geofence — review</div>';
+  h += '<div style="font-size:11px;color:#999;margin-top:8px;">✏️ Tap a name to edit the whole week, or a day to edit that time card · 🟢 currently clocked in · ⚠ a punch was outside the geofence — review</div>';
   h += '</div>';
   return h;
 }
