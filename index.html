@@ -4164,6 +4164,7 @@ function renderAccountabilityPage(){
   h += '</div>';
   h += renderTcMapModal();
   h += renderTcShiftModal();
+  h += renderTcCardModal();
   return h;
 }
 
@@ -4225,13 +4226,74 @@ function renderTcTimesheet(){
       const dk = tcDateKey(d); const dayE = es[dk] || {}; let mins = 0, flag = false, openDay = false;
       Object.values(dayE).forEach(e => { if (!e) return; if (e.inAt && e.outAt) mins += (e.outAt - e.inAt) / 60000; else if (e.inAt && !e.outAt) openDay = true; if (e.inOk === false || e.outOk === false) flag = true; });
       wkMin += mins; const hrs = mins ? (mins / 60).toFixed(1) : '';
-      cells += '<td style="text-align:center;' + (flag ? 'background:#fef3c7;' : '') + '">' + (openDay ? '🟢' : '') + (hrs || '·') + (flag ? ' ⚠' : '') + '</td>';
+      cells += '<td onclick="tcCardOpen(\'' + s.id + '\',\'' + dk + '\')" title="Tap to edit time card" style="text-align:center;cursor:pointer;' + (flag ? 'background:#fef3c7;' : '') + '">' + (openDay ? '🟢' : '') + (hrs || '·') + (flag ? ' ⚠' : '') + '</td>';
     });
     h += '<tr><td style="text-align:left;font-weight:700;">' + esc(s.name) + '</td>' + cells + '<td style="text-align:center;font-weight:800;">' + (wkMin ? (wkMin / 60).toFixed(1) + 'h' : '0') + '</td></tr>';
   });
   h += '</tbody></table></div>';
-  h += '<div style="font-size:11px;color:#999;margin-top:8px;">🟢 currently clocked in · ⚠ a punch was outside the geofence — review</div>';
+  h += '<div style="font-size:11px;color:#999;margin-top:8px;">✏️ Tap any day to edit a time card · 🟢 currently clocked in · ⚠ a punch was outside the geofence — review</div>';
   h += '</div>';
+  return h;
+}
+/* ── Time-card editor — fix a punch, add a missed entry, delete a bad one ── */
+function tcHMfromMs(ms){ if (!ms) return ''; const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function tcMsFromHM(dateKey, hm){ if (!hm) return null; const t = new Date(dateKey + 'T' + tcPadTime(hm) + ':00'); return isNaN(t.getTime()) ? null : t.getTime(); }
+function tcCardOpen(staffId, dateKey){
+  const es = (tcEmpEntries(staffId)[dateKey]) || {};
+  const rows = Object.entries(es).map(([eid, e]) => ({ eid, in: tcHMfromMs((e || {}).inAt), out: tcHMfromMs((e || {}).outAt), flag: (e || {}).inOk === false || (e || {}).outOk === false, edited: !!(e || {}).edited })).sort((a, b) => (a.in || '').localeCompare(b.in || ''));
+  state.tcCardEdit = { staffId, dateKey, rows, newRows: [] };
+  render();
+}
+function tcCardField(kind, idx, field, val){ const c = state.tcCardEdit; if (!c) return; const arr = kind === 'new' ? c.newRows : c.rows; if (arr[idx]) arr[idx][field] = val; }
+function tcCardAddRow(){ const c = state.tcCardEdit; if (!c) return; c.newRows.push({ in: '', out: '' }); render(); }
+function tcCardDeleteRow(idx){ const c = state.tcCardEdit; if (!c) return; const r = c.rows[idx]; if (!r) return; if (!confirm('Delete this clock entry?')) return; if (r.eid) fbSet('timeclock/entries/' + c.staffId + '/' + c.dateKey + '/' + r.eid, null); c.rows.splice(idx, 1); render(); }
+function tcCardDeleteNew(idx){ const c = state.tcCardEdit; if (!c) return; c.newRows.splice(idx, 1); render(); }
+function tcCardClose(){ state.tcCardEdit = null; render(); }
+function tcCardSave(){
+  const c = state.tcCardEdit; if (!c) return;
+  c.rows.forEach(r => {
+    if (!r.eid) return;
+    const inAt = tcMsFromHM(c.dateKey, r.in); let outAt = tcMsFromHM(c.dateKey, r.out);
+    if (inAt && outAt && outAt < inAt) outAt += 86400000;   // crossed midnight
+    const base = 'timeclock/entries/' + c.staffId + '/' + c.dateKey + '/' + r.eid + '/';
+    fbSet(base + 'inAt', inAt); fbSet(base + 'outAt', outAt || null); fbSet(base + 'edited', true); fbSet(base + 'editedAt', Date.now());
+  });
+  c.newRows.forEach(r => {
+    const inAt = tcMsFromHM(c.dateKey, r.in); if (!inAt) return; let outAt = tcMsFromHM(c.dateKey, r.out);
+    if (inAt && outAt && outAt < inAt) outAt += 86400000;
+    const eid = 'e_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    fbSet('timeclock/entries/' + c.staffId + '/' + c.dateKey + '/' + eid, { inAt, outAt: outAt || null, inOk: true, outOk: outAt ? true : null, inLoc: null, edited: true, editedAt: Date.now() });
+  });
+  state.tcCardEdit = null; render();
+}
+function renderTcCardModal(){
+  const c = state.tcCardEdit; if (!c) return '';
+  const st = (tcData().staff || {})[c.staffId] || {};
+  const dLabel = new Date(c.dateKey + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const fld = 'border:1px solid #e3e6ef;border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;';
+  const row = (r, idx, isNew) => {
+    const kind = isNew ? 'new' : 'row'; const del = isNew ? 'tcCardDeleteNew(' + idx + ')' : 'tcCardDeleteRow(' + idx + ')';
+    let x = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+    x += '<label style="flex:1;font-size:11px;font-weight:700;color:#666;">In<input type="time" value="' + esc(r.in || '') + '" onchange="tcCardField(\'' + kind + '\',' + idx + ',\'in\',this.value)" style="' + fld + 'width:100%;box-sizing:border-box;margin-top:3px;"></label>';
+    x += '<label style="flex:1;font-size:11px;font-weight:700;color:#666;">Out<input type="time" value="' + esc(r.out || '') + '" onchange="tcCardField(\'' + kind + '\',' + idx + ',\'out\',this.value)" style="' + fld + 'width:100%;box-sizing:border-box;margin-top:3px;"></label>';
+    x += '<button onclick="' + del + '" title="Delete entry" style="align-self:flex-end;background:#fff;border:1px solid #fca5a5;color:#dc2626;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>';
+    x += '</div>';
+    if (!isNew && (r.flag || r.edited)) x += '<div style="font-size:10.5px;color:#999;margin:-4px 0 8px 2px;">' + (r.flag ? '⚠ punch was off-site' : '') + (r.flag && r.edited ? ' · ' : '') + (r.edited ? '✏️ manually edited' : '') + '</div>';
+    return x;
+  };
+  let h = '<div onclick="if(event.target===this)tcCardClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:400;padding:16px;">';
+  h += '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">';
+  h += '<div style="padding:16px 18px;border-bottom:1px solid #eef0f6;"><div style="font-size:16px;font-weight:800;color:#1a1a2e;">Edit time card</div><div style="font-size:12px;color:#888;margin-top:2px;">' + esc(st.name || '') + ' · ' + esc(dLabel) + '</div></div>';
+  h += '<div style="padding:16px 18px;max-height:60vh;overflow-y:auto;">';
+  if (!c.rows.length && !c.newRows.length) h += '<div style="font-size:13px;color:#999;margin-bottom:10px;">No punches this day. Add one below.</div>';
+  c.rows.forEach((r, i) => h += row(r, i, false));
+  if (c.newRows.length) { h += '<div style="font-size:11px;font-weight:800;color:#16a34a;margin:4px 0 6px;">NEW ENTRIES</div>'; c.newRows.forEach((r, i) => h += row(r, i, true)); }
+  h += '<button onclick="tcCardAddRow()" style="width:100%;background:#f1f5ff;border:1px dashed #b9c6f5;color:#4169E1;border-radius:9px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px;">+ Add entry</button>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:10px;padding:14px 18px;border-top:1px solid #eef0f6;">';
+  h += '<button onclick="tcCardSave()" style="flex:1;padding:11px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Save</button>';
+  h += '<button onclick="tcCardClose()" style="padding:11px 16px;background:#f1f3f9;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>';
+  h += '</div></div></div>';
   return h;
 }
 
@@ -6956,6 +7018,7 @@ state.tcWeekOffset   = 0;            // timesheet week navigation
 state.tcSetup        = false;        // show/hide admin setup panel
 state.tcMapLoc       = null;         // geofence map picker: location id whose map modal is open
 state.tcShiftEdit    = null;         // schedule shift add/edit modal state
+state.tcCardEdit     = null;         // time-card editor modal state
 state.adLabTab     = 'playbook';     // Ad Creative: 'playbook' | 'tracker' | 'leaderboard'
 state.adLabFilter  = 'all';          // Hook bank avatar filter
 state.adCreative   = state.adCreative || {};
