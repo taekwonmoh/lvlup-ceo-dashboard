@@ -818,6 +818,28 @@ const db = firebase.database();
 const storage = firebase.storage();
 const CEO = 'ceo'; // root path in Firebase
 
+/* ── Manager-dashboard sign-in gate (Phase 1a) ──────────────────────────────
+   Ties the MANAGER dashboard to a verified staff Google account — the same
+   staff/{email} identity the rest of lvlupma uses — so the ceo/* rules can then
+   be locked to that identity. The #clock kiosk is exempt (keeps its own
+   name+PIN gate). Controlled by a flag: OFF = exactly today's behaviour, so
+   turning it on/off is a one-line, instantly-reversible change. */
+const DASH_AUTH_REQUIRED = false;
+const auth = firebase.auth();
+let dashAuth = { ready: !DASH_AUTH_REQUIRED, user: null, allowed: false };
+auth.onAuthStateChanged(async (u) => {
+  if (!DASH_AUTH_REQUIRED) { dashAuth = { ready: true, user: u || null, allowed: false }; return; }
+  if (!u || !u.email || !u.emailVerified) { dashAuth = { ready: true, user: u || null, allowed: false }; render(); return; }
+  const key = u.email.trim().toLowerCase().replace(/\./g, ',');
+  try {
+    const s = (await db.ref('staff/' + key).once('value')).val() || {};
+    dashAuth = { ready: true, user: u, allowed: s.role === 'admin' || (!!s.role && !!(s.access && s.access.dashboard === true)) };
+  } catch (e) { dashAuth = { ready: true, user: u, allowed: false }; }
+  render();
+});
+function dashSignIn(){ auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => { state.gateMsg = 'Sign-in failed: ' + (e.message || e.code || 'try again'); render(); }); }
+function dashSignOut(){ auth.signOut(); }
+
 // Events database — shared with the members portal & iCal calendar worker
 // Using REST API directly (SDK WebSocket connection unreliable for secondary databases)
 const EVENTS_DB_URL = 'https://va-dashboard-bf7ca-default-rtdb.firebaseio.com/ceo';
@@ -3108,10 +3130,20 @@ function renderCrModal(){
 
 function render() {
   const app = document.getElementById('app');
-  // Access gate — name + 4-digit PIN (reuses the time-clock identity, remembered per device).
-  if (!state.gateOk) { app.innerHTML = renderAccessGate(); return; }
-  // Kiosk mode — part-timer clock page only, no nav or dashboard content.
-  if (location.hash === '#clock') { app.innerHTML = renderClockKiosk(); return; }
+  // Kiosk mode — part-timer clock page only. Keeps its own name+PIN gate and is
+  // exempt from the manager Google sign-in so staff can punch on a shared device.
+  if (location.hash === '#clock') {
+    if (!state.gateOk) { app.innerHTML = renderAccessGate(); return; }
+    app.innerHTML = renderClockKiosk(); return;
+  }
+  // Manager dashboard gate. When DASH_AUTH_REQUIRED is on, require a verified
+  // staff Google account with dashboard access; otherwise the name+PIN gate.
+  if (DASH_AUTH_REQUIRED) {
+    if (!dashAuth.ready) { app.innerHTML = renderDashLoading(); return; }
+    if (!dashAuth.allowed) { app.innerHTML = renderDashSignIn(); return; }
+  } else if (!state.gateOk) {
+    app.innerHTML = renderAccessGate(); return;
+  }
   // Backward-compat: old links to removed tabs redirect into merged pages
   if (state.activeSection === 'performance') state.activeSection = 'scorecard';   // KPIs & Financials tab removed
   if (state.activeSection === 'monthlyGoals') { state.goalsTab = 'monthly'; state.activeSection = 'goals'; }
@@ -3163,6 +3195,7 @@ function renderHeader() {
     tabs.map(t =>
       '<button class="nav-tab ' + (activeGroup === t.group ? 'active' : '') + '" onclick="setSection(\'' + t.target() + '\')">' + t.label + '</button>'
     ).join('') +
+    (DASH_AUTH_REQUIRED && dashAuth.user ? '<button class="nav-tab" title="Sign out ' + esc(dashAuth.user.email) + '" onclick="dashSignOut()" style="color:#94a3b8;">⎋</button>' : '') +
     '<button class="nav-tab" title="Lock this device" onclick="gateLock()" style="color:#94a3b8;">🔒</button>' +
     '</div></div>';
 }
@@ -4919,6 +4952,27 @@ async function gateRegister(){
   fbSet('timeclock/staff/' + id, { name: name, loc: loc || null });
   fbSet('timeclock/pins/' + id, await tcHash(p1));
   gateFinish(id);
+}
+function renderDashLoading(){
+  return '<div style="min-height:100vh;background:#0b1220;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:14px;">Checking access…</div>';
+}
+function renderDashSignIn(){
+  const u = dashAuth.user;
+  let h = '<div style="min-height:100vh;background:#0b1220;display:flex;align-items:center;justify-content:center;padding:16px;">';
+  h += '<div style="width:100%;max-width:380px;background:#111a2e;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:26px 22px;text-align:center;">';
+  h += '<div style="margin-bottom:16px;"><div style="display:inline-flex;align-items:center;gap:14px;"><img src="images/lvlup-logo-white.png" alt="LVLUP" style="height:26px;"><span style="width:1px;height:22px;background:rgba(255,255,255,.18);display:inline-block;"></span><img src="images/goninja-logo-white.png" alt="Go Ninja" style="height:20px;"></div></div>';
+  h += '<h1 style="color:#fff;font-size:1.15rem;font-weight:800;margin:0 0 6px;">HQ Dashboard</h1>';
+  if (state.gateMsg) h += '<div style="background:rgba(239,68,68,.15);color:#fca5a5;border-radius:8px;padding:8px 10px;font-size:12px;margin:10px 0;">' + esc(state.gateMsg) + '</div>';
+  if (u && !dashAuth.allowed) {
+    h += '<p style="color:#cbd5e1;font-size:13px;margin:6px 0 14px;">Signed in as <b style="color:#fff;">' + esc(u.email) + '</b>, but this account doesn\'t have dashboard access. Ask an admin to grant it, or use a different account.</p>';
+    h += '<button onclick="dashSignOut()" style="width:100%;padding:12px;background:#1f2a44;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">Use a different account</button>';
+  } else {
+    h += '<p style="color:#cbd5e1;font-size:13px;margin:6px 0 16px;">Staff sign-in required.</p>';
+    h += '<button onclick="dashSignIn()" style="width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;">Sign in with Google</button>';
+    h += '<p style="color:#64748b;font-size:11px;margin-top:14px;">Part-timers clocking in? Use the <a href="#clock" style="color:#94a3b8;">clock kiosk</a>.</p>';
+  }
+  h += '</div></div>';
+  return h;
 }
 function renderAccessGate(){
   const staff = tcStaffList();
