@@ -4336,32 +4336,50 @@ function tcPayData(){
       Object.values(dayE).forEach(e2=>{ if(!e2||!e2.inAt) return; const open=!e2.outAt; const mins=open?0:(e2.outAt-e2.inAt)/60000; dmins+=mins; punches.push({in:e2.inAt,out:e2.outAt,mins,open,flag:(e2.inOk===false||e2.outOk===false)}); });
       if(punches.length){ punches.sort((a,b)=>a.in-b.in); days.push({dk,punches,mins:dmins}); total+=dmins; }
     });
-    return {id:st.id,name:st.name,days,totalMins:total};
+    return {id:st.id,name:st.name,loc:st.loc,days,totalMins:total};
   }).filter(r=>r.days.length);
 }
+// PTO days logged within the pay-period range (QBO PTO is entered separately, in days).
+function tcPtoDaysInRange(id,start,end){ let s=0; Object.values(tcPtoEntries(id)).forEach(e=>{ if(!e||!e.date) return; if(e.date>=start && e.date<=end) s+=(+e.days||0); }); return s; }
+function tcPayLocName(locId){ return (LOCATIONS.find(l=>l.id===locId)||{}).name||locId||'Other'; }
+function tcPayCsvString(){
+  const data=tcPayData(); const rows=[['Location','Employee','Date','Clock In','Clock Out','Hours']];
+  data.forEach(r=>{ const loc=tcPayLocName(r.loc); r.days.forEach(d=>{ d.punches.forEach(p=>{ rows.push([loc, r.name, d.dk, tcFmtTime(p.in), p.open?'(still in)':tcFmtTime(p.out), p.open?'':(p.mins/60).toFixed(2)]); }); }); const pto=tcPtoDaysInRange(r.id,tcPayStart(),tcPayEnd()); rows.push([loc, r.name,'TOTAL '+tcPayStart()+'→'+tcPayEnd(),'',pto?(tcFmtDays(pto)+'d PTO'):'',(r.totalMins/60).toFixed(2)]); });
+  return rows.map(r=>r.map(c=>/[",\n]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(',')).join('\n');
+}
 function tcPayCsv(){
-  const data=tcPayData(); const rows=[['Employee','Date','Clock In','Clock Out','Hours']];
-  data.forEach(r=>{ r.days.forEach(d=>{ d.punches.forEach(p=>{ rows.push([r.name, d.dk, tcFmtTime(p.in), p.open?'(still in)':tcFmtTime(p.out), p.open?'':(p.mins/60).toFixed(2)]); }); }); rows.push([r.name,'TOTAL '+tcPayStart()+'→'+tcPayEnd(),'','',(r.totalMins/60).toFixed(2)]); });
-  const csv=rows.map(r=>r.map(c=>/[",\n]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(',')).join('\n');
-  (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(csv):Promise.reject()).then(()=>alert('Payroll CSV copied — '+data.length+' staff, '+tcPayStart()+' to '+tcPayEnd()+'.')).catch(()=>prompt('Copy the payroll CSV:',csv));
+  const csv=tcPayCsvString(); const n=tcPayData().length;
+  (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(csv):Promise.reject()).then(()=>alert('Payroll CSV copied — '+n+' staff, '+tcPayStart()+' to '+tcPayEnd()+'.')).catch(()=>prompt('Copy the payroll CSV:',csv));
+}
+function tcPayDownload(){
+  const csv=tcPayCsvString(); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='payroll_'+tcPayStart()+'_to_'+tcPayEnd()+'.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
 function renderTcPayroll(){
   const data=tcPayData();
   const inStyle='border:1px solid #e3e6ef;border-radius:7px;padding:6px 9px;font-size:13px;font-family:inherit;';
   const pbtn='padding:5px 11px;border:1px solid #e3e6ef;background:#fff;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;color:#555;';
   let h='<div class="section" style="margin-bottom:22px;">';
-  h+='<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>💵 Payroll Timesheet</h2><button onclick="tcPayCsv()" style="padding:7px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">⧉ Copy CSV for payroll</button></div>';
+  h+='<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>💵 Payroll Timesheet</h2><div style="display:flex;gap:8px;flex-wrap:wrap;"><button onclick="tcPayDownload()" style="padding:7px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">⬇ Download CSV</button><button onclick="tcPayCsv()" style="padding:7px 14px;background:#fff;color:#16a34a;border:1px solid #86efac;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">⧉ Copy CSV</button></div></div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 18px;">';
   h+='<label style="font-size:12px;color:#555;font-weight:600;">From <input type="date" value="'+esc(tcPayStart())+'" onchange="tcPaySet(\'start\',this.value)" style="'+inStyle+'"></label>';
   h+='<label style="font-size:12px;color:#555;font-weight:600;">To <input type="date" value="'+esc(tcPayEnd())+'" onchange="tcPaySet(\'end\',this.value)" style="'+inStyle+'"></label>';
   h+='<span style="width:6px;"></span>';
   h+='<button onclick="tcPayPreset(\'thisweek\')" style="'+pbtn+'">This week</button><button onclick="tcPayPreset(\'lastweek\')" style="'+pbtn+'">Last week</button><button onclick="tcPayPreset(\'2weeks\')" style="'+pbtn+'">Last 2 wks</button><button onclick="tcPayPreset(\'thismonth\')" style="'+pbtn+'">This month</button>';
   h+='</div>';
-  h+='<div style="overflow-x:auto;padding:0 0 4px;"><table class="sc-table" style="width:100%;font-size:13px;"><thead><tr><th style="text-align:left;">Staff</th><th style="text-align:center;">Days</th><th style="text-align:right;">Total Hours</th></tr></thead><tbody>';
-  if(!data.length) h+='<tr><td colspan="3" style="padding:14px;text-align:center;color:#aaa;font-size:13px;">No punches in this range.</td></tr>';
+  h+='<div style="overflow-x:auto;padding:0 0 4px;"><table class="sc-table" style="width:100%;font-size:13px;"><thead><tr><th style="text-align:left;">Staff</th><th style="text-align:center;">Days</th><th style="text-align:center;">PTO</th><th style="text-align:right;">Total Hours</th></tr></thead><tbody>';
+  if(!data.length) h+='<tr><td colspan="4" style="padding:14px;text-align:center;color:#aaa;font-size:13px;">No punches in this range.</td></tr>';
   let grand=0;
-  data.forEach(r=>{ grand+=r.totalMins; h+='<tr><td style="text-align:left;font-weight:700;">'+esc(r.name)+'</td><td style="text-align:center;">'+r.days.length+'</td><td style="text-align:right;font-weight:800;">'+(r.totalMins/60).toFixed(2)+'h</td></tr>'; });
-  if(data.length) h+='<tr style="border-top:2px solid #e8eaf0;background:#fafbff;"><td style="text-align:left;font-weight:800;">All staff</td><td></td><td style="text-align:right;font-weight:800;">'+(grand/60).toFixed(2)+'h</td></tr>';
+  const byLoc={}; data.forEach(r=>{ (byLoc[r.loc]||(byLoc[r.loc]=[])).push(r); });
+  LOCATIONS.map(l=>l.id).concat(Object.keys(byLoc).filter(k=>!LOCATIONS.some(l=>l.id===k))).forEach(locId=>{
+    const grp=byLoc[locId]; if(!grp||!grp.length) return;
+    const locName=tcPayLocName(locId); let sub=0;
+    h+='<tr style="background:#f5f7ff;"><td colspan="4" style="text-align:left;font-size:11px;font-weight:800;color:#4169E1;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;">'+esc(locName)+'</td></tr>';
+    grp.forEach(r=>{ grand+=r.totalMins; sub+=r.totalMins; const pto=tcPtoDaysInRange(r.id,tcPayStart(),tcPayEnd());
+      h+='<tr><td style="text-align:left;font-weight:700;">'+esc(r.name)+'</td><td style="text-align:center;">'+r.days.length+'</td><td style="text-align:center;color:'+(pto?'#0891b2':'#ccc')+';font-weight:'+(pto?'700':'400')+';">'+(pto?tcFmtDays(pto)+'d':'—')+'</td><td style="text-align:right;font-weight:800;">'+(r.totalMins/60).toFixed(2)+'h</td></tr>'; });
+    h+='<tr style="border-top:1px solid #e8eaf0;"><td style="text-align:left;font-weight:700;color:#777;font-size:12px;">'+esc(locName)+' subtotal</td><td></td><td></td><td style="text-align:right;font-weight:800;color:#555;">'+(sub/60).toFixed(2)+'h</td></tr>';
+  });
+  if(data.length) h+='<tr style="border-top:2px solid #e8eaf0;background:#fafbff;"><td style="text-align:left;font-weight:800;">All staff</td><td></td><td></td><td style="text-align:right;font-weight:800;">'+(grand/60).toFixed(2)+'h</td></tr>';
   h+='</tbody></table></div>';
   h+='<details style="padding:4px 18px 10px;"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#4169E1;">Show daily clock in / out detail</summary>';
   data.forEach(r=>{
@@ -4370,7 +4388,7 @@ function renderTcPayroll(){
     h+='</tbody></table></div>';
   });
   h+='</details>';
-  h+='<div style="font-size:11px;color:#999;padding:0 18px 14px;">Decimal hours. ⚠ = a punch was outside the geofence — review before running payroll. (Breaks are not tracked.)</div>';
+  h+='<div style="font-size:11px;color:#999;padding:0 18px 14px;">Decimal hours, grouped by location. Enter each person\'s <b>Total Hours</b> into QuickBooks Online Payroll; <b>PTO</b> is logged separately (in days). ⚠ = a punch was outside the geofence — review before running payroll. (Breaks are not tracked.)</div>';
   h+='</div>';
   return h;
 }
