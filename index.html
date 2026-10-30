@@ -2805,8 +2805,21 @@ function renderGrowthPage() {
   return nav + renderGoalsPage();
 }
 
+// Team Handbook — PDF hosted alongside the dashboard, linked at the top of Training.
+const HANDBOOK_URL = 'assets/team-handbook.pdf';
+function renderHandbookCard(){
+  return '<div class="page" style="max-width:900px;padding-bottom:0;">' +
+    '<a href="' + HANDBOOK_URL + '" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:16px;text-decoration:none;background:linear-gradient(135deg,#1a1a2e,#2c4bff);color:#fff;border-radius:14px;padding:18px 22px;box-shadow:var(--shadow);">' +
+      '<div style="font-size:30px;line-height:1;">📕</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:16px;font-weight:800;">Team Handbook</div>' +
+        '<div style="font-size:12.5px;opacity:.9;margin-top:2px;line-height:1.45;">LVLUP &amp; Go Ninja — who we are and every team policy. Updated Nov 2026.</div>' +
+      '</div>' +
+      '<div style="flex:none;background:rgba(255,255,255,.16);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:800;white-space:nowrap;">Open PDF →</div>' +
+    '</a></div>';
+}
 function renderResourcesPage() {
-  return renderDevelopmentPage();
+  return renderHandbookCard() + renderDevelopmentPage();
 }
 
 function renderMarketingPage() {
@@ -4187,9 +4200,9 @@ function renderAccountabilityPage(){
   h += '<a href="#clock" target="_blank" style="flex-shrink:0;padding:9px 15px;background:#1a1a2e;color:#fff;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;">🖥 Open clock kiosk →</a></div>';
   h += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:10px;padding:10px 14px;font-size:12px;color:#334;margin-bottom:16px;">Give part-timers the kiosk link — it shows only the clock and their schedule, not the rest of the dashboard: <b>' + esc(location.origin + location.pathname) + '#clock</b></div>';
   h += renderTcClock();
+  h += renderTcSchedule();
   h += renderTcTimesheet();
   h += renderTcPayroll();
-  h += renderTcSchedule();
   h += renderTcTimeoff();
   h += renderTcTrades();
   h += renderTcPto();
@@ -4356,32 +4369,50 @@ function tcPayData(){
       Object.values(dayE).forEach(e2=>{ if(!e2||!e2.inAt) return; const open=!e2.outAt; const mins=open?0:(e2.outAt-e2.inAt)/60000; dmins+=mins; punches.push({in:e2.inAt,out:e2.outAt,mins,open,flag:(e2.inOk===false||e2.outOk===false)}); });
       if(punches.length){ punches.sort((a,b)=>a.in-b.in); days.push({dk,punches,mins:dmins}); total+=dmins; }
     });
-    return {id:st.id,name:st.name,days,totalMins:total};
+    return {id:st.id,name:st.name,loc:st.loc,days,totalMins:total};
   }).filter(r=>r.days.length);
 }
+// PTO days logged within the pay-period range (QBO PTO is entered separately, in days).
+function tcPtoDaysInRange(id,start,end){ let s=0; Object.values(tcPtoEntries(id)).forEach(e=>{ if(!e||!e.date) return; if(e.date>=start && e.date<=end) s+=(+e.days||0); }); return s; }
+function tcPayLocName(locId){ return (LOCATIONS.find(l=>l.id===locId)||{}).name||locId||'Other'; }
+function tcPayCsvString(){
+  const data=tcPayData(); const rows=[['Location','Employee','Date','Clock In','Clock Out','Hours']];
+  data.forEach(r=>{ const loc=tcPayLocName(r.loc); r.days.forEach(d=>{ d.punches.forEach(p=>{ rows.push([loc, r.name, d.dk, tcFmtTime(p.in), p.open?'(still in)':tcFmtTime(p.out), p.open?'':(p.mins/60).toFixed(2)]); }); }); const pto=tcPtoDaysInRange(r.id,tcPayStart(),tcPayEnd()); rows.push([loc, r.name,'TOTAL '+tcPayStart()+'→'+tcPayEnd(),'',pto?(tcFmtDays(pto)+'d PTO'):'',(r.totalMins/60).toFixed(2)]); });
+  return rows.map(r=>r.map(c=>/[",\n]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(',')).join('\n');
+}
 function tcPayCsv(){
-  const data=tcPayData(); const rows=[['Employee','Date','Clock In','Clock Out','Hours']];
-  data.forEach(r=>{ r.days.forEach(d=>{ d.punches.forEach(p=>{ rows.push([r.name, d.dk, tcFmtTime(p.in), p.open?'(still in)':tcFmtTime(p.out), p.open?'':(p.mins/60).toFixed(2)]); }); }); rows.push([r.name,'TOTAL '+tcPayStart()+'→'+tcPayEnd(),'','',(r.totalMins/60).toFixed(2)]); });
-  const csv=rows.map(r=>r.map(c=>/[",\n]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(',')).join('\n');
-  (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(csv):Promise.reject()).then(()=>alert('Payroll CSV copied — '+data.length+' staff, '+tcPayStart()+' to '+tcPayEnd()+'.')).catch(()=>prompt('Copy the payroll CSV:',csv));
+  const csv=tcPayCsvString(); const n=tcPayData().length;
+  (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(csv):Promise.reject()).then(()=>alert('Payroll CSV copied — '+n+' staff, '+tcPayStart()+' to '+tcPayEnd()+'.')).catch(()=>prompt('Copy the payroll CSV:',csv));
+}
+function tcPayDownload(){
+  const csv=tcPayCsvString(); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='payroll_'+tcPayStart()+'_to_'+tcPayEnd()+'.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
 function renderTcPayroll(){
   const data=tcPayData();
   const inStyle='border:1px solid #e3e6ef;border-radius:7px;padding:6px 9px;font-size:13px;font-family:inherit;';
   const pbtn='padding:5px 11px;border:1px solid #e3e6ef;background:#fff;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;color:#555;';
   let h='<div class="section" style="margin-bottom:22px;">';
-  h+='<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>💵 Payroll Timesheet</h2><button onclick="tcPayCsv()" style="padding:7px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">⧉ Copy CSV for payroll</button></div>';
+  h+='<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>💵 Payroll Timesheet</h2><div style="display:flex;gap:8px;flex-wrap:wrap;"><button onclick="tcPayDownload()" style="padding:7px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">⬇ Download CSV</button><button onclick="tcPayCsv()" style="padding:7px 14px;background:#fff;color:#16a34a;border:1px solid #86efac;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">⧉ Copy CSV</button></div></div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 18px;">';
   h+='<label style="font-size:12px;color:#555;font-weight:600;">From <input type="date" value="'+esc(tcPayStart())+'" onchange="tcPaySet(\'start\',this.value)" style="'+inStyle+'"></label>';
   h+='<label style="font-size:12px;color:#555;font-weight:600;">To <input type="date" value="'+esc(tcPayEnd())+'" onchange="tcPaySet(\'end\',this.value)" style="'+inStyle+'"></label>';
   h+='<span style="width:6px;"></span>';
   h+='<button onclick="tcPayPreset(\'thisweek\')" style="'+pbtn+'">This week</button><button onclick="tcPayPreset(\'lastweek\')" style="'+pbtn+'">Last week</button><button onclick="tcPayPreset(\'2weeks\')" style="'+pbtn+'">Last 2 wks</button><button onclick="tcPayPreset(\'thismonth\')" style="'+pbtn+'">This month</button>';
   h+='</div>';
-  h+='<div style="overflow-x:auto;padding:0 0 4px;"><table class="sc-table" style="width:100%;font-size:13px;"><thead><tr><th style="text-align:left;">Staff</th><th style="text-align:center;">Days</th><th style="text-align:right;">Total Hours</th></tr></thead><tbody>';
-  if(!data.length) h+='<tr><td colspan="3" style="padding:14px;text-align:center;color:#aaa;font-size:13px;">No punches in this range.</td></tr>';
+  h+='<div style="overflow-x:auto;padding:0 0 4px;"><table class="sc-table" style="width:100%;font-size:13px;"><thead><tr><th style="text-align:left;">Staff</th><th style="text-align:center;">Days</th><th style="text-align:center;">PTO</th><th style="text-align:right;">Total Hours</th></tr></thead><tbody>';
+  if(!data.length) h+='<tr><td colspan="4" style="padding:14px;text-align:center;color:#aaa;font-size:13px;">No punches in this range.</td></tr>';
   let grand=0;
-  data.forEach(r=>{ grand+=r.totalMins; h+='<tr><td style="text-align:left;font-weight:700;">'+esc(r.name)+'</td><td style="text-align:center;">'+r.days.length+'</td><td style="text-align:right;font-weight:800;">'+(r.totalMins/60).toFixed(2)+'h</td></tr>'; });
-  if(data.length) h+='<tr style="border-top:2px solid #e8eaf0;background:#fafbff;"><td style="text-align:left;font-weight:800;">All staff</td><td></td><td style="text-align:right;font-weight:800;">'+(grand/60).toFixed(2)+'h</td></tr>';
+  const byLoc={}; data.forEach(r=>{ (byLoc[r.loc]||(byLoc[r.loc]=[])).push(r); });
+  LOCATIONS.map(l=>l.id).concat(Object.keys(byLoc).filter(k=>!LOCATIONS.some(l=>l.id===k))).forEach(locId=>{
+    const grp=byLoc[locId]; if(!grp||!grp.length) return;
+    const locName=tcPayLocName(locId); let sub=0;
+    h+='<tr style="background:#f5f7ff;"><td colspan="4" style="text-align:left;font-size:11px;font-weight:800;color:#4169E1;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;">'+esc(locName)+'</td></tr>';
+    grp.forEach(r=>{ grand+=r.totalMins; sub+=r.totalMins; const pto=tcPtoDaysInRange(r.id,tcPayStart(),tcPayEnd());
+      h+='<tr><td style="text-align:left;font-weight:700;">'+esc(r.name)+'</td><td style="text-align:center;">'+r.days.length+'</td><td style="text-align:center;color:'+(pto?'#0891b2':'#ccc')+';font-weight:'+(pto?'700':'400')+';">'+(pto?tcFmtDays(pto)+'d':'—')+'</td><td style="text-align:right;font-weight:800;">'+(r.totalMins/60).toFixed(2)+'h</td></tr>'; });
+    h+='<tr style="border-top:1px solid #e8eaf0;"><td style="text-align:left;font-weight:700;color:#777;font-size:12px;">'+esc(locName)+' subtotal</td><td></td><td></td><td style="text-align:right;font-weight:800;color:#555;">'+(sub/60).toFixed(2)+'h</td></tr>';
+  });
+  if(data.length) h+='<tr style="border-top:2px solid #e8eaf0;background:#fafbff;"><td style="text-align:left;font-weight:800;">All staff</td><td></td><td></td><td style="text-align:right;font-weight:800;">'+(grand/60).toFixed(2)+'h</td></tr>';
   h+='</tbody></table></div>';
   h+='<details style="padding:4px 18px 10px;"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#4169E1;">Show daily clock in / out detail</summary>';
   data.forEach(r=>{
@@ -4390,7 +4421,7 @@ function renderTcPayroll(){
     h+='</tbody></table></div>';
   });
   h+='</details>';
-  h+='<div style="font-size:11px;color:#999;padding:0 18px 14px;">Decimal hours. ⚠ = a punch was outside the geofence — review before running payroll. (Breaks are not tracked.)</div>';
+  h+='<div style="font-size:11px;color:#999;padding:0 18px 14px;">Decimal hours, grouped by location. Enter each person\'s <b>Total Hours</b> into QuickBooks Online Payroll; <b>PTO</b> is logged separately (in days). ⚠ = a punch was outside the geofence — review before running payroll. (Breaks are not tracked.)</div>';
   h+='</div>';
   return h;
 }
@@ -10972,7 +11003,7 @@ function feedbackMaybeStartCycle(studentKey){
 }
 function feedbackResetCycle(studentKey){
   const base = 'feedbackTracking/all/' + studentKey;
-  ['postcard', 'video', 'phoneCall', 'conference'].forEach(f => db.ref(base + '/' + f).set(null));
+  ['postcard', 'video', 'phoneCall', 'conference', 'outreach', 'outreachMethod', 'outreachBy'].forEach(f => db.ref(base + '/' + f).set(null));
   db.ref(base + '/dates').set(null);
   db.ref(base + '/_cycleStart').set(null);
 }
@@ -10984,6 +11015,80 @@ function feedbackAutoResetExpiredCycles(){
     const t = tracking[key]; if (!t || !t._cycleStart || guard.has(key)) return;
     if (now >= feedbackCycleResetDate(t._cycleStart).getTime()) { guard.add(key); feedbackResetCycle(key); }
   });
+}
+
+/* ── Student outreach (simplified): one "done" flag + method + initials. ──
+   Checking it off (or picking a method / typing initials) feeds the student's
+   name into that location instructor's daily "Stoplight Outreach" task, so the
+   night's outreach shows up per-person in the task rollup. */
+const OUTREACH_METHODS = [
+  { id: 'loom',     label: 'Loom'     },
+  { id: 'email',    label: 'Email'    },
+  { id: 'text',     label: 'Text'     },
+  { id: 'postcard', label: 'Postcard' },
+];
+const OUTREACH_EMP_BY_LOC = { waunakee: 'tarikM', eastmad: 'ash', verona: 'bryanG', deforest: 'joeyZ' };
+
+// Rebuild the location instructor's Stoplight Outreach task from today's checked-off
+// students. `changed` overlays the just-made edit so we don't read stale state.
+function feedbackSyncOutreachTask(location, changedKey, changed) {
+  const empId = OUTREACH_EMP_BY_LOC[location]; if (!empId) return;
+  const today = new Date().toISOString().split('T')[0];
+  const roster = state.feedback.roster || {}, tracking = state.feedback.tracking || {};
+  const entries = [];
+  Object.keys(roster).forEach(k => {
+    const s = roster[k]; if (!s || s.location !== location || s.active === false) return;
+    const t = tracking[k] || {}, dts = t.dates || {};
+    let done = !!t.outreach, method = t.outreachMethod, by = t.outreachBy, dkey = dts.outreach;
+    if (k === changedKey && changed) { done = changed.done; method = changed.method; by = changed.by; dkey = changed.date; }
+    if (done && dkey === today) {
+      const m = (OUTREACH_METHODS.find(x => x.id === method) || {}).label || '';
+      const tag = [m, by].filter(Boolean).join('·');
+      entries.push((s.name || 'Student') + (tag ? ' (' + tag + ')' : ''));
+    }
+  });
+  const base = 'tasks/emp/' + empId + '/daily/' + today + '/stoplight';   // fbSet prefixes ceo/
+  if (entries.length) {
+    fbSet(base, { ts: Date.now(), count: entries.length, notes: entries.join(', '), auto: true });
+  } else {
+    const existing = ((((state.tasksData || {})[empId] || {}).daily || {})[today] || {}).stoplight;
+    if (!existing || existing.auto) fbSet(base, null);   // only clear an auto-generated note, never a manual one
+  }
+}
+
+function feedbackSetOutreachDone(studentKey) {
+  const base = 'feedbackTracking/all/' + studentKey;
+  const cur = state.feedback.tracking[studentKey] || {};
+  const loc = (state.feedback.roster[studentKey] || {}).location;
+  const today = new Date().toISOString().split('T')[0];
+  if (cur.outreach) {
+    db.ref(base + '/outreach').set(null); db.ref(base + '/dates/outreach').set(null);
+    feedbackSyncOutreachTask(loc, studentKey, { done: false });
+  } else {
+    db.ref(base + '/outreach').set(true); db.ref(base + '/dates/outreach').set(today); feedbackMaybeStartCycle(studentKey);
+    feedbackSyncOutreachTask(loc, studentKey, { done: true, method: cur.outreachMethod, by: cur.outreachBy, date: today });
+  }
+}
+function feedbackSetOutreachMethod(studentKey, value) {
+  const base = 'feedbackTracking/all/' + studentKey;
+  const cur = state.feedback.tracking[studentKey] || {};
+  const loc = (state.feedback.roster[studentKey] || {}).location;
+  const today = new Date().toISOString().split('T')[0];
+  db.ref(base + '/outreachMethod').set(value || null);
+  let done = !!cur.outreach, date = (cur.dates || {}).outreach;
+  if (value) { db.ref(base + '/outreach').set(true); db.ref(base + '/dates/outreach').set(today); feedbackMaybeStartCycle(studentKey); done = true; date = today; }
+  feedbackSyncOutreachTask(loc, studentKey, { done, method: value || null, by: cur.outreachBy, date });
+}
+function feedbackSetOutreachBy(studentKey, value) {
+  const base = 'feedbackTracking/all/' + studentKey;
+  const cur = state.feedback.tracking[studentKey] || {};
+  const loc = (state.feedback.roster[studentKey] || {}).location;
+  const today = new Date().toISOString().split('T')[0];
+  const v = (value || '').trim().toUpperCase();
+  db.ref(base + '/outreachBy').set(v || null);
+  let done = !!cur.outreach, date = (cur.dates || {}).outreach;
+  if (v) { db.ref(base + '/outreach').set(true); db.ref(base + '/dates/outreach').set(today); feedbackMaybeStartCycle(studentKey); done = true; date = today; }
+  feedbackSyncOutreachTask(loc, studentKey, { done, method: cur.outreachMethod, by: v || null, date });
 }
 
 function feedbackToggle(studentKey, field) {
@@ -12536,12 +12641,7 @@ function renderFeedbackPage() {
   const isCurrentMonth = getFeedbackMonthKey() === currentMonth;
 
   const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
-  const INTERACTIONS = [
-    { field: 'postcard',   icon: '📬', label: 'Postcard', initials: true },
-    { field: 'video',      icon: '🎥', label: 'Loom' },
-    { field: 'phoneCall',  icon: '📞', label: 'Call' },
-    { field: 'conference', icon: '🤝', label: 'Conf.' },
-  ];
+  // Outreach is now a single done-flag + method + initials (see OUTREACH_METHODS).
 
   // ── Staleness banners (only for current month view) ──
   const attSort = state.feedback.attSort || null; // null=status sort, 'away'=longest-away first, 'recent'=most-recent first
@@ -12597,8 +12697,8 @@ function renderFeedbackPage() {
   // ── Stats (active only) ──
   const total = activeStudents.length;
   const counts = {};
-  INTERACTIONS.forEach(i => { counts[i.field] = activeStudents.filter(s => (tracking[s.key] || {})[i.field]).length; });
-  const contacted = activeStudents.filter(s => { const t = tracking[s.key] || {}; return INTERACTIONS.some(i => t[i.field]); }).length;
+  OUTREACH_METHODS.forEach(m => { counts[m.id] = activeStudents.filter(s => { const t = tracking[s.key] || {}; return t.outreach && t.outreachMethod === m.id; }).length; });
+  const contacted = activeStudents.filter(s => (tracking[s.key] || {}).outreach).length;
   const statusCounts = {
     red:    activeStudents.filter(s => s.status === 'red').length,
     yellow: activeStudents.filter(s => s.status === 'yellow').length,
@@ -12633,6 +12733,20 @@ function renderFeedbackPage() {
       ' title="Initials of who sent it" onchange="feedbackSetInitials(\'' + studentKey + '\',\'' + field + '\',this.value)" ' +
       'style="width:44px;text-align:center;text-transform:uppercase;border:1px solid ' + (filled ? '#4169E1' : 'var(--gray-200)') + ';border-radius:6px;padding:4px 2px;font-size:12px;font-weight:700;color:' + (filled ? '#4169E1' : '#999') + ';background:' + (filled ? '#eef2ff' : '#fff') + ';opacity:' + (disabled ? '0.4' : '1') + ';">' +
       (filled && dateStr ? '<div style="font-size:8px;font-weight:700;color:#4169E1;margin-top:2px;white-space:nowrap;">' + fmtBoxDate(dateStr) + '</div>' : '') +
+      '</td>';
+  };
+
+  // Outreach: one checkbox + method dropdown + initials. Any of the three marks it done.
+  const outreachCell = (studentKey, t, disabled) => {
+    const done = !!t.outreach, method = t.outreachMethod || '', by = t.outreachBy || '', dateStr = (t.dates || {}).outreach;
+    const methodOpts = '<option value="">—</option>' + OUTREACH_METHODS.map(m => '<option value="' + m.id + '"' + (method === m.id ? ' selected' : '') + '>' + m.label + '</option>').join('');
+    return '<td style="text-align:center;padding:8px 4px;">' +
+        '<input type="checkbox" ' + (done ? 'checked' : '') + (disabled ? ' disabled' : '') + ' onchange="feedbackSetOutreachDone(\'' + studentKey + '\')" style="width:18px;height:18px;cursor:' + (disabled ? 'default' : 'pointer') + ';accent-color:#16a34a;opacity:' + (disabled ? '0.3' : '1') + ';">' +
+        (done && dateStr ? '<div style="font-size:8px;font-weight:700;color:#16a34a;margin-top:2px;white-space:nowrap;">' + fmtBoxDate(dateStr) + '</div>' : '') +
+      '</td>' +
+      '<td style="text-align:center;padding:6px 6px;white-space:nowrap;">' +
+        '<select ' + (disabled ? 'disabled' : '') + ' onchange="feedbackSetOutreachMethod(\'' + studentKey + '\',this.value)" style="border:1px solid ' + (method ? '#16a34a' : 'var(--gray-200)') + ';border-radius:6px;padding:4px 3px;font-size:12px;font-weight:600;color:' + (method ? '#15803d' : '#999') + ';background:' + (method ? '#f0fdf4' : '#fff') + ';max-width:90px;cursor:' + (disabled ? 'default' : 'pointer') + ';">' + methodOpts + '</select>' +
+        '<input type="text" maxlength="4" value="' + esc(by) + '" placeholder="—" ' + (disabled ? 'disabled' : '') + ' title="Your initials" onchange="feedbackSetOutreachBy(\'' + studentKey + '\',this.value)" style="width:40px;margin-left:4px;text-align:center;text-transform:uppercase;border:1px solid ' + (by ? '#16a34a' : 'var(--gray-200)') + ';border-radius:6px;padding:4px 2px;font-size:12px;font-weight:700;color:' + (by ? '#15803d' : '#999') + ';background:' + (by ? '#f0fdf4' : '#fff') + ';">' +
       '</td>';
   };
 
@@ -12725,7 +12839,7 @@ function renderFeedbackPage() {
           '</td>' +
           (locationFilter === 'all' ? '<td style="padding:10px 10px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
           attColumnCell(s.attendance) +
-          INTERACTIONS.map(i => i.initials ? initialsCell(s.key, i.field, t[i.field], isInactive, (t.dates || {})[i.field]) : chk(s.key, i.field, !!t[i.field], isInactive, (t.dates || {})[i.field])).join('') +
+          outreachCell(s.key, t, isInactive) +
           (function() {
             const hasFeedback = !!(t.instructorFeedback && t.instructorFeedback.trim());
             return '<td style="text-align:center;padding:10px 4px;white-space:nowrap;">' +
@@ -12804,11 +12918,10 @@ function renderFeedbackPage() {
         '<div style="font-size:20px;font-weight:800;color:' + (statusCounts.green > 0 ? '#22c55e' : '#ccc') + ';">' + statusCounts.green + '</div>' +
         '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">🟢 Engaged</div>' +
       '</div>' +
-      INTERACTIONS.map(i =>
+      OUTREACH_METHODS.map(m =>
         '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:12px 14px;text-align:center;">' +
-          '<div style="font-size:15px;margin-bottom:2px;">' + i.icon + '</div>' +
-          '<div style="font-size:18px;font-weight:800;color:' + (counts[i.field] > 0 ? '#4169E1' : '#ccc') + ';">' + counts[i.field] + '</div>' +
-          '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">' + i.label + '</div>' +
+          '<div style="font-size:18px;font-weight:800;color:' + (counts[m.id] > 0 ? '#16a34a' : '#ccc') + ';">' + counts[m.id] + '</div>' +
+          '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">' + m.label + '</div>' +
         '</div>'
       ).join('') +
       '<div style="background:' + (feedbackCount === total && total > 0 ? '#f0fdf4' : '#fff') + ';border:1px solid ' + (feedbackCount === total && total > 0 ? '#bbf7d0' : '#e8eaf0') + ';border-radius:10px;padding:12px 14px;text-align:center;">' +
@@ -12845,7 +12958,8 @@ function renderFeedbackPage() {
           '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">Name</th>' +
           (locationFilter === 'all' ? '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">Location</th>' : '') +
           '<th onclick="feedbackToggleAttSort()" style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;color:' + (attSort ? '#0f766e' : '#4169E1') + ';text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="Click to sort: away-longest first ↓, then most-recent first ↑, then back to status">Last Attended ' + (attSort === 'away' ? '↓' : attSort === 'recent' ? '↑' : '⇅') + '</th>' +
-          INTERACTIONS.map(i => '<th style="padding:10px 6px;text-align:center;font-size:17px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="' + i.label + '">' + i.icon + '</th>').join('') +
+          '<th style="padding:10px 6px;text-align:center;font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="Outreach done — checking it logs the student to the daily Stoplight Outreach task">✅ Outreach</th>' +
+          '<th style="padding:10px 6px;text-align:center;font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="How they reached out, and who did it">Method · By</th>' +
           '<th style="padding:10px 6px;text-align:center;font-size:17px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="Instructor Feedback">💬</th>' +
           '<th style="width:80px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;"></th>' +
         '</tr></thead>' +
