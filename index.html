@@ -10918,7 +10918,7 @@ function feedbackMaybeStartCycle(studentKey){
 }
 function feedbackResetCycle(studentKey){
   const base = 'feedbackTracking/all/' + studentKey;
-  ['postcard', 'video', 'phoneCall', 'conference'].forEach(f => db.ref(base + '/' + f).set(null));
+  ['postcard', 'video', 'phoneCall', 'conference', 'outreach', 'outreachMethod', 'outreachBy'].forEach(f => db.ref(base + '/' + f).set(null));
   db.ref(base + '/dates').set(null);
   db.ref(base + '/_cycleStart').set(null);
 }
@@ -10930,6 +10930,80 @@ function feedbackAutoResetExpiredCycles(){
     const t = tracking[key]; if (!t || !t._cycleStart || guard.has(key)) return;
     if (now >= feedbackCycleResetDate(t._cycleStart).getTime()) { guard.add(key); feedbackResetCycle(key); }
   });
+}
+
+/* ── Student outreach (simplified): one "done" flag + method + initials. ──
+   Checking it off (or picking a method / typing initials) feeds the student's
+   name into that location instructor's daily "Stoplight Outreach" task, so the
+   night's outreach shows up per-person in the task rollup. */
+const OUTREACH_METHODS = [
+  { id: 'loom',     label: 'Loom'     },
+  { id: 'email',    label: 'Email'    },
+  { id: 'text',     label: 'Text'     },
+  { id: 'postcard', label: 'Postcard' },
+];
+const OUTREACH_EMP_BY_LOC = { waunakee: 'tarikM', eastmad: 'ash', verona: 'bryanG', deforest: 'joeyZ' };
+
+// Rebuild the location instructor's Stoplight Outreach task from today's checked-off
+// students. `changed` overlays the just-made edit so we don't read stale state.
+function feedbackSyncOutreachTask(location, changedKey, changed) {
+  const empId = OUTREACH_EMP_BY_LOC[location]; if (!empId) return;
+  const today = new Date().toISOString().split('T')[0];
+  const roster = state.feedback.roster || {}, tracking = state.feedback.tracking || {};
+  const entries = [];
+  Object.keys(roster).forEach(k => {
+    const s = roster[k]; if (!s || s.location !== location || s.active === false) return;
+    const t = tracking[k] || {}, dts = t.dates || {};
+    let done = !!t.outreach, method = t.outreachMethod, by = t.outreachBy, dkey = dts.outreach;
+    if (k === changedKey && changed) { done = changed.done; method = changed.method; by = changed.by; dkey = changed.date; }
+    if (done && dkey === today) {
+      const m = (OUTREACH_METHODS.find(x => x.id === method) || {}).label || '';
+      const tag = [m, by].filter(Boolean).join('·');
+      entries.push((s.name || 'Student') + (tag ? ' (' + tag + ')' : ''));
+    }
+  });
+  const base = 'tasks/emp/' + empId + '/daily/' + today + '/stoplight';   // fbSet prefixes ceo/
+  if (entries.length) {
+    fbSet(base, { ts: Date.now(), count: entries.length, notes: entries.join(', '), auto: true });
+  } else {
+    const existing = ((((state.tasksData || {})[empId] || {}).daily || {})[today] || {}).stoplight;
+    if (!existing || existing.auto) fbSet(base, null);   // only clear an auto-generated note, never a manual one
+  }
+}
+
+function feedbackSetOutreachDone(studentKey) {
+  const base = 'feedbackTracking/all/' + studentKey;
+  const cur = state.feedback.tracking[studentKey] || {};
+  const loc = (state.feedback.roster[studentKey] || {}).location;
+  const today = new Date().toISOString().split('T')[0];
+  if (cur.outreach) {
+    db.ref(base + '/outreach').set(null); db.ref(base + '/dates/outreach').set(null);
+    feedbackSyncOutreachTask(loc, studentKey, { done: false });
+  } else {
+    db.ref(base + '/outreach').set(true); db.ref(base + '/dates/outreach').set(today); feedbackMaybeStartCycle(studentKey);
+    feedbackSyncOutreachTask(loc, studentKey, { done: true, method: cur.outreachMethod, by: cur.outreachBy, date: today });
+  }
+}
+function feedbackSetOutreachMethod(studentKey, value) {
+  const base = 'feedbackTracking/all/' + studentKey;
+  const cur = state.feedback.tracking[studentKey] || {};
+  const loc = (state.feedback.roster[studentKey] || {}).location;
+  const today = new Date().toISOString().split('T')[0];
+  db.ref(base + '/outreachMethod').set(value || null);
+  let done = !!cur.outreach, date = (cur.dates || {}).outreach;
+  if (value) { db.ref(base + '/outreach').set(true); db.ref(base + '/dates/outreach').set(today); feedbackMaybeStartCycle(studentKey); done = true; date = today; }
+  feedbackSyncOutreachTask(loc, studentKey, { done, method: value || null, by: cur.outreachBy, date });
+}
+function feedbackSetOutreachBy(studentKey, value) {
+  const base = 'feedbackTracking/all/' + studentKey;
+  const cur = state.feedback.tracking[studentKey] || {};
+  const loc = (state.feedback.roster[studentKey] || {}).location;
+  const today = new Date().toISOString().split('T')[0];
+  const v = (value || '').trim().toUpperCase();
+  db.ref(base + '/outreachBy').set(v || null);
+  let done = !!cur.outreach, date = (cur.dates || {}).outreach;
+  if (v) { db.ref(base + '/outreach').set(true); db.ref(base + '/dates/outreach').set(today); feedbackMaybeStartCycle(studentKey); done = true; date = today; }
+  feedbackSyncOutreachTask(loc, studentKey, { done, method: cur.outreachMethod, by: v || null, date });
 }
 
 function feedbackToggle(studentKey, field) {
@@ -12482,12 +12556,7 @@ function renderFeedbackPage() {
   const isCurrentMonth = getFeedbackMonthKey() === currentMonth;
 
   const LOC_LABELS = { waunakee: 'Waunakee', eastmad: 'East Madison', verona: 'Verona', deforest: 'DeForest' };
-  const INTERACTIONS = [
-    { field: 'postcard',   icon: '📬', label: 'Postcard', initials: true },
-    { field: 'video',      icon: '🎥', label: 'Loom' },
-    { field: 'phoneCall',  icon: '📞', label: 'Call' },
-    { field: 'conference', icon: '🤝', label: 'Conf.' },
-  ];
+  // Outreach is now a single done-flag + method + initials (see OUTREACH_METHODS).
 
   // ── Staleness banners (only for current month view) ──
   const attSort = state.feedback.attSort || null; // null=status sort, 'away'=longest-away first, 'recent'=most-recent first
@@ -12543,8 +12612,8 @@ function renderFeedbackPage() {
   // ── Stats (active only) ──
   const total = activeStudents.length;
   const counts = {};
-  INTERACTIONS.forEach(i => { counts[i.field] = activeStudents.filter(s => (tracking[s.key] || {})[i.field]).length; });
-  const contacted = activeStudents.filter(s => { const t = tracking[s.key] || {}; return INTERACTIONS.some(i => t[i.field]); }).length;
+  OUTREACH_METHODS.forEach(m => { counts[m.id] = activeStudents.filter(s => { const t = tracking[s.key] || {}; return t.outreach && t.outreachMethod === m.id; }).length; });
+  const contacted = activeStudents.filter(s => (tracking[s.key] || {}).outreach).length;
   const statusCounts = {
     red:    activeStudents.filter(s => s.status === 'red').length,
     yellow: activeStudents.filter(s => s.status === 'yellow').length,
@@ -12579,6 +12648,20 @@ function renderFeedbackPage() {
       ' title="Initials of who sent it" onchange="feedbackSetInitials(\'' + studentKey + '\',\'' + field + '\',this.value)" ' +
       'style="width:44px;text-align:center;text-transform:uppercase;border:1px solid ' + (filled ? '#4169E1' : 'var(--gray-200)') + ';border-radius:6px;padding:4px 2px;font-size:12px;font-weight:700;color:' + (filled ? '#4169E1' : '#999') + ';background:' + (filled ? '#eef2ff' : '#fff') + ';opacity:' + (disabled ? '0.4' : '1') + ';">' +
       (filled && dateStr ? '<div style="font-size:8px;font-weight:700;color:#4169E1;margin-top:2px;white-space:nowrap;">' + fmtBoxDate(dateStr) + '</div>' : '') +
+      '</td>';
+  };
+
+  // Outreach: one checkbox + method dropdown + initials. Any of the three marks it done.
+  const outreachCell = (studentKey, t, disabled) => {
+    const done = !!t.outreach, method = t.outreachMethod || '', by = t.outreachBy || '', dateStr = (t.dates || {}).outreach;
+    const methodOpts = '<option value="">—</option>' + OUTREACH_METHODS.map(m => '<option value="' + m.id + '"' + (method === m.id ? ' selected' : '') + '>' + m.label + '</option>').join('');
+    return '<td style="text-align:center;padding:8px 4px;">' +
+        '<input type="checkbox" ' + (done ? 'checked' : '') + (disabled ? ' disabled' : '') + ' onchange="feedbackSetOutreachDone(\'' + studentKey + '\')" style="width:18px;height:18px;cursor:' + (disabled ? 'default' : 'pointer') + ';accent-color:#16a34a;opacity:' + (disabled ? '0.3' : '1') + ';">' +
+        (done && dateStr ? '<div style="font-size:8px;font-weight:700;color:#16a34a;margin-top:2px;white-space:nowrap;">' + fmtBoxDate(dateStr) + '</div>' : '') +
+      '</td>' +
+      '<td style="text-align:center;padding:6px 6px;white-space:nowrap;">' +
+        '<select ' + (disabled ? 'disabled' : '') + ' onchange="feedbackSetOutreachMethod(\'' + studentKey + '\',this.value)" style="border:1px solid ' + (method ? '#16a34a' : 'var(--gray-200)') + ';border-radius:6px;padding:4px 3px;font-size:12px;font-weight:600;color:' + (method ? '#15803d' : '#999') + ';background:' + (method ? '#f0fdf4' : '#fff') + ';max-width:90px;cursor:' + (disabled ? 'default' : 'pointer') + ';">' + methodOpts + '</select>' +
+        '<input type="text" maxlength="4" value="' + esc(by) + '" placeholder="—" ' + (disabled ? 'disabled' : '') + ' title="Your initials" onchange="feedbackSetOutreachBy(\'' + studentKey + '\',this.value)" style="width:40px;margin-left:4px;text-align:center;text-transform:uppercase;border:1px solid ' + (by ? '#16a34a' : 'var(--gray-200)') + ';border-radius:6px;padding:4px 2px;font-size:12px;font-weight:700;color:' + (by ? '#15803d' : '#999') + ';background:' + (by ? '#f0fdf4' : '#fff') + ';">' +
       '</td>';
   };
 
@@ -12671,7 +12754,7 @@ function renderFeedbackPage() {
           '</td>' +
           (locationFilter === 'all' ? '<td style="padding:10px 10px;font-size:12px;color:#aaa;">' + (LOC_LABELS[s.location] || '—') + '</td>' : '') +
           attColumnCell(s.attendance) +
-          INTERACTIONS.map(i => i.initials ? initialsCell(s.key, i.field, t[i.field], isInactive, (t.dates || {})[i.field]) : chk(s.key, i.field, !!t[i.field], isInactive, (t.dates || {})[i.field])).join('') +
+          outreachCell(s.key, t, isInactive) +
           (function() {
             const hasFeedback = !!(t.instructorFeedback && t.instructorFeedback.trim());
             return '<td style="text-align:center;padding:10px 4px;white-space:nowrap;">' +
@@ -12750,11 +12833,10 @@ function renderFeedbackPage() {
         '<div style="font-size:20px;font-weight:800;color:' + (statusCounts.green > 0 ? '#22c55e' : '#ccc') + ';">' + statusCounts.green + '</div>' +
         '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">🟢 Engaged</div>' +
       '</div>' +
-      INTERACTIONS.map(i =>
+      OUTREACH_METHODS.map(m =>
         '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:12px 14px;text-align:center;">' +
-          '<div style="font-size:15px;margin-bottom:2px;">' + i.icon + '</div>' +
-          '<div style="font-size:18px;font-weight:800;color:' + (counts[i.field] > 0 ? '#4169E1' : '#ccc') + ';">' + counts[i.field] + '</div>' +
-          '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">' + i.label + '</div>' +
+          '<div style="font-size:18px;font-weight:800;color:' + (counts[m.id] > 0 ? '#16a34a' : '#ccc') + ';">' + counts[m.id] + '</div>' +
+          '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">' + m.label + '</div>' +
         '</div>'
       ).join('') +
       '<div style="background:' + (feedbackCount === total && total > 0 ? '#f0fdf4' : '#fff') + ';border:1px solid ' + (feedbackCount === total && total > 0 ? '#bbf7d0' : '#e8eaf0') + ';border-radius:10px;padding:12px 14px;text-align:center;">' +
@@ -12791,7 +12873,8 @@ function renderFeedbackPage() {
           '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">Name</th>' +
           (locationFilter === 'all' ? '<th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;color:#4169E1;text-transform:uppercase;letter-spacing:0.4px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;">Location</th>' : '') +
           '<th onclick="feedbackToggleAttSort()" style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;color:' + (attSort ? '#0f766e' : '#4169E1') + ';text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="Click to sort: away-longest first ↓, then most-recent first ↑, then back to status">Last Attended ' + (attSort === 'away' ? '↓' : attSort === 'recent' ? '↑' : '⇅') + '</th>' +
-          INTERACTIONS.map(i => '<th style="padding:10px 6px;text-align:center;font-size:17px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="' + i.label + '">' + i.icon + '</th>').join('') +
+          '<th style="padding:10px 6px;text-align:center;font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="Outreach done — checking it logs the student to the daily Stoplight Outreach task">✅ Outreach</th>' +
+          '<th style="padding:10px 6px;text-align:center;font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="How they reached out, and who did it">Method · By</th>' +
           '<th style="padding:10px 6px;text-align:center;font-size:17px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;" title="Instructor Feedback">💬</th>' +
           '<th style="width:80px;position:sticky;top:0;z-index:5;background:#f5f7ff;border-bottom:1px solid #e8eaf0;"></th>' +
         '</tr></thead>' +
