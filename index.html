@@ -824,7 +824,7 @@ const CEO = 'ceo'; // root path in Firebase
    be locked to that identity. The #clock kiosk is exempt (keeps its own
    name+PIN gate). Controlled by a flag: OFF = exactly today's behaviour, so
    turning it on/off is a one-line, instantly-reversible change. */
-const DASH_AUTH_REQUIRED = false;
+const DASH_AUTH_REQUIRED = true;
 const auth = firebase.auth();
 let dashAuth = { ready: !DASH_AUTH_REQUIRED, user: null, allowed: false, isAdmin: false };
 auth.onAuthStateChanged(async (u) => {
