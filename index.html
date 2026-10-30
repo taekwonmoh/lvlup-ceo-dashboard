@@ -4167,9 +4167,9 @@ function renderAccountabilityPage(){
   h += '<a href="#clock" target="_blank" style="flex-shrink:0;padding:9px 15px;background:#1a1a2e;color:#fff;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;">🖥 Open clock kiosk →</a></div>';
   h += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:10px;padding:10px 14px;font-size:12px;color:#334;margin-bottom:16px;">Give part-timers the kiosk link — it shows only the clock and their schedule, not the rest of the dashboard: <b>' + esc(location.origin + location.pathname) + '#clock</b></div>';
   h += renderTcClock();
+  h += renderTcSchedule();
   h += renderTcTimesheet();
   h += renderTcPayroll();
-  h += renderTcSchedule();
   h += renderTcTimeoff();
   h += renderTcTrades();
   h += renderTcPto();
