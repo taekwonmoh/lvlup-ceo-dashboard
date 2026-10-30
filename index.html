@@ -835,6 +835,7 @@ auth.onAuthStateChanged(async (u) => {
     const s = (await db.ref('staff/' + key).once('value')).val() || {};
     dashAuth = { ready: true, user: u, allowed: s.role === 'admin' || (!!s.role && !!(s.access && s.access.dashboard === true)), isAdmin: s.role === 'admin' };
   } catch (e) { dashAuth = { ready: true, user: u, allowed: false, isAdmin: false }; }
+  if (dashAuth.allowed) attachDataListeners();   // re-attach reads authenticated (needed once the DB rules are locked)
   render();
 });
 function dashSignIn(){ auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => { state.gateMsg = 'Sign-in failed: ' + (e.message || e.code || 'try again'); render(); }); }
@@ -10937,11 +10938,13 @@ function renderDevelopmentPage() {
   if (sessionStorage && sessionStorage.getItem('acqUnlocked') === '1') state.acq.unlocked = true;
   seedIfEmpty();
   seedEMadGoals();
-  listenAll();
-  listenTasks();
-  listenGoals();
-  listenAcqPin();
+  attachDataListeners();
 }
+// (Re)attach every data listener. Safe to call again — listenAll() detaches the
+// previous set first. Called at startup and again after sign-in, so the reads run
+// authenticated once the DB rules are locked (a listener that hits a permission
+// failure never auto-retries, so it must be re-attached once we're signed in).
+function attachDataListeners(){ listenAll(); listenTasks(); listenGoals(); listenAcqPin(); }
 
 function seedEMadGoals() {
   // Use full lowercase keys to match the existing format across all locations
