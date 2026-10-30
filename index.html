@@ -2783,8 +2783,21 @@ function renderGrowthPage() {
   return nav + renderGoalsPage();
 }
 
+// Team Handbook — PDF hosted alongside the dashboard, linked at the top of Training.
+const HANDBOOK_URL = 'assets/team-handbook.pdf';
+function renderHandbookCard(){
+  return '<div class="page" style="max-width:900px;padding-bottom:0;">' +
+    '<a href="' + HANDBOOK_URL + '" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:16px;text-decoration:none;background:linear-gradient(135deg,#1a1a2e,#2c4bff);color:#fff;border-radius:14px;padding:18px 22px;box-shadow:var(--shadow);">' +
+      '<div style="font-size:30px;line-height:1;">📕</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:16px;font-weight:800;">Team Handbook</div>' +
+        '<div style="font-size:12.5px;opacity:.9;margin-top:2px;line-height:1.45;">LVLUP &amp; Go Ninja — who we are and every team policy. Updated Nov 2026.</div>' +
+      '</div>' +
+      '<div style="flex:none;background:rgba(255,255,255,.16);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:800;white-space:nowrap;">Open PDF →</div>' +
+    '</a></div>';
+}
 function renderResourcesPage() {
-  return renderDevelopmentPage();
+  return renderHandbookCard() + renderDevelopmentPage();
 }
 
 function renderMarketingPage() {
