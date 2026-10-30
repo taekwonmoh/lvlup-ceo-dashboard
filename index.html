@@ -826,15 +826,15 @@ const CEO = 'ceo'; // root path in Firebase
    turning it on/off is a one-line, instantly-reversible change. */
 const DASH_AUTH_REQUIRED = false;
 const auth = firebase.auth();
-let dashAuth = { ready: !DASH_AUTH_REQUIRED, user: null, allowed: false };
+let dashAuth = { ready: !DASH_AUTH_REQUIRED, user: null, allowed: false, isAdmin: false };
 auth.onAuthStateChanged(async (u) => {
-  if (!DASH_AUTH_REQUIRED) { dashAuth = { ready: true, user: u || null, allowed: false }; return; }
-  if (!u || !u.email || !u.emailVerified) { dashAuth = { ready: true, user: u || null, allowed: false }; render(); return; }
+  if (!DASH_AUTH_REQUIRED) { dashAuth = { ready: true, user: u || null, allowed: false, isAdmin: false }; return; }
+  if (!u || !u.email || !u.emailVerified) { dashAuth = { ready: true, user: u || null, allowed: false, isAdmin: false }; render(); return; }
   const key = u.email.trim().toLowerCase().replace(/\./g, ',');
   try {
     const s = (await db.ref('staff/' + key).once('value')).val() || {};
-    dashAuth = { ready: true, user: u, allowed: s.role === 'admin' || (!!s.role && !!(s.access && s.access.dashboard === true)) };
-  } catch (e) { dashAuth = { ready: true, user: u, allowed: false }; }
+    dashAuth = { ready: true, user: u, allowed: s.role === 'admin' || (!!s.role && !!(s.access && s.access.dashboard === true)), isAdmin: s.role === 'admin' };
+  } catch (e) { dashAuth = { ready: true, user: u, allowed: false, isAdmin: false }; }
   render();
 });
 function dashSignIn(){ auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => { state.gateMsg = 'Sign-in failed: ' + (e.message || e.code || 'try again'); render(); }); }
@@ -4169,10 +4169,18 @@ function tcRemovePto(id, eid){ if (!confirm('Remove this PTO entry?')) return; f
 
 function renderTcPto(){
   const ft = tcStaffList().filter(s => s.fullTime); if (!ft.length) return '';
+  // Visibility: admins (Mike + Richelle) see everyone; a full-time employee sees only their own;
+  // everyone else sees nothing. Enforced only when the sign-in gate is on (we know the viewer then).
+  let visible = ft, selfOnly = false;
+  if (DASH_AUTH_REQUIRED) {
+    const email = ((dashAuth.user && dashAuth.user.email) || '').trim().toLowerCase();
+    if (!dashAuth.isAdmin) { visible = email ? ft.filter(s => (s.email || '').trim().toLowerCase() === email) : []; selfOnly = true; }
+    if (!visible.length) return '';
+  }
   let h = '<div class="section" style="margin-bottom:22px;">';
-  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>🌴 PTO</h2><span style="font-size:11px;color:#aaa;font-weight:600;">Full-time employees · days off</span></div>';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>🌴 PTO</h2><span style="font-size:11px;color:#aaa;font-weight:600;">' + (selfOnly ? 'Your paid time off' : 'Full-time employees · days off') + '</span></div>';
   h += '<div style="padding:8px 20px 16px;">';
-  ft.forEach(s => {
+  visible.forEach(s => {
     const per = tcPtoPeriod(s); const allot = per.allot, used = tcPtoUsedInPeriod(s.id, per.start, per.end), rem = allot - used;
     const pct = allot > 0 ? Math.min(100, Math.round(used / allot * 100)) : 0;
     const remColor = rem < 0 ? '#dc2626' : rem <= 2 ? '#d97706' : '#16a34a';
