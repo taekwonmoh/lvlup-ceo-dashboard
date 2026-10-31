@@ -4478,6 +4478,7 @@ function renderAccountabilityPage(){
   h += '</div>';
   h += renderTcMapModal();
   h += renderTcShiftModal();
+  h += renderTcPublishModal();
   h += renderTcCardModal();
   h += renderTcGuideModal();
   h += renderTcStaffModal();
@@ -4489,6 +4490,7 @@ function renderTcClock(){
   let h = '<div class="section" style="margin-bottom:22px;padding:0;overflow:hidden;">';
   h += '<div style="background:#1a1a2e;color:#fff;padding:16px 20px;"><div style="font-size:16px;font-weight:800;">Clock In / Out</div><div style="font-size:12px;opacity:.75;margin-top:2px;">Tap your name, enter your PIN, and clock in. Your location is checked against the school.</div></div>';
   h += '<div style="padding:16px 20px;">';
+  h += renderTcNoticeBanner();
   if (state.tcMsg) { const c = { ok: ['#dcfce7', '#166534'], warn: ['#fef3c7', '#92400e'], error: ['#fee2e2', '#b91c1c'], info: ['#e0f2fe', '#075985'] }[state.tcMsg.type] || ['#f1f3f9', '#555']; h += '<div style="background:' + c[0] + ';color:' + c[1] + ';border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:14px;">' + esc(state.tcMsg.text) + '</div>'; }
   if (!staff.length) { h += '<div style="color:#aaa;font-size:13px;padding:8px 0;">No staff on the clock yet — open <b>Setup</b> below to add your team.</div>'; }
   else if (state.tcSel && (tcData().staff || {})[state.tcSel]) {
@@ -4772,6 +4774,92 @@ function tcCopyLastWeek(){
   }));
   fbRef('timeclock/schedule').update(updates);
 }
+
+/* ── Publish & notify ─────────────────────────────────────────────────────
+   Snapshot the displayed week's schedule; diff against the last published
+   snapshot to find who changed; then notify the whole team or just the
+   affected staff (Slack via the webhooks server + a kiosk banner for anyone
+   without Slack). Snapshot lives at ceo/timeclock/schedulePublished/{weekKey};
+   the banner at ceo/timeclock/notices/scheduleUpdated. */
+function tcWeekKey(){ return tcDateKey(tcSchedDays()[0]); }                    // Monday date key
+function tcWeekSnapshot(){
+  const days = tcSchedDays(); const snap = {};
+  tcSchedStaff().forEach(s => days.forEach(d => {
+    const dk = tcDateKey(d);
+    Object.values((tcSchedFor(s.id)[dk]) || {}).forEach(sh => { if (!sh) return;
+      (snap[s.id] = snap[s.id] || []).push(dk + '|' + (sh.start || '') + '|' + (sh.end || '') + '|' + (sh.loc || '') + '|' + (sh.role || '')); });
+  }));
+  Object.keys(snap).forEach(id => snap[id].sort());
+  return snap;
+}
+function tcDiffAffected(prev, cur){
+  const ids = new Set([...Object.keys(prev || {}), ...Object.keys(cur || {})]); const out = [];
+  ids.forEach(id => { if ((prev[id] || []).join('¶') !== (cur[id] || []).join('¶')) out.push(id); });
+  return out;
+}
+function tcPublishOpen(){
+  const weekKey = tcWeekKey(); const cur = tcWeekSnapshot();
+  const prevRec = (tcData().schedulePublished || {})[weekKey]; const prev = (prevRec && prevRec.snap) || {};
+  const days = tcSchedDays();
+  const label = (days[0].getMonth() + 1) + '/' + days[0].getDate() + '–' + (days[6].getMonth() + 1) + '/' + days[6].getDate();
+  state.tcPublish = { weekKey, label, cur, affected: tcDiffAffected(prev, cur), firstTime: !prevRec, note: '' };
+  render();
+}
+function tcPublishClose(){ state.tcPublish = null; render(); }
+function tcPublishField(f, v){ if (state.tcPublish) state.tcPublish[f] = v; }
+async function tcPublishConfirm(mode){
+  const p = state.tcPublish; if (!p) return;
+  // Save the snapshot so the next publish diffs against this one.
+  fbSet('timeclock/schedulePublished/' + p.weekKey, { snap: p.cur, publishedAt: Date.now(), label: p.label });
+  if (mode === 'none') { state.tcPublish = null; state.tcMsg = { type: 'ok', text: 'Schedule published for ' + p.label + ' (no notification sent).' }; render(); return; }
+  // Kiosk / dashboard banner (seen by staff without Slack).
+  fbSet('timeclock/notices/scheduleUpdated', { weekKey: p.weekKey, label: p.label, ts: Date.now(), mode, affected: mode === 'affected' ? p.affected : [], note: (p.note || '').trim() || null });
+  // Slack via the webhooks server (best-effort; the banner still covers everyone).
+  let slackMsg = '';
+  try {
+    const { proxyUrl, secret } = await getReportProxyConfig();
+    const resp = await fetch(proxyUrl + '/notify-schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret, mode, weekLabel: p.label, affectedIds: p.affected, note: (p.note || '').trim() }) });
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok || j.error) slackMsg = ' · Slack: ' + (j.error || ('error ' + resp.status));
+    else if (mode === 'affected') slackMsg = ' · Slack DMs sent: ' + (j.dmSent || 0) + (j.notDmd && j.notDmd.length ? ' (no Slack: ' + j.notDmd.join(', ') + ' — covered by kiosk banner)' : '');
+    else slackMsg = (j.ok ? ' · posted to Slack' : ' · Slack not configured');
+  } catch (e) { slackMsg = ' · Slack skipped (' + (e.message || 'no server') + ')'; }
+  state.tcPublish = null;
+  state.tcMsg = { type: 'ok', text: 'Published ' + p.label + ' and notified ' + (mode === 'all' ? 'the whole team' : (p.affected.length + ' affected')) + '. Kiosk banner is live' + slackMsg + '.' };
+  render();
+}
+function renderTcPublishModal(){
+  const p = state.tcPublish; if (!p) return '';
+  const names = p.affected.map(id => esc(((tcData().staff || {})[id] || {}).name || id));
+  const fld = 'width:100%;box-sizing:border-box;border:1px solid #e3e6ef;border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;';
+  let h = '<div onclick="if(event.target===this)tcPublishClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:420;padding:16px;">';
+  h += '<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">';
+  h += '<div style="background:#1a1a2e;color:#fff;padding:14px 18px;"><div style="font-size:16px;font-weight:800;">📣 Publish &amp; notify — week of ' + esc(p.label) + '</div></div>';
+  h += '<div style="padding:16px 18px;">';
+  if (p.firstTime) h += '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:9px 12px;font-size:12.5px;color:#1e40af;margin-bottom:12px;">First time publishing this week — everyone’s shifts are treated as new, so “affected” is the whole scheduled team.</div>';
+  h += '<div style="font-size:13px;color:#333;margin-bottom:6px;"><b>' + (p.affected.length || 0) + '</b> ' + (p.affected.length === 1 ? 'person has' : 'people have') + ' a change since the last publish' + (names.length ? ':' : '.') + '</div>';
+  if (names.length) h += '<div style="font-size:12px;color:#555;background:#f7f9ff;border:1px solid #e3e6ef;border-radius:8px;padding:8px 10px;margin-bottom:12px;max-height:84px;overflow:auto;">' + names.join(', ') + '</div>';
+  h += '<label style="font-size:11px;font-weight:700;color:#666;">Optional note (added to the notification)<textarea oninput="tcPublishField(\'note\',this.value)" rows="2" placeholder="e.g. Summer camp week — earlier start times." style="' + fld + 'margin-top:4px;resize:vertical;">' + esc(p.note || '') + '</textarea></label>';
+  h += '<div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">';
+  h += '<button onclick="tcPublishConfirm(\'all\')" style="padding:12px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Notify the whole team</button>';
+  h += '<button onclick="tcPublishConfirm(\'affected\')"' + (p.affected.length ? '' : ' disabled') + ' style="padding:12px;background:' + (p.affected.length ? '#2563eb' : '#cbd5e1') + ';color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:' + (p.affected.length ? 'pointer' : 'not-allowed') + ';">Notify only the ' + (p.affected.length || '') + ' affected</button>';
+  h += '<button onclick="tcPublishConfirm(\'none\')" style="padding:10px;background:#fff;color:#555;border:1px solid #e3e6ef;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Just publish (no notification)</button>';
+  h += '<button onclick="tcPublishClose()" style="padding:8px;background:none;color:#888;border:none;font-size:12px;font-weight:700;cursor:pointer;">Cancel</button>';
+  h += '</div></div></div></div>';
+  return h;
+}
+// Dismissible banner shown on the kiosk + dashboard when a schedule update was published.
+function tcNoticeSeen(ts){ try { return localStorage.getItem('tcNoticeSeen_' + ts) === '1'; } catch (e) { return false; } }
+function tcDismissNotice(ts){ try { localStorage.setItem('tcNoticeSeen_' + ts, '1'); } catch (e) {} render(); }
+function renderTcNoticeBanner(){
+  const n = (tcData().notices || {}).scheduleUpdated; if (!n || !n.ts) return '';
+  if (Date.now() - n.ts > 7 * 86400000) return '';          // auto-expire after a week
+  if (tcNoticeSeen(n.ts)) return '';
+  return '<div style="background:#fef9c3;border:1px solid #fde68a;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;">'
+    + '<div style="flex:1;font-size:13px;color:#854d0e;"><b>📣 Schedule updated — week of ' + esc(n.label || '') + '.</b> Please check your shifts.' + (n.note ? '<br><span style="font-weight:600;">' + esc(n.note) + '</span>' : '') + '</div>'
+    + '<button onclick="tcDismissNotice(' + n.ts + ')" title="Dismiss" style="background:none;border:none;color:#a16207;font-size:16px;font-weight:800;cursor:pointer;line-height:1;">✕</button></div>';
+}
 // ── Drag & drop: move a shift to another day / person ──
 let _tcDrag = null;
 function tcDragStart(e, staffId, dk, sid){ _tcDrag = { staffId, dk, sid }; try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', sid); } catch (_) {} }
@@ -4996,8 +5084,10 @@ function renderTcSchedule(){
   const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length));
   let h = '<div class="section" style="margin-bottom:22px;">';
   const copyBtn = '<button onclick="tcCopyLastWeek()" title="Copy last week\'s shifts into this week" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4169E1;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 11px;">⧉ Copy last week</button>';
+  // "Publish & notify" is for full-edit users (admins / unscoped managers); scoped users focus on editing.
+  const publishBtn = tcSchedScope() ? '' : '<button onclick="tcPublishOpen()" title="Save this week as published and notify the team (whole team or just who changed)" style="background:#16a34a;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 12px;box-shadow:0 1px 3px rgba(22,163,74,.35);">📣 Publish &amp; notify</button>';
   const guideBtn = '<button onclick="tcGuideOpen()" title="How to run the schedule, time off, and time cards" style="background:#2f54d6;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 13px;box-shadow:0 1px 3px rgba(47,84,214,.35);">❔ How to use the scheduler</button>';
-  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📆 Master Schedule</h2><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + guideBtn + copyBtn + '<span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></span></div>';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📆 Master Schedule</h2><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + guideBtn + publishBtn + copyBtn + '<span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></span></div>';
   // Location filter / legend
   const chip = (id, label, color) => '<button onclick="tcSchedSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (color ? '<span style="width:9px;height:9px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:12px 20px 4px;">' + chip('all', 'All locations', null) + LOCATIONS.map(l => chip(l.id, l.name, l.color)).join('') + '</div>';
@@ -11549,16 +11639,20 @@ function feedbackToggleSelectAll() {
 
 // ── Shared proxy helper ──
 async function getReportProxyConfig() {
-  // Only reportProxyUrl is public; the rest of `config` (API keys, secrets) stays locked.
-  const snap = await db.ref('config/reportProxyUrl').once('value').catch(() => ({ val: () => null }));
-  let proxyUrl = (snap.val() || '').trim().replace(/\/$/, '');
+  // reportProxyUrl is public; webhookSecret lives under the (dashboard-only) config
+  // node so it can be aligned with the server's WATCHLIST_SECRET without a redeploy.
+  const [urlSnap, secSnap] = await Promise.all([
+    db.ref('config/reportProxyUrl').once('value').catch(() => ({ val: () => null })),
+    db.ref('config/webhookSecret').once('value').catch(() => ({ val: () => null })),
+  ]);
+  let proxyUrl = (urlSnap.val() || '').trim().replace(/\/$/, '');
   if (!proxyUrl) {
     proxyUrl = prompt('Enter your webhooks server URL to generate reports\n(e.g. https://your-server.com or http://localhost:3001)\n\nThis will be saved for future use:');
     if (!proxyUrl) throw new Error('No proxy URL configured');
     proxyUrl = proxyUrl.trim().replace(/\/$/, '');
     db.ref('config/reportProxyUrl').set(proxyUrl);
   }
-  const secret = 'lvlup-watchlist-2026';
+  const secret = (secSnap.val() || '').trim() || 'lvlup-watchlist-2026';   // override via config/webhookSecret
   return { proxyUrl, secret };
 }
 
