@@ -4302,6 +4302,21 @@ async function tcPunch(id, dir){
   } else {
     const open = tcOpenEntry(id);
     if (!open) { state.tcMsg = { type: 'warn', text: 'No open clock-in found for ' + (st.name || '') + '.' }; render(); return; }
+    // Stale open punch = a missed clock-out from earlier. Don't stamp "now" (wrong);
+    // ask for the real end time instead so hours stay accurate.
+    const staleOpen = open.dateKey !== tcDateKey() || (now - open.entry.inAt) > TC_MISSED_HRS * 3600000;
+    if (staleOpen) {
+      const v = prompt('Looks like you forgot to clock out — you clocked in ' + fmtCancelDate(open.dateKey) + ' at ' + tcFmtTime(open.entry.inAt) + '.\n\nEnter the ACTUAL end time for that shift (24-hour, e.g. 20:30):', '');
+      if (v === null) { state.tcMsg = null; render(); return; }
+      if (!/^\d{1,2}:\d{2}$/.test(v.trim())) { state.tcMsg = { type: 'error', text: 'Use HH:MM (24-hour), e.g. 20:30.' }; render(); return; }
+      let outAt = tcMsFromHM(open.dateKey, v.trim());
+      if (outAt && outAt < open.entry.inAt) outAt += 86400000;
+      if (!outAt || outAt <= open.entry.inAt) { state.tcMsg = { type: 'error', text: 'End time must be after your clock-in (' + tcFmtTime(open.entry.inAt) + ').' }; render(); return; }
+      const sb = 'timeclock/entries/' + id + '/' + open.dateKey + '/' + open.entryId + '/';
+      fbSet(sb + 'outAt', outAt); fbSet(sb + 'outOk', true); fbSet(sb + 'edited', true); fbSet(sb + 'editedAt', Date.now()); fbSet(sb + 'missedFix', true);
+      state.tcMsg = { type: 'ok', text: (st.name || '') + ' — missed clock-out fixed: ended ' + tcFmtTime(outAt) + ' (' + ((outAt - open.entry.inAt) / 3600000).toFixed(1) + 'h). Clock in again if you’re starting a new shift.' };
+      state.tcSel = null; state.tcPin = ''; render(); return;
+    }
     const base = 'timeclock/entries/' + id + '/' + open.dateKey + '/' + open.entryId + '/';
     fbSet(base + 'outAt', now); fbSet(base + 'outLat', pos.lat || null); fbSet(base + 'outLng', pos.lng || null); fbSet(base + 'outDist', dist); fbSet(base + 'outAcc', acc); fbSet(base + 'outOk', ok); fbSet(base + 'outLoc', punchLoc);
     state.tcMsg = { type: ok === false ? 'warn' : 'ok', text: (st.name || '') + ' clocked OUT · ' + tcFmtTime(now) + ' · ' + geoNote };
@@ -4374,6 +4389,56 @@ function renderTcMapModal(){
   return h;
 }
 function tcDeleteEntry(id, dk, eid){ if (!confirm('Delete this punch from the record?')) return; fbSet('timeclock/entries/' + id + '/' + dk + '/' + eid, null); }
+
+/* ── Missed clock-outs ─────────────────────────────────────────────────────
+   An open punch (clocked in, never clocked out) is a "missed clock-out" once
+   it's stale — from an earlier day, or more than 16h old. Surface them so a
+   manager can fill in the real end time. */
+const TC_MISSED_HRS = 16;
+function tcMissedClockouts(){
+  const out = []; const now = Date.now(); const todayK = tcDateKey();
+  Object.entries(tcData().entries || {}).forEach(([id, days]) => {
+    Object.entries(days || {}).forEach(([dk, es]) => {
+      Object.entries(es || {}).forEach(([eid, e]) => {
+        if (!e || !e.inAt || e.outAt) return;
+        if (dk !== todayK || (now - e.inAt) > TC_MISSED_HRS * 3600000)
+          out.push({ id, dk, eid, inAt: e.inAt, name: ((tcData().staff || {})[id] || {}).name || id });
+      });
+    });
+  });
+  return out.sort((a, b) => a.inAt - b.inAt);
+}
+function tcFixMissedOut(id, dk, eid){
+  const e = ((tcEmpEntries(id)[dk]) || {})[eid]; if (!e || !e.inAt || e.outAt) { render(); return; }
+  const nm = ((tcData().staff || {})[id] || {}).name || id;
+  const v = prompt('Missed clock-out — ' + nm + '\nClocked in ' + fmtCancelDate(dk) + ' at ' + tcFmtTime(e.inAt) + ' and never clocked out.\n\nEnter the ACTUAL end time (24-hour, e.g. 20:30):', '');
+  if (v === null) return;
+  if (!/^\d{1,2}:\d{2}$/.test(v.trim())) { alert('Use HH:MM (24-hour), e.g. 20:30.'); return; }
+  let outAt = tcMsFromHM(dk, v.trim());
+  if (outAt && outAt < e.inAt) outAt += 86400000;                 // crossed midnight
+  if (!outAt || outAt <= e.inAt) { alert('End time must be after the clock-in (' + tcFmtTime(e.inAt) + ').'); return; }
+  if ((outAt - e.inAt) > 24 * 3600000 && !confirm('That makes a shift longer than 24 hours — save anyway?')) return;
+  const base = 'timeclock/entries/' + id + '/' + dk + '/' + eid + '/';
+  fbSet(base + 'outAt', outAt); fbSet(base + 'outOk', true); fbSet(base + 'edited', true); fbSet(base + 'editedAt', Date.now()); fbSet(base + 'missedFix', true);
+  state.tcMsg = { type: 'ok', text: nm + '’s clock-out set to ' + tcFmtTime(outAt) + ' (' + ((outAt - e.inAt) / 3600000).toFixed(1) + 'h).' };
+  render();
+}
+function renderTcMissedOuts(){
+  const miss = tcMissedClockouts(); if (!miss.length) return '';
+  let h = '<div class="section" style="margin-bottom:22px;border:1px solid #fecaca;background:#fff5f5;">';
+  h += '<div class="section-header"><h2 style="color:#b91c1c;">⚠ Missed clock-outs (' + miss.length + ')</h2></div>';
+  h += '<div style="padding:4px 20px 6px;font-size:12px;color:#7f1d1d;">Someone clocked in and never clocked out. Fill in the real end time so hours and payroll are correct.</div>';
+  h += '<div style="padding:4px 20px 16px;">';
+  miss.forEach(m => {
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #fde0e0;flex-wrap:wrap;">';
+    h += '<span style="flex:1;min-width:180px;font-size:13px;"><b>' + esc(m.name) + '</b> <span style="color:#9b5a5a;">· in ' + esc(fmtCancelDate(m.dk)) + ' at ' + esc(tcFmtTime(m.inAt)) + '</span></span>';
+    h += '<button onclick="tcFixMissedOut(\'' + m.id + '\',\'' + m.dk + '\',\'' + m.eid + '\')" style="padding:7px 14px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">Fill in end time</button>';
+    h += '<button onclick="tcCardOpen(\'' + m.id + '\',\'' + m.dk + '\')" title="Open the full day card" style="padding:7px 12px;background:#fff;color:#555;border:1px solid #e3e6ef;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Edit card</button>';
+    h += '</div>';
+  });
+  h += '</div></div>';
+  return h;
+}
 
 /* ── PTO — fixed annual allotment (days) for full-time employees, log-only ── */
 function tcFmtDays(n){ n = +n || 0; return n % 1 ? n.toFixed(1) : String(n); }
@@ -4467,6 +4532,7 @@ function renderAccountabilityPage(){
   h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;"><div><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Accountability</h2><p style="margin:0;font-size:13px;color:#888;">Clock in/out with geo-fence, weekly timesheet, PTO, and the team schedule.</p></div>';
   h += '<a href="#clock" target="_blank" style="flex-shrink:0;padding:9px 15px;background:#1a1a2e;color:#fff;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;">🖥 Open clock kiosk →</a></div>';
   h += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:10px;padding:10px 14px;font-size:12px;color:#334;margin-bottom:16px;">Give part-timers the kiosk link — it shows only the clock and their schedule, not the rest of the dashboard: <b>' + esc(location.origin + location.pathname) + '#clock</b></div>';
+  h += renderTcMissedOuts();
   h += renderTcClock();
   h += renderTcSchedule();
   h += renderTcTimesheet();
