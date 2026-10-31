@@ -899,6 +899,9 @@ let state = {
   mktTab: 'content',
   contentRequests: {},
   taskPhotoFeed: {},
+  incidents: {},
+  incDraft: null,
+  incFilter: 'all',
   crDraft: null,
   crFilter: 'all',
   classPlaybook: {},
@@ -1897,6 +1900,11 @@ function listenAll() {
   invRef.on('value', snap => { state.inventory = snap.val() || {}; render(); });
   activeListeners.push({ ref: invRef, event: 'value' });
 
+  // Incident reports (injuries / medical / safety) — Members section
+  const incRef = fbRef('incidents');
+  incRef.on('value', snap => { state.incidents = snap.val() || {}; render(); });
+  activeListeners.push({ ref: incRef, event: 'value' });
+
   // Leadership backup timestamp (shared across owners)
   const ldBackupRef = fbRef('leadership/lastBackup');
   ldBackupRef.on('value', snap => { state.leadership.lastBackup = snap.val(); render(); });
@@ -2593,16 +2601,198 @@ function renderMembersPage() {
   const pending = crqAll().filter(r => !r.status).length;
   const openApps = appAll().filter(a => !appIsDone(a)).length;
   const openShirts = f5All().filter(r => !r.shirtGiven).length;
+  const openInc = incOpenCount();
   const nav = renderGroupSubNav([
     { id: 'feedback',     label: '👥 Students' },
     { id: 'holds',        label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') },
     { id: 'applications', label: '📋 Applications' + (openApps ? ' (' + openApps + ')' : '') },
     { id: 'firstfive',    label: '🥋 First 5' + (openShirts ? ' (' + openShirts + ')' : '') },
+    { id: 'incidents',    label: '🚑 Incidents' + (openInc ? ' (' + openInc + ')' : '') },
   ]);
   if (s === 'holds') return nav + renderHoldsPage();
   if (s === 'applications') return nav + renderApplicationsPage();
   if (s === 'firstfive') return nav + renderFirstFivePage();
+  if (s === 'incidents') return nav + renderIncidentsPage();
   return nav + renderFeedbackPage();
+}
+
+/* ── Incident Reports — injuries / medical / safety, filed by staff ──
+   Stored at ceo/incidents/{id}. Sensitive personal data (often about
+   minors): must be covered by the staff-only DB rules lockdown. */
+const INC_TYPES = [
+  { id: 'injury',     label: 'Injury',            color: '#dc2626' },
+  { id: 'medical',    label: 'Illness / Medical', color: '#db2777' },
+  { id: 'behavioral', label: 'Behavioral',        color: '#d97706' },
+  { id: 'property',   label: 'Property Damage',    color: '#7c3aed' },
+  { id: 'nearmiss',   label: 'Near Miss',         color: '#0891b2' },
+  { id: 'other',      label: 'Other',             color: '#64748b' },
+];
+const INC_SEVERITY = [
+  { id: 'minor',    label: 'Minor',               color: '#16a34a' },
+  { id: 'moderate', label: 'Moderate',            color: '#d97706' },
+  { id: 'serious',  label: 'Serious / Emergency', color: '#dc2626' },
+];
+const INC_PERSON_TYPES = ['Student', 'Staff', 'Visitor', 'Parent / Guest'];
+const INC_STATUSES = [
+  { id: 'open',     label: 'Open',     color: '#dc2626' },
+  { id: 'reviewed', label: 'Reviewed', color: '#2563eb' },
+  { id: 'closed',   label: 'Closed',   color: '#16a34a' },
+];
+
+function incAll(){ return Object.entries(state.incidents || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
+function incOpenCount(){ return incAll().filter(r => (r.status || 'open') === 'open').length; }
+function incNew(){
+  // Auto-fill the reporter: the signed-in manager on the dashboard, or the
+  // selected staffer when filing from the kiosk; blank otherwise.
+  let by = (typeof dashAuth !== 'undefined' && dashAuth && dashAuth.user && dashAuth.user.email) ? dashAuth.user.email : '';
+  if (!by && location.hash === '#clock' && state.tcSel) { const sn = ((tcData().staff || {})[state.tcSel] || {}).name; if (sn) by = sn; }
+  const now = new Date(); const pad = n => String(n).padStart(2, '0');
+  state.incDraft = {
+    _id: null,
+    date: now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()),
+    time: pad(now.getHours()) + ':' + pad(now.getMinutes()),
+    location: '', type: 'injury', severity: 'minor',
+    personName: '', personType: 'Student', age: '',
+    description: '', injuryDetail: '', actionTaken: '',
+    emergencyCalled: false, parentNotified: false, notifyNote: '',
+    witnesses: '', followUp: '', reportedBy: by, status: 'open',
+  };
+  render();
+}
+function incEdit(id){ const r = (state.incidents || {})[id]; if (!r) return; state.incDraft = Object.assign({ _id: id }, r); render(); }
+function incClose(){ state.incDraft = null; render(); }
+function incSet(f, v){ if (state.incDraft) state.incDraft[f] = v; }
+function incSetRender(f, v){ if (state.incDraft){ state.incDraft[f] = v; render(); } }
+function incToggle(f){ if (state.incDraft){ state.incDraft[f] = !state.incDraft[f]; render(); } }
+function incSetFilter(f){ state.incFilter = f; render(); }
+function incSave(){
+  const d = state.incDraft; if (!d) return;
+  if (!d.date){ alert('Please enter the date of the incident.'); return; }
+  if (!d.location){ alert('Please choose a location.'); return; }
+  if (!(d.description || '').trim()){ alert('Please describe what happened.'); return; }
+  const id = d._id || ('inc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+  const existing = (state.incidents || {})[id] || {};
+  const rec = {
+    date: d.date, time: (d.time || '').trim(), location: d.location,
+    type: d.type || 'injury', severity: d.severity || 'minor',
+    personName: (d.personName || '').trim(), personType: d.personType || 'Student', age: String(d.age || '').trim(),
+    description: d.description.trim(), injuryDetail: (d.injuryDetail || '').trim(), actionTaken: (d.actionTaken || '').trim(),
+    emergencyCalled: !!d.emergencyCalled, parentNotified: !!d.parentNotified, notifyNote: (d.notifyNote || '').trim(),
+    witnesses: (d.witnesses || '').trim(), followUp: (d.followUp || '').trim(),
+    reportedBy: (d.reportedBy || '').trim(), status: d.status || 'open',
+    createdAt: existing.createdAt || Date.now(),
+    createdBy: existing.createdBy || (d.reportedBy || '').trim() || null,
+    updatedAt: Date.now(),
+  };
+  fbSet('incidents/' + id, rec);
+  state.incDraft = null; render();
+}
+function incDelete(){
+  const d = state.incDraft; if (!d || !d._id) return;
+  if (!confirm('Delete this incident report? This is a safety record and cannot be undone.')) return;
+  fbSet('incidents/' + d._id, null);
+  state.incDraft = null; render();
+}
+
+function renderIncidentsPage(){
+  const all = incAll().sort((a, b) => (b.date || '').localeCompare(a.date || '') || ((b.createdAt || 0) - (a.createdAt || 0)));
+  const filter = state.incFilter || 'all';
+  const counts = { open: 0, reviewed: 0, closed: 0 };
+  all.forEach(r => { const st = r.status || 'open'; counts[st] = (counts[st] || 0) + 1; });
+  const shown = filter === 'all' ? all : all.filter(r => (r.status || 'open') === filter);
+  let h = '<div class="page" style="max-width:1100px;">';
+  h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px;">';
+  h += '<div><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🚑 Incident Reports</h2><p style="margin:0;font-size:13px;color:#888;">Document any injury, medical, behavioral or safety incident. Fill this out as soon as possible after it happens.</p></div>';
+  h += '<button onclick="incNew()" style="flex:none;background:#dc2626;border:none;color:#fff;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;">+ New incident report</button>';
+  h += '</div>';
+  h += '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:9px 13px;font-size:12px;color:#9a3412;margin:12px 0 16px;">🔒 These reports hold sensitive personal information — keep them confidential and share only with those who need them.</div>';
+  const chip = (id, l, n) => '<button onclick="incSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + l + (n != null ? ' (' + n + ')' : '') + '</button>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All', all.length) + chip('open', 'Open', counts.open) + chip('reviewed', 'Reviewed', counts.reviewed) + chip('closed', 'Closed', counts.closed) + '</div>';
+  if (!shown.length){
+    h += '<div style="text-align:center;color:#aaa;font-size:13px;padding:30px;border:1px dashed #e2e5ee;border-radius:12px;">' + (all.length ? 'No ' + filter + ' reports.' : 'No incident reports yet. Tap “+ New incident report” if something needs documenting.') + '</div>';
+    h += '</div>' + renderIncidentModal(); return h;
+  }
+  shown.forEach(r => {
+    const typ = INC_TYPES.find(t => t.id === (r.type || 'other')) || INC_TYPES[INC_TYPES.length - 1];
+    const sev = INC_SEVERITY.find(s => s.id === (r.severity || 'minor')) || INC_SEVERITY[0];
+    const st  = INC_STATUSES.find(s => s.id === (r.status || 'open')) || INC_STATUSES[0];
+    const loc = (LOCATIONS.find(l => l.id === r.location) || {}).name || r.location || '—';
+    const badge = (txt, c) => '<span style="display:inline-block;background:' + c + ';color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;letter-spacing:.3px;">' + esc(txt) + '</span>';
+    h += '<div onclick="incEdit(\'' + r.id + '\')" style="background:#fff;border:1px solid #e8eaf0;border-left:4px solid ' + sev.color + ';border-radius:12px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);cursor:pointer;">';
+    h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">' + badge(typ.label, typ.color) + badge(sev.label, sev.color) + badge(st.label, st.color);
+    h += '<span style="margin-left:auto;font-size:12px;color:#888;font-weight:600;">' + esc(fmtCancelDate(r.date)) + (r.time ? ' · ' + esc(r.time) : '') + '</span></div>';
+    h += '<div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:2px;">' + esc(r.personName || '(no name)') + ' <span style="font-weight:500;color:#8892a6;">· ' + esc(r.personType || '') + '</span> <span style="font-weight:500;color:#aab2c0;">· ' + esc(loc) + '</span></div>';
+    h += '<div style="font-size:13px;color:#555;line-height:1.45;white-space:pre-wrap;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + esc(r.description || '') + '</div>';
+    const flags = [];
+    if (r.emergencyCalled) flags.push('🚨 911 called');
+    if (r.parentNotified) flags.push('✓ Parent notified'); else if (r.type === 'injury' || r.type === 'medical') flags.push('⚠ Parent not notified');
+    if ((r.followUp || '').trim()) flags.push('📌 Follow-up');
+    if (flags.length) h += '<div style="margin-top:7px;display:flex;gap:10px;flex-wrap:wrap;font-size:11px;font-weight:700;color:#667085;">' + flags.map(esc).join(' <span style="color:#ccc;">·</span> ') + '</div>';
+    h += '<div style="margin-top:6px;font-size:11px;color:#aab2c0;">Reported by ' + esc(r.reportedBy || '—') + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  h += renderIncidentModal();
+  return h;
+}
+
+function renderIncidentModal(){
+  const d = state.incDraft; if (!d) return '';
+  const editing = !!d._id;
+  const fieldLbl = 'font-size:11px;font-weight:800;color:#0f3460;text-transform:uppercase;letter-spacing:.4px;margin:0 0 5px;display:block;';
+  const inputCss = 'width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #dde1ec;border-radius:9px;font-size:13px;outline:none;font-family:inherit;';
+  let h = '<div onclick="incClose()" style="position:fixed;inset:0;background:rgba(15,20,35,.55);z-index:1000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:28px 14px;">';
+  h += '<div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px;max-width:580px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3);">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #eef0f6;position:sticky;top:0;background:#fff;border-radius:16px 16px 0 0;">';
+  h += '<div style="font-size:16px;font-weight:800;color:#1a1a2e;">' + (editing ? '✏️ Incident Report' : '🚑 New Incident Report') + '</div>';
+  h += '<button onclick="incClose()" style="background:#f1f3f9;border:none;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:16px;color:#666;line-height:1;">×</button>';
+  h += '</div>';
+  h += '<div style="padding:20px 22px;">';
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+  h += '<div style="flex:1;min-width:130px;"><label style="' + fieldLbl + '">📅 Date <span style="color:#dc2626;">*</span></label><input type="date" value="' + esc(d.date || '') + '" oninput="incSet(\'date\',this.value)" style="' + inputCss + '"></div>';
+  h += '<div style="flex:1;min-width:110px;"><label style="' + fieldLbl + '">⏰ Time</label><input type="time" value="' + esc(d.time || '') + '" oninput="incSet(\'time\',this.value)" style="' + inputCss + '"></div>';
+  h += '</div>';
+  h += '<label style="' + fieldLbl + '">📍 Location <span style="color:#dc2626;">*</span></label>';
+  h += '<select onchange="incSet(\'location\',this.value)" style="' + inputCss + 'background:#fff;margin-bottom:16px;"><option value="">Choose a location…</option>' + LOCATIONS.map(l => '<option value="' + l.id + '"' + (d.location === l.id ? ' selected' : '') + '>' + esc(l.name) + '</option>').join('') + '</select>';
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+  h += '<div style="flex:1;min-width:150px;"><label style="' + fieldLbl + '">Type</label><select onchange="incSetRender(\'type\',this.value)" style="' + inputCss + 'background:#fff;">' + INC_TYPES.map(t => '<option value="' + t.id + '"' + (d.type === t.id ? ' selected' : '') + '>' + t.label + '</option>').join('') + '</select></div>';
+  h += '<div style="flex:1;min-width:150px;"><label style="' + fieldLbl + '">Severity</label><select onchange="incSet(\'severity\',this.value)" style="' + inputCss + 'background:#fff;">' + INC_SEVERITY.map(s => '<option value="' + s.id + '"' + (d.severity === s.id ? ' selected' : '') + '>' + s.label + '</option>').join('') + '</select></div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+  h += '<div style="flex:2;min-width:160px;"><label style="' + fieldLbl + '">Person involved</label><input value="' + esc(d.personName || '') + '" oninput="incSet(\'personName\',this.value)" placeholder="Full name" style="' + inputCss + '"></div>';
+  h += '<div style="flex:1;min-width:120px;"><label style="' + fieldLbl + '">Who</label><select onchange="incSet(\'personType\',this.value)" style="' + inputCss + 'background:#fff;">' + INC_PERSON_TYPES.map(p => '<option' + (d.personType === p ? ' selected' : '') + '>' + p + '</option>').join('') + '</select></div>';
+  h += '<div style="flex:0 0 68px;"><label style="' + fieldLbl + '">Age</label><input value="' + esc(d.age || '') + '" oninput="incSet(\'age\',this.value)" placeholder="—" style="' + inputCss + '"></div>';
+  h += '</div>';
+  h += '<label style="' + fieldLbl + '">What happened? <span style="color:#dc2626;">*</span></label>';
+  h += '<textarea oninput="incSet(\'description\',this.value)" placeholder="Describe the incident: what led up to it, what happened, and where exactly." style="' + inputCss + 'min-height:90px;resize:vertical;margin-bottom:16px;line-height:1.5;">' + esc(d.description || '') + '</textarea>';
+  if (d.type === 'injury' || d.type === 'medical'){
+    h += '<label style="' + fieldLbl + '">Injury / symptoms (body area, nature)</label>';
+    h += '<input value="' + esc(d.injuryDetail || '') + '" oninput="incSet(\'injuryDetail\',this.value)" placeholder="e.g. Scraped left knee; bump on forehead" style="' + inputCss + 'margin-bottom:16px;">';
+  }
+  h += '<label style="' + fieldLbl + '">Action taken / first aid</label>';
+  h += '<textarea oninput="incSet(\'actionTaken\',this.value)" placeholder="What was done in response — first aid, ice, rest, sent home, etc." style="' + inputCss + 'min-height:60px;resize:vertical;margin-bottom:16px;line-height:1.5;">' + esc(d.actionTaken || '') + '</textarea>';
+  const chk = (field, label) => '<button onclick="incToggle(\'' + field + '\')" style="display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:9px;border:1px solid ' + (d[field] ? '#1a1a2e' : '#dde1ec') + ';background:' + (d[field] ? '#1a1a2e' : '#fff') + ';color:' + (d[field] ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (d[field] ? '✓ ' : '') + label + '</button>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' + chk('emergencyCalled', '🚨 911 / emergency called') + chk('parentNotified', 'Parent / guardian notified') + '</div>';
+  if (d.parentNotified){
+    h += '<label style="' + fieldLbl + '">Notification details (who, when, how)</label>';
+    h += '<input value="' + esc(d.notifyNote || '') + '" oninput="incSet(\'notifyNote\',this.value)" placeholder="e.g. Called mom at 4:15pm, she picked up" style="' + inputCss + 'margin-bottom:16px;">';
+  }
+  h += '<label style="' + fieldLbl + '">Witnesses</label>';
+  h += '<input value="' + esc(d.witnesses || '') + '" oninput="incSet(\'witnesses\',this.value)" placeholder="Names of anyone who saw it" style="' + inputCss + 'margin-bottom:16px;">';
+  h += '<label style="' + fieldLbl + '">Follow-up needed</label>';
+  h += '<textarea oninput="incSet(\'followUp\',this.value)" placeholder="Anything still to do — call home, check in tomorrow, notify insurer, etc." style="' + inputCss + 'min-height:50px;resize:vertical;margin-bottom:16px;line-height:1.5;">' + esc(d.followUp || '') + '</textarea>';
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+  h += '<div style="flex:2;min-width:150px;"><label style="' + fieldLbl + '">Reported by</label><input value="' + esc(d.reportedBy || '') + '" oninput="incSet(\'reportedBy\',this.value)" placeholder="Your name" style="' + inputCss + '"></div>';
+  h += '<div style="flex:1;min-width:120px;"><label style="' + fieldLbl + '">Status</label><select onchange="incSet(\'status\',this.value)" style="' + inputCss + 'background:#fff;">' + INC_STATUSES.map(s => '<option value="' + s.id + '"' + ((d.status || 'open') === s.id ? ' selected' : '') + '>' + s.label + '</option>').join('') + '</select></div>';
+  h += '</div>';
+  h += '</div>';
+  h += '<div style="display:flex;align-items:center;gap:10px;padding:16px 22px;border-top:1px solid #eef0f6;position:sticky;bottom:0;background:#fff;border-radius:0 0 16px 16px;">';
+  if (editing) h += '<button onclick="incDelete()" style="background:#fff;border:1px solid #f3c6c6;color:#dc2626;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;">Delete</button>';
+  h += '<button onclick="incClose()" style="margin-left:auto;background:#f1f3f9;border:none;color:#555;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>';
+  h += '<button onclick="incSave()" style="background:#dc2626;border:none;color:#fff;border-radius:9px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;">Save Report</button>';
+  h += '</div>';
+  h += '</div></div>';
+  return h;
 }
 
 /* ── Holds & Cancellations — form-fed request queue ─────────── */
@@ -3176,7 +3366,7 @@ function render() {
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
      ['tasks','events','testing','accountability','inventory','photos'].includes(s)    ? renderOpsPage()       :
-     ['feedback','watchlist','holds','applications','firstfive'].includes(s)              ? renderMembersPage()   :
+     ['feedback','watchlist','holds','applications','firstfive','incidents'].includes(s)   ? renderMembersPage()   :
      ['goals','marketing','scorecard','rocks','financials'].includes(s)       ? renderGrowthPage()    :
      s === 'development'                                                      ? renderResourcesPage() :
      '');
@@ -3189,7 +3379,7 @@ function renderHeader() {
   const getGroup = s => {
     if (s === 'home') return 'home';
     if (['tasks','events','testing','accountability','inventory','photos'].includes(s)) return 'ops';
-    if (['feedback','watchlist','holds','applications','firstfive'].includes(s)) return 'members';
+    if (['feedback','watchlist','holds','applications','firstfive','incidents'].includes(s)) return 'members';
     if (['goals','marketing','monthlyGoals','scorecard','rocks','financials','performance'].includes(s)) return 'growth';
     if (s === 'development')                                   return 'resources';
     if (s === 'leadership')                                    return 'leadership';
@@ -5058,8 +5248,11 @@ function renderClockKiosk(){
   h += '<div style="border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">' + renderTcClock() + '</div>';
   if (state.tcSel && (tcData().staff || {})[state.tcSel]) { h += renderTcKioskActions(state.tcSel); h += renderTcMySchedule(state.tcSel); }
   h += renderTcTeamSchedule();
+  // Anyone on shift can file an injury / incident report straight from the kiosk.
+  h += '<div style="text-align:center;margin-top:18px;"><button onclick="incNew()" style="background:rgba(220,38,38,.15);border:1px solid rgba(248,113,113,.5);color:#fca5a5;border-radius:11px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;">🚑 Report an injury / incident</button></div>';
   h += '<div style="text-align:center;margin-top:16px;"><a href="#" onclick="location.hash=\'\';return false;" style="color:#64748b;font-size:12px;text-decoration:none;">Exit kiosk</a></div>';
   h += '</div></div>';
+  h += renderIncidentModal();
   return h;
 }
 
