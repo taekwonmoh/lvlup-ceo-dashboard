@@ -4509,6 +4509,97 @@ function tcAddPto(id){
 }
 function tcRemovePto(id, eid){ if (!confirm('Remove this PTO entry?')) return; fbSet('timeclock/pto/' + id + '/' + eid, null); }
 
+/* ── Paid holidays — company-wide, auto-computed each year from the LVLUP work-agreement
+   list (MLK, Memorial, July 4, Labor Day, Thanksgiving, Christmas Eve+Day, New Year's Eve+Day).
+   Admins can hide one they don't observe, or add a custom closed date, in Setup → Paid holidays.
+   Overrides live at ceo/timeclock/holidays/{YYYY-MM-DD} = { name } (add) or { off:true } (hide). ── */
+function tcNthDow(y, month, dow, n){ const first = new Date(y, month, 1); const off = (dow - first.getDay() + 7) % 7; return [month, 1 + off + (n - 1) * 7]; }
+function tcLastDow(y, month, dow){ const last = new Date(y, month + 1, 0); const off = (last.getDay() - dow + 7) % 7; return [month, last.getDate() - off]; }
+const TC_HOLIDAY_DEFS = [
+  { id:'nyd',  name:"New Year's Day",   md:y => [0, 1] },            // Jan 1
+  { id:'mlk',  name:'MLK Jr. Day',      md:y => tcNthDow(y, 0, 1, 3) }, // 3rd Mon Jan
+  { id:'mem',  name:'Memorial Day',     md:y => tcLastDow(y, 4, 1) },   // last Mon May
+  { id:'jul4', name:'Independence Day', md:y => [6, 4] },            // Jul 4
+  { id:'lab',  name:'Labor Day',        md:y => tcNthDow(y, 8, 1, 1) }, // 1st Mon Sep
+  { id:'thx',  name:'Thanksgiving',     md:y => tcNthDow(y, 10, 4, 4) },// 4th Thu Nov
+  { id:'xe',   name:'Christmas Eve',    md:y => [11, 24] },         // Dec 24
+  { id:'xd',   name:'Christmas Day',    md:y => [11, 25] },         // Dec 25
+  { id:'nye',  name:"New Year's Eve",   md:y => [11, 31] },         // Dec 31
+];
+function tcHolKey(y, md){ return y + '-' + String(md[0] + 1).padStart(2, '0') + '-' + String(md[1]).padStart(2, '0'); }
+function tcHolidayOverrides(){ return (tcData().holidays) || {}; }
+// { 'YYYY-MM-DD': name } across the given years, with admin add/hide applied.
+function tcHolidayMap(years){
+  const map = {};
+  (years || []).forEach(y => TC_HOLIDAY_DEFS.forEach(def => { map[tcHolKey(y, def.md(y))] = def.name; }));
+  Object.entries(tcHolidayOverrides()).forEach(([k, v]) => { if (!v) return; if (v.off) delete map[k]; else if (v.name) map[k] = v.name; });
+  return map;
+}
+function tcHolidayName(dkOrDate){
+  const dk = (dkOrDate instanceof Date) ? tcDateKey(dkOrDate) : dkOrDate;
+  const y = parseInt(String(dk).slice(0, 4)); if (!y) return null;
+  return tcHolidayMap([y])[dk] || null;
+}
+// Upcoming holidays from today (inclusive), up to `n`.
+function tcUpcomingHolidays(n){
+  const today = new Date(); today.setHours(0, 0, 0, 0); const y = today.getFullYear();
+  return Object.entries(tcHolidayMap([y, y + 1])).map(([dk, name]) => ({ dk, name, d: new Date(dk + 'T00:00:00') }))
+    .filter(x => x.d >= today).sort((a, b) => a.d - b.d).slice(0, n || 5);
+}
+// Shared "paid holidays & time off" explainer. Pass a staff id (kiosk) to show that person's PTO.
+function renderTcTimeoffInfo(staffId){
+  const up = tcUpcomingHolidays(5);
+  const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmtH = d => DOW[d.getDay()] + ' ' + MON[d.getMonth()] + ' ' + d.getDate();
+  let h = '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:14px;padding:16px 18px;margin-bottom:16px;">';
+  h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:10px;">🎉 Paid holidays &amp; time off</div>';
+  if (up.length) {
+    h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
+    up.forEach(x => { h += '<span style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:4px 10px;font-size:12px;color:#9a3412;font-weight:600;">🎉 ' + esc(x.name) + ' · ' + fmtH(x.d) + '</span>'; });
+    h += '</div>';
+  }
+  if (staffId) { const st = (tcData().staff || {})[staffId]; if (st && st.fullTime) { const per = tcPtoPeriod(st); const rem = per.allot - tcPtoUsedInPeriod(staffId, per.start, per.end); const rc = rem < 0 ? '#dc2626' : rem <= 2 ? '#d97706' : '#16a34a'; h += '<div style="font-size:13px;color:#334;margin-bottom:8px;">Your PTO: <b style="color:' + rc + ';">' + tcFmtDays(rem) + '</b> of ' + tcFmtDays(per.allot) + ' paid days left this year.</div>'; } }
+  h += '<div style="font-size:12px;color:#555;line-height:1.6;">'
+    + '• <b>Salaried staff</b> are paid for the holidays above and have <b>PTO</b> — both set in your work agreement. Sick days come out of the same PTO bank.<br>'
+    + '• <b>Hourly staff</b> don’t receive paid time off.<br>'
+    + '• <b>Need time off?</b> You can always take it — if you’re out of PTO (or paid hourly), those days are simply <b>unpaid</b>, not denied. Submit requests <b>at least 2 weeks ahead</b>. No blackout dates, no cap on consecutive days — every request needs manager approval.'
+    + '</div>';
+  h += '</div>';
+  return h;
+}
+
+/* ── Admin: paid-holiday list (hide a standard one, add a custom closed date) ── */
+function tcHolidaySetOff(dk){ const cur = tcHolidayOverrides()[dk]; if (cur && cur.off) fbSet('timeclock/holidays/' + dk, null); else fbSet('timeclock/holidays/' + dk, { off: true }); }
+function tcHolidayAdd(){
+  const date = prompt('Add a paid holiday / closed date (YYYY-MM-DD):'); if (!date) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) { alert('Use YYYY-MM-DD.'); return; }
+  const name = prompt('Label (e.g. “Winter break”, “Staff training day”):'); if (!name || !name.trim()) return;
+  fbSet('timeclock/holidays/' + date.trim(), { name: name.trim() });
+}
+function tcHolidayRemoveCustom(dk){ if (!confirm('Remove this custom date?')) return; fbSet('timeclock/holidays/' + dk, null); }
+function renderTcHolidayAdmin(){
+  if (!dashAuth.isAdmin) return '';
+  const y = new Date().getFullYear(), ov = tcHolidayOverrides();
+  const rows = [];
+  [y, y + 1].forEach(yy => TC_HOLIDAY_DEFS.forEach(def => { const dk = tcHolKey(yy, def.md(yy)); rows.push({ dk, name: def.name, std: true, hidden: !!(ov[dk] && ov[dk].off) }); }));
+  const stdKeys = new Set(rows.map(r => r.dk));
+  Object.entries(ov).forEach(([dk, v]) => { if (v && !v.off && v.name && !stdKeys.has(dk)) rows.push({ dk, name: v.name, std: false, hidden: false }); });
+  rows.sort((a, b) => a.dk.localeCompare(b.dk));
+  const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmt = dk => { const d = new Date(dk + 'T00:00:00'); return DOW[d.getDay()] + ' ' + MON[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); };
+  let h = '<div style="font-size:13px;font-weight:800;color:#1a1a2e;margin:22px 0 4px;">Paid holidays</div>';
+  h += '<div style="font-size:11px;color:#999;margin-bottom:8px;">Auto-marked on the schedule &amp; kiosk every year (from the LVLUP work-agreement list). Hide one you don’t observe, or add a custom closed date. Salaried staff are paid per their agreement.</div>';
+  rows.forEach(r => {
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;' + (r.hidden ? 'opacity:.5;' : '') + '">';
+    h += '<span style="flex:1;min-width:180px;font-size:13px;">' + (r.std ? '🎉' : '📅') + ' <b>' + esc(r.name) + '</b> <span style="color:#aaa;font-size:11px;">· ' + fmt(r.dk) + (r.std ? '' : ' · custom') + '</span></span>';
+    if (r.std) h += '<button onclick="tcHolidaySetOff(\'' + r.dk + '\')" style="padding:5px 11px;border:1px solid #e3e6ef;background:#fff;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;color:' + (r.hidden ? '#16a34a' : '#d97706') + ';">' + (r.hidden ? 'Un-hide' : 'Hide') + '</button>';
+    else h += '<button onclick="tcHolidayRemoveCustom(\'' + r.dk + '\')" style="padding:5px 11px;border:1px solid #e3e6ef;background:#fff;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;color:#dc2626;">Remove</button>';
+    h += '</div>';
+  });
+  h += '<button onclick="tcHolidayAdd()" class="l10-add-btn" style="margin-top:10px;">+ Add custom closed date</button>';
+  return h;
+}
+
 function renderTcPto(){
   const ft = tcStaffList().filter(s => s.fullTime); if (!ft.length) return '';
   // Visibility: admins (Mike + Richelle) see everyone; a full-time employee sees only their own;
@@ -4552,6 +4643,7 @@ function renderAccountabilityPage(){
   h += renderTcMissedOuts();
   h += renderTcClock();
   h += renderTcSchedule();
+  h += renderTcTimeoffInfo();
   h += renderTcTimesheet();
   h += renderTcPayroll();
   h += renderTcTimeoff();
@@ -4801,6 +4893,7 @@ function renderTcSetup(){
     h += '<button onclick="tcAddStaff()" class="l10-add-btn" style="margin-top:10px;">+ Add staff</button>';
     h += '<div style="font-size:11px;color:#999;margin-top:8px;">🔔 <b>Slack shift reminders:</b> toggle per person (optional @handle for a mention). Reminders post to Slack from the webhooks server on a schedule — free, no Twilio. Turn toggles on now; I\'ll wire the scheduled job to your Slack.</div>';
     h += renderTcSchedulers();
+    h += renderTcHolidayAdmin();
     h += '<div style="font-size:13px;font-weight:800;color:#1a1a2e;margin:20px 0 4px;">Geofences</div>';
     h += '<div style="font-size:11px;color:#999;margin-bottom:8px;">Stand at each school and tap “Set from here” to capture its GPS + radius.</div>';
     LOCATIONS.forEach(loc => { const cfg = tcCfg(loc.id); h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;"><span style="flex:1;min-width:150px;font-size:13px;">' + esc(loc.name) + '</span>' + (cfg ? '<span style="font-size:11px;font-weight:700;color:#16a34a;">✓ set ±' + (cfg.radiusM || 150) + 'm</span>' : '<span style="font-size:11px;font-weight:700;color:#d97706;">not set</span>') + '<button onclick="tcOpenMap(\'' + loc.id + '\')" style="' + btn + '">Set on map</button><button onclick="tcSetGeofenceHere(\'' + loc.id + '\')" style="' + btn + '">Set from here</button>' + (cfg ? '<button onclick="tcClearGeofence(\'' + loc.id + '\')" style="' + btn + 'color:#dc2626;">Clear</button>' : '') + '</div>'; });
@@ -5174,10 +5267,11 @@ function renderTcSchedule(){
   // Location filter / legend
   const chip = (id, label, color) => '<button onclick="tcSchedSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (color ? '<span style="width:9px;height:9px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:12px 20px 4px;">' + chip('all', 'All locations', null) + LOCATIONS.map(l => chip(l.id, l.name, l.color)).join('') + '</div>';
-  h += '<div style="padding:4px 20px 0;font-size:11.5px;color:#9aa3b5;">Tap a name to see one person’s week · tap a shift to edit · drag a shift to move it</div>';
+  h += '<div style="padding:4px 20px 0;font-size:11.5px;color:#9aa3b5;">Tap a name to see one person’s week · tap a shift to edit · drag a shift to move it · 🎉 = paid holiday</div>';
   { const sc = tcSchedScope(); if (sc) h += '<div style="margin:8px 20px 0;background:#eef4ff;border:1px solid #d5e2ff;border-radius:9px;padding:8px 12px;font-size:12px;color:#334;">📋 You’re scheduling <b>' + esc(tcScopeNames(sc) || 'your assigned locations') + '</b>' + (sc.selfId ? ' (and your own shifts)' : '') + '. Other shifts show for context but are view-only.</div>'; }
+  const holMap = tcHolidayMap([...new Set(days.map(d => d.getFullYear()))]);
   h += '<div style="overflow-x:auto;padding:8px 0 0;"><table class="sc-table" style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;min-width:120px;position:sticky;left:0;background:#fff;">Staff</th>';
-  days.forEach(d => { h += '<th style="text-align:center;min-width:92px;">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#aaa;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span></th>'; });
+  days.forEach(d => { const hn = holMap[tcDateKey(d)]; h += '<th style="text-align:center;min-width:92px;' + (hn ? 'background:#fff7ed;' : '') + '">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#aaa;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span>' + (hn ? '<br><span title="Paid holiday" style="display:inline-block;margin-top:2px;font-size:9px;font-weight:800;color:#9a3412;background:#ffedd5;border-radius:5px;padding:1px 5px;line-height:1.3;">🎉 ' + esc(hn) + '</span>' : '') + '</th>'; });
   h += '</tr></thead><tbody>';
   if (!rows.length) h += '<tr><td colspan="8" style="padding:16px;text-align:center;color:#aaa;font-size:13px;">No shifts at this location this week.</td></tr>';
   rows.forEach((s, ri) => {
@@ -5186,7 +5280,7 @@ function renderTcSchedule(){
     h += '<tr><td style="text-align:left;font-weight:800;position:sticky;left:0;background:' + zebra + ';white-space:nowrap;border-right:2px solid #dfe5f1;' + rowSep + '"><span onclick="tcStaffFocus(\'' + s.id + '\')" title="View ' + esc(s.name) + '’s week" style="cursor:pointer;border-bottom:1px dotted #b9c0d0;">' + esc(s.name) + '</span></td>';
     days.forEach(d => {
       const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
-      h += '<td class="tc-cell" data-staff="' + s.id + '" data-dk="' + dk + '" ondragover="tcDragOver(event)" ondragleave="tcDragLeave(event)" ondrop="tcDrop(event,\'' + s.id + '\',\'' + dk + '\')" style="text-align:center;vertical-align:top;padding:4px;background:' + zebra + ';' + rowSep + '">';
+      h += '<td class="tc-cell" data-staff="' + s.id + '" data-dk="' + dk + '" ondragover="tcDragOver(event)" ondragleave="tcDragLeave(event)" ondrop="tcDrop(event,\'' + s.id + '\',\'' + dk + '\')" style="text-align:center;vertical-align:top;padding:4px;background:' + (holMap[dk] ? '#fff7ed' : zebra) + ';' + rowSep + '">';
       shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; const canEd = tcCanEditShift(sh.loc, s.id); const handlers = canEd ? ' draggable="true" ontouchstart="tcTouchStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragstart="tcDragStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragend="tcDragEnd(event)" onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="Tap to edit · drag to move"' : ' title="View only — outside your scheduling locations"'; h += '<div class="tc-shift"' + handlers + ' style="background:' + c + ';color:#fff;border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:11px;line-height:1.25;' + (canEd ? 'cursor:grab;touch-action:none;' : 'cursor:default;opacity:.62;') + '">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
       h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'\',\'' + (filter !== 'all' ? filter : '') + '\')" title="Add shift" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
       h += '</td>';
@@ -5205,8 +5299,10 @@ function renderTcMySchedule(id){
   const items = [];
   for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const dk = tcDateKey(d); Object.values(sched[dk] || {}).forEach(sh => items.push({ d, sh })); }
   items.sort((a, b) => (a.d - b.d) || (a.sh.start || '').localeCompare(b.sh.start || ''));
+  const hols = []; for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const hn = tcHolidayName(d); if (hn) hols.push({ d, hn }); }
   let h = '<div style="background:#fff;border-radius:16px;margin-top:14px;padding:16px;">';
   h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">📅 ' + esc(st.name || '') + ' — next 7 days</div>';
+  if (hols.length) { h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">'; hols.forEach(x => { h += '<span style="display:inline-flex;align-items:center;gap:5px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:3px 9px;font-size:12px;color:#9a3412;font-weight:600;">🎉 ' + esc(x.hn) + ' · ' + dow[x.d.getDay()] + ' ' + (x.d.getMonth() + 1) + '/' + x.d.getDate() + '</span>'; }); h += '</div>'; }
   if (!items.length) h += '<div style="color:#aaa;font-size:13px;">No shifts scheduled.</div>';
   items.forEach(it => { const loc = LOCATIONS.find(l => l.id === it.sh.loc) || {}; h += '<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;font-size:13px;"><span style="font-weight:700;min-width:70px;">' + dow[it.d.getDay()] + ' ' + (it.d.getMonth() + 1) + '/' + it.d.getDate() + '</span><span>' + tcFmtHM(it.sh.start) + '–' + tcFmtHM(it.sh.end) + (it.sh.role ? ' <span style="color:#aaa;">' + esc(it.sh.role) + '</span>' : '') + '</span><span style="color:#888;">' + esc(loc.short || loc.name || '') + '</span></div>'; });
   h += '</div>';
@@ -5393,15 +5489,16 @@ function renderTcTeamSchedule(){
   // Location filter tabs
   const chip = (id, label, color) => '<button onclick="tcTeamSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:16px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">' + (color ? '<span style="width:8px;height:8px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
   h += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">' + chip('all', 'All locations', null) + LOCATIONS.map(l => chip(l.id, l.name, l.color)).join('') + '</div>';
+  const holMap = tcHolidayMap([...new Set(days.map(d => d.getFullYear()))]);
   h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr><th style="text-align:left;padding:4px;position:sticky;left:0;background:#fff;">Staff</th>';
-  days.forEach(d => { h += '<th style="text-align:center;padding:4px;min-width:64px;color:#888;font-weight:700;">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#bbb;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span></th>'; });
+  days.forEach(d => { const hn = holMap[tcDateKey(d)]; h += '<th style="text-align:center;padding:4px;min-width:64px;color:#888;font-weight:700;' + (hn ? 'background:#fff7ed;' : '') + '">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#bbb;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span>' + (hn ? '<br><span title="Paid holiday" style="display:inline-block;margin-top:1px;font-size:8px;font-weight:800;color:#9a3412;background:#ffedd5;border-radius:4px;padding:0 4px;line-height:1.4;">🎉 ' + esc(hn) + '</span>' : '') + '</th>'; });
   h += '</tr></thead><tbody>';
   if (!rows.length) h += '<tr><td colspan="8" style="padding:14px;text-align:center;color:#aaa;">No shifts at this location this week.</td></tr>';
   rows.forEach(s => {
     h += '<tr style="border-top:1px solid #f1f3f9;"><td style="text-align:left;padding:4px;font-weight:700;position:sticky;left:0;background:#fff;white-space:nowrap;">' + esc(s.name) + '</td>';
     days.forEach(d => {
       const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
-      h += '<td style="text-align:center;padding:3px;vertical-align:top;">';
+      h += '<td style="text-align:center;padding:3px;vertical-align:top;' + (holMap[dk] ? 'background:#fff7ed;' : '') + '">';
       shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div style="background:' + c + ';color:#fff;border-radius:5px;padding:2px 3px;margin-bottom:2px;line-height:1.2;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.9;font-size:9px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
       if (!shifts.length) h += '<span style="color:#e0e0e0;">·</span>';
       h += '</td>';
@@ -5504,8 +5601,11 @@ function renderClockKiosk(){
   h += '<div style="border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">' + renderTcClock() + '</div>';
   if (state.tcSel && (tcData().staff || {})[state.tcSel]) { h += renderTcKioskActions(state.tcSel); h += renderTcMySchedule(state.tcSel); }
   h += renderTcTeamSchedule();
+  h += renderTcTimeoffInfo(state.tcSel || null);
+  // Team handbook & policies — always reachable from the kiosk for part-time staff.
+  h += '<div style="text-align:center;margin-top:18px;"><a href="' + HANDBOOK_URL + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#cbd5e1;border-radius:11px;padding:11px 20px;font-size:13px;font-weight:700;text-decoration:none;">📕 Team Handbook &amp; Policies</a></div>';
   // Anyone on shift can file an injury / incident report straight from the kiosk.
-  h += '<div style="text-align:center;margin-top:18px;"><button onclick="incNew()" style="background:rgba(220,38,38,.15);border:1px solid rgba(248,113,113,.5);color:#fca5a5;border-radius:11px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;">🚑 Report an injury / incident</button></div>';
+  h += '<div style="text-align:center;margin-top:14px;"><button onclick="incNew()" style="background:rgba(220,38,38,.15);border:1px solid rgba(248,113,113,.5);color:#fca5a5;border-radius:11px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;">🚑 Report an injury / incident</button></div>';
   h += '<div style="text-align:center;margin-top:16px;"><a href="#" onclick="location.hash=\'\';return false;" style="color:#64748b;font-size:12px;text-decoration:none;">Exit kiosk</a></div>';
   h += '</div></div>';
   h += renderIncidentModal();
@@ -10436,6 +10536,19 @@ const LVLUP_POLICY = [
       { heading:'Internal Business Information',
         body:'Revenue figures, staff salaries, internal performance issues, and business strategy are confidential. Sharing these externally — including on social media or to other martial arts schools — is a violation of your employment agreement.',
         bullets:['Business metrics stay inside the team','Staff compensation is private — do not discuss your pay or ask about others\''] },
+    ]
+  },
+  { id:'timeoff', icon:'🌴', title:'Time Off, Holidays & PTO',
+    sections:[
+      { heading:'Paid Holidays',
+        body:'LVLUP observes these paid holidays. Salaried staff are paid for them per their work agreement; hourly staff are not paid for days not worked. They are marked automatically on the Master Schedule and the clock kiosk every year.',
+        bullets:['New Year\'s Eve & New Year\'s Day','MLK Jr. Day','Memorial Day','Independence Day (July 4)','Labor Day','Thanksgiving','Christmas Eve & Christmas Day'] },
+      { heading:'Paid Time Off (PTO)',
+        body:'PTO is for salaried staff only. Your work agreement or engagement letter sets how many PTO days — and which paid holidays — you get. Sick days come out of the same PTO bank; there is no separate sick bank. Hourly staff do not receive paid time off. You can check your current balance on the clock kiosk or in the dashboard PTO panel.',
+        bullets:['Your PTO amount is set in your individual work agreement','Vacation and sick days share one PTO bank','Hourly staff: time off is unpaid'] },
+      { heading:'Requesting Time Off',
+        body:'Submit time-off requests in staff.lvlupma.com at least 2 weeks in advance. There\'s no cap on consecutive days and there are no blackout dates — but every request needs your manager\'s approval, so plan ahead. If you\'re out of PTO, or you\'re hourly, you can still request time off; those days are simply unpaid, not denied.',
+        bullets:['Request at least 2 weeks ahead','No blackout dates, no cap on consecutive days','Out of PTO or hourly → the time off is unpaid, not denied','Can\'t make a shift last-minute? Request cover and tell your manager right away'] },
     ]
   },
 ];
