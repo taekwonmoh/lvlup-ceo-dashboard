@@ -1080,6 +1080,23 @@ const MIRANDA_WEEKLY = [
   TASK_BUFFER,
 ];
 const EMP_DAILY  = {bryanG:BRYAN_DAILY, ash:ASH_DAILY, joeyZ:JOEY_DAILY, mirandaS:MIRANDA_DAILY, tarikM:TARIK_DAILY};
+// Legacy task-ID aliases: the daily task lists were renamed/overhauled on
+// 2026-10-26 (commit d434d96). Completions logged before then used the old IDs
+// (m_*/b_*/j_* and earlier names), so history views must count those as their
+// current equivalents or every pre-Oct-26 day reads 0%. Non-destructive — the
+// stored data is untouched; this just maps old→current when counting.
+const TASK_ALIASES = {
+  opening:        ['m_opening', 'b_opening', 'j_opening', 'j_tv', 'clock'],
+  closing:        ['m_closing', 'b_closing', 'j_closing', 'j_eos', 'eos', 'eos_report'],
+  ph_floor:       ['m_floor', 'spot_clean'],
+  ph_bathroom:    ['bathrooms'],
+  j_wetmop:       ['j_wetmop'],
+  j_greenmachine: ['j_greenmachine'],
+  j_spray:        ['j_spray'],
+};
+// True if task `tid` is satisfied by the day's completion record `dd`,
+// counting the current ID or any of its legacy aliases.
+function taskDone(dd, tid){ if (dd[tid]) return true; const al = TASK_ALIASES[tid]; return !!(al && al.some(a => dd[a])); }
 const EMP_WEEKLY = {bryanG:BRYAN_WEEKLY,ash:ASH_WEEKLY,joeyZ:JOEY_WEEKLY,mirandaS:MIRANDA_WEEKLY, tarikM:TARIK_WEEKLY};
 // Legacy shared arrays kept as fallback ────────────────────────────────────
 const LVLUP_DAILY = BRYAN_DAILY;
@@ -7974,7 +7991,7 @@ function loadHistoryDate(empId,dateKey){
   ]).then(([dailySnap,dnwSnap])=>{
     const dayOff=!!dnwSnap.val();
     let done=0;
-    if(!dayOff){const dd=dailySnap.val()||{};tasks.forEach(t=>{if(dd[t.id])done++;});}
+    if(!dayOff){const dd=dailySnap.val()||{};tasks.forEach(t=>{if(taskDone(dd,t.id))done++;});}
     state.historyData[key]={done,total,dayOff};
     render();
   }).catch(()=>{state.historyData[key]=null;render();});
