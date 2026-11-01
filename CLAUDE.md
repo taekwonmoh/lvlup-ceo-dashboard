@@ -14,7 +14,7 @@ This app shares one Firebase project (`lvlup-members-app`) with the **lvlupma.co
 |---|---|---|
 | `ceo/membership/{locId}/{year}/{month}/{total\|newMem}` | lvlupma.com roster-import | dashboard KPIs |
 | `ceo/events/{key}` + Storage `events/` | both | both (members app shows photos) |
-| `ceo/timeclock/*` (staff, schedule, entries, config=geofence, pto, timeoff, trades, pins) | dashboard (kiosk at `#clock`) | dashboard |
+| `ceo/timeclock/*` (staff, schedule, entries, config=geofence, pto, timeoff, trades, pins, holidays) | dashboard (kiosk at `#clock`) | dashboard |
 | `ceo/cycles`, `ceo/firstFive`, `ceo/applications`, `ceo/inventory`, `ceo/watchlist` | mixed | mixed |
 | `config/rosterCode` (**root, not under ceo**) | set by hand | lvlupma.com roster-upload gate |
 
