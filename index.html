@@ -1326,6 +1326,8 @@ const LVLUP_CYCLE_CHECKLIST = [
   {id:'cc_w8_sotc',     week:8, text:'Identify and announce the Student of the Cycle — post to #LVLUPHQ'},
   {id:'cc_bday',        week:0, text:'Run a minimum of 2 birthday parties this cycle',  playbook:'birthday_party'},
   {id:'cc_upgrades',    week:0, text:'Upgrade 2 students to AD or Legacy — list their names', hasNotes:true},
+  {id:'cc_belts',       week:0, text:'Pro-shop testing prep — belts, stripes, patches & certificates in stock for promotions.'},
+  {id:'cc_survey',      week:8, text:'End-of-cycle parent satisfaction survey (NPS) — send after testing.'},
 ];
 const FRONTDESK_CYCLE_CHECKLIST = [
   // ── Ongoing (any time this cycle) ──
@@ -1340,6 +1342,8 @@ const FRONTDESK_CYCLE_CHECKLIST = [
   {id:'fd_cc_yb',        week:6, text:'Review Yellow Belt students — send gear + program emails for any new yellow belts', playbook:'email_yellow_belt'},
   // ── Week 8 ──
   {id:'fd_cc_sotc_input', week:8, text:'Share Student of the Cycle input with lead instructor — which students stood out this cycle?'},
+  {id:'fd_cc_belts',  week:0, text:'Pro-shop testing prep — order & stock belts, patches and certificates for promotions.'},
+  {id:'fd_cc_photog', week:6, text:'Book photographer / plan photos for testing & graduation day.'},
 ];
 
 /* ── Mat Chat Scripts (ATA Legacy Pro) ── */
@@ -5792,6 +5796,24 @@ function renderLeadAccountability(){
     h += cell('Attrition %', attrPct !== null ? attrPct + '%' : '—', (attrPct !== null && attrPct > 3) ? '#dc2626' : '#16a34a');
     h += cell('Weeks Signed', signed + '/' + (monthWeeks.length || 4));
     h += '</div>';
+    // Weekly task-completion strip — how DONE each week is, not just whether it was signed.
+    h += '<div style="padding:10px 16px 12px;border-bottom:1px solid #f1f3f9;">';
+    h += '<div style="font-size:10px;font-weight:700;color:#8894b0;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;">Weekly task completion</div>';
+    h += '<div style="display:flex;gap:7px;flex-wrap:wrap;">';
+    monthWeeks.forEach((wk, i) => {
+      loadHistoryWeekly(st.empId, wk);
+      const info = state.historyWeekly[st.empId + '|' + wk];
+      const wkSigned = !!so[wk];
+      let pct = '…', bg = '#f1f3f9', fg = '#8894b0';
+      if (info && info !== 'loading' && info.total) { const p = Math.round(info.done / info.total * 100); pct = p + '%';
+        bg = p >= 100 ? '#dcfce7' : p >= 75 ? '#dbf4e0' : p >= 50 ? '#fef9c3' : p > 0 ? '#fee2e2' : '#f1f3f9';
+        fg = p >= 100 ? '#166534' : p >= 50 ? '#854d0e' : p > 0 ? '#991b1b' : '#8894b0'; }
+      else if (info === null) pct = '—';
+      h += '<div style="flex:0 0 auto;min-width:58px;text-align:center;background:' + bg + ';border-radius:9px;padding:6px 9px;">'
+        + '<div style="font-size:9px;font-weight:700;color:#8894b0;">W' + (i + 1) + (wkSigned ? ' <span style="color:#16a34a;">✓</span>' : '') + '</div>'
+        + '<div style="font-size:14px;font-weight:800;color:' + fg + ';font-variant-numeric:tabular-nums;">' + pct + '</div></div>';
+    });
+    h += '</div></div>';
     h += '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;flex-wrap:wrap;">';
     h += '<span style="font-size:12px;font-weight:700;color:#555;">Recommendation:</span>';
     h += '<select onchange="leadUpdatePerf(\'' + st.empId + '\',\'recommendation\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:7px;font-size:12px;font-weight:700;">' + ['TBD', 'For Coaching', 'Review Required'].map(o => '<option' + (rec === o ? ' selected' : '') + '>' + o + '</option>').join('') + '</select>';
@@ -7880,6 +7902,7 @@ state.historyMonthYear = new Date().getFullYear();
 state.historyMonthNum  = new Date().getMonth()+1;
 state.historyData      = {};       // empId+'|'+dateKey → {done,total,dayOff}|'loading'|undefined
 state.historySigns     = {};       // empId+'|'+weekKey → {signed,initials}|'loading'|undefined
+state.historyWeekly    = {};       // empId+'|'+weekKey → {done,total}|'loading'|null  (weekly-task completion)
 
 function isGoNinja(empOrLocId){
   const emp=TASK_EMPLOYEES.find(e=>e.id===empOrLocId);
@@ -8194,6 +8217,26 @@ function loadHistorySign(empId,weekKey){
     render();
   }).catch(()=>{state.historySigns[key]={signed:false};render();});
 }
+// Lazy-load a staffer's weekly-task completion for a week (for the Leadership view + weekly history).
+function loadHistoryWeekly(empId,weekKey){
+  const key=empId+'|'+weekKey;
+  if(state.historyWeekly[key]!==undefined)return;
+  state.historyWeekly[key]='loading';
+  const rec=getWeeklyRec(empId); const total=rec.length;
+  fbRef(empPath(empId)+'/weekly/'+weekKey).once('value').then(snap=>{
+    const dd=snap.val()||{}; let done=0; rec.forEach(t=>{if(dd[t.id])done++;});
+    state.historyWeekly[key]={done,total};
+    render();
+  }).catch(()=>{state.historyWeekly[key]=null;render();});
+}
+// Required weekly tasks still open for the CURRENT loc's loaded data (drives the sign-off guard).
+function weeklyRequiredStatus(empId,weekKey){
+  const locData=state.tasksData[empId]||{};
+  const dd=(locData.weekly||{})[weekKey]||{};
+  const rec=getWeeklyRec(empId);
+  const missing=rec.filter(t=>!dd[t.id]);
+  return {done:rec.length-missing.length,total:rec.length,missing};
+}
 function loadHistoryWeekData(weekOff){
   const days=hWeekDays(weekOff);
   const weekKey=getTaskWeekKey(days[0]);
@@ -8228,10 +8271,11 @@ function renderHistorySection(){
   const view=state.historyView;
   let html='<div class="history-nav">';
   html+='<div class="history-view-toggle">';
-  html+='<button class="hvt-btn'+(view==='week'?' active':'')+'" onclick="state.historyView=\'week\';render()">📅 Week Grid</button>';
+  html+='<button class="hvt-btn'+(view==='week'?' active':'')+'" onclick="state.historyView=\'week\';render()">📅 Day Grid</button>';
   html+='<button class="hvt-btn'+(view==='month'?' active':'')+'" onclick="state.historyView=\'month\';render()">🗓 Month Map</button>';
+  html+='<button class="hvt-btn'+(view==='weekly'?' active':'')+'" onclick="state.historyView=\'weekly\';render()">📈 Weekly</button>';
   html+='</div></div>';
-  return html+(view==='week'?renderHistoryWeekGrid():renderHistoryMonthHeatmap());
+  return html+(view==='month'?renderHistoryMonthHeatmap():view==='weekly'?renderHistoryWeeklyGrid():renderHistoryWeekGrid());
 }
 
 function renderHistoryWeekGrid(){
@@ -8295,6 +8339,35 @@ function renderHistoryWeekGrid(){
   return html;
 }
 
+// Weekly-task completion over the last 8 weeks — rows = staff, cols = weeks.
+function renderHistoryWeeklyGrid(){
+  const WEEKS=8; const cols=[];
+  for(let off=-(WEEKS-1); off<=0; off++){
+    const d0=hWeekDays(off)[0]; const mon=new Date(d0+'T12:00:00');
+    cols.push({off,mon:d0,weekKey:getTaskWeekKey(d0),label:(mon.getMonth()+1)+'/'+mon.getDate()});
+  }
+  TASK_EMPLOYEES.forEach(emp=>cols.forEach(c=>{loadHistoryWeekly(emp.id,c.weekKey);loadHistorySign(emp.id,c.weekKey);}));
+  let html='<div class="history-nav-label" style="margin:0 0 10px;font-size:13px;color:var(--gray-500);">Weekly recurring-task completion — last '+WEEKS+' weeks. Tap a cell to open that week’s sheet.</div>';
+  html+='<div class="h-grid-wrap"><div class="h-grid-scroll"><table class="h-grid"><thead><tr><th>Staff</th>';
+  cols.forEach((c,i)=>{html+='<th style="'+(i===cols.length-1?'color:var(--accent)':'')+'">'+(i===cols.length-1?'This wk':'Wk')+'<br><span style="font-size:12px;font-weight:800;text-transform:none;letter-spacing:0">'+c.label+'</span></th>';});
+  html+='</tr></thead><tbody>';
+  TASK_EMPLOYEES.forEach(emp=>{
+    const gn=isGoNinja(emp.id);
+    html+='<tr><td style="'+(gn?'':'color:var(--primary)')+'">'+esc(emp.name)+'</td>';
+    cols.forEach(c=>{
+      const info=state.historyWeekly[emp.id+'|'+c.weekKey];
+      const cls=hPctClass(info),lbl=hPctLabel(info);
+      const si=state.historySigns[emp.id+'|'+c.weekKey];
+      const sign=(si&&si!=='loading'&&si.signed)?'<div style="font-size:9px;color:#16a34a;font-weight:800;line-height:1;margin-top:1px;">✓</div>':'';
+      const clickable=cls!=='loading';
+      html+='<td><button class="h-cell-btn '+cls+'" '+(clickable?'onclick="jumpToHistory(\''+emp.id+'\',\''+c.mon+'\')"':'')+' title="'+esc(emp.name)+' • week of '+c.label+'">'+lbl+sign+'</button></td>';
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table></div>';
+  html+='<div class="h-legend">'+[{bg:'#16a34a',l:'100%'},{bg:'#4ade80',l:'75–99%'},{bg:'#fde047',l:'50–74%'},{bg:'#f87171',l:'1–49%'},{bg:'var(--gray-200)',l:'0%'},{bg:'#16a34a',l:'✓ = signed off'}].map(x=>'<div class="h-legend-item"><div class="h-legend-sq" style="background:'+x.bg+'"></div>'+x.l+'</div>').join('')+'</div></div>';
+  return html;
+}
 function renderHistoryMonthHeatmap(){
   const yr=state.historyMonthYear,mn=state.historyMonthNum;
   const monthLabel=new Date(yr,mn-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
@@ -8522,8 +8595,8 @@ function renderTasksPage(){
     }
     html+='</div>';
     html+=renderCycleSection('cycle','Week '+cycleWeek+': '+cw.name,cw.tasks,cycleData);
-  }else if(!isFrontDesk(loc)){
-    html+=renderCycleChecklistSection(loc,locData);
+  }else{
+    html+=renderCycleChecklistSection(loc,locData);   // LVLUP instructors + front desk
   }
   if(state.modalTask)html+=renderInitialsModal();
   return html;
@@ -8901,7 +8974,19 @@ function renderInitialsModal(){
     return '<div class="modal-overlay" onclick="cancelModal()"><div class="modal-box" onclick="event.stopPropagation()"><h3>Did Not Work</h3><p>Enter your initials to mark today as a day off — daily tasks will be waived.</p><input id="initialsInput" maxlength="4" placeholder="e.g. MM" autofocus onkeydown="if(event.key===\'Enter\')confirmDidNotWork()" /><div class="modal-actions"><button class="btn-cancel" onclick="cancelModal()">Cancel</button><button class="btn-confirm" onclick="confirmDidNotWork()">Confirm</button></div></div></div>';
   }
   if(m&&m.section==='_signoff'){
-    return '<div class="modal-overlay" onclick="cancelModal()"><div class="modal-box" onclick="event.stopPropagation()"><h3>Sign Off This Week</h3><p>By signing off you confirm all required tasks were completed this week. This will lock the week.</p><input id="initialsInput" maxlength="4" placeholder="e.g. MM" autofocus onkeydown="if(event.key===\'Enter\')confirmSignOff()" /><div class="modal-actions"><button class="btn-cancel" onclick="cancelModal()">Cancel</button><button class="btn-confirm" onclick="confirmSignOff()">Sign Off</button></div></div></div>';
+    const st=weeklyRequiredStatus(state.tasksLoc,m.taskId);
+    let guard='';
+    if(st.missing.length){
+      const names=st.missing.map(t=>esc((t.text||'').split(':')[0])).slice(0,8);
+      guard='<div style="margin:10px 0 4px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 13px;">'
+        +'<div style="font-size:13px;font-weight:800;color:#92400e;">⚠ '+st.missing.length+' of '+st.total+' weekly task'+(st.missing.length===1?'':'s')+' still open</div>'
+        +'<ul style="margin:7px 0 0;padding-left:18px;font-size:12px;color:#92400e;line-height:1.5;">'+names.map(n=>'<li>'+n+'</li>').join('')+(st.missing.length>8?'<li>…and '+(st.missing.length-8)+' more</li>':'')+'</ul>'
+        +'<div style="font-size:11.5px;color:#a16207;margin-top:7px;">You can still sign off — it records your initials either way, so this is just a heads-up.</div></div>';
+    } else {
+      guard='<div style="margin:10px 0 4px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 13px;font-size:13px;font-weight:700;color:#166534;">✓ All '+st.total+' weekly tasks complete.</div>';
+    }
+    const btnLabel=st.missing.length?'Sign off anyway':'Sign Off';
+    return '<div class="modal-overlay" onclick="cancelModal()"><div class="modal-box" onclick="event.stopPropagation()"><h3>Sign Off This Week</h3><p>Signing off confirms this week’s tasks are done and locks the week (it counts toward the bonus).</p>'+guard+'<input id="initialsInput" maxlength="4" placeholder="Your initials, e.g. MM" autofocus onkeydown="if(event.key===\'Enter\')confirmSignOff()" /><div class="modal-actions"><button class="btn-cancel" onclick="cancelModal()">Cancel</button><button class="btn-confirm" onclick="confirmSignOff()">'+btnLabel+'</button></div></div></div>';
   }
   return '';
 }
