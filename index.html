@@ -4976,6 +4976,31 @@ function tcDiffAffected(prev, cur){
   ids.forEach(id => { if ((prev[id] || []).join('¶') !== (cur[id] || []).join('¶')) out.push(id); });
   return out;
 }
+/* ── Draft vs. posted (Homebase-style) ─────────────────────────────────────
+   Managers edit the live `schedule` tree as a DRAFT. Staff only ever see the
+   last PUBLISHED snapshot (ceo/timeclock/schedulePublished/{weekKey}.snap), so
+   a week can be built and tweaked without staff seeing it until it's posted.
+   Shift signature = dk|start|end|loc|role (same format tcWeekSnapshot writes). */
+function tcWeekKeyFor(d){                                        // Monday date-key for any date
+  const b = new Date(d); b.setHours(0, 0, 0, 0); const day = b.getDay();
+  const mon = new Date(b); mon.setDate(b.getDate() - day + (day === 0 ? -6 : 1));
+  return tcDateKey(mon);
+}
+function tcPublishedRec(weekKey){ return (tcData().schedulePublished || {})[weekKey] || null; }
+function tcShiftSig(dk, sh){ return dk + '|' + (sh.start || '') + '|' + (sh.end || '') + '|' + (sh.loc || '') + '|' + (sh.role || ''); }
+// Reconstruct the POSTED shifts for one staffer on one day from the week snapshot.
+function tcPostedShifts(id, dk){
+  const rec = tcPublishedRec(tcWeekKeyFor(new Date(dk + 'T00:00:00')));
+  if (!rec || !rec.snap) return [];
+  return (rec.snap[id] || []).filter(Boolean).map(sig => { const p = String(sig).split('|');
+    return { dk: p[0], start: p[1] || '', end: p[2] || '', loc: p[3] || '', role: p[4] || '' }; }).filter(s => s.dk === dk);
+}
+function tcPostedSigSet(id, weekKey){ const rec = tcPublishedRec(weekKey); const set = new Set();
+  if (rec && rec.snap) (rec.snap[id] || []).forEach(sig => set.add(sig)); return set; }
+// Weekly scheduled minutes for one staffer across ALL locations (draft tree / posted snapshot).
+function tcWeekMins(id, days){ let m = 0; days.forEach(d => Object.values((tcSchedFor(id)[tcDateKey(d)]) || {}).forEach(sh => { if (sh) m += tcShiftMins(sh); })); return m; }
+function tcWeekMinsPosted(id, days){ let m = 0; days.forEach(d => tcPostedShifts(id, tcDateKey(d)).forEach(sh => { m += tcShiftMins(sh); })); return m; }
+function tcFmtHrs(min){ if (!min) return '0h'; return (min / 60).toFixed(1).replace(/\.0$/, '') + 'h'; }
 function tcPublishOpen(){
   const weekKey = tcWeekKey(); const cur = tcWeekSnapshot();
   const prevRec = (tcData().schedulePublished || {})[weekKey]; const prev = (prevRec && prevRec.snap) || {};
@@ -4990,7 +5015,7 @@ async function tcPublishConfirm(mode){
   const p = state.tcPublish; if (!p) return;
   // Save the snapshot so the next publish diffs against this one.
   fbSet('timeclock/schedulePublished/' + p.weekKey, { snap: p.cur, publishedAt: Date.now(), label: p.label });
-  if (mode === 'none') { state.tcPublish = null; state.tcMsg = { type: 'ok', text: 'Schedule published for ' + p.label + ' (no notification sent).' }; render(); return; }
+  if (mode === 'none') { state.tcPublish = null; state.tcMsg = { type: 'ok', text: 'Posted ' + p.label + ' to staff (no notification sent).' }; render(); return; }
   // Kiosk / dashboard banner (seen by staff without Slack).
   fbSet('timeclock/notices/scheduleUpdated', { weekKey: p.weekKey, label: p.label, ts: Date.now(), mode, affected: mode === 'affected' ? p.affected : [], note: (p.note || '').trim() || null });
   // Slack via the webhooks server (best-effort; the banner still covers everyone).
@@ -5016,8 +5041,9 @@ function renderTcPublishModal(){
   h += '<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">';
   h += '<div style="background:#1a1a2e;color:#fff;padding:14px 18px;"><div style="font-size:16px;font-weight:800;">📣 Publish &amp; notify — week of ' + esc(p.label) + '</div></div>';
   h += '<div style="padding:16px 18px;">';
-  if (p.firstTime) h += '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:9px 12px;font-size:12.5px;color:#1e40af;margin-bottom:12px;">First time publishing this week — everyone’s shifts are treated as new, so “affected” is the whole scheduled team.</div>';
-  h += '<div style="font-size:13px;color:#333;margin-bottom:6px;"><b>' + (p.affected.length || 0) + '</b> ' + (p.affected.length === 1 ? 'person has' : 'people have') + ' a change since the last publish' + (names.length ? ':' : '.') + '</div>';
+  h += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:9px 12px;font-size:12px;color:#166534;margin-bottom:12px;">Publishing posts this week to staff — it becomes what they see on the kiosk and in “my schedule.” Until you publish, your edits stay a private draft.</div>';
+  if (p.firstTime) h += '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:9px 12px;font-size:12.5px;color:#1e40af;margin-bottom:12px;">First time posting this week — everyone’s shifts are treated as new, so “affected” is the whole scheduled team.</div>';
+  h += '<div style="font-size:13px;color:#333;margin-bottom:6px;"><b>' + (p.affected.length || 0) + '</b> ' + (p.affected.length === 1 ? 'person has' : 'people have') + ' a change since the last post' + (names.length ? ':' : '.') + '</div>';
   if (names.length) h += '<div style="font-size:12px;color:#555;background:#f7f9ff;border:1px solid #e3e6ef;border-radius:8px;padding:8px 10px;margin-bottom:12px;max-height:84px;overflow:auto;">' + names.join(', ') + '</div>';
   h += '<label style="font-size:11px;font-weight:700;color:#666;">Optional note (added to the notification)<textarea oninput="tcPublishField(\'note\',this.value)" rows="2" placeholder="e.g. Summer camp week — earlier start times." style="' + fld + 'margin-top:4px;resize:vertical;">' + esc(p.note || '') + '</textarea></label>';
   h += '<div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">';
@@ -5261,16 +5287,30 @@ function renderTcSchedule(){
   const shiftsOf = (s, dk) => Object.entries((tcSchedFor(s.id)[dk]) || {}).map(([sid, sh]) => ({ sid, ...(sh || {}) })).filter(sh => filter === 'all' || sh.loc === filter).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
   // In a filtered view, only show staff who have a shift at that location this week.
   const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length));
+  // Draft vs. posted status — staff only ever see the last posted snapshot of this week.
+  const weekKey = tcDateKey(days[0]);
+  const pubRec = tcPublishedRec(weekKey);
+  const changedIds = new Set(pubRec ? tcDiffAffected((pubRec.snap) || {}, tcWeekSnapshot()) : []);
+  const nChanged = changedIds.size;
+  const pubAgo = pubRec && pubRec.publishedAt ? timeAgo(pubRec.publishedAt) : '';
+  let statusPill;
+  if (!pubRec) statusPill = '<span title="Nothing has been posted for this week — staff can’t see it yet. Build it, then Publish." style="display:inline-flex;align-items:center;gap:5px;background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:20px;padding:3px 11px;font-size:11.5px;font-weight:800;"><span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;"></span>Draft · not posted</span>';
+  else if (nChanged) statusPill = '<span title="Edited since the last post — staff still see the previously posted version until you Publish." style="display:inline-flex;align-items:center;gap:5px;background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:20px;padding:3px 11px;font-size:11.5px;font-weight:800;"><span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;"></span>' + nChanged + ' unpublished change' + (nChanged === 1 ? '' : 's') + '</span>';
+  else statusPill = '<span title="Posted and up to date — staff see exactly this." style="display:inline-flex;align-items:center;gap:5px;background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:20px;padding:3px 11px;font-size:11.5px;font-weight:800;">✓ Posted' + (pubAgo ? ' · ' + pubAgo : '') + '</span>';
   let h = '<div class="section" style="margin-bottom:22px;">';
   const copyBtn = '<button onclick="tcCopyLastWeek()" title="Copy last week\'s shifts into this week" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4169E1;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 11px;">⧉ Copy last week</button>';
   // "Publish & notify" is for full-edit users (admins / unscoped managers); scoped users focus on editing.
   const publishBtn = tcSchedScope() ? '' : '<button onclick="tcPublishOpen()" title="Save this week as published and notify the team (whole team or just who changed)" style="background:#16a34a;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 12px;box-shadow:0 1px 3px rgba(22,163,74,.35);">📣 Publish &amp; notify</button>';
   const guideBtn = '<button onclick="tcGuideOpen()" title="How to run the schedule, time off, and time cards" style="background:#2f54d6;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 13px;box-shadow:0 1px 3px rgba(47,84,214,.35);">❔ How to use the scheduler</button>';
-  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>📆 Master Schedule</h2><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + guideBtn + publishBtn + copyBtn + '<span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></span></div>';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><h2 style="margin:0;">📆 Master Schedule</h2>' + statusPill + '</span><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + guideBtn + publishBtn + copyBtn + '<span style="display:flex;align-items:center;gap:4px;"><button onclick="tcWeek(-1)" style="' + navBtn + '">‹</button><b style="font-size:13px;min-width:120px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + navBtn + '">›</button></span></span></div>';
   // Location filter / legend
   const chip = (id, label, color) => '<button onclick="tcSchedSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (color ? '<span style="width:9px;height:9px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:12px 20px 4px;">' + chip('all', 'All locations', null) + LOCATIONS.map(l => chip(l.id, l.name, l.color)).join('') + '</div>';
-  h += '<div style="padding:4px 20px 0;font-size:11.5px;color:#9aa3b5;">Tap a name to see one person’s week · tap a shift to edit · drag a shift to move it · 🎉 = paid holiday</div>';
+  h += '<div style="padding:4px 20px 0;font-size:11.5px;color:#9aa3b5;">Tap a name to see one person’s week · tap a shift to edit · drag a shift to move it · 🎉 = paid holiday' + (pubRec ? ' · <span style="color:#b45309;font-weight:700;">amber outline = edited since last post</span>' : '') + '</div>';
+  // Draft-vs-posted explainer (+ inline Publish for full-edit users).
+  { const canPub = !tcSchedScope();
+    if (!pubRec) h += '<div style="margin:8px 20px 0;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="flex:1;min-width:200px;">📝 <b>This week is a draft.</b> Staff don’t see anything until you post it — build it out, then publish.</span>' + (canPub ? '<button onclick="tcPublishOpen()" style="background:#16a34a;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 12px;white-space:nowrap;">📣 Publish &amp; notify</button>' : '') + '</div>';
+    else if (nChanged) h += '<div style="margin:8px 20px 0;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="flex:1;min-width:200px;">✏️ <b>' + nChanged + ' unpublished change' + (nChanged === 1 ? '' : 's') + '.</b> Staff still see the version posted ' + esc(pubAgo) + '. Publish to push your edits out.</span>' + (canPub ? '<button onclick="tcPublishOpen()" style="background:#16a34a;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 12px;white-space:nowrap;">📣 Publish &amp; notify</button>' : '') + '</div>'; }
   { const sc = tcSchedScope(); if (sc) h += '<div style="margin:8px 20px 0;background:#eef4ff;border:1px solid #d5e2ff;border-radius:9px;padding:8px 12px;font-size:12px;color:#334;">📋 You’re scheduling <b>' + esc(tcScopeNames(sc) || 'your assigned locations') + '</b>' + (sc.selfId ? ' (and your own shifts)' : '') + '. Other shifts show for context but are view-only.</div>'; }
   const holMap = tcHolidayMap([...new Set(days.map(d => d.getFullYear()))]);
   h += '<div style="overflow-x:auto;padding:8px 0 0;"><table class="sc-table" style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;min-width:120px;position:sticky;left:0;background:#fff;">Staff</th>';
@@ -5280,11 +5320,17 @@ function renderTcSchedule(){
   rows.forEach((s, ri) => {
     const zebra = ri % 2 ? '#f5f8fd' : '#ffffff';                 // alternating bands so each person's row is easy to follow
     const rowSep = 'border-bottom:2px solid #e7ecf5;';
-    h += '<tr><td style="text-align:left;font-weight:800;position:sticky;left:0;background:' + zebra + ';white-space:nowrap;border-right:2px solid #dfe5f1;' + rowSep + '"><span onclick="tcStaffFocus(\'' + s.id + '\')" title="View ' + esc(s.name) + '’s week" style="cursor:pointer;border-bottom:1px dotted #b9c0d0;">' + esc(s.name) + '</span></td>';
+    const wkMin = tcWeekMins(s.id, days);                          // weekly hours, all locations (Homebase-style)
+    const postedSet = tcPostedSigSet(s.id, weekKey);
+    const rowChanged = pubRec && changedIds.has(s.id);
+    h += '<tr><td style="text-align:left;position:sticky;left:0;background:' + zebra + ';white-space:nowrap;border-right:2px solid #dfe5f1;' + rowSep + 'vertical-align:top;padding:5px 8px;">'
+      + '<div style="font-weight:800;"><span onclick="tcStaffFocus(\'' + s.id + '\')" title="View ' + esc(s.name) + '’s week" style="cursor:pointer;border-bottom:1px dotted #b9c0d0;">' + esc(s.name) + '</span></div>'
+      + '<div style="font-size:10.5px;font-weight:600;color:#8894b0;margin-top:2px;display:flex;align-items:center;gap:5px;"><span title="Scheduled this week, all locations">' + tcFmtHrs(wkMin) + '</span>' + (rowChanged ? '<span title="This person has unpublished changes" style="display:inline-flex;align-items:center;gap:3px;color:#b45309;font-weight:800;"><span style="width:6px;height:6px;border-radius:50%;background:#f59e0b;"></span>edited</span>' : '') + '</div>'
+      + '</td>';
     days.forEach(d => {
       const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
       h += '<td class="tc-cell" data-staff="' + s.id + '" data-dk="' + dk + '" ondragover="tcDragOver(event)" ondragleave="tcDragLeave(event)" ondrop="tcDrop(event,\'' + s.id + '\',\'' + dk + '\')" style="text-align:center;vertical-align:top;padding:4px;background:' + (holMap[dk] ? '#fff7ed' : zebra) + ';' + rowSep + '">';
-      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; const canEd = tcCanEditShift(sh.loc, s.id); const handlers = canEd ? ' draggable="true" ontouchstart="tcTouchStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragstart="tcDragStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragend="tcDragEnd(event)" onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="Tap to edit · drag to move"' : ' title="View only — outside your scheduling locations"'; h += '<div class="tc-shift"' + handlers + ' style="background:' + c + ';color:#fff;border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:11px;line-height:1.25;' + (canEd ? 'cursor:grab;touch-action:none;' : 'cursor:default;opacity:.62;') + '">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
+      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; const canEd = tcCanEditShift(sh.loc, s.id); const unpub = pubRec && !postedSet.has(tcShiftSig(dk, sh)); const handlers = canEd ? ' draggable="true" ontouchstart="tcTouchStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragstart="tcDragStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragend="tcDragEnd(event)" onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="' + (unpub ? 'Unpublished — tap to edit · drag to move' : 'Tap to edit · drag to move') + '"' : ' title="View only — outside your scheduling locations"'; h += '<div class="tc-shift"' + handlers + ' style="background:' + c + ';color:#fff;border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:11px;line-height:1.25;' + (unpub ? 'outline:2px solid #f59e0b;outline-offset:1px;' : '') + (canEd ? 'cursor:grab;touch-action:none;' : 'cursor:default;opacity:.62;') + '">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
       h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'\',\'' + (filter !== 'all' ? filter : '') + '\')" title="Add shift" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
       h += '</td>';
     });
@@ -5296,17 +5342,21 @@ function renderTcSchedule(){
 }
 
 function renderTcMySchedule(id){
-  const st = (tcData().staff || {})[id] || {}; const sched = tcSchedFor(id);
+  const st = (tcData().staff || {})[id] || {};
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  // Staff only see the POSTED schedule — never a manager's unpublished draft.
   const items = [];
-  for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const dk = tcDateKey(d); Object.values(sched[dk] || {}).forEach(sh => items.push({ d, sh })); }
+  for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const dk = tcDateKey(d); tcPostedShifts(id, dk).forEach(sh => items.push({ d, sh })); }
   items.sort((a, b) => (a.d - b.d) || (a.sh.start || '').localeCompare(b.sh.start || ''));
   const hols = []; for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const hn = tcHolidayName(d); if (hn) hols.push({ d, hn }); }
+  // Flag if the week(s) covered haven't been posted yet (so "no shifts" isn't mistaken for "day off").
+  const unposted = []; const wkKeys = new Set(); for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(today.getDate() + i); wkKeys.add(tcWeekKeyFor(d)); } wkKeys.forEach(wk => { if (!tcPublishedRec(wk)) unposted.push(wk); });
   let h = '<div style="background:#fff;border-radius:16px;margin-top:14px;padding:16px;">';
   h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">📅 ' + esc(st.name || '') + ' — next 7 days</div>';
   if (hols.length) { h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">'; hols.forEach(x => { h += '<span style="display:inline-flex;align-items:center;gap:5px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:3px 9px;font-size:12px;color:#9a3412;font-weight:600;">🎉 ' + esc(x.hn) + ' · ' + dow[x.d.getDay()] + ' ' + (x.d.getMonth() + 1) + '/' + x.d.getDate() + '</span>'; }); h += '</div>'; }
-  if (!items.length) h += '<div style="color:#aaa;font-size:13px;">No shifts scheduled.</div>';
+  if (!items.length) h += '<div style="color:#aaa;font-size:13px;">' + (unposted.length ? 'Your schedule for this stretch hasn’t been posted yet — check back soon.' : 'No shifts scheduled.') + '</div>';
+  else if (unposted.length) h += '<div style="color:#b45309;font-size:11.5px;margin-bottom:6px;">Part of this range isn’t posted yet — more shifts may be added.</div>';
   items.forEach(it => { const loc = LOCATIONS.find(l => l.id === it.sh.loc) || {}; h += '<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;font-size:13px;"><span style="font-weight:700;min-width:70px;">' + dow[it.d.getDay()] + ' ' + (it.d.getMonth() + 1) + '/' + it.d.getDate() + '</span><span>' + tcFmtHM(it.sh.start) + '–' + tcFmtHM(it.sh.end) + (it.sh.role ? ' <span style="color:#aaa;">' + esc(it.sh.role) + '</span>' : '') + '</span><span style="color:#888;">' + esc(loc.short || loc.name || '') + '</span></div>'; });
   h += '</div>';
   return h;
@@ -5484,11 +5534,16 @@ function renderTcTeamSchedule(){
   const wkLabel = (days[0].getMonth() + 1) + '/' + days[0].getDate() + ' – ' + (days[6].getMonth() + 1) + '/' + days[6].getDate();
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const nav = 'background:none;border:none;cursor:pointer;font-size:18px;padding:2px 10px;color:#4169E1;font-weight:700;';
-  const shiftsOf = (s, dk) => Object.values((tcSchedFor(s.id)[dk]) || {}).filter(Boolean).filter(sh => filter === 'all' || sh.loc === filter).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+  // Staff only ever see the POSTED snapshot of this week — not a manager's unpublished draft.
+  const weekKey = tcDateKey(days[0]);
+  const pubRec = tcPublishedRec(weekKey);
+  const shiftsOf = (s, dk) => tcPostedShifts(s.id, dk).filter(sh => filter === 'all' || sh.loc === filter).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
   // When a location is selected, only show staff who actually work there this week.
   const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length));
   let h = '<div style="background:#fff;border-radius:16px;margin-top:14px;padding:16px;">';
-  h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><div style="font-size:14px;font-weight:800;color:#1a1a2e;">📆 Team schedule</div><span style="display:flex;align-items:center;gap:2px;"><button onclick="tcWeek(-1)" style="' + nav + '">‹</button><b style="font-size:12px;min-width:96px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + nav + '">›</button></span></div>';
+  const postedNote = pubRec ? '<span style="font-size:10.5px;color:#16a34a;font-weight:700;">✓ posted' + (pubRec.publishedAt ? ' ' + timeAgo(pubRec.publishedAt) : '') + '</span>' : '<span style="font-size:10.5px;color:#b45309;font-weight:700;">not posted yet</span>';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div style="font-size:14px;font-weight:800;color:#1a1a2e;">📆 Team schedule</div>' + postedNote + '</div><span style="display:flex;align-items:center;gap:2px;"><button onclick="tcWeek(-1)" style="' + nav + '">‹</button><b style="font-size:12px;min-width:96px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + nav + '">›</button></span></div>';
+  if (!pubRec) { h += '<div style="text-align:center;color:#94a3b8;font-size:13px;padding:22px 10px;background:#f7f9ff;border:1px dashed #d5def0;border-radius:12px;">🗓️ The schedule for this week hasn’t been posted yet.<br><span style="font-size:11.5px;">Use the ‹ › arrows to check another week.</span></div></div>'; return h; }
   // Location filter tabs
   const chip = (id, label, color) => '<button onclick="tcTeamSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:16px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">' + (color ? '<span style="width:8px;height:8px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
   h += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">' + chip('all', 'All locations', null) + LOCATIONS.map(l => chip(l.id, l.name, l.color)).join('') + '</div>';
@@ -5498,7 +5553,8 @@ function renderTcTeamSchedule(){
   h += '</tr></thead><tbody>';
   if (!rows.length) h += '<tr><td colspan="8" style="padding:14px;text-align:center;color:#aaa;">No shifts at this location this week.</td></tr>';
   rows.forEach(s => {
-    h += '<tr style="border-top:1px solid #f1f3f9;"><td style="text-align:left;padding:4px;font-weight:700;position:sticky;left:0;background:#fff;white-space:nowrap;">' + esc(s.name) + '</td>';
+    const wkMin = tcWeekMinsPosted(s.id, days);
+    h += '<tr style="border-top:1px solid #f1f3f9;"><td style="text-align:left;padding:4px;position:sticky;left:0;background:#fff;white-space:nowrap;vertical-align:top;"><div style="font-weight:700;">' + esc(s.name) + '</div><div style="font-size:9.5px;font-weight:600;color:#9aa3b5;" title="Scheduled this week, all locations">' + tcFmtHrs(wkMin) + '</div></td>';
     days.forEach(d => {
       const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
       h += '<td style="text-align:center;padding:3px;vertical-align:top;' + (holMap[dk] ? 'background:#fff7ed;' : '') + '">';
