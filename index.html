@@ -9027,7 +9027,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     photos.forEach((url,idx)=>{
       html+='<div style="position:relative;"><a href="'+esc(url)+'" target="_blank" rel="noopener"><img src="'+esc(url)+'" style="width:58px;height:58px;object-fit:cover;border-radius:8px;border:1px solid var(--gray-200);display:block;"></a>'+(locked?'':'<button onclick="taskPhotoRemove(\''+section+'\',\''+task.id+'\','+idx+')" title="Remove" style="position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border:none;border-radius:999px;width:18px;height:18px;font-size:12px;line-height:1;cursor:pointer;padding:0;">×</button>')+'</div>';
     });
-    if(!locked&&(task.multi||!photos.length)){
+    if(!locked){   // every photo task accepts multiple photos — keep the button after the first
       html+='<input type="file" accept="image/*" capture="environment" id="ph_'+section+'_'+task.id+'" style="display:none" onchange="taskPhotoUpload(\''+section+'\',\''+task.id+'\',this)">';
       html+='<button onclick="document.getElementById(\'ph_'+section+'_'+task.id+'\').click()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#4169E1;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">📸 '+(photos.length?'Add Another':'Add Photo')+'</button>';
     }
