@@ -2617,7 +2617,7 @@ function renderReviewsPage(){
 }
 
 function renderApplicationsPage(){
-  const all = appAll().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const all = appAll().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const filter = state.appFilter || 'all';
   const open = all.filter(a => !appIsDone(a));
   let filtered = all;
