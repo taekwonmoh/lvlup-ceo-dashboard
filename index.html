@@ -2361,11 +2361,13 @@ function renderGroupSubNav(tabs) {
 
 function renderOpsPage() {
   const s = state.activeSection;
+  const toPending = tcPendingTimeoffCount();
+  const schedBadge = toPending ? ' <span title="' + toPending + ' time-off request' + (toPending === 1 ? '' : 's') + ' awaiting approval" style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#d97706;color:#fff;font-size:10px;font-weight:800;vertical-align:middle;">' + toPending + '</span>' : '';
   const nav = renderGroupSubNav([
     { id: 'tasks',          label: '✅ Tasks'         },
     { id: 'events',         label: '📅 Events'        },
     { id: 'testing',        label: '🥋 Testing'       },
-    { id: 'accountability', label: '⏱ Schedule' },
+    { id: 'accountability', label: '⏱ Schedule' + schedBadge },
     { id: 'inventory',      label: '📦 Inventory'     },
     { id: 'photos',         label: '📸 Photos'        },
   ]);
@@ -4741,18 +4743,19 @@ function renderAccountabilityPage(){
   h += '<a href="#clock" target="_blank" style="flex-shrink:0;padding:9px 15px;background:#1a1a2e;color:#fff;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;">🖥 Open clock kiosk →</a></div>';
   h += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:10px;padding:10px 14px;font-size:12px;color:#334;margin-bottom:16px;">Give part-timers the kiosk link — it shows only the clock and their schedule, not the rest of the dashboard: <b>' + esc(location.origin + location.pathname) + '#clock</b></div>';
   h += renderTcMissedOuts();
+  h += renderTcTimeoff();        // pending time-off approvals up top, Homebase-style
   h += renderTcClock();
   h += renderTcSchedule();
   h += renderTcTimeoffInfo();
   h += renderTcTimesheet();
   h += renderTcPayroll();
-  h += renderTcTimeoff();
   h += renderTcTrades();
   h += renderTcPto();
   h += renderTcSetup();
   h += '</div>';
   h += renderTcMapModal();
   h += renderTcShiftModal();
+  h += renderTcTimeoffModal();
   h += renderTcPublishModal();
   h += renderTcCardModal();
   h += renderTcGuideModal();
@@ -5479,19 +5482,69 @@ function tcToggleSlack(id){ const cur = !!((tcData().staff || {})[id] || {}).sla
 /* ── Time-off requests ── */
 function tcTimeoffAll(){ return Object.entries((tcData().timeoff) || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
 function tcDaysInclusive(a, b){ const d1 = new Date(a + 'T00:00:00'), d2 = new Date((b || a) + 'T00:00:00'); if (isNaN(d1) || isNaN(d2)) return 1; return Math.max(1, Math.round((d2 - d1) / 86400000) + 1); }
+function tcPendingTimeoffCount(){ return tcTimeoffAll().filter(t => (t.status || 'pending') === 'pending').length; }
+// Kiosk entry — gate on the staffer's PIN, then open the request form bound to them.
 async function tcRequestTimeoff(id){
   const chk = await tcCheckPin(id); if (!chk.ok) { state.tcMsg = { type: 'error', text: chk.msg }; render(); return; }
-  const st = (tcData().staff || {})[id] || {};
-  const start = prompt('Time off — START date (YYYY-MM-DD):', tcDateKey()); if (!start) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(start.trim())) { alert('Use YYYY-MM-DD.'); return; }
-  const end = prompt('END date (YYYY-MM-DD) — same as start for one day:', start.trim()); if (!end) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(end.trim())) { alert('Use YYYY-MM-DD.'); return; }
-  const paid = st.fullTime ? confirm('Is this PAID time off (PTO)?\n\nOK = PTO (counts against your balance)\nCancel = unpaid') : false;
-  const note = prompt('Reason (optional):') || '';
-  const days = tcDaysInclusive(start.trim(), end.trim());
-  fbSet('timeclock/timeoff/' + ('to_' + Date.now().toString(36)), { empId: id, start: start.trim(), end: end.trim(), days, type: paid ? 'pto' : 'unpaid', note: note.trim() || null, status: 'pending', reqAt: Date.now() });
-  state.tcMsg = { type: 'ok', text: 'Time-off request submitted (' + days + ' day' + (days > 1 ? 's' : '') + ', ' + (paid ? 'PTO' : 'unpaid') + ') — pending approval.' };
-  state.tcSel = null; render();
+  tcTimeoffReqOpen(id, 'kiosk');
+}
+// ctx 'kiosk' pre-binds the signed-in staffer; ctx 'dash' lets a signed-in manager pick who it's for.
+function tcTimeoffReqOpen(empId, ctx){
+  const today = tcDateKey();
+  state.tcTimeoffReq = { empId: empId || '', ctx: ctx || 'dash', start: today, end: today, type: 'unpaid', note: '' };
+  render();
+}
+function tcTimeoffReqClose(){ state.tcTimeoffReq = null; render(); }
+function tcTimeoffReqField(f, v){
+  const r = state.tcTimeoffReq; if (!r) return;
+  r[f] = v;
+  if (f === 'start' && (!r.end || r.end < v)) r.end = v;                 // keep end on/after start
+  if (f === 'empId') { const st = (tcData().staff || {})[v] || {}; if (!st.fullTime) r.type = 'unpaid'; }   // only full-timers have PTO
+  render();
+}
+function tcTimeoffReqSubmit(){
+  const r = state.tcTimeoffReq; if (!r) return;
+  if (!r.empId) { alert('Pick who the time off is for.'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(r.start) || !/^\d{4}-\d{2}-\d{2}$/.test(r.end)) { alert('Pick a start and end date.'); return; }
+  if (r.end < r.start) { alert('The end date can’t be before the start date.'); return; }
+  const st = (tcData().staff || {})[r.empId] || {};
+  const type = (st.fullTime && r.type === 'pto') ? 'pto' : 'unpaid';
+  const days = tcDaysInclusive(r.start, r.end);
+  fbSet('timeclock/timeoff/' + ('to_' + Date.now().toString(36)), { empId: r.empId, start: r.start, end: r.end, days, type, note: (r.note || '').trim() || null, status: 'pending', reqAt: Date.now(), reqVia: r.ctx });
+  state.tcTimeoffReq = null;
+  state.tcMsg = { type: 'ok', text: 'Time-off request submitted (' + tcFmtDays(days) + ' day' + (days > 1 ? 's' : '') + ', ' + (type === 'pto' ? 'PTO' : 'unpaid') + ') — pending approval.' };
+  if (r.ctx === 'kiosk') state.tcSel = null;                             // kiosk returns to the roster
+  render();
+}
+function renderTcTimeoffModal(){
+  const r = state.tcTimeoffReq; if (!r) return '';
+  const st = (tcData().staff || {})[r.empId] || {};
+  const fld = 'width:100%;box-sizing:border-box;border:1px solid #e3e6ef;border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit;margin-top:4px;';
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(r.start) && /^\d{4}-\d{2}-\d{2}$/.test(r.end) && r.end >= r.start;
+  const days = valid ? tcDaysInclusive(r.start, r.end) : 0;
+  let h = '<div onclick="if(event.target===this)tcTimeoffReqClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:400;padding:16px;">';
+  h += '<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">';
+  h += '<div style="padding:16px 18px;border-bottom:1px solid #eef0f6;"><div style="font-size:16px;font-weight:800;color:#1a1a2e;">🏝 Request time off</div><div style="font-size:12px;color:#888;margin-top:2px;">' + (r.ctx === 'kiosk' ? esc(st.name || '') : 'Submit a request — a manager approves it') + '</div></div>';
+  h += '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;">';
+  if (r.ctx !== 'kiosk') {
+    const opts = '<option value="">— pick staff —</option>' + tcSchedStaff().map(s => '<option value="' + s.id + '"' + (r.empId === s.id ? ' selected' : '') + '>' + esc(s.name) + '</option>').join('');
+    h += '<label style="font-size:12px;font-weight:700;color:#555;">Who<select onchange="tcTimeoffReqField(\'empId\',this.value)" style="' + fld + '">' + opts + '</select></label>';
+  }
+  h += '<div style="display:flex;gap:10px;"><label style="flex:1;font-size:12px;font-weight:700;color:#555;">From<input type="date" value="' + esc(r.start) + '" onchange="tcTimeoffReqField(\'start\',this.value)" style="' + fld + '"></label><label style="flex:1;font-size:12px;font-weight:700;color:#555;">To<input type="date" value="' + esc(r.end) + '" min="' + esc(r.start) + '" onchange="tcTimeoffReqField(\'end\',this.value)" style="' + fld + '"></label></div>';
+  if (days) h += '<div style="font-size:12px;color:#16a34a;font-weight:800;margin-top:-4px;">' + tcFmtDays(days) + ' day' + (days > 1 ? 's' : '') + ' off</div>';
+  if (st.fullTime) {
+    const seg = (val, label, desc) => '<button onclick="tcTimeoffReqField(\'type\',\'' + val + '\')" style="flex:1;text-align:left;padding:9px 11px;border-radius:8px;border:1px solid ' + (r.type === val ? '#16a34a' : '#e3e6ef') + ';background:' + (r.type === val ? '#f0fdf4' : '#fff') + ';cursor:pointer;"><div style="font-size:13px;font-weight:800;color:' + (r.type === val ? '#166534' : '#444') + ';">' + label + '</div><div style="font-size:10.5px;color:#888;">' + desc + '</div></button>';
+    h += '<div><div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">Type</div><div style="display:flex;gap:8px;">' + seg('pto', 'PTO', 'Counts against balance') + seg('unpaid', 'Unpaid', 'Doesn’t use PTO') + '</div></div>';
+  } else if (r.empId) {
+    h += '<div style="font-size:11.5px;color:#888;background:#f7f9ff;border:1px solid #e6edf8;border-radius:8px;padding:8px 10px;">Hourly / part-time — this time off is <b>unpaid</b> (no PTO balance). It’s still fine to take; it just isn’t paid.</div>';
+  }
+  h += '<label style="font-size:12px;font-weight:700;color:#555;">Reason <span style="font-weight:400;color:#aaa;">(optional)</span><input type="text" value="' + esc(r.note || '') + '" placeholder="e.g. family trip" onchange="tcTimeoffReqField(\'note\',this.value)" style="' + fld + '"></label>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:10px;padding:14px 18px;border-top:1px solid #eef0f6;">';
+  h += '<button onclick="tcTimeoffReqSubmit()" style="flex:1;padding:11px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Submit request</button>';
+  h += '<button onclick="tcTimeoffReqClose()" style="padding:11px 14px;background:#f1f3f9;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>';
+  h += '</div></div></div>';
+  return h;
 }
 function tcTimeoffDecision(id, status){
   const t = ((tcData().timeoff) || {})[id]; if (!t) return;
@@ -5551,9 +5604,9 @@ function renderTcTimeoff(){
   const pending = all.filter(t => (t.status || 'pending') === 'pending');
   const decided = all.filter(t => (t.status || 'pending') !== 'pending').slice(0, 12);
   let h = '<div class="section" style="margin-bottom:22px;">';
-  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h2>🏝 Time-off requests</h2>' + (pending.length ? '<span style="font-size:11px;font-weight:800;color:#d97706;background:#fffbeb;padding:3px 9px;border-radius:6px;">' + pending.length + ' pending</span>' : '') + '</div>';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><h2 style="margin:0;">🏝 Time-off requests</h2>' + (pending.length ? '<span style="font-size:11px;font-weight:800;color:#d97706;background:#fffbeb;padding:3px 9px;border-radius:6px;">' + pending.length + ' pending</span>' : '') + '</span><button onclick="tcTimeoffReqOpen(\'\',\'dash\')" title="File a time-off request (yours or on behalf of a staffer)" style="background:#1a1a2e;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:7px 13px;">🏝 Request time off</button></div>';
   h += '<div style="padding:8px 20px 16px;">';
-  if (!all.length) h += '<div style="color:#aaa;font-size:13px;">No requests yet. Staff submit these from the clock kiosk.</div>';
+  if (!all.length) h += '<div style="color:#aaa;font-size:13px;">No requests yet. Tap <b>Request time off</b> above, or staff can submit from the clock kiosk — either way they land here for approval.</div>';
   const row = t => {
     const range = t.start + (t.end && t.end !== t.start ? ' → ' + t.end : '');
     const typeBadge = t.type === 'pto' ? '<span style="font-size:10px;font-weight:800;color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:6px;">PTO</span>' : '<span style="font-size:10px;font-weight:800;color:#64748b;background:#f1f5f9;padding:2px 7px;border-radius:6px;">Unpaid</span>';
@@ -5768,6 +5821,7 @@ function renderClockKiosk(){
   h += '<div style="text-align:center;margin-top:16px;"><a href="#" onclick="location.hash=\'\';return false;" style="color:#64748b;font-size:12px;text-decoration:none;">Exit kiosk</a></div>';
   h += '</div></div>';
   h += renderIncidentModal();
+  h += renderTcTimeoffModal();
   return h;
 }
 
