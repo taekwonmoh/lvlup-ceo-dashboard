@@ -4330,8 +4330,8 @@ async function tcPunch(id, dir){
       if (outAt && outAt < open.entry.inAt) outAt += 86400000;
       if (!outAt || outAt <= open.entry.inAt) { state.tcMsg = { type: 'error', text: 'End time must be after your clock-in (' + tcFmtTime(open.entry.inAt) + ').' }; render(); return; }
       const sb = 'timeclock/entries/' + id + '/' + open.dateKey + '/' + open.entryId + '/';
-      fbSet(sb + 'outAt', outAt); fbSet(sb + 'outOk', true); fbSet(sb + 'edited', true); fbSet(sb + 'editedAt', Date.now()); fbSet(sb + 'missedFix', true);
-      state.tcMsg = { type: 'ok', text: (st.name || '') + ' — missed clock-out fixed: ended ' + tcFmtTime(outAt) + ' (' + ((outAt - open.entry.inAt) / 3600000).toFixed(1) + 'h). Clock in again if you’re starting a new shift.' };
+      fbSet(sb + 'outAt', outAt); fbSet(sb + 'outOk', true); fbSet(sb + 'edited', true); fbSet(sb + 'editedAt', Date.now()); fbSet(sb + 'missedFix', true); fbSet(sb + 'manualOut', true); fbSet(sb + 'manualBy', 'self');
+      state.tcMsg = { type: 'ok', text: (st.name || '') + ' — missed clock-out filled in: ended ' + tcFmtTime(outAt) + ' (' + ((outAt - open.entry.inAt) / 3600000).toFixed(1) + 'h). Marked * manual/unverified. Clock in again if you’re starting a new shift.' };
       state.tcSel = null; state.tcPin = ''; render(); return;
     }
     const base = 'timeclock/entries/' + id + '/' + open.dateKey + '/' + open.entryId + '/';
@@ -4436,15 +4436,15 @@ function tcFixMissedOut(id, dk, eid){
   if (!outAt || outAt <= e.inAt) { alert('End time must be after the clock-in (' + tcFmtTime(e.inAt) + ').'); return; }
   if ((outAt - e.inAt) > 24 * 3600000 && !confirm('That makes a shift longer than 24 hours — save anyway?')) return;
   const base = 'timeclock/entries/' + id + '/' + dk + '/' + eid + '/';
-  fbSet(base + 'outAt', outAt); fbSet(base + 'outOk', true); fbSet(base + 'edited', true); fbSet(base + 'editedAt', Date.now()); fbSet(base + 'missedFix', true);
-  state.tcMsg = { type: 'ok', text: nm + '’s clock-out set to ' + tcFmtTime(outAt) + ' (' + ((outAt - e.inAt) / 3600000).toFixed(1) + 'h).' };
+  fbSet(base + 'outAt', outAt); fbSet(base + 'outOk', true); fbSet(base + 'edited', true); fbSet(base + 'editedAt', Date.now()); fbSet(base + 'missedFix', true); fbSet(base + 'manualOut', true); fbSet(base + 'manualBy', 'manager');
+  state.tcMsg = { type: 'ok', text: nm + '’s clock-out set to ' + tcFmtTime(outAt) + ' (' + ((outAt - e.inAt) / 3600000).toFixed(1) + 'h) · marked * manual/unverified.' };
   render();
 }
 function renderTcMissedOuts(){
   const miss = tcMissedClockouts(); if (!miss.length) return '';
   let h = '<div class="section" style="margin-bottom:22px;border:1px solid #fecaca;background:#fff5f5;">';
   h += '<div class="section-header"><h2 style="color:#b91c1c;">⚠ Missed clock-outs (' + miss.length + ')</h2></div>';
-  h += '<div style="padding:4px 20px 6px;font-size:12px;color:#7f1d1d;">Someone clocked in and never clocked out. Fill in the real end time so hours and payroll are correct.</div>';
+  h += '<div style="padding:4px 20px 6px;font-size:12px;color:#7f1d1d;">Someone clocked in and never clocked out. They’re prompted to fix it themselves the next time they open the kiosk — or fill in the real end time here. Hand-entered times are marked <b>&#42;</b> (manual, unverified).</div>';
   h += '<div style="padding:4px 20px 16px;">';
   miss.forEach(m => {
     h += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #fde0e0;flex-wrap:wrap;">';
@@ -4670,13 +4670,15 @@ function renderTcClock(){
   if (!staff.length) { h += '<div style="color:#aaa;font-size:13px;padding:8px 0;">No staff on the clock yet — open <b>Setup</b> below to add your team.</div>'; }
   else if (state.tcSel && (tcData().staff || {})[state.tcSel]) {
     const st = (tcData().staff || {})[state.tcSel]; const open = tcOpenEntry(state.tcSel); const hasPin = !!(tcData().pins || {})[state.tcSel];
+    const stale = open && (open.dateKey !== tcDateKey() || (Date.now() - open.entry.inAt) > TC_MISSED_HRS * 3600000);
     h += '<div style="max-width:360px;">';
     h += '<div style="font-size:18px;font-weight:800;color:#1a1a2e;margin-bottom:2px;">' + esc(st.name || '') + '</div>';
-    h += '<div style="font-size:12px;color:#888;margin-bottom:12px;">' + esc((LOCATIONS.find(l => l.id === st.loc) || {}).name || '') + (open ? ' · 🟢 clocked in since ' + tcFmtTime(open.entry.inAt) : ' · ⚪ clocked out') + '</div>';
+    h += '<div style="font-size:12px;color:' + (stale ? '#b91c1c' : '#888') + ';margin-bottom:12px;">' + esc((LOCATIONS.find(l => l.id === st.loc) || {}).name || '') + (stale ? ' · ⚠ never clocked out from ' + fmtCancelDate(open.dateKey) : open ? ' · 🟢 clocked in since ' + tcFmtTime(open.entry.inAt) : ' · ⚪ clocked out') + '</div>';
+    if (stale) { h += '<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:12px 14px;font-size:13px;color:#7f1d1d;margin-bottom:12px;line-height:1.5;"><b>⚠ You forgot to clock out.</b><br>You clocked in <b>' + esc(fmtCancelDate(open.dateKey)) + '</b> at <b>' + esc(tcFmtTime(open.entry.inAt)) + '</b> and never clocked out. Enter your real end time so your hours and pay are right — it’ll be marked <b>*</b> (manual, unverified).</div>'; }
     if (!hasPin) { h += '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px;font-size:12px;color:#92400e;margin-bottom:12px;">No PIN yet. <button onclick="tcSetPin(\'' + state.tcSel + '\')" style="background:none;border:none;color:#b45309;font-weight:700;text-decoration:underline;cursor:pointer;font-size:12px;">Set your PIN</button> first.</div>'; }
-    h += '<input id="tcPinInput" type="password" inputmode="numeric" maxlength="4" placeholder="PIN" onkeydown="if(event.key===\'Enter\')tcPunch(\'' + state.tcSel + '\',\'' + (open ? 'out' : 'in') + '\')" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:12px;font-size:22px;padding:12px;border:2px solid #e0e3ed;border-radius:10px;margin-bottom:12px;font-family:inherit;" autofocus>';
+    h += '<input id="tcPinInput" type="password" inputmode="numeric" maxlength="4" placeholder="PIN" onkeydown="if(event.key===\'Enter\')tcPunch(\'' + state.tcSel + '\',\'' + (open ? 'out' : 'in') + '\')" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:12px;font-size:22px;padding:12px;border:2px solid ' + (stale ? '#fca5a5' : '#e0e3ed') + ';border-radius:10px;margin-bottom:12px;font-family:inherit;" autofocus>';
     h += '<div style="display:flex;gap:10px;">';
-    h += '<button onclick="tcPunch(\'' + state.tcSel + '\',\'' + (open ? 'out' : 'in') + '\')" style="flex:1;padding:14px;background:' + (open ? '#dc2626' : '#16a34a') + ';color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;">' + (open ? 'Clock Out' : 'Clock In') + '</button>';
+    h += '<button onclick="tcPunch(\'' + state.tcSel + '\',\'' + (open ? 'out' : 'in') + '\')" style="flex:1;padding:14px;background:' + (open ? '#dc2626' : '#16a34a') + ';color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;">' + (stale ? '⏱ Fill in my end time' : open ? 'Clock Out' : 'Clock In') + '</button>';
     h += '<button onclick="tcSelect(\'' + state.tcSel + '\')" style="padding:14px 16px;background:#f1f3f9;color:#555;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Cancel</button>';
     h += '</div></div>';
   } else {
@@ -4685,7 +4687,7 @@ function renderTcClock(){
       { name: 'LVLUP',    test: s => !GONINJA_LOC_IDS.includes(s.loc) },
       { name: 'Go Ninja', test: s => GONINJA_LOC_IDS.includes(s.loc) },
     ];
-    const btn = s => { const open = tcOpenEntry(s.id); return '<button onclick="tcSelect(\'' + s.id + '\')" style="padding:10px 16px;border-radius:10px;border:1px solid ' + (open ? '#16a34a' : '#e3e6ef') + ';background:' + (open ? '#dcfce7' : '#fff') + ';color:#1a1a2e;font-size:14px;font-weight:700;cursor:pointer;">' + (open ? '🟢 ' : '') + esc(s.name) + '</button>'; };
+    const btn = s => { const open = tcOpenEntry(s.id); const stale = open && (open.dateKey !== tcDateKey() || (Date.now() - open.entry.inAt) > TC_MISSED_HRS * 3600000); const bd = stale ? '#f59e0b' : open ? '#16a34a' : '#e3e6ef'; const bg = stale ? '#fef3c7' : open ? '#dcfce7' : '#fff'; return '<button onclick="tcSelect(\'' + s.id + '\')" title="' + (stale ? 'Forgot to clock out — tap to fix' : '') + '" style="padding:10px 16px;border-radius:10px;border:1px solid ' + bd + ';background:' + bg + ';color:#1a1a2e;font-size:14px;font-weight:700;cursor:pointer;">' + (stale ? '⚠ ' : open ? '🟢 ' : '') + esc(s.name) + '</button>'; };
     let any = false;
     brands.forEach(b => {
       const ppl = staff.filter(b.test).sort((a, c) => (a.name || '').localeCompare(c.name || '')); if (!ppl.length) return; any = true;
@@ -4716,15 +4718,15 @@ function renderTcTimesheet(){
   staff.forEach(s => {
     const es = tcEmpEntries(s.id); let wkMin = 0; let cells = '';
     days.forEach(d => {
-      const dk = tcDateKey(d); const dayE = es[dk] || {}; let mins = 0, flag = false, openDay = false;
-      Object.values(dayE).forEach(e => { if (!e) return; if (e.inAt && e.outAt) mins += (e.outAt - e.inAt) / 60000; else if (e.inAt && !e.outAt) openDay = true; if (e.inOk === false || e.outOk === false) flag = true; });
+      const dk = tcDateKey(d); const dayE = es[dk] || {}; let mins = 0, flag = false, openDay = false, manualDay = false;
+      Object.values(dayE).forEach(e => { if (!e) return; if (e.inAt && e.outAt) mins += (e.outAt - e.inAt) / 60000; else if (e.inAt && !e.outAt) openDay = true; if (e.inOk === false || e.outOk === false) flag = true; if (e.manualOut === true) manualDay = true; });
       wkMin += mins; const hrs = mins ? (mins / 60).toFixed(1) : '';
-      cells += '<td onclick="tcStaffFocus(\'' + s.id + '\')" title="Tap to edit the week\'s time cards" style="text-align:center;cursor:pointer;' + (flag ? 'background:#fef3c7;' : '') + '">' + (openDay ? '🟢' : '') + (hrs || '·') + (flag ? ' ⚠' : '') + '</td>';
+      cells += '<td onclick="tcStaffFocus(\'' + s.id + '\')" title="Tap to edit the week\'s time cards' + (manualDay ? ' · * = manual, unverified end time' : '') + '" style="text-align:center;cursor:pointer;' + (flag ? 'background:#fef3c7;' : '') + '">' + (openDay ? '🟢' : '') + (hrs || '·') + (flag ? ' ⚠' : '') + (manualDay ? ' <span style="color:#b45309;font-weight:800;">&#42;</span>' : '') + '</td>';
     });
     h += '<tr><td style="text-align:left;font-weight:700;"><span onclick="tcStaffFocus(\'' + s.id + '\')" title="Edit ' + esc(s.name) + '’s clock in/out" style="cursor:pointer;border-bottom:1px dotted #b9c0d0;">' + esc(s.name) + '</span></td>' + cells + '<td style="text-align:center;font-weight:800;">' + (wkMin ? (wkMin / 60).toFixed(1) + 'h' : '0') + '</td></tr>';
   });
   h += '</tbody></table></div>';
-  h += '<div style="font-size:11px;color:#999;margin-top:8px;">✏️ Tap anyone\'s row to edit their whole week of clock times · 🟢 currently clocked in · ⚠ a punch was outside the geofence — review</div>';
+  h += '<div style="font-size:11px;color:#999;margin-top:8px;">✏️ Tap anyone\'s row to edit their whole week of clock times · 🟢 currently clocked in · ⚠ a punch was outside the geofence · <b>&#42;</b> end time entered by hand (manual, unverified) — review</div>';
   h += '</div>';
   return h;
 }
@@ -4733,7 +4735,7 @@ function tcHMfromMs(ms){ if (!ms) return ''; const d = new Date(ms); return Stri
 function tcMsFromHM(dateKey, hm){ if (!hm) return null; const t = new Date(dateKey + 'T' + tcPadTime(hm) + ':00'); return isNaN(t.getTime()) ? null : t.getTime(); }
 function tcCardOpen(staffId, dateKey){
   const es = (tcEmpEntries(staffId)[dateKey]) || {};
-  const rows = Object.entries(es).map(([eid, e]) => ({ eid, in: tcHMfromMs((e || {}).inAt), out: tcHMfromMs((e || {}).outAt), flag: (e || {}).inOk === false || (e || {}).outOk === false, edited: !!(e || {}).edited })).sort((a, b) => (a.in || '').localeCompare(b.in || ''));
+  const rows = Object.entries(es).map(([eid, e]) => ({ eid, in: tcHMfromMs((e || {}).inAt), out: tcHMfromMs((e || {}).outAt), flag: (e || {}).inOk === false || (e || {}).outOk === false, edited: !!(e || {}).edited, manual: !!(e || {}).manualOut })).sort((a, b) => (a.in || '').localeCompare(b.in || ''));
   state.tcCardEdit = { staffId, dateKey, rows, newRows: [] };
   render();
 }
@@ -4750,12 +4752,13 @@ function tcCardSave(){
     if (inAt && outAt && outAt < inAt) outAt += 86400000;   // crossed midnight
     const base = 'timeclock/entries/' + c.staffId + '/' + c.dateKey + '/' + r.eid + '/';
     fbSet(base + 'inAt', inAt); fbSet(base + 'outAt', outAt || null); fbSet(base + 'edited', true); fbSet(base + 'editedAt', Date.now());
+    fbSet(base + 'manualOut', outAt ? true : null); if (outAt) fbSet(base + 'manualBy', 'manager');   // typed end time = unverified
   });
   c.newRows.forEach(r => {
     const inAt = tcMsFromHM(c.dateKey, r.in); if (!inAt) return; let outAt = tcMsFromHM(c.dateKey, r.out);
     if (inAt && outAt && outAt < inAt) outAt += 86400000;
     const eid = 'e_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-    fbSet('timeclock/entries/' + c.staffId + '/' + c.dateKey + '/' + eid, { inAt, outAt: outAt || null, inOk: true, outOk: outAt ? true : null, inLoc: null, edited: true, editedAt: Date.now() });
+    fbSet('timeclock/entries/' + c.staffId + '/' + c.dateKey + '/' + eid, { inAt, outAt: outAt || null, inOk: true, outOk: outAt ? true : null, inLoc: null, edited: true, editedAt: Date.now(), manualOut: outAt ? true : null, manualBy: outAt ? 'manager' : null });
   });
   state.tcCardEdit = null; render();
 }
@@ -4771,7 +4774,7 @@ function renderTcCardModal(){
     x += '<label style="flex:1;font-size:11px;font-weight:700;color:#666;">Out<input type="time" value="' + esc(r.out || '') + '" onchange="tcCardField(\'' + kind + '\',' + idx + ',\'out\',this.value)" style="' + fld + 'width:100%;box-sizing:border-box;margin-top:3px;"></label>';
     x += '<button onclick="' + del + '" title="Delete entry" style="align-self:flex-end;background:#fff;border:1px solid #fca5a5;color:#dc2626;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>';
     x += '</div>';
-    if (!isNew && (r.flag || r.edited)) x += '<div style="font-size:10.5px;color:#999;margin:-4px 0 8px 2px;">' + (r.flag ? '⚠ punch was off-site' : '') + (r.flag && r.edited ? ' · ' : '') + (r.edited ? '✏️ manually edited' : '') + '</div>';
+    if (!isNew && (r.flag || r.edited || r.manual)) { const parts = []; if (r.flag) parts.push('⚠ punch was off-site'); if (r.manual) parts.push('<span style="color:#b45309;font-weight:700;">&#42; manual end time (unverified)</span>'); else if (r.edited) parts.push('✏️ manually edited'); x += '<div style="font-size:10.5px;color:#999;margin:-4px 0 8px 2px;">' + parts.join(' · ') + '</div>'; }
     return x;
   };
   let h = '<div onclick="if(event.target===this)tcCardClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:470;padding:16px;">';
@@ -4811,7 +4814,7 @@ function tcPayData(){
   return tcClockStaff().map(st=>{
     const es=tcEmpEntries(st.id); let total=0; const days=[];
     dates.forEach(dk=>{ const dayE=es[dk]||{}; const punches=[]; let dmins=0;
-      Object.values(dayE).forEach(e2=>{ if(!e2||!e2.inAt) return; const open=!e2.outAt; const mins=open?0:(e2.outAt-e2.inAt)/60000; dmins+=mins; punches.push({in:e2.inAt,out:e2.outAt,mins,open,flag:(e2.inOk===false||e2.outOk===false)}); });
+      Object.values(dayE).forEach(e2=>{ if(!e2||!e2.inAt) return; const open=!e2.outAt; const mins=open?0:(e2.outAt-e2.inAt)/60000; dmins+=mins; punches.push({in:e2.inAt,out:e2.outAt,mins,open,flag:(e2.inOk===false||e2.outOk===false),manual:(e2.manualOut===true)}); });
       if(punches.length){ punches.sort((a,b)=>a.in-b.in); days.push({dk,punches,mins:dmins}); total+=dmins; }
     });
     return {id:st.id,name:st.name,loc:st.loc,days,totalMins:total};
@@ -4822,7 +4825,7 @@ function tcPtoDaysInRange(id,start,end){ let s=0; Object.values(tcPtoEntries(id)
 function tcPayLocName(locId){ return (LOCATIONS.find(l=>l.id===locId)||{}).name||locId||'Other'; }
 function tcPayCsvString(){
   const data=tcPayData(); const rows=[['Location','Employee','Date','Clock In','Clock Out','Hours']];
-  data.forEach(r=>{ const loc=tcPayLocName(r.loc); r.days.forEach(d=>{ d.punches.forEach(p=>{ rows.push([loc, r.name, d.dk, tcFmtTime(p.in), p.open?'(still in)':tcFmtTime(p.out), p.open?'':(p.mins/60).toFixed(2)]); }); }); const pto=tcPtoDaysInRange(r.id,tcPayStart(),tcPayEnd()); rows.push([loc, r.name,'TOTAL '+tcPayStart()+'→'+tcPayEnd(),'',pto?(tcFmtDays(pto)+'d PTO'):'',(r.totalMins/60).toFixed(2)]); });
+  data.forEach(r=>{ const loc=tcPayLocName(r.loc); r.days.forEach(d=>{ d.punches.forEach(p=>{ rows.push([loc, r.name, d.dk, tcFmtTime(p.in), p.open?'(still in)':(tcFmtTime(p.out)+(p.manual?' * (manual/unverified)':'')), p.open?'':(p.mins/60).toFixed(2)]); }); }); const pto=tcPtoDaysInRange(r.id,tcPayStart(),tcPayEnd()); rows.push([loc, r.name,'TOTAL '+tcPayStart()+'→'+tcPayEnd(),'',pto?(tcFmtDays(pto)+'d PTO'):'',(r.totalMins/60).toFixed(2)]); });
   return rows.map(r=>r.map(c=>/[",\n]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(',')).join('\n');
 }
 function tcPayCsv(){
@@ -4862,11 +4865,11 @@ function renderTcPayroll(){
   h+='<details style="padding:4px 18px 10px;"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#4169E1;">Show daily clock in / out detail</summary>';
   data.forEach(r=>{
     h+='<div style="margin-top:12px;"><div style="font-weight:800;font-size:13px;color:#1a1a2e;margin-bottom:4px;">'+esc(r.name)+' — '+(r.totalMins/60).toFixed(2)+'h</div><table class="sc-table" style="width:100%;font-size:12px;"><tbody>';
-    r.days.forEach(d=>{ d.punches.forEach((p,i)=>{ h+='<tr><td style="text-align:left;color:#555;min-width:72px;">'+(i===0?esc(tcPayDayLabel(d.dk)):'')+'</td><td style="text-align:center;">'+tcFmtTime(p.in)+' – '+(p.open?'<span style="color:#d97706;">still in</span>':tcFmtTime(p.out))+(p.flag?' <span title="punch outside geofence" style="color:#dc2626;">⚠</span>':'')+'</td><td style="text-align:right;font-weight:700;min-width:54px;">'+(p.open?'—':(p.mins/60).toFixed(2)+'h')+'</td></tr>'; }); });
+    r.days.forEach(d=>{ d.punches.forEach((p,i)=>{ h+='<tr><td style="text-align:left;color:#555;min-width:72px;">'+(i===0?esc(tcPayDayLabel(d.dk)):'')+'</td><td style="text-align:center;">'+tcFmtTime(p.in)+' – '+(p.open?'<span style="color:#d97706;">still in</span>':tcFmtTime(p.out)+(p.manual?'<span title="manually entered — unverified" style="color:#b45309;font-weight:800;">&#42;</span>':''))+(p.flag?' <span title="punch outside geofence" style="color:#dc2626;">⚠</span>':'')+'</td><td style="text-align:right;font-weight:700;min-width:54px;">'+(p.open?'—':(p.mins/60).toFixed(2)+'h')+'</td></tr>'; }); });
     h+='</tbody></table></div>';
   });
   h+='</details>';
-  h+='<div style="font-size:11px;color:#999;padding:0 18px 14px;">Decimal hours, grouped by location. Enter each person\'s <b>Total Hours</b> into QuickBooks Online Payroll; <b>PTO</b> is logged separately (in days). ⚠ = a punch was outside the geofence — review before running payroll. (Breaks are not tracked.)</div>';
+  h+='<div style="font-size:11px;color:#999;padding:0 18px 14px;">Decimal hours, grouped by location. Enter each person\'s <b>Total Hours</b> into QuickBooks Online Payroll; <b>PTO</b> is logged separately (in days). ⚠ = a punch was outside the geofence; <b>&#42;</b> = end time entered by hand (manual, unverified) — review before running payroll. (Breaks are not tracked.)</div>';
   h+='</div>';
   return h;
 }
