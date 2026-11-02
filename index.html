@@ -838,7 +838,7 @@ auth.onAuthStateChanged(async (u) => {
   if (dashAuth.allowed) attachDataListeners();   // re-attach reads authenticated (needed once the DB rules are locked)
   render();
 });
-function dashSignIn(){ auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => { state.gateMsg = 'Sign-in failed: ' + (e.message || e.code || 'try again'); render(); }); }
+function dashSignIn(){ const prov = new firebase.auth.GoogleAuthProvider(); prov.setCustomParameters({ prompt: 'select_account' }); auth.signInWithPopup(prov).catch(e => { state.gateMsg = 'Sign-in failed: ' + (e.message || e.code || 'try again'); render(); }); }
 function dashSignOut(){ auth.signOut(); }
 
 // Events database — shared with the members portal & iCal calendar worker
