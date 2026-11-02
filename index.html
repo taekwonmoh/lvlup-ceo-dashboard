@@ -1035,7 +1035,7 @@ const JOEY_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Ensure the instructor station is clean, organized, and ready.'},
   TASK_STOPLIGHT,
   TASK_ROSTERS,
-  {id:'j_wetmop', cat:'Pre-Class Admin', days:[1,2,3], text:'Wet mop the training floors before classes.'},
+  {id:'j_wetmop', cat:'Pre-Class Admin', days:[1], text:'Wet mop the training floors before classes.'},
   {id:'j_greenmachine', cat:'Pre-Class Admin', days:[4], photo:true, icon:'📸', text:'Run the green machine on the training floors, then snap a photo.'},
   ...DAILY_PHOTOS,
   {id:'j_spray', cat:'Closing & EOS', text:'Spray mop the training floors.'},
@@ -1064,6 +1064,14 @@ function lvlupWeekly(board){ return [
   {id:'supplies',  text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
   {id:'ad_invites',text:'Program Growth: Invite 2 students to try the AD class + post names to #LVLUPHQ.'},
   {id:'lifelinks', text:'Student Milestones: Review LifeLinks and award belt clips + post to #LVLUPHQ.'},
+  {id:'bday_report',    text:'Birthday Outreach: Run the upcoming birthday report and send Birthday Party invitations/offers to eligible families.'},
+  {id:'events_promote', text:'Event Promotion: Review upcoming events and promote them to students in class.'},
+  {id:'mia_report',     text:'MIA / At-Risk: Run the attendance report and book booster lessons for at-risk students.'},
+  {id:'lead_audit',     text:'Lead Follow-up Audit: Make sure no new lead has sat more than 48 hours without contact.'},
+  {id:'new_checkin',    text:'30-Day Check-in: Call new students around day 30 to make sure they’re loving it.'},
+  {id:'social_plan',    text:'Social Plan: Plan next week’s social content calendar (separate from posting in Buffer).'},
+  {id:'pto_review',     text:'Time-off Review: Review and action any pending PTO / time-off requests.'},
+  {id:'post_schedule',  text:'Post Schedule: Post next week’s staff schedule on the dashboard and confirm coverage.'},
   TASK_BUFFER,
 ]; }
 const BRYAN_WEEKLY = lvlupWeekly('mirror');
@@ -1103,14 +1111,17 @@ const LVLUP_DAILY = BRYAN_DAILY;
 const LVLUP_WEEKLY_REC = BRYAN_WEEKLY;
 const GONINJA_DAILY = MIRANDA_DAILY;
 const GONINJA_WEEKLY_REC = MIRANDA_WEEKLY;
-const LVLUP_MONTHLY = [];
-// Front desk staff (Waunakee, Verona) — tasks TBD
+const LVLUP_MONTHLY = [
+  {id:'lm_reviews',  text:'Google Reviews: Ask 2 happy families for a review and respond to every new review.'},
+  {id:'lm_checkin',  text:'Team Check-in: 1:1 / coaching check-in with your assistant instructors.'},
+  {id:'lm_sanitize', text:'Deep Sanitize: Monthly deep-sanitize of all mats and high-touch surfaces.'},
+];
+// Front desk staff (Waunakee, Verona)
 const FRONTDESK_DAILY = [
   {id:'fd_messages',    text:'Check and respond to all parent messages, emails, and missed calls.'},
   {id:'fd_followups',   text:'Log any follow-up action items.'},
   {id:'fd_notify_msk',  text:'Notify the location lead instructor of any membership-related issues requiring follow-up.'},
   {id:'fd_questions',   text:'Answer parent questions at the front desk.'},
-  {id:'fd_photos',      text:'Take and upload student photos to GymDesk as needed.'},
   {id:'fd_retail',      text:'Check and fulfill GymDesk for pending retail orders.'},
   {id:'fd_gear',        text:'Assist members with retail purchases and sparring gear fittings.'},
   {id:'fd_lobby',       text:'Maintain a clean, organized, and welcoming front lobby.', subs:[
@@ -1125,8 +1136,6 @@ const FRONTDESK_DAILY = [
   {id:'fd_next_shift',  text:'Note any outstanding action items for the next shift.'},
 ];
 const FRONTDESK_WEEKLY = [
-  {id:'fdw_birthday',  text:'Generate the upcoming birthday report and send Birthday Party invitations/offers to eligible families.'},
-  {id:'fdw_events',    text:'Review upcoming events and promote to students.'},
   {id:'fdw_inventory', text:'Review front desk retail inventory and supplies.'},
   {id:'fdw_restock',   text:'Restock merchandise as needed.'},
   {id:'fdw_lowstock',  text:'Notify #inventory of low-stock items.'},
@@ -1137,8 +1146,27 @@ const FRONTDESK_WEEKLY = [
     'Front desk displays',
     'Upcoming events',
   ]},
+  {id:'fdw_backup',      text:'Data Backup: Back up the dashboard data (the dashboard flags this weekly).'},
+  {id:'fdw_lead_audit',  text:'Lead Follow-up Audit: Make sure no new lead has sat more than 48 hours without contact.'},
+  {id:'fdw_new_checkin', text:'30-Day Check-in: Call new students around day 30 to make sure they’re loving it.'},
+  {id:'fdw_payroll',     text:'Payroll Review (every 2 weeks): Approve timesheets and review payroll before the pay run.'},
 ];
-const FRONTDESK_MONTHLY = [];
+const FRONTDESK_MONTHLY = [
+  {id:'fm_reviews', text:'Google Reviews: Ask 2 happy families for a review and respond to every new review.'},
+  {id:'fm_gbp',     text:'Google Business Profile: Update holiday hours, photos, and the current promo.'},
+  {id:'fm_par',     text:'Retail Par-Levels: Reorder uniforms, belts, and gear for new students.'},
+];
+// ── "As needed" reference lists — not tracked / no sign-off, shown for context ──
+const LVLUP_ASNEEDED = [
+  {id:'an_fire',     text:'Safety check — fire extinguishers, exit signs & emergency lighting.'},
+  {id:'an_firstaid', text:'Restock the first-aid kit & check the AED (if present).'},
+  {id:'an_equip',    text:'Equipment safety inspection — boards, bags, targets, pads for wear.'},
+];
+const FRONTDESK_ASNEEDED = [
+  {id:'an_photos',  text:'Take & upload student photos to GymDesk.'},
+  {id:'an_winback', text:'Win-back outreach to members who cancelled in the last 60 days.'},
+  {id:'an_hvac',    text:'Change HVAC filters / dust vents.'},
+];
 const GONINJA_MONTHLY = [
   {id:'event_promo',text:'Event promotion (3 weeks prior to upcoming events)'},
   {id:'newsletter',text:'GoNinja Newsletter (sent by first week of month)'},
@@ -7864,6 +7892,7 @@ function isFrontDesk(empId){return FRONTDESK_EMP_IDS.has(empId);}
 function getDailyTasks(empId){return EMP_DAILY[empId]||(isFrontDesk(empId)?FRONTDESK_DAILY:LVLUP_DAILY);}
 function getWeeklyRec(empId){return EMP_WEEKLY[empId]||(isFrontDesk(empId)?FRONTDESK_WEEKLY:LVLUP_WEEKLY_REC);}
 function getMonthlyTasks(empId){return isGoNinja(empId)?GONINJA_MONTHLY:isFrontDesk(empId)?FRONTDESK_MONTHLY:LVLUP_MONTHLY;}
+function getAsNeededTasks(empId){return isGoNinja(empId)?[]:isFrontDesk(empId)?FRONTDESK_ASNEEDED:LVLUP_ASNEEDED;}
 function getCycleTasks(locId){return isGoNinja(locId)?GONINJA_CYCLE:LVLUP_CYCLE;}
 function getCycleChecklist(empId){return isFrontDesk(empId)?FRONTDESK_CYCLE_CHECKLIST:LVLUP_CYCLE_CHECKLIST;}
 function getCycleChecklistKey(){
@@ -8484,6 +8513,7 @@ function renderTasksPage(){
     const monthLabel=new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
     html+=renderTaskSection('monthly','Monthly Tasks — '+monthLabel,monthlyTasks,monthlyData,customMonthly);
   }
+  html+=renderAsNeededSection(loc);
   if(isGoNinja(loc)){
     html+='<div class="cycle-week-nav">';
     for(let w=1;w<=8;w++){
@@ -8529,6 +8559,24 @@ function renderTaskSection(section,title,tasks,completionData,customTasksObj,loc
   html+='</div></div>';return html;
 }
 
+// "As needed" reference — periodic tasks with no fixed cadence. Not tracked, no sign-off.
+function renderAsNeededSection(loc){
+  const tasks=getAsNeededTasks(loc);
+  if(!tasks.length) return '';
+  const collapsed=state.collapsedSections['asneeded'];
+  let html='<div class="task-section">';
+  html+='<div class="task-section-header" onclick="toggleSection(\'asneeded\')"><h3><span class="chevron '+(collapsed?'':'open')+'">&#9654;</span>As Needed <span style="font-size:11px;font-weight:600;background:#eef2ff;color:#4169E1;padding:2px 8px;border-radius:999px;margin-left:8px;">reference</span></h3></div>';
+  html+='<div class="task-list '+(collapsed?'collapsed':'')+'">';
+  html+='<div style="padding:8px 20px 2px;font-size:12px;color:var(--gray-500);">Do these when the situation calls for it — they don’t count toward daily/weekly completion or sign-off.</div>';
+  tasks.forEach(t=>{
+    html+='<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 20px;border-top:1px solid var(--gray-100);">';
+    html+='<span style="flex:none;color:#c3c9d6;font-size:15px;line-height:1.3;">○</span>';
+    html+='<span style="font-size:13.5px;color:var(--gray-700);line-height:1.35;">'+esc(t.text)+'</span>';
+    html+='</div>';
+  });
+  html+='</div></div>';
+  return html;
+}
 function deleteCustomTask(section,taskId){
   const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),monthKey=getTaskMonthKey();
   const sKey=section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
