@@ -2359,7 +2359,7 @@ function renderOpsPage() {
     { id: 'tasks',          label: '✅ Tasks'         },
     { id: 'events',         label: '📅 Events'        },
     { id: 'testing',        label: '🥋 Testing'       },
-    { id: 'accountability', label: '⏱ Accountability' },
+    { id: 'accountability', label: '⏱ Schedule' },
     { id: 'inventory',      label: '📦 Inventory'     },
     { id: 'photos',         label: '📸 Photos'        },
   ]);
@@ -4665,7 +4665,7 @@ function renderTcPto(){
 
 function renderAccountabilityPage(){
   let h = '<div class="page" style="max-width:1100px;">';
-  h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;"><div><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Accountability</h2><p style="margin:0;font-size:13px;color:#888;">Clock in/out with geo-fence, weekly timesheet, PTO, and the team schedule.</p></div>';
+  h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;"><div><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Schedule</h2><p style="margin:0;font-size:13px;color:#888;">Clock in/out with geo-fence, weekly timesheet, PTO, and the team schedule.</p></div>';
   h += '<a href="#clock" target="_blank" style="flex-shrink:0;padding:9px 15px;background:#1a1a2e;color:#fff;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;">🖥 Open clock kiosk →</a></div>';
   h += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:10px;padding:10px 14px;font-size:12px;color:#334;margin-bottom:16px;">Give part-timers the kiosk link — it shows only the clock and their schedule, not the rest of the dashboard: <b>' + esc(location.origin + location.pathname) + '#clock</b></div>';
   h += renderTcMissedOuts();
@@ -5228,7 +5228,7 @@ function renderTcGuideModal(){
   h += '<div style="background:#fff;border-radius:16px;max-width:540px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 14px 50px rgba(0,0,0,.35);">';
   h += '<div style="padding:18px 20px;border-bottom:1px solid #eef0f6;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;"><div><div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#2f54d6;">Manager quick guide</div><div style="font-size:19px;font-weight:800;color:#1a1a2e;margin-top:3px;">Running the schedule &amp; time clock</div></div><button onclick="tcGuideClose()" style="flex:none;background:#f1f3f9;border:none;border-radius:8px;width:30px;height:30px;font-size:16px;color:#667;cursor:pointer;">✕</button></div>';
   h += '<div style="padding:4px 20px 8px;overflow-y:auto;">';
-  h += '<p style="font-size:13px;color:#667;margin:12px 0 2px;">The three things leads do day to day. Everything lives on this <b>Accountability</b> page.</p>';
+  h += '<p style="font-size:13px;color:#667;margin:12px 0 2px;">The three things leads do day to day. Everything lives on this <b>Schedule</b> page.</p>';
   h += sec('1', 'Build the schedule', 'Here on the Master Schedule', [
     'Use the ' + bt('‹ ›') + ' arrows to pick the week.',
     'In a person’s day box tap ' + bt('+') + ' → set <b>Start</b>, <b>End</b>, <b>Location</b>, optional <b>Role</b> → ' + bt('Save', 1) + '.',
