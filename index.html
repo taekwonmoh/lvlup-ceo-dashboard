@@ -983,6 +983,7 @@ const TASK_EMPLOYEES = [
   { id: 'sueK',     name: 'Waunakee (Front Desk)',  loc: 'waunakee', label: 'Waunakee',   bonus: true  },
   { id: 'andyR',    name: 'E. Madison (Front Desk)', loc: 'eastmad', label: 'E. Madison', bonus: false },
   { id: 'marioS',   name: 'Verona (Front Desk)',    loc: 'verona',   label: 'Verona',     bonus: false },
+  { id: 'erikaD',   name: 'DeForest (Front Desk)',  loc: 'deforest', label: 'DeForest',   bonus: false },
 ];
 
 /*  -  -  Team Wall  -  -  */
@@ -8072,7 +8073,7 @@ function isGoNinja(empOrLocId){
   return empOrLocId==='goninjaW'||empOrLocId==='goninjaV';
 }
 function getEmpById(empId){return TASK_EMPLOYEES.find(e=>e.id===empId)||TASK_EMPLOYEES[0];}
-const FRONTDESK_EMP_IDS = new Set(['sueK','andyR','marioS']);
+const FRONTDESK_EMP_IDS = new Set(['sueK','andyR','marioS','erikaD']);
 function isFrontDesk(empId){return FRONTDESK_EMP_IDS.has(empId);}
 function getDailyTasks(empId){return EMP_DAILY[empId]||(isFrontDesk(empId)?FRONTDESK_DAILY:LVLUP_DAILY);}
 function getWeeklyRec(empId){return EMP_WEEKLY[empId]||(isFrontDesk(empId)?FRONTDESK_WEEKLY:LVLUP_WEEKLY_REC);}
