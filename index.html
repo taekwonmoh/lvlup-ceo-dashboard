@@ -3140,8 +3140,66 @@ function renderHandbookCard(){
       '<div style="flex:none;background:rgba(255,255,255,.16);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:800;white-space:nowrap;">Open PDF →</div>' +
     '</a></div>';
 }
+// ── Official family-facing links on lvlupma.com ──
+// The single source of truth staff send families to. Edit this array to keep the
+// "Forms & Pages" card on the Training tab current. Clean URLs resolve via the
+// lvlupma.com Cloudflare middleware (every *.html is also reachable without the
+// extension; /join* and /enroll* are vanity aliases → per-location welcome page).
+const STAFF_LINKS = [
+  { group: '🥋 Enroll & free trials', items: [
+    { url: 'lvlupma.com/quiz', href: 'https://lvlupma.com/quiz', desc: 'The main link for a brand-new family: a 60-second "find your program" quiz that ends in a free first-class booking.' },
+    { url: 'lvlupma.com/book', href: 'https://lvlupma.com/book', desc: 'Straight-to-booking form for a free first class — we text to confirm the time within one business day.' },
+    { label: 'In-studio enrollment (welcome packet)', desc: 'When a family is signing up at the front desk — the welcome page for their location (with the $100 tuition credit). The /enroll… spelling works too.', links: [
+      { label: '/joinwaunakee', href: 'https://lvlupma.com/joinwaunakee' },
+      { label: '/joinverona', href: 'https://lvlupma.com/joinverona' },
+      { label: '/joineastmadison', href: 'https://lvlupma.com/joineastmadison' },
+      { label: '/joindeforest', href: 'https://lvlupma.com/joindeforest' },
+    ] },
+    { url: 'lvlupma.com/tuition-credit', href: 'https://lvlupma.com/tuition-credit', desc: 'The $100-off-first-tuition offer page — hand this to a family who’s on the fence.' },
+  ] },
+  { group: '📈 Program upgrades — these land in the dashboard Applications tab', items: [
+    { url: 'lvlupma.com/upgrade?program=adp', href: 'https://lvlupma.com/upgrade?program=adp', desc: '⚠️ Athlete Development Program (ADP) application. Use this — NOT the old Google form (that one no longer reaches us).' },
+    { url: 'lvlupma.com/upgrade?program=tiger-leaders', href: 'https://lvlupma.com/upgrade?program=tiger-leaders', desc: 'Tiger Leaders Team application.' },
+  ] },
+  { group: '🛍️ Orders & shop', items: [
+    { url: 'lvlupma.com/uniform-order', href: 'https://lvlupma.com/uniform-order', desc: 'Custom uniform / gear order form.' },
+    { url: 'lvlupma.com/shop', href: 'https://lvlupma.com/shop', desc: 'The LVLUP Pro Shop.' },
+  ] },
+  { group: '🎉 Events & community', items: [
+    { url: 'lvlupma.com/events', href: 'https://lvlupma.com/events', desc: 'Events & tournaments, including the 2026 LVLUP Invitational.' },
+    { url: 'lvlupma.com/reviews', href: 'https://lvlupma.com/reviews', desc: 'Parent reviews page — where to send a happy family to leave a review.' },
+    { url: 'lvlupma.com/recover-event-photos', href: 'https://lvlupma.com/recover-event-photos', desc: 'Lets a family look up and download their event photos.' },
+  ] },
+];
+function renderLinksCard(){
+  let h = '<div class="page" style="max-width:900px;padding-bottom:0;">';
+  h += '<div class="section" style="margin-bottom:0;">';
+  h += '<div class="section-header" style="display:block;">';
+  h += '<h2 style="margin:0;font-size:15px;font-weight:700;">🔗 Forms &amp; Pages</h2>';
+  h += '<p style="margin:5px 0 0;font-size:12.5px;color:#888;line-height:1.5;">The official lvlupma.com links to send families to. These replace the old Google forms — if you keep a saved email template or a QR code, point it at the link here.</p>';
+  h += '</div>';
+  h += '<div style="padding:2px 20px 18px;">';
+  STAFF_LINKS.forEach(g => {
+    h += '<div style="margin-top:16px;margin-bottom:2px;font-size:11px;font-weight:800;letter-spacing:.02em;color:#1a1a2e;text-transform:uppercase;">' + g.group + '</div>';
+    g.items.forEach(it => {
+      h += '<div style="padding:9px 0;border-bottom:1px solid #f0f2f8;">';
+      if (it.links) {
+        h += '<div style="font-size:13px;font-weight:700;color:#1a1a2e;">' + it.label + '</div>';
+        h += '<div style="font-size:12.5px;color:#4b5563;line-height:1.45;margin-top:2px;">' + it.desc + '</div>';
+        h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;">' + it.links.map(l =>
+          '<a href="' + l.href + '" target="_blank" rel="noopener" style="font-size:12px;font-weight:700;color:#2c4bff;background:#eef2ff;border:1px solid #d5ddff;border-radius:7px;padding:3px 10px;text-decoration:none;white-space:nowrap;">' + l.label + ' ↗</a>').join('') + '</div>';
+      } else {
+        h += '<a href="' + it.href + '" target="_blank" rel="noopener" style="font-size:13px;font-weight:800;color:#2c4bff;text-decoration:none;word-break:break-word;">' + it.url + ' ↗</a>';
+        h += '<div style="font-size:12.5px;color:#4b5563;line-height:1.45;margin-top:2px;">' + it.desc + '</div>';
+      }
+      h += '</div>';
+    });
+  });
+  h += '</div></div></div>';
+  return h;
+}
 function renderResourcesPage() {
-  return renderHandbookCard() + renderDevelopmentPage();
+  return renderHandbookCard() + renderLinksCard() + renderDevelopmentPage();
 }
 
 function renderMarketingPage() {
