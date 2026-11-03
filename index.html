@@ -2554,15 +2554,20 @@ function renderFirstFivePage(){
   return h;
 }
 
-/* ── 5-star review tracker (ceo/reviews) — log a review, then track reply + water-bottle thank-you ── */
+/* ── Review tracker (ceo/reviews) — log any 1–5★ review, track reply + water-bottle thank-you (4–5★), flag low (1–3★) for recovery ── */
 function rvAll(){ return Object.entries(state.reviews || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
-function rvDone(r){ return !!(r.replied && r.bottleGiven); }
+function rvStars(r){ const n = r.rating; return (typeof n === 'number' && n >= 1 && n <= 5) ? n : 5; }   // legacy entries had no rating → they were 5-star
+function rvStarStr(r){ const s = rvStars(r); return '★★★★★☆☆☆☆☆'.slice(5 - s, 10 - s); }
+function rvThankable(r){ return rvStars(r) >= 4; }   // 4–5★ earn a water-bottle thank-you
+function rvLow(r){ return rvStars(r) <= 3; }         // 1–3★ need a service-recovery reach-out
+function rvDone(r){ return !!r.replied && (!rvThankable(r) || !!r.bottleGiven); }
 function rvOpenCount(){ return rvAll().filter(r => !rvDone(r)).length; }
 function rvAdd(){
   const nameEl = document.getElementById('rvNewName'); const name = (nameEl.value || '').trim(); if (!name) { nameEl.focus(); return; }
   const text = (document.getElementById('rvNewText').value || '').trim();
   const loc = document.getElementById('rvNewLoc').value;
-  fbSet('reviews/rv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), { name: name, text: text, location: loc || '', createdAt: Date.now(), replied: false, bottleGiven: false });
+  const rating = parseInt(document.getElementById('rvNewRating').value, 10) || 5;
+  fbSet('reviews/rv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), { name: name, text: text, location: loc || '', rating: rating, createdAt: Date.now(), replied: false, bottleGiven: false });
   nameEl.value = ''; document.getElementById('rvNewText').value = '';
 }
 function rvToggle(id, field){ const cur = ((state.reviews || {})[id] || {})[field]; fbSet('reviews/' + id + '/' + field, cur ? null : true); }
@@ -2572,46 +2577,53 @@ function renderReviewsPage(){
   const all = rvAll().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const filter = state.rvFilter || 'all';
   const needsReply = all.filter(r => !r.replied).length;
-  const needsBottle = all.filter(r => !r.bottleGiven).length;
+  const needsBottle = all.filter(r => rvThankable(r) && !r.bottleGiven).length;
+  const lowOpen = all.filter(r => rvLow(r) && !r.replied).length;
+  const anyLow = all.some(rvLow);
   const open = all.filter(r => !rvDone(r));
   const locName = id => (LOCATIONS.find(l => l.id === id) || {}).name || '';
-  let filtered = filter === 'open' ? open : filter === 'done' ? all.filter(rvDone) : all;
+  let filtered = filter === 'open' ? open : filter === 'low' ? all.filter(rvLow) : filter === 'done' ? all.filter(rvDone) : all;
 
-  let h = '<div style="margin-bottom:14px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⭐ 5-Star Reviews</h2>'
-    + '<p style="margin:0;font-size:13px;color:#888;">Log every new 5-star review, then track whether we replied and handed them a water bottle to say thanks.</p></div>';
+  let h = '<div style="margin-bottom:14px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⭐ Reviews</h2>'
+    + '<p style="margin:0;font-size:13px;color:#888;">Track every review across all locations. Reply to each one; hand 4–5★ reviewers a water bottle to say thanks, and reach out fast on anything 3★ or below to make it right.</p></div>';
 
   // Log-a-review form
   h += '<div style="background:#fff;border:1px solid #e3e6ef;border-radius:12px;padding:14px 16px;margin-bottom:14px;">'
     + '<div style="font-size:11px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px;">Log a new review</div>'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
-    + '<input id="rvNewName" placeholder="Reviewer name" onkeydown="if(event.key===\'Enter\')rvAdd()" style="flex:1;min-width:160px;padding:8px 11px;border:1px solid #e3e6ef;border-radius:8px;font-size:13px;font-family:inherit;outline:none;">'
+    + '<input id="rvNewName" placeholder="Reviewer name" onkeydown="if(event.key===\'Enter\')rvAdd()" style="flex:1;min-width:150px;padding:8px 11px;border:1px solid #e3e6ef;border-radius:8px;font-size:13px;font-family:inherit;outline:none;">'
+    + '<select id="rvNewRating" style="flex:0 0 auto;padding:8px 11px;border:1px solid #e3e6ef;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;">' + [5, 4, 3, 2, 1].map(n => '<option value="' + n + '">' + '★'.repeat(n) + ' ' + n + '</option>').join('') + '</select>'
     + '<select id="rvNewLoc" style="flex:0 0 auto;padding:8px 11px;border:1px solid #e3e6ef;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;"><option value="">Location…</option>' + LOCATIONS.map(l => '<option value="' + l.id + '">' + esc(l.name) + '</option>').join('') + '</select>'
     + '<button onclick="rvAdd()" style="flex:0 0 auto;padding:8px 16px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">+ Add</button>'
     + '</div>'
     + '<textarea id="rvNewText" placeholder="What did they say? (optional)" rows="2" style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 11px;border:1px solid #e3e6ef;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;"></textarea>'
     + '</div>';
 
-  if (!all.length) { h += '<div style="text-align:center;padding:36px 20px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;">No reviews logged yet. Add one above the next time a 5-star review comes in.</div>'; return h; }
+  if (!all.length) { h += '<div style="text-align:center;padding:36px 20px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;">No reviews logged yet. Add one above the next time a review comes in.</div>'; return h; }
 
   const tile = (n, label, color) => '<div style="flex:1;min-width:90px;background:#fff;border:1px solid #e3e6ef;border-radius:10px;padding:13px;text-align:center;"><div style="font-size:22px;font-weight:800;color:' + color + ';">' + n + '</div><div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#888;">' + label + '</div></div>';
-  h += '<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">' + tile(needsReply, 'To reply', '#d97706') + tile(needsBottle, 'Bottle to give', '#2563eb') + tile(all.length, 'Total', '#1a1a2e') + '</div>';
+  h += '<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">' + (lowOpen ? tile(lowOpen, 'Needs recovery', '#dc2626') : '') + tile(needsReply, 'To reply', '#d97706') + tile(needsBottle, 'Bottle to give', '#2563eb') + tile(all.length, 'Total', '#1a1a2e') + '</div>';
 
   const chip = (id, l) => '<button onclick="rvSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + l + '</button>';
-  h += '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">' + chip('all', 'All (' + all.length + ')') + chip('open', 'Needs action (' + open.length + ')') + chip('done', 'Done') + '</div>';
+  h += '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">' + chip('all', 'All (' + all.length + ')') + chip('open', 'Needs action (' + open.length + ')') + (anyLow ? chip('low', 'Low (' + all.filter(rvLow).length + ')') : '') + chip('done', 'Done') + '</div>';
 
   const tog = (r, field, label, icon) => { const on = !!r[field];
     return '<button onclick="rvToggle(\'' + r.id + '\',\'' + field + '\')" style="padding:7px 13px;border-radius:8px;border:1px solid ' + (on ? '#16a34a' : '#e3e6ef') + ';background:' + (on ? '#16a34a' : '#fff') + ';color:' + (on ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (on ? '✓ ' + label : icon + ' ' + label) + '</button>'; };
   filtered.forEach(r => {
     const when = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '';
-    h += '<div style="background:#fff;border:1px solid ' + (rvDone(r) ? '#e3e6ef' : '#fcd34d') + ';border-radius:10px;padding:14px 16px;margin-bottom:10px;">'
+    const low = rvLow(r);
+    const urgent = low && !r.replied;
+    const border = urgent ? '#f87171' : (rvDone(r) ? '#e3e6ef' : '#fcd34d');
+    h += '<div style="background:#fff;border:1px solid ' + border + ';border-radius:10px;padding:14px 16px;margin-bottom:10px;">'
       + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
       + '<span style="font-size:15px;font-weight:800;color:#1a1a2e;">' + esc(r.name || '') + '</span>'
-      + '<span style="color:#f6a417;font-size:13px;letter-spacing:1px;">★★★★★</span>'
+      + '<span style="color:' + (low ? '#dc2626' : '#f6a417') + ';font-size:13px;letter-spacing:1px;">' + rvStarStr(r) + '</span>'
       + (r.location ? '<span style="font-size:11px;font-weight:700;color:#666;background:#f1f3f8;border-radius:20px;padding:2px 9px;">' + esc(locName(r.location)) + '</span>' : '')
       + '<span style="font-size:11px;color:#999;margin-left:auto;">' + when + '</span>'
       + '<button onclick="rvDelete(\'' + r.id + '\')" title="Remove" style="background:none;border:none;color:#c3c9d6;cursor:pointer;font-size:14px;line-height:1;">✕</button></div>'
-      + (r.text ? '<div style="margin-top:9px;padding:9px 12px;background:#faf9f6;border-left:3px solid #f6a417;border-radius:4px;font-size:13.5px;color:#444;line-height:1.5;">“' + esc(r.text) + '”</div>' : '')
-      + '<div style="margin-top:11px;display:flex;gap:8px;flex-wrap:wrap;">' + tog(r, 'replied', 'Replied to review', '💬') + tog(r, 'bottleGiven', 'Water bottle given', '🥤') + '</div>'
+      + (urgent ? '<div style="margin-top:9px;padding:7px 11px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:12px;font-weight:700;color:#b91c1c;">⚠ Low rating — reach out fast to make it right.</div>' : '')
+      + (r.text ? '<div style="margin-top:9px;padding:9px 12px;background:#faf9f6;border-left:3px solid ' + (low ? '#f87171' : '#f6a417') + ';border-radius:4px;font-size:13.5px;color:#444;line-height:1.5;">“' + esc(r.text) + '”</div>' : '')
+      + '<div style="margin-top:11px;display:flex;gap:8px;flex-wrap:wrap;">' + tog(r, 'replied', 'Replied to review', '💬') + (rvThankable(r) ? tog(r, 'bottleGiven', 'Water bottle given', '🥤') : '') + '</div>'
       + '</div>';
   });
   return h;
@@ -8007,7 +8019,7 @@ state.gateMode       = null;          // gate screen: 'login' | 'register'
 state.gateMsg        = null;          // gate screen error message
 state.inventory      = {};           // Items to Order (Firebase-synced)
 state.firstFive      = {};           // First 5 completions (Firebase-synced)
-state.reviews        = {};           // 5-star review tracker (Firebase-synced)
+state.reviews        = {};           // review tracker, all ratings (Firebase-synced)
 state.invFilter      = 'all';        // inventory status filter
 state.schedLoc       = 'all';        // master schedule location filter
 state.matStory       = {};           // 60-second story overrides per life skill (Firebase-synced)
