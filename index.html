@@ -5482,11 +5482,9 @@ function tcToggleSlack(id){ const cur = !!((tcData().staff || {})[id] || {}).sla
 function tcTimeoffAll(){ return Object.entries((tcData().timeoff) || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
 function tcDaysInclusive(a, b){ const d1 = new Date(a + 'T00:00:00'), d2 = new Date((b || a) + 'T00:00:00'); if (isNaN(d1) || isNaN(d2)) return 1; return Math.max(1, Math.round((d2 - d1) / 86400000) + 1); }
 function tcPendingTimeoffCount(){ return tcTimeoffAll().filter(t => (t.status || 'pending') === 'pending').length; }
-// Kiosk entry — gate on the staffer's PIN, then open the request form bound to them.
-async function tcRequestTimeoff(id){
-  const chk = await tcCheckPin(id); if (!chk.ok) { state.tcMsg = { type: 'error', text: chk.msg }; render(); return; }
-  tcTimeoffReqOpen(id, 'kiosk');
-}
+// Kiosk entry — open the request form bound to the staffer. No PIN and no geolocation:
+// time off can be requested from any device, on or off site (a manager still approves it).
+function tcRequestTimeoff(id){ tcTimeoffReqOpen(id, 'kiosk'); }
 // ctx 'kiosk' pre-binds the signed-in staffer; ctx 'dash' lets a signed-in manager pick who it's for.
 function tcTimeoffReqOpen(empId, ctx){
   const today = tcDateKey();
@@ -5689,7 +5687,7 @@ function renderTcKioskActions(id){
   let h = '<div style="background:#fff;border-radius:16px;margin-top:14px;padding:16px;">';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><div style="font-size:14px;font-weight:800;color:#1a1a2e;">Requests</div>';
   h += '<button onclick="tcRequestTimeoff(\'' + id + '\')" style="padding:7px 12px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">🏝 Request time off</button></div>';
-  h += '<div style="font-size:11px;color:#999;margin-bottom:8px;">Enter your PIN above, then use these.</div>';
+  if (mine.length || open.length) h += '<div style="font-size:11px;color:#999;margin-bottom:8px;">Offering or covering a shift uses your PIN (enter it above). Requesting time off doesn’t.</div>';
   if (mine.length) {
     h += '<div style="font-size:12px;font-weight:800;color:#555;margin:8px 0 4px;">Your shifts (next 2 wks) — offer one for coverage</div>';
     mine.forEach(m => { const loc = LOCATIONS.find(l => l.id === m.sh.loc) || {}; h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f3f9;font-size:12.5px;"><span>' + esc(fmtCancelDate(m.dk)) + ' · ' + tcFmtHM(m.sh.start) + '–' + tcFmtHM(m.sh.end) + (loc.short ? ' · ' + esc(loc.short) : '') + '</span><button onclick="tcOfferShift(\'' + id + '\',\'' + m.dk + '\',\'' + m.sid + '\')" style="padding:4px 10px;border:1px solid #e3e6ef;background:#fff;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;color:#555;">Offer</button></div>'; });
@@ -5835,6 +5833,11 @@ function renderClockKiosk(){
   h += '<div style="color:#5b6b8c;font-size:12px;margin-top:3px;">' + new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + '</div>';
   h += '</div>';
   h += '<div style="border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">' + renderTcClock() + '</div>';
+  // Request time off — works from any phone, on or off site. No clock-in, no PIN (a manager approves it).
+  h += '<div style="background:#fff;border-radius:16px;margin-top:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'
+    + '<div style="min-width:160px;flex:1;"><div style="font-size:14px;font-weight:800;color:#1a1a2e;">🏝 Need time off?</div><div style="font-size:12px;color:#8894a8;margin-top:1px;">Request it from anywhere — no clock-in or PIN needed.</div></div>'
+    + '<button onclick="tcTimeoffReqOpen(\'' + (state.tcSel || '') + '\',\'' + (state.tcSel ? 'kiosk' : 'dash') + '\')" style="padding:11px 16px;background:#0891b2;color:#fff;border:none;border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;">Request time off</button>'
+    + '</div>';
   if (state.tcSel && (tcData().staff || {})[state.tcSel]) { h += renderTcKioskActions(state.tcSel); h += renderTcMySchedule(state.tcSel); }
   h += renderTcTeamSchedule();
   h += renderTcTimeoffInfo(state.tcSel || null);
