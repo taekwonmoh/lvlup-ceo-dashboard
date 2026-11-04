@@ -5875,7 +5875,7 @@ function renderTcTeamSchedule(){
   const chip = (id, label, color) => '<button onclick="tcTeamSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:16px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">' + (color ? '<span style="width:8px;height:8px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
   h += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">' + chip('all', 'All locations', null) + LOCATIONS.map(l => chip(l.id, l.name, l.color)).join('') + '</div>';
   const holMap = tcHolidayMap([...new Set(days.map(d => d.getFullYear()))]);
-  h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr><th style="text-align:left;padding:4px;position:sticky;left:0;background:#fff;">Staff</th>';
+  h += '<div class="sc-wide"><div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr><th style="text-align:left;padding:4px;position:sticky;left:0;background:#fff;">Staff</th>';
   days.forEach(d => { const hn = holMap[tcDateKey(d)]; h += '<th style="text-align:center;padding:4px;min-width:64px;color:#888;font-weight:700;' + (hn ? 'background:#fff7ed;' : '') + '">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#bbb;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span>' + (hn ? '<br><span title="Paid holiday" style="display:inline-block;margin-top:1px;font-size:8px;font-weight:800;color:#9a3412;background:#ffedd5;border-radius:4px;padding:0 4px;line-height:1.4;">🎉 ' + esc(hn) + '</span>' : '') + '</th>'; });
   h += '</tr></thead><tbody>';
   if (!rows.length) h += '<tr><td colspan="8" style="padding:14px;text-align:center;color:#aaa;">No shifts at this location this week.</td></tr>';
@@ -5891,7 +5891,59 @@ function renderTcTeamSchedule(){
     });
     h += '</tr>';
   });
-  h += '</tbody></table></div></div>';
+  h += '</tbody></table></div>';                                 // close table + overflow
+  h += '</div>';                                                  // /.sc-wide
+  h += renderTcTeamDayView({ days, dow, filter, holMap, shiftsOf, staff });
+  h += '</div>';                                                  // close card
+  return h;
+}
+// ── Phone-only single-day view of the staff-facing Team schedule (read-only) ──
+function tcTeamSetDay(i){ state.tcTeamDay = i; render(); }
+function renderTcTeamDayView(ctx){
+  const { days, dow, filter, holMap, shiftsOf, staff } = ctx;
+  const dowFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const todayKey = tcDateKey(new Date());
+  const todayIdx = days.findIndex(d => tcDateKey(d) === todayKey);
+  let di = state.tcTeamDay;
+  if (typeof di !== 'number' || di < 0 || di > 6) di = todayIdx >= 0 ? todayIdx : 0;
+  const dSel = days[di]; const dkSel = tcDateKey(dSel);
+  const dayCounts = days.map(d => { const dk = tcDateKey(d); return staff.reduce((n, s) => n + shiftsOf(s, dk).length, 0); });
+  let h = '<div class="sc-mobile">';
+  // Day strip
+  h += '<div style="display:flex;gap:6px;overflow-x:auto;padding:4px 2px 10px;-webkit-overflow-scrolling:touch;">';
+  days.forEach((d, i) => {
+    const dk = tcDateKey(d); const act = i === di; const isToday = dk === todayKey; const hn = holMap[dk]; const cnt = dayCounts[i];
+    h += '<button onclick="tcTeamSetDay(' + i + ')" style="flex:0 0 auto;min-width:46px;border-radius:12px;border:1px solid ' + (act ? '#1a1a2e' : (isToday ? '#c7d2fe' : '#e3e6ef')) + ';background:' + (act ? '#1a1a2e' : '#fff') + ';color:' + (act ? '#fff' : '#555') + ';padding:7px 6px 6px;cursor:pointer;text-align:center;line-height:1.15;">'
+      + '<div style="font-size:10px;font-weight:700;opacity:.8;">' + dow[d.getDay()] + '</div>'
+      + '<div style="font-size:16px;font-weight:800;margin-top:1px;">' + d.getDate() + '</div>'
+      + '<div style="font-size:9px;margin-top:1px;height:11px;">' + (hn ? '🎉' : (cnt ? '<span style="color:' + (act ? '#c7d2fe' : '#4169E1') + ';font-weight:800;">' + cnt + '</span>' : '<span style="opacity:.4;">·</span>')) + '</div>'
+      + '</button>';
+  });
+  h += '</div>';
+  // Selected-day header
+  const hnSel = holMap[dkSel];
+  h += '<div style="padding:0 2px 4px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">'
+    + '<span style="font-size:15px;font-weight:800;color:#1a1a2e;">' + dowFull[dSel.getDay()] + '</span>'
+    + '<span style="font-size:13px;color:#8894b0;font-weight:600;">' + (dSel.getMonth() + 1) + '/' + dSel.getDate() + '</span>'
+    + (hnSel ? '<span style="font-size:11px;font-weight:800;color:#9a3412;background:#ffedd5;border-radius:6px;padding:2px 8px;">🎉 ' + esc(hnSel) + '</span>' : '')
+    + '</div>';
+  const dayRows = staff.filter(s => shiftsOf(s, dkSel).length);
+  if (!dayRows.length) { h += '<div style="padding:20px 6px;text-align:center;color:#aaa;font-size:13px;">No shifts scheduled this day.</div></div>'; return h; }
+  dayRows.forEach(s => {
+    const shifts = shiftsOf(s, dkSel);
+    h += '<div style="padding:10px 2px;border-top:1px solid #eef0f6;">';
+    h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:7px;">' + esc(s.name) + '</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    shifts.forEach(sh => {
+      const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155';
+      h += '<div style="background:' + c + ';color:#fff;border-radius:9px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;">'
+        + '<span style="font-size:14px;font-weight:800;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + '</span>'
+        + '<span style="font-size:11px;text-align:right;line-height:1.25;opacity:.92;">' + (loc.short ? esc(loc.short) : '') + (sh.role ? '<br>' + esc(sh.role) : '') + '</span>'
+        + '</div>';
+    });
+    h += '</div></div>';
+  });
+  h += '</div>';
   return h;
 }
 
