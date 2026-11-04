@@ -386,6 +386,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   /* Goals form */
   .goals-row { flex-wrap: wrap; }
   .goals-input { width: 100%; }
+  .plan-cols { display: none; }
+  .plan-stream { grid-template-columns: minmax(0,1fr) minmax(0,1.2fr) auto; }
+  .plan-mem { grid-template-columns: 1fr 1fr; }
+  .plan-stream-name { grid-column: 1 / -1; }
+  .plan-event-top { grid-template-columns: 1fr; }
+  .plan-event-bot { grid-template-columns: minmax(0,1fr) minmax(0,1.2fr) auto; }
+  .plan-stream-merch .plan-money { grid-column: 1 / 3; }
+  .plan-remove { grid-column: 1 / -1; text-align: left; }
+  .plan-need-line strong { font-size: 28px; }
+  .plan-goal-top { align-items: stretch; }
+  .plan-money-lg input { width: 100%; }
 
   /* Month selector */
   .month-selector { gap: 3px; }
@@ -607,6 +618,60 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .goals-textarea{width:100%;border:1px solid var(--gray-200);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;min-height:80px;resize:vertical}
 .goals-textarea:focus{outline:none;border-color:var(--accent)}
 .goals-calc{font-size:12px;color:var(--gray-400);font-style:italic}
+.plan-label{font-size:14px;font-weight:700;color:var(--gray-800)}
+.plan-hint{font-size:12px;color:var(--gray-500);line-height:1.35;margin-top:3px}
+.plan-input{width:100%;box-sizing:border-box;border:1px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;font-weight:600;text-align:right;background:#fff;min-width:0}
+.plan-input-text,.plan-event select.plan-input,.plan-event input[type=date]{text-align:left;font-weight:500}
+.plan-input:focus{outline:none;border-color:var(--accent)}
+.plan-input.gd-suggest{border-color:#93c5fd;background:#f8fbff}
+.plan-input.plan-warn{border-color:#f59e0b;background:#fffbeb}
+.plan-money{display:flex;align-items:center;gap:4px;min-width:0}
+.plan-money>span{color:var(--gray-400);font-weight:700;flex-shrink:0}
+.plan-money-lg .plan-input{font-size:20px;font-weight:800;width:170px;padding:8px 12px}
+.plan-sub{text-align:right;font-weight:800;font-variant-numeric:tabular-nums;font-size:15px;color:var(--gray-900)}
+.plan-goal-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.plan-need-line{margin:6px 0 8px;font-size:16px;color:var(--gray-700);display:flex;flex-wrap:wrap;align-items:baseline;gap:8px}
+.plan-need-line strong{font-size:34px;font-weight:800;letter-spacing:-.4px;color:#0f3460;font-variant-numeric:tabular-nums;line-height:1.1}
+.plan-need-line.ok strong{color:#15803d}
+.plan-bar{height:12px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:8px 0}
+.plan-bar>div{height:100%;background:#0f3460;border-radius:999px;max-width:100%}
+.plan-bar.covered>div{background:#16a34a}
+.plan-still{font-size:15px;font-weight:800;margin-top:4px}
+.plan-good{color:#15803d}
+.plan-bad{color:#dc2626}
+.plan-cols,.plan-stream{display:grid;grid-template-columns:minmax(150px,1.7fr) 72px 120px 108px;gap:8px;align-items:center}
+.plan-cols{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-400);margin:4px 0}
+.plan-cols span:not(:first-child){text-align:right}
+.plan-stream{margin-bottom:8px}
+.plan-stream-name{min-width:0}
+.plan-stream-merch .plan-money{grid-column:2 / 4}
+.plan-event{border:1px solid var(--gray-200);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--gray-50)}
+.plan-event-top{display:grid;grid-template-columns:minmax(140px,1.5fr) 148px minmax(120px,150px) minmax(110px,140px);gap:8px;margin-bottom:8px}
+.plan-event-bot{display:grid;grid-template-columns:72px 120px 108px auto;gap:8px;align-items:center}
+.plan-add{margin-top:4px;background:#fff;border:1px dashed var(--gray-300);color:var(--blue);font-weight:700;border-radius:8px;padding:9px 14px;cursor:pointer;font-size:13px;font-family:inherit}
+.plan-add:hover{background:var(--blue-light)}
+.plan-remove{background:none;border:none;color:var(--gray-400);font-weight:700;cursor:pointer;font-size:12px;font-family:inherit;padding:6px 0;text-align:right}
+.plan-remove:hover{color:var(--red)}
+.plan-link{background:none;border:none;color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;padding:0;margin-top:2px;font-family:inherit}
+.plan-total-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-top:12px;padding-top:10px;border-top:2px solid var(--gray-100)}
+.plan-total-row .amt{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.plan-mem{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.plan-stat{background:var(--gray-50);border-radius:8px;padding:8px 10px}
+.plan-stat .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--gray-900)}
+.plan-arm-edit{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.plan-arm-edit .plan-input{width:110px}
+@media(max-width:720px){
+  .plan-cols{display:none}
+  .plan-stream{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto}
+  .plan-mem{grid-template-columns:1fr 1fr}
+  .plan-stream-name{grid-column:1 / -1}
+  .plan-event-top{grid-template-columns:1fr}
+  .plan-event-bot{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto}
+  .plan-stream-merch .plan-money{grid-column:1 / 3}
+  .plan-remove{grid-column:1 / -1;text-align:left}
+  .plan-need-line strong{font-size:28px}
+  .plan-money-lg .plan-input{width:100%}
+}
 .month-selector{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px}
 .month-btn{padding:6px 10px;border-radius:8px;border:1px solid var(--gray-200);background:var(--card);cursor:pointer;font-size:11px;font-weight:600}
 .month-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -889,6 +954,8 @@ let state = {
   financials: { waunakee: {}, eastmad: {}, verona: {} },
   gymdesk: null,
   gymdeskErr: null,
+  plannerBaseline: undefined,
+  plannerBaselineErr: null,
   gdFinGroup: 'all',
   membership: { waunakee: {}, eastmad: {}, verona: {} },
   kpis: {},
@@ -1725,77 +1792,27 @@ const MAT_CHATS = {
   }
 };
 
-const LVLUP_GOALS_FIELDS = {
-  membership:[
-    {id:'currentMembership',label:'Current membership # as of 1st day of month',type:'number'},
-    {id:'newIntros',label:'New Intros',type:'number'},
-    {id:'newMemberships',label:'New Memberships (80%+ of New Intros #)',type:'number'},
-    {id:'attritionTarget',label:'Attrition (goal is 3% or less)',type:'text'},
-    {id:'eomGoal',label:'End of Month Student Count Goal',type:'number',highlight:true},
+/* Monthly planner rows. Legacy dollar fields (revNewMem, revLeadership, revLegacy,
+   revMerch, revEvent1/2, revTesting, revTournament, revCamps, event1/2 name+purpose)
+   stay in Firebase and are copied into planStreams / planEvents on first open.
+   Belt testing, tournaments, and camps are events — not fixed rows. */
+const PLAN_EVENT_TYPES = [['camp','Camp'],['tournament','Tournament'],['clinic','Clinic'],['seminar','Seminar'],['party','Party / social'],['belt','Belt test'],['other','Other']];
+const PLAN_EVENT_PURPOSES = [['leads','Leads'],['profit','Profit'],['retention','Retention']];
+const PLAN_STREAM_DEFS = {
+  lvlup: [
+    { id:'newMem', label:'New memberships', defPrice:60, legacy:'revNewMem' },
+    { id:'leadership', label:'Leadership upgrades', defPrice:299, legacy:'revLeadership' },
+    { id:'legacy', label:'Legacy upgrades', defPrice:349, legacy:'revLegacy' },
+    { id:'merch', label:'Merchandise', merch:true, legacy:'revMerch' }
   ],
-  rationale:[
-    {id:'rationale',label:'Rationale',type:'textarea'},
-  ],
-  revenue:[
-    {id:'totalMonthlyRevenue',label:'Total Expected Billing',type:'currency'},
-  ],
-  revenueStreams:[
-    {id:'revNewMem',label:'New Memberships x $60 (pro-rated avg)',type:'currency'},
-    {id:'revLeadership',label:'Leadership Upgrades x $299',type:'currency'},
-    {id:'revLegacy',label:'Legacy Upgrades x $349',type:'currency'},
-    {id:'revMerch',label:'Merchandise',type:'currency'},
-    {id:'revEvent1',label:'Event #1',type:'currency'},
-    {id:'revEvent2',label:'Event #2',type:'currency'},
-    {id:'revTesting',label:'Testing',type:'currency'},
-    {id:'revTournament',label:'Tournament',type:'currency'},
-    {id:'revCamps',label:'Camps',type:'currency'},
-    {id:'totalRevenueStreamGoal',label:'Total Revenue Stream Income',type:'currency',highlight:true,computed:true},{id:'eomRevenueGoal',label:'End of Month Revenue Goal',type:'currency',highlight:true},
-  ],
-  
-  plan:[
-    {id:'strategies',label:'Actionable Strategies',type:'textarea'},
-  ],
-  events:[
-    {id:'event1Name',label:'Event #1 Name',type:'text'},
-    {id:'event1Purpose',label:'Event #1 Purpose (leads, profit, retention)',type:'text'},
-    {id:'event2Name',label:'Event #2 Name',type:'text'},
-    {id:'event2Purpose',label:'Event #2 Purpose (leads, profit, retention)',type:'text'},
-  ],
+  ninja: [
+    { id:'newMem', label:'New memberships', defPrice:50, legacy:'revNewMem' },
+    { id:'bday', label:'Birthday parties', defPrice:null, legacy:null },
+    { id:'dropin', label:'Open gym / drop-ins', defPrice:null, legacy:null },
+    { id:'merch', label:'Merchandise', merch:true, legacy:'revMerch' }
+  ]
 };
-const GONINJA_GOALS_FIELDS = {
-  membership:[
-    {id:'mvmtMembership',label:'Day 1 MVMT Membership',type:'number'},
-    {id:'afterschoolMembership',label:'Day 1 Afterschool Membership',type:'number'},
-    {id:'newIntros',label:'New Intros',type:'number'},
-    {id:'newMemberships',label:'New Memberships (80%+ of New Intros #)',type:'number'},
-    {id:'attritionTarget',label:'Attrition (goal is 3% or less)',type:'text'},
-    {id:'eomGoal',label:'End of Month Student Count Goal',type:'number',highlight:true},
-  ],
-  rationale:[
-    {id:'rationale',label:'Rationale',type:'textarea'},
-  ],
-  revenue:[
-    {id:'totalMonthlyRevenue',label:'Total Expected Billing',type:'currency'},
-  ],
-  revenueStreams:[
-    {id:'revNewMem',label:'New Memberships x $50',type:'currency'},
-    {id:'revMerch',label:'Merchandise',type:'currency'},
-    {id:'revEvent1',label:'Event #1',type:'currency'},
-    {id:'revEvent2',label:'Event #2',type:'currency'},
-    {id:'revCamps',label:'Camps',type:'currency'},
-    {id:'totalRevenueStreamGoal',label:'Total Revenue Stream Income',type:'currency',highlight:true,computed:true},{id:'eomRevenueGoal',label:'End of Month Revenue Goal',type:'currency',highlight:true},
-  ],
-  
-  plan:[
-    {id:'strategies',label:'Actionable Strategies',type:'textarea'},
-  ],
-  events:[
-    {id:'event1Name',label:'Event #1 Name',type:'text'},
-    {id:'event1Purpose',label:'Event #1 Purpose (leads, profit, retention)',type:'text'},
-    {id:'event2Name',label:'Event #2 Name',type:'text'},
-    {id:'event2Purpose',label:'Event #2 Purpose (leads, profit, retention)',type:'text'},
-  ],
-};
+function planStreamDefs(loc){ return isGoNinja(loc) ? PLAN_STREAM_DEFS.ninja : PLAN_STREAM_DEFS.lvlup; }
 const ARM_VALUES = {verona:200,waunakee:210,eastmad:180};
 
 /*  -  -  Helpers  -  -  */
@@ -2114,6 +2131,22 @@ function listenAll() {
     });
     activeListeners.push({ ref: gdFinRef, event: 'value' });
   }
+
+  // Director-facing GymDesk aggregates for the monthly planner. Read is allowed
+  // for any signed-in staff with dashboard access; write is false. If the rule
+  // is not deployed yet, the planner falls back to typed numbers (and, for a
+  // finance user, to finance/gymdesk).
+  const planBaseRef = db.ref('finance/plannerBaseline');
+  planBaseRef.on('value', snap => {
+    state.plannerBaseline = snap.val() || {};
+    state.plannerBaselineErr = null;
+    render();
+  }, err => {
+    state.plannerBaseline = null;
+    state.plannerBaselineErr = (err && (err.code || err.message)) || 'permission denied';
+    render();
+  });
+  activeListeners.push({ ref: planBaseRef, event: 'value' });
 
   // Feedback tracking (persistent, year-round) — migrate old monthly data once, then listen
   migrateFeedbackTrackingToAll();
@@ -8159,28 +8192,6 @@ function setGdFinGroup(g) {
   render();
 }
 
-/* Empty Monthly Plan boxes only. A saved value is left alone and nothing is written until the user edits. */
-function gdPlanSuggestion(loc, mk, fieldId) {
-  if (!dashAuth.canFinance || !state.gymdesk) return null;
-  const g = state.gymdesk;
-  const gdLoc = GD_DASH_LOC[loc];
-  if (!gdLoc) return null;
-  if (fieldId === 'currentMembership') {
-    if (gdLoc !== 'waunakee') return null;
-    const row = ((((g.waunakee_members || {}).growth || {}).months || {})[mk]) || null;
-    if (!row || row.active == null || row.active === '') return null;
-    return { text: String(row.active), note: 'GymDesk active members for this month (Waunakee' + (row.is_partial ? ', month in progress' : '') + '). Shown only while this box is empty — edit to save your number.' };
-  }
-  if (fieldId === 'totalMonthlyRevenue') {
-    const row = gdMonthRow(g, gdLoc, mk);
-    if (!row || row.total == null || row.total === '') return null;
-    const kind = row.is_partial ? 'expected billing (memberships + sales + pending)' : 'collected billing (memberships + sales)';
-    const def = gdLoc === 'deforest' ? ' DeForest is GymDesk gross, pre-split.' : '';
-    return { text: fmtCurrency(row.total), note: 'GymDesk ' + kind + '.' + def + ' Shown only while this box is empty — edit to save your number.' };
-  }
-  return null;
-}
-
 function renderGymdeskFinancePage() {
   if (!dashAuth.canFinance) return '';
   const g = state.gymdesk;
@@ -8783,7 +8794,6 @@ function getCycleChecklistKey(){
   return yr+'-C'+c.cycleNum;
 }
 function getTaskMonthKey(){const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');}
-function getGoalsFields(locId){return isGoNinja(locId)?GONINJA_GOALS_FIELDS:LVLUP_GOALS_FIELDS;}
 function getTaskWeekKey(dateStr){
   const d=new Date(dateStr+'T12:00:00');const day=d.getDay();
   const diff=d.getDate()-day+(day===0?-6:1);const mon=new Date(d);mon.setDate(diff);
@@ -8993,22 +9003,8 @@ function setGoalsMonth(mk){state.goalsMonth=mk;listenGoals();}
 function setScorecardTab(t){state.scorecardTab=t;render();if(t==='performance')setTimeout(initKPICharts,80);}
 function setGoalsTab(t){state.goalsTab=t;if(t==='monthly')listenGoals();render();}
 function updateGoalField(field,val){
-    fbDebounce('monthlyGoals/'+state.goalsLoc+'/'+state.goalsMonth+'/'+field,val);
-    recalcRevTotal();
-  }
-  function recalcRevTotal(){
-    var fields=isGoNinja(state.goalsLoc)?GONINJA_GOALS_FIELDS:LVLUP_GOALS_FIELDS;
-    var rs=fields.revenueStreams||[];
-    var sum=0;
-    rs.forEach(function(f){
-      if(f.computed||f.highlight)return;
-      var el=document.querySelector('[data-field-id="'+f.id+'"]');
-      if(el)sum+=parseFloat(el.value.replace(/[^0-9.\-]/g,''))||0;
-    });
-    var fmt='$'+sum.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-    var tot=document.querySelector('[data-field-id="totalRevenueStreamGoal"]');
-    if(tot)tot.value=fmt;
-  }
+  planSaveField(field, val);
+}
 
 /*  -  -  History View Helpers  -  -  */
 function hMondayOf(weekOff){
@@ -9848,63 +9844,533 @@ function renderInitialsModal(){
   }
   return '';
 }
-/*  -  -  Render Monthly Goals Page  -  -  */
-function renderMonthlyGoalsPage(){
-    const loc=state.goalsLoc,mk=state.goalsMonth;
-    const data=(state.goalsData[loc]||{})[mk]||{};
-    const fields=getGoalsFields(loc);
-    function goalShown(f){
-      var stored=data[f.id];
-      var empty=stored===undefined||stored===null||String(stored).trim()==='';
-      if(!empty) return {value:stored, hint:''};
-      var sug=gdPlanSuggestion(loc, mk, f.id);
-      if(!sug) return {value:'', hint:''};
-      return {value:sug.text, hint:sug.note};
+/*  -  -  Monthly Goals Planner  -  -
+   Directors plan the dollars beyond recurring billing. Saved under
+   ceo/monthlyGoals/{locId}/{YYYY-MM}. Old field names are still read and
+   are never deleted. The first open of a month that has old event or stream
+   dollars copies them into planEvents / planStreams. GymDesk figures come
+   from finance/plannerBaseline/{locId}/{YYYY-MM}; finance users can also
+   fall back to finance/gymdesk. Nothing is written until a box is edited,
+   and a value already saved is not replaced by a GymDesk figure. */
+function planNum(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+function planCents(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 0;
+  return Math.round((x + Number.EPSILON) * 100) / 100;
+}
+function planMoney(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return '—';
+  return fmtCurrency(planCents(x));
+}
+function planInputNum(n) {
+  if (n == null || n === '') return '';
+  const x = typeof n === 'number' ? n : planNum(n);
+  if (x == null) return '';
+  const r = planCents(x);
+  if (Math.abs(r - Math.round(r)) < 1e-9) return String(Math.round(r));
+  return String(r);
+}
+function planAsOfShort(iso) {
+  const t = Date.parse(iso || '');
+  if (!Number.isFinite(t)) return '';
+  try { return new Date(t).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric' }); }
+  catch (e) { return ''; }
+}
+function goalsBucket(loc, mk) {
+  if (!state.goalsData[loc]) state.goalsData[loc] = {};
+  if (!state.goalsData[loc][mk] || typeof state.goalsData[loc][mk] !== 'object') state.goalsData[loc][mk] = {};
+  return state.goalsData[loc][mk];
+}
+function planCurrent() { return goalsBucket(state.goalsLoc, state.goalsMonth); }
+function planSaveField(field, val) {
+  const loc = state.goalsLoc, mk = state.goalsMonth;
+  const node = goalsBucket(loc, mk);
+  const store = (val == null || val === '') ? null : val;
+  if (store == null) delete node[field];
+  else node[field] = store;
+  fbDebounce('monthlyGoals/' + loc + '/' + mk + '/' + field, store);
+  render();
+}
+function planBaselineRow(loc, mk) {
+  const all = state.plannerBaseline;
+  if (!all || typeof all !== 'object') return null;
+  const row = all[loc] && all[loc][mk];
+  if (!row || typeof row !== 'object') return null;
+  return row;
+}
+function planBilling(loc, mk, data) {
+  const saved = planNum(data.totalMonthlyRevenue);
+  if (saved != null) return { n: saved, mode: 'saved' };
+  const base = planBaselineRow(loc, mk);
+  if (base && planNum(base.expected_billing) != null) return { n: planNum(base.expected_billing), mode: 'baseline', asOf: base.as_of };
+  if (dashAuth.canFinance && state.gymdesk) {
+    const gdLoc = GD_DASH_LOC[loc];
+    const row = gdLoc && gdMonthRow(state.gymdesk, gdLoc, mk);
+    if (row && (row.memberships != null || row.sales_pos != null || row.pending != null)) {
+      return { n: planCents(gdNum(row.memberships) + gdNum(row.sales_pos) + gdNum(row.pending)), mode: 'gymdesk', asOf: state.gymdesk.as_of, partial: !!row.is_partial };
     }
-    const locObj=LOCATIONS.find(l=>l.id===loc);
-    let html='<div class="loc-selector">';
-    LOCATIONS.forEach(l=>{
-      const cls=l.id===loc?(isGoNinja(l.id)?'active':'active lvlup'):'';
-      html+='<button class="loc-btn '+cls+'" onclick="setGoalsLoc(\''+l.id+'\')">'+l.short+'</button>';
-    });
-    html+='</div><div class="month-selector">';
-    MONTHS_SHORT.forEach((m,i)=>{
-      const mKey=new Date().getFullYear()+'-'+String(i+1).padStart(2,'0');
-      html+='<button class="month-btn '+(mKey===mk?'active':'')+'" onclick="setGoalsMonth(\''+mKey+'\')">'+m+'</button>';
-    });
-    html+='</div>';
-    html+='<div class="section"><div class="section-header"><h2>'+locObj.name+' \u2014 Monthly Goals Planner</h2><div class="badge">'+MONTHS[parseInt(mk.split('-')[1])-1]+' '+mk.split('-')[0]+'</div></div><div class="goals-form">';
-    if(!isGoNinja(loc)&&ARM_VALUES[loc])html+='<div class="goals-calc">ARM Value: $'+ARM_VALUES[loc]+'</div>';
-    html+='<div class="goals-section-title">Membership Targets</div>';
-    fields.membership.forEach(f=>{var s=goalShown(f);html+=renderGoalField(f,s.value,s.hint);});
-    if(fields.rationale){
-      html+='<div class="goals-section-title">Rationale?</div>';
-      fields.rationale.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-    }
-    html+='<div class="goals-section-title">Revenue Projection</div>';
-    fields.revenue.forEach(f=>{var s=goalShown(f);html+=renderGoalField(f,s.value,s.hint);});
-    if(fields.revenueStreams){
-      html+='<div class="goals-subsection-title">Revenue Streams:</div>';
-      fields.revenueStreams.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-      if(!isGoNinja(loc)&&ARM_VALUES[loc]){
-        html+='<div class="goals-arm-note">'+Object.entries(ARM_VALUES).map(([k,v])=>{const n=LOCATIONS.find(l=>l.id===k);return n?n.short+' ARM = $'+v:'';}).filter(Boolean).join(' | ')+'</div>';
-      }
-    }
-        html+='<div class="goals-section-title">The Plan</div>';
-    fields.plan.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-    html+='<div class="goals-section-title">Events</div>';
-    fields.events.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
-    html+='</div></div>';setTimeout(recalcRevTotal,50);return html;
   }
-  function renderGoalField(field,value,hint){
-    var hl=field.highlight?' goals-highlight':'';
-    var sug=hint?' gd-suggest':'';
-    var note=hint?'<div style="font-size:11px;color:#0f3460;margin:-2px 0 8px;line-height:1.35;">'+esc(hint)+'</div>':'';
-    if(field.computed){
-      return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" readonly style="background:#e9ecef;cursor:default" /></div>'+note;
-    }
-    if(field.type==='textarea'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><textarea class="goals-input'+sug+'" data-field-id="'+field.id+'" style="min-height:60px;resize:vertical;font-family:inherit;padding:8px" placeholder="Enter details..." onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea></div>'+note;}if(field.type==='text'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input'+sug+'" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>'+note;}return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input'+sug+'" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>'+note;
+  return { n: null, mode: 'empty' };
+}
+function planStartMembers(loc, mk, data) {
+  const saved = planNum(data.currentMembership);
+  if (saved != null) return { n: saved, mode: 'saved' };
+  const base = planBaselineRow(loc, mk);
+  if (base && planNum(base.paying_members) != null) return { n: planNum(base.paying_members), mode: 'baseline', asOf: base.as_of };
+  if (dashAuth.canFinance && state.gymdesk) {
+    const gdLoc = GD_DASH_LOC[loc];
+    const row = gdLoc && gdMonthRow(state.gymdesk, gdLoc, mk);
+    if (row && planNum(row.paying_members) != null) return { n: planNum(row.paying_members), mode: 'gymdesk', asOf: state.gymdesk.as_of };
   }
+  if (isGoNinja(loc)) {
+    const a = planNum(data.mvmtMembership), b = planNum(data.afterschoolMembership);
+    if (a != null || b != null) return { n: (a || 0) + (b || 0), mode: 'split' };
+  }
+  return { n: null, mode: 'empty' };
+}
+function planBillingHint(bill) {
+  if (bill.mode === 'saved') return 'Your number. Clear the box to use the GymDesk figure.';
+  if (bill.mode === 'baseline' || bill.mode === 'gymdesk') {
+    const when = planAsOfShort(bill.asOf);
+    return 'GymDesk expected billing' + (when ? ' as of ' + when : '') + (bill.partial ? ', month in progress' : '') + '. Edit to save your own.';
+  }
+  if (state.plannerBaselineErr) return 'GymDesk billing is not available on this login — enter it here.';
+  if (state.plannerBaseline == null) return 'You can type recurring billing now. GymDesk fills this when it is available.';
+  return 'No GymDesk number for this month yet — enter it here.';
+}
+function planMemberHint(mem) {
+  if (mem.mode === 'saved') return 'Your count. Clear the box to use the GymDesk figure.';
+  if (mem.mode === 'baseline' || mem.mode === 'gymdesk') {
+    const when = planAsOfShort(mem.asOf);
+    return 'GymDesk paying members' + (when ? ' as of ' + when : '') + '. Edit to save your own.';
+  }
+  if (mem.mode === 'split') return 'Sum of the saved MVMT and afterschool counts. Edit to save one number.';
+  if (state.plannerBaselineErr) return 'GymDesk member count is not available — enter it here.';
+  return 'Paying members on the first of the month.';
+}
+function planCloseRate(data) {
+  const n = planNum(data.closeRate);
+  return n == null ? 80 : n;
+}
+function planNewMemAuto(data) {
+  const intros = planNum(data.newIntros);
+  if (intros == null) return null;
+  return Math.round(intros * planCloseRate(data) / 100);
+}
+function planAttrition(data) {
+  const saved = planNum(data.attritionPct);
+  if (saved != null) return { pct: saved, mode: 'saved', note: '' };
+  const raw = data.attritionTarget;
+  if (raw == null || String(raw).trim() === '') return { pct: null, mode: 'empty', note: '' };
+  const s = String(raw).trim();
+  if (/^[\d.]+%?$/.test(s)) return { pct: parseFloat(s), mode: 'legacy', note: '' };
+  return { pct: null, mode: 'empty', note: s };
+}
+function deriveLegacyQtyPrice(def, data) {
+  if (!def.legacy || def.merch) return null;
+  const dollars = planNum(data[def.legacy]);
+  if (dollars == null || dollars === 0) return null;
+  let qty = def.id === 'newMem' ? planNum(data.newMemberships) : null;
+  let price = null;
+  if (qty != null && qty > 0) price = planCents(dollars / qty);
+  else if (def.defPrice) {
+    const q = dollars / def.defPrice;
+    if (Math.abs(q - Math.round(q)) < 1e-6 && Math.round(q) >= 1) { qty = Math.round(q); price = def.defPrice; }
+    else { qty = 1; price = dollars; }
+  } else { qty = 1; price = dollars; }
+  return { qty: qty, price: price };
+}
+function resolveRow(def, data, newMemAuto) {
+  const savedAll = (data.planStreams && typeof data.planStreams === 'object') ? data.planStreams : null;
+  const useSaved = !!(savedAll && Object.prototype.hasOwnProperty.call(savedAll, def.id));
+  const saved = useSaved ? savedAll[def.id] || {} : null;
+  const legacy = (useSaved || data.planStreamsMigrated === true) ? null : deriveLegacyQtyPrice(def, data);
+  if (def.merch) {
+    let amount = null;
+    if (useSaved) amount = (saved.amount == null || saved.amount === '') ? null : planNum(saved.amount);
+    else if (data.planStreamsMigrated !== true && def.legacy) amount = planNum(data[def.legacy]);
+    return Object.assign({}, def, { amount: amount, sub: amount || 0 });
+  }
+  let price = null, priceDefault = false, qty = null, qtyOverride = false;
+  if (useSaved && saved.price != null && saved.price !== '') price = planNum(saved.price);
+  else if (legacy && legacy.price != null) price = legacy.price;
+  else if (def.defPrice != null) { price = def.defPrice; priceDefault = true; }
+  if (def.id === 'newMem') {
+    if (useSaved && saved.qtyOverride) { qty = planNum(saved.qty); qtyOverride = true; }
+    else if (!useSaved && legacy) { qty = legacy.qty; qtyOverride = true; }
+    else if (newMemAuto != null) qty = newMemAuto;
+    else if (useSaved && saved.qty != null && saved.qty !== '') qty = planNum(saved.qty);
+    else if (data.planStreamsMigrated !== true && planNum(data.newMemberships) != null) qty = planNum(data.newMemberships);
+  } else if (useSaved && saved.qty != null && saved.qty !== '') qty = planNum(saved.qty);
+  else if (legacy && legacy.qty != null) qty = legacy.qty;
+  return Object.assign({}, def, {
+    qty: qty, price: price, priceDefault: priceDefault, qtyOverride: qtyOverride,
+    sub: planCents((qty || 0) * (price || 0)), auto: newMemAuto
+  });
+}
+function planRows(loc, data) {
+  const auto = planNewMemAuto(data);
+  return planStreamDefs(loc).map(def => resolveRow(def, data, auto));
+}
+function snapshotStreams(loc, data) {
+  const out = {};
+  planRows(loc, data).forEach(r => {
+    if (r.merch) out[r.id] = { amount: r.amount == null ? '' : r.amount };
+    else out[r.id] = { qty: r.qty == null ? '' : r.qty, price: r.priceDefault ? '' : (r.price == null ? '' : r.price), qtyOverride: !!r.qtyOverride };
+  });
+  return out;
+}
+function mapPurpose(text) {
+  const raw = String(text || '').trim();
+  const t = raw.toLowerCase();
+  if (!t) return { purpose: '', leftover: '' };
+  if (/lead/.test(t) && /profit/.test(t) && /retention/.test(t)) return { purpose: '', leftover: '' };
+  if (/^leads?$/.test(t)) return { purpose: 'leads', leftover: '' };
+  if (t === 'profit') return { purpose: 'profit', leftover: '' };
+  if (t === 'retention') return { purpose: 'retention', leftover: '' };
+  const hits = [];
+  if (/\bleads?\b/.test(t)) hits.push('leads');
+  if (/\bprofit\b/.test(t)) hits.push('profit');
+  if (/\bretention\b/.test(t)) hits.push('retention');
+  if (hits.length === 1) return { purpose: hits[0], leftover: '' };
+  return { purpose: '', leftover: raw };
+}
+function inferEventType(name) {
+  const n = String(name || '').toLowerCase();
+  if (/tournament/.test(n)) return 'tournament';
+  if (/camp/.test(n)) return 'camp';
+  if (/clinic/.test(n)) return 'clinic';
+  if (/seminar/.test(n)) return 'seminar';
+  if (/party|social/.test(n)) return 'party';
+  if (/belt|\btest/.test(n)) return 'belt';
+  return 'other';
+}
+function legacyEvent(name, purposeText, dollars, forcedType) {
+  const nm = String(name || '').trim();
+  const pur = mapPurpose(purposeText);
+  const money = planNum(dollars);
+  const hasMoney = money != null && money !== 0;
+  if (!nm && !pur.purpose && !pur.leftover && !hasMoney) return null;
+  let finalName = nm;
+  if (pur.leftover) finalName = finalName ? (finalName + ' — ' + pur.leftover) : pur.leftover;
+  if (!finalName) finalName = forcedType === 'belt' ? 'Belt testing' : forcedType === 'tournament' ? 'Tournament' : forcedType === 'camp' ? 'Camps' : 'Event';
+  return {
+    name: finalName, date: '', type: forcedType || inferEventType(finalName),
+    purpose: pur.purpose || '', qty: hasMoney ? 1 : '', price: hasMoney ? money : ''
+  };
+}
+function deriveLegacyEvents(loc, data) {
+  const out = [];
+  function push(ev) { if (ev) out.push(ev); }
+  push(legacyEvent(data.event1Name, data.event1Purpose, data.revEvent1, null));
+  push(legacyEvent(data.event2Name, data.event2Purpose, data.revEvent2, null));
+  if (!isGoNinja(loc)) {
+    push(legacyEvent('', '', data.revTesting, 'belt'));
+    push(legacyEvent('', '', data.revTournament, 'tournament'));
+  }
+  push(legacyEvent('', '', data.revCamps, 'camp'));
+  return out;
+}
+function eventsFromData(loc, data) {
+  if (data.planEventsMigrated === true) return Array.isArray(data.planEvents) ? data.planEvents.filter(Boolean) : [];
+  if (Array.isArray(data.planEvents) && data.planEvents.filter(Boolean).length) return data.planEvents.filter(Boolean);
+  return deriveLegacyEvents(loc, data);
+}
+function planEventSub(e) { return planCents((planNum(e && e.qty) || 0) * (planNum(e && e.price) || 0)); }
+function planEventsWorking(loc, data) {
+  return eventsFromData(loc, data).map(e => ({
+    name: e.name || '', date: e.date || '',
+    type: PLAN_EVENT_TYPES.some(t => t[0] === e.type) ? e.type : 'other',
+    purpose: e.purpose || '',
+    qty: e.qty == null ? '' : e.qty,
+    price: e.price == null ? '' : e.price
+  }));
+}
+function planMigrationPatch(loc, data) {
+  if (!data || typeof data !== 'object') return null;
+  const patch = {};
+  let any = false;
+  if (data.planEventsMigrated !== true && !(Array.isArray(data.planEvents) && data.planEvents.filter(Boolean).length)) {
+    const ev = deriveLegacyEvents(loc, data);
+    if (ev.length) { patch.planEvents = ev; patch.planEventsMigrated = true; any = true; }
+  }
+  if (data.planStreamsMigrated !== true) {
+    const had = planStreamDefs(loc).some(def => def.legacy && planNum(data[def.legacy]) != null && planNum(data[def.legacy]) !== 0);
+    if (had) { patch.planStreams = snapshotStreams(loc, data); patch.planStreamsMigrated = true; any = true; }
+  }
+  return any ? patch : null;
+}
+function maybeMigratePlan(loc, mk) {
+  const data = (state.goalsData[loc] || {})[mk] || {};
+  const patch = planMigrationPatch(loc, data);
+  if (!patch) return;
+  const key = loc + '|' + mk;
+  if (!state._planMig) state._planMig = {};
+  if (state._planMig[key]) return;
+  state._planMig[key] = true;
+  const node = goalsBucket(loc, mk);
+  Object.keys(patch).forEach(k => { node[k] = patch[k]; });
+  try {
+    const ref = fbRef('monthlyGoals/' + loc + '/' + mk);
+    if (ref && typeof ref.update === 'function') ref.update(patch).catch(function () {});
+  } catch (e) {}
+  render();
+}
+function planPatch(patch) {
+  const loc = state.goalsLoc, mk = state.goalsMonth;
+  const data = goalsBucket(loc, mk);
+  Object.keys(patch).forEach(k => { data[k] = patch[k]; });
+  const key = 'planpatch|' + loc + '|' + mk;
+  if (!state._planPatch) state._planPatch = {};
+  state._planPatch[key] = Object.assign(state._planPatch[key] || {}, patch);
+  clearTimeout(debounceTimers[key]);
+  debounceTimers[key] = setTimeout(function () {
+    const body = state._planPatch[key];
+    delete state._planPatch[key];
+    if (!body) return;
+    try {
+      const ref = fbRef('monthlyGoals/' + loc + '/' + mk);
+      if (ref && typeof ref.update === 'function') ref.update(body).catch(function () {});
+    } catch (e) {}
+  }, 400);
+  render();
+}
+function planSaveEvents(events) {
+  planPatch({ planEvents: events.length ? events : null, planEventsMigrated: true });
+}
+function planEditEvent(i, field, raw) {
+  const events = planEventsWorking(state.goalsLoc, planCurrent());
+  if (!events[i]) return;
+  events[i][field] = (field === 'qty' || field === 'price') ? (planNum(raw) == null ? '' : planNum(raw)) : raw;
+  planSaveEvents(events);
+}
+function planAddEvent() {
+  const events = planEventsWorking(state.goalsLoc, planCurrent());
+  events.push({ name: '', date: '', type: 'other', purpose: 'profit', qty: 1, price: '' });
+  planSaveEvents(events);
+  const idx = events.length - 1;
+  setTimeout(function () { const el = document.getElementById('planEvName' + idx); if (el) el.focus(); }, 40);
+}
+function planRemoveEvent(i) {
+  const events = planEventsWorking(state.goalsLoc, planCurrent());
+  events.splice(i, 1);
+  planSaveEvents(events);
+}
+function planEditStream(id, field, raw) {
+  const loc = state.goalsLoc, mk = state.goalsMonth;
+  const data = goalsBucket(loc, mk);
+  const streams = snapshotStreams(loc, data);
+  const row = streams[id];
+  if (!row) return;
+  if (field === 'amount') row.amount = planNum(raw) == null ? '' : planNum(raw);
+  else if (field === 'qty') { row.qty = planNum(raw) == null ? '' : planNum(raw); if (id === 'newMem') row.qtyOverride = true; }
+  else if (field === 'price') row.price = planNum(raw) == null ? '' : planNum(raw);
+  else if (field === 'useCalc') {
+    row.qtyOverride = false;
+    const auto = planNewMemAuto(data);
+    row.qty = auto == null ? '' : auto;
+  }
+  planPatch({ planStreams: streams, planStreamsMigrated: true });
+}
+function planEditBilling(raw) {
+  const data = planCurrent();
+  const cur = planBilling(state.goalsLoc, state.goalsMonth, data);
+  const n = planNum(raw);
+  if (n == null) { planSaveField('totalMonthlyRevenue', null); return; }
+  if (cur.mode !== 'saved' && cur.n != null && planCents(n) === planCents(cur.n)) return;
+  planSaveField('totalMonthlyRevenue', planCents(n));
+}
+function planEditMembers(raw) {
+  const data = planCurrent();
+  const cur = planStartMembers(state.goalsLoc, state.goalsMonth, data);
+  const n = planNum(raw);
+  if (n == null) { planSaveField('currentMembership', null); return; }
+  if (cur.mode !== 'saved' && cur.n != null && n === cur.n) return;
+  planSaveField('currentMembership', Math.round(n));
+}
+function planEditClose(raw) {
+  const n = planNum(raw);
+  if (n == null) { planSaveField('closeRate', null); return; }
+  if (planNum(planCurrent().closeRate) == null && n === 80) return;
+  planSaveField('closeRate', n);
+}
+function planEditAttrition(raw) {
+  const n = planNum(raw);
+  const cur = planAttrition(planCurrent());
+  if (n == null) { planSaveField('attritionPct', null); return; }
+  if (cur.mode !== 'saved' && cur.pct != null && n === cur.pct) return;
+  planSaveField('attritionPct', n);
+}
+function planEditGoal(raw) {
+  const n = planNum(raw);
+  planSaveField('eomRevenueGoal', n == null ? null : planCents(n));
+}
+function planEditText(field, raw) {
+  const s = String(raw || '');
+  planSaveField(field, s.trim() ? s : null);
+}
+function planEditArm(raw) {
+  const n = planNum(raw);
+  planSaveField('armTarget', n == null ? null : n);
+}
+function planStreamHtml(r) {
+  if (r.merch) {
+    return '<div class="plan-stream plan-stream-merch"><div class="plan-stream-name"><div class="plan-label">' + esc(r.label) + '</div></div>'
+      + '<div class="plan-money"><span>$</span><input class="plan-input" inputmode="decimal" aria-label="Merchandise amount" placeholder="0" value="' + esc(planInputNum(r.amount)) + '" onchange="planEditStream(\'' + r.id + '\',\'amount\',this.value)"></div>'
+      + '<div class="plan-sub">' + planMoney(r.sub) + '</div></div>';
+  }
+  const priceCls = r.priceDefault ? ' gd-suggest' : '';
+  let use = '';
+  if (r.id === 'newMem' && r.qtyOverride && r.auto != null && r.auto !== r.qty) {
+    use = '<button type="button" class="plan-link" onclick="planEditStream(\'newMem\',\'useCalc\',\'\')">Use ' + r.auto + ' from intros</button>';
+  }
+  return '<div class="plan-stream"><div class="plan-stream-name"><div class="plan-label">' + esc(r.label) + '</div>' + use + '</div>'
+    + '<input class="plan-input" inputmode="numeric" aria-label="' + esc(r.label) + ' quantity" placeholder="Qty" value="' + esc(planInputNum(r.qty)) + '" onchange="planEditStream(\'' + r.id + '\',\'qty\',this.value)">'
+    + '<div class="plan-money"><span>$</span><input class="plan-input' + priceCls + '" inputmode="decimal" aria-label="' + esc(r.label) + ' price" placeholder="Price" value="' + esc(planInputNum(r.price)) + '" onchange="planEditStream(\'' + r.id + '\',\'price\',this.value)"></div>'
+    + '<div class="plan-sub">' + planMoney(r.sub) + '</div></div>';
+}
+function planEventHtml(e, i) {
+  const type = PLAN_EVENT_TYPES.some(t => t[0] === e.type) ? e.type : 'other';
+  const purpose = PLAN_EVENT_PURPOSES.some(p => p[0] === e.purpose) ? e.purpose : '';
+  const types = PLAN_EVENT_TYPES.map(t => '<option value="' + t[0] + '"' + (type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>').join('');
+  const purps = (purpose ? '' : '<option value=""></option>') + PLAN_EVENT_PURPOSES.map(p => '<option value="' + p[0] + '"' + (purpose === p[0] ? ' selected' : '') + '>' + p[1] + '</option>').join('');
+  return '<div class="plan-event"><div class="plan-event-top">'
+    + '<input id="planEvName' + i + '" class="plan-input plan-input-text" placeholder="Event name" aria-label="Event name" value="' + esc(e.name || '') + '" onchange="planEditEvent(' + i + ',\'name\',this.value)">'
+    + '<input class="plan-input" type="date" aria-label="Event date" value="' + esc(e.date || '') + '" onchange="planEditEvent(' + i + ',\'date\',this.value)">'
+    + '<select class="plan-input" aria-label="Event type" onchange="planEditEvent(' + i + ',\'type\',this.value)">' + types + '</select>'
+    + '<select class="plan-input" aria-label="Event purpose" onchange="planEditEvent(' + i + ',\'purpose\',this.value)">' + purps + '</select>'
+    + '</div><div class="plan-event-bot">'
+    + '<input class="plan-input" inputmode="numeric" placeholder="Qty" aria-label="Expected number" value="' + esc(planInputNum(e.qty)) + '" onchange="planEditEvent(' + i + ',\'qty\',this.value)">'
+    + '<div class="plan-money"><span>$</span><input class="plan-input" inputmode="decimal" placeholder="Price" aria-label="Event price" value="' + esc(planInputNum(e.price)) + '" onchange="planEditEvent(' + i + ',\'price\',this.value)"></div>'
+    + '<div class="plan-sub">' + planMoney(planEventSub(e)) + '</div>'
+    + '<button type="button" class="plan-remove" onclick="planRemoveEvent(' + i + ')">Remove</button>'
+    + '</div></div>';
+}
+function renderMonthlyGoalsPage() {
+  const loc = state.goalsLoc, mk = state.goalsMonth;
+  const data = (state.goalsData[loc] || {})[mk] || {};
+  const locObj = LOCATIONS.find(l => l.id === loc) || { name: loc, short: loc };
+  const rows = planRows(loc, data);
+  const events = eventsFromData(loc, data);
+  const planned = planCents(rows.reduce((s, r) => s + (r.sub || 0), 0) + events.reduce((s, e) => s + planEventSub(e), 0));
+  const goal = planNum(data.eomRevenueGoal);
+  const bill = planBilling(loc, mk, data);
+  const billingKnown = bill.n != null;
+  const beyond = (goal == null || !billingKnown) ? null : planCents(goal - bill.n);
+  const need = beyond == null ? null : Math.max(0, beyond);
+  const still = need == null ? null : planCents(Math.max(0, need - planned));
+  const covered = still != null && still <= 0.004;
+  const pct = need == null ? 0 : (need <= 0 ? 100 : Math.max(0, Math.min(100, (planned / need) * 100)));
+  const totalRev = billingKnown ? planCents(bill.n + planned) : null;
+  const members = planStartMembers(loc, mk, data);
+  const startN = members.n;
+  const auto = planNewMemAuto(data);
+  const att = planAttrition(data);
+  const newMemShown = auto != null ? auto : (planNum(data.newMemberships));
+  const lost = (startN == null || att.pct == null) ? null : Math.round(startN * att.pct / 100);
+  const eom = (startN == null || newMemShown == null || lost == null) ? null : startN + newMemShown - lost;
+  const monthLabel = MONTHS[parseInt(mk.split('-')[1], 10) - 1] + ' ' + mk.split('-')[0];
+  const fixedArm = ARM_VALUES[loc];
+  const armTarget = fixedArm != null ? fixedArm : planNum(data.armTarget);
+  const proj = (billingKnown && startN) ? bill.n / startN : null;
+
+  let html = '<div class="loc-selector">';
+  LOCATIONS.forEach(l => {
+    const cls = l.id === loc ? (isGoNinja(l.id) ? 'active' : 'active lvlup') : '';
+    html += '<button class="loc-btn ' + cls + '" onclick="setGoalsLoc(\'' + l.id + '\')">' + l.short + '</button>';
+  });
+  html += '</div><div class="month-selector">';
+  MONTHS_SHORT.forEach((m, i) => {
+    const mKey = new Date().getFullYear() + '-' + String(i + 1).padStart(2, '0');
+    html += '<button class="month-btn ' + (mKey === mk ? 'active' : '') + '" onclick="setGoalsMonth(\'' + mKey + '\')">' + m + '</button>';
+  });
+  html += '</div>';
+
+  html += '<div class="section"><div class="section-header"><h2>' + esc(locObj.name) + ' — Monthly Goals Planner</h2><div class="badge">' + esc(monthLabel) + '</div></div><div class="goals-form">';
+  html += '<div class="plan-goal-top"><div><div class="plan-label">End of month revenue goal</div><div class="plan-hint">The total you want this school to bring in.</div></div>';
+  html += '<div class="plan-money plan-money-lg"><span>$</span><input class="plan-input" inputmode="decimal" aria-label="End of month revenue goal" placeholder="0" value="' + esc(planInputNum(goal)) + '" onchange="planEditGoal(this.value)"></div></div>';
+  const billCls = (bill.mode !== 'saved' && bill.n != null) ? ' gd-suggest' : '';
+  html += '<div class="plan-goal-top"><div><div class="plan-label">Expected recurring billing</div><div class="plan-hint">' + esc(planBillingHint(bill)) + '</div></div>';
+  html += '<div class="plan-money plan-money-lg"><span>$</span><input class="plan-input' + billCls + '" inputmode="decimal" aria-label="Expected recurring billing" placeholder="0" value="' + esc(billingKnown ? planInputNum(bill.n) : '') + '" onchange="planEditBilling(this.value)"></div></div>';
+  if (need == null) {
+    html += '<p class="plan-need-line"><span>' + (goal == null ? 'Enter a revenue goal to see the gap.' : 'Enter expected billing to see the gap.') + '</span></p>';
+  } else {
+    html += '<p class="plan-need-line' + (beyond <= 0 ? ' ok' : '') + '"><span>You need</span> <strong>' + planMoney(need) + '</strong> <span>beyond billing</span></p>';
+    if (beyond < 0) html += '<div class="plan-hint">Billing is already ' + planMoney(-beyond) + ' above the goal.</div>';
+    html += '<div class="plan-bar' + (covered ? ' covered' : '') + '" role="progressbar" aria-valuenow="' + Math.round(pct) + '" aria-valuemin="0" aria-valuemax="100"><div style="width:' + pct.toFixed(1) + '%"></div></div>';
+    html += '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline"><div class="plan-still' + (covered ? ' plan-good' : '') + '">Still to plan: ' + planMoney(still) + '</div><div class="plan-hint" style="margin:0">' + planMoney(planned) + ' planned</div></div>';
+  }
+  html += '<div class="plan-total-row"><div><div class="plan-label">Total revenue</div><div class="plan-hint">Billing + planned extra.</div></div><div class="amt">' + (totalRev == null ? '—' : planMoney(totalRev)) + '</div></div>';
+  html += '</div></div>';
+
+  html += '<div class="section"><div class="section-header"><h2>Revenue plan</h2><div class="badge">' + planMoney(planned) + ' extra</div></div><div class="goals-form">';
+  html += '<div class="plan-hint" style="margin:0 0 10px">Quantity × price. This is money beyond recurring billing.</div>';
+  html += '<div class="plan-cols"><span></span><span>Qty</span><span>Price</span><span>Subtotal</span></div>';
+  rows.forEach(r => { html += planStreamHtml(r); });
+  html += '<div class="plan-label" style="margin:16px 0 4px">Events</div>';
+  html += '<div class="plan-hint" style="margin-bottom:8px">Every camp, tournament, clinic, seminar, party, or belt test.</div>';
+  if (!events.length) html += '<div class="plan-hint" style="margin-bottom:8px">No events yet.</div>';
+  events.forEach((e, i) => { html += planEventHtml(e, i); });
+  html += '<button type="button" class="plan-add" onclick="planAddEvent()">+ Add event</button>';
+  html += '<div class="plan-total-row"><div class="plan-label">Planned extra revenue</div><div class="amt">' + planMoney(planned) + '</div></div>';
+  html += '</div></div>';
+
+  html += '<div class="section"><div class="section-header"><h2>Membership plan</h2><div class="badge">' + (eom == null ? 'Member goal —' : (eom + ' members')) + '</div></div><div class="goals-form">';
+  const memCls = (members.mode !== 'saved' && members.n != null) ? ' gd-suggest' : '';
+  html += '<div class="plan-mem">';
+  html += '<div><div class="plan-label">Members at start of month</div><input class="plan-input' + memCls + '" inputmode="numeric" aria-label="Members at start of month" placeholder="0" value="' + esc(startN == null ? '' : planInputNum(startN)) + '" onchange="planEditMembers(this.value)"><div class="plan-hint">' + esc(planMemberHint(members)) + '</div></div>';
+  html += '<div><div class="plan-label">New intros</div><input class="plan-input" inputmode="numeric" aria-label="New intros" placeholder="0" value="' + esc(planInputNum(data.newIntros)) + '" onchange="planSaveField(\'newIntros\', planNum(this.value))"><div class="plan-hint">Trials you expect to show.</div></div>';
+  const closeSaved = planNum(data.closeRate) != null;
+  html += '<div><div class="plan-label">Close rate %</div><input class="plan-input' + (closeSaved ? '' : ' gd-suggest') + '" inputmode="decimal" aria-label="Close rate percent" value="' + esc(planInputNum(planCloseRate(data))) + '" onchange="planEditClose(this.value)"><div class="plan-hint">' + (closeSaved ? 'Percent of intros who join.' : 'Default 80% of intros.') + '</div></div>';
+  const savedNew = planNum(data.newMemberships);
+  let newHint = 'Intros × close rate. Fills the new-memberships row unless you change that quantity.';
+  if (savedNew != null && auto != null && savedNew !== auto) newHint = 'Saved count was ' + savedNew + '. This uses intros × close rate.';
+  else if (auto == null && savedNew != null) newHint = 'Saved count is ' + savedNew + '. Enter intros to calculate.';
+  html += '<div class="plan-stat"><div class="plan-label">New memberships</div><div class="v">' + (newMemShown == null ? '—' : newMemShown) + '</div><div class="plan-hint">' + esc(newHint) + '</div></div>';
+  const attCls = (att.mode !== 'saved' && att.pct != null) ? ' gd-suggest' : '';
+  const attWarn = (att.pct != null && att.pct > 3) ? ' plan-warn' : '';
+  html += '<div><div class="plan-label">Attrition %</div><input class="plan-input' + attCls + attWarn + '" inputmode="decimal" aria-label="Attrition percent" placeholder="0" value="' + esc(att.pct == null ? '' : planInputNum(att.pct)) + '" onchange="planEditAttrition(this.value)"><div class="plan-hint">' + (att.note ? ('Saved note: ' + esc(att.note)) : 'Goal is 3% or less.') + '</div></div>';
+  html += '<div class="plan-stat"><div class="plan-label">Members lost</div><div class="v">' + (lost == null ? '—' : lost) + '</div><div class="plan-hint">Start × attrition %.</div></div>';
+  const savedEom = planNum(data.eomGoal);
+  let eomHint = 'Start + new memberships − members lost.';
+  if (savedEom != null && eom != null && savedEom !== eom) eomHint = 'Previously saved count was ' + savedEom + '. This calculates from the rows above.';
+  html += '<div class="plan-stat"><div class="plan-label">End-of-month member goal</div><div class="v">' + (eom == null ? '—' : eom) + '</div><div class="plan-hint">' + esc(eomHint) + '</div></div>';
+  html += '</div>';
+  if (isGoNinja(loc) && (planNum(data.mvmtMembership) != null || planNum(data.afterschoolMembership) != null)) {
+    html += '<div class="plan-mem" style="margin-top:12px">';
+    html += '<div><div class="plan-label">MVMT members (day 1)</div><input class="plan-input" inputmode="numeric" value="' + esc(planInputNum(data.mvmtMembership)) + '" onchange="planSaveField(\'mvmtMembership\', planNum(this.value))"><div class="plan-hint">Kept from the previous planner.</div></div>';
+    html += '<div><div class="plan-label">Afterschool members (day 1)</div><input class="plan-input" inputmode="numeric" value="' + esc(planInputNum(data.afterschoolMembership)) + '" onchange="planSaveField(\'afterschoolMembership\', planNum(this.value))"><div class="plan-hint">Kept from the previous planner.</div></div>';
+    html += '</div>';
+  }
+  html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--gray-100)">';
+  if (fixedArm != null) html += '<div class="goals-arm-note">' + esc(locObj.short) + ' ARM = $' + fixedArm + '</div>';
+  else {
+    html += '<div class="plan-arm-edit"><span class="goals-arm-note">' + esc(locObj.short) + ' ARM =</span><input class="plan-input" inputmode="decimal" aria-label="ARM target" placeholder="optional" value="' + esc(armTarget == null ? '' : planInputNum(armTarget)) + '" onchange="planEditArm(this.value)"></div>';
+    html += '<div class="plan-hint">No set target for this school. Leave blank if you don\'t use one.</div>';
+  }
+  let projCls = '';
+  if (proj != null && armTarget != null) projCls = proj + 0.001 >= armTarget ? ' plan-good' : ' plan-bad';
+  html += '<div class="plan-label' + projCls + '" style="margin-top:6px">Projected ARM ' + (proj == null ? '—' : gdArmText(proj)) + '</div>';
+  html += '<div class="plan-hint">Billing ÷ members at the start of the month.</div>';
+  html += '</div></div></div>';
+
+  html += '<div class="section"><div class="section-header"><h2>Plan & notes</h2></div><div class="goals-form">';
+  html += '<div class="plan-label">Rationale</div><textarea class="plan-input plan-input-text" style="min-height:72px;margin:6px 0 12px;text-align:left;font-weight:500" placeholder="Why this plan" onchange="planEditText(\'rationale\',this.value)">' + esc(data.rationale || '') + '</textarea>';
+  html += '<div class="plan-label">Actionable strategies</div><textarea class="plan-input plan-input-text" style="min-height:72px;margin-top:6px;text-align:left;font-weight:500" placeholder="What you will do this month" onchange="planEditText(\'strategies\',this.value)">' + esc(data.strategies || '') + '</textarea>';
+  html += '</div></div>';
+
+  setTimeout(function () {
+    if (state.activeSection === 'goals' && state.goalsTab === 'monthly' && state.goalsLoc === loc && state.goalsMonth === mk) maybeMigratePlan(loc, mk);
+  }, 0);
+  return html;
+}
+
 /*  -  -  Watch List Page  -  -  */
 function setWlFilter(f) { state.wlFilter = f; render(); }
 

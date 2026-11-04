@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Push a GymDesk snapshot to Firebase Realtime Database at finance/gymdesk.
+ * Push a GymDesk snapshot to Firebase Realtime Database at finance/gymdesk,
+ * and the director-facing aggregates at finance/plannerBaseline.
  *
  *   node scripts/push_gymdesk_data.mjs <path-to-gymdesk_data.json>
  *   node scripts/push_gymdesk_data.mjs --dry-run <path-to-gymdesk_data.json>
@@ -19,7 +20,18 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 
 const RTDB_PATH = 'finance/gymdesk';
+const BASELINE_PATH = 'finance/plannerBaseline';
 const DEFAULT_DB = 'https://lvlup-members-app-default-rtdb.firebaseio.com';
+// GymDesk snapshot keys → canonical dashboard location ids. east_madison is
+// eastmad here (never eastmadison). Go Ninja is goninjaW / goninjaV.
+const GD_KEY_TO_LOC = {
+  waunakee: 'waunakee',
+  east_madison: 'eastmad',
+  verona: 'verona',
+  deforest: 'deforest',
+  go_ninja_waunakee: 'goninjaW',
+  go_ninja_verona: 'goninjaV'
+};
 const MAX_BYTES = 2 * 1024 * 1024;
 const MONTH_FIELDS = ['paying_members', 'memberships', 'sales_pos', 'pending', 'total', 'per_member'];
 const PII_KEYS = new Set([
@@ -169,6 +181,33 @@ function validate(data) {
   return { lvlupOnly: [...lvl] };
 }
 
+function cents(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+
+// Aggregates only: expected billing (memberships + sales_pos + pending) and
+// paying members for each school-month. Directors read this node; they do
+// not get finance/gymdesk. A full PUT replaces the node so it matches the snapshot.
+function buildPlannerBaseline(data) {
+  const out = {};
+  const locs = data.franchise_revenue_2026.locations;
+  data.groups.all_in.forEach(key => {
+    const locId = GD_KEY_TO_LOC[key];
+    if (!locId) {
+      die(2, 'No planner location id for GymDesk key "' + key + '". Add it to GD_KEY_TO_LOC (canonical ids: waunakee, eastmad, verona, deforest, goninjaW, goninjaV).');
+    }
+    const months = (locs[key] && locs[key].months) || {};
+    out[locId] = {};
+    Object.keys(months).forEach(mk => {
+      const row = months[mk];
+      out[locId][mk] = {
+        expected_billing: cents(row.memberships + row.sales_pos + row.pending),
+        paying_members: row.paying_members,
+        as_of: data.as_of
+      };
+    });
+  });
+  return out;
+}
+
 function summary(data) {
   const keys = data.groups.all_in;
   const locs = data.franchise_revenue_2026.locations;
@@ -194,9 +233,12 @@ async function main() {
   try { data = JSON.parse(raw.toString('utf8')); }
   catch (e) { die(2, 'Not JSON: ' + e.message); }
   validate(data);
+  const baseline = buildPlannerBaseline(data);
+  const baseMonths = Object.keys(baseline).reduce((s, k) => s + Object.keys(baseline[k]).length, 0);
   const line = summary(data);
+  const baseLine = 'plannerBaseline schools ' + Object.keys(baseline).length + ' months ' + baseMonths;
   if (dry) {
-    console.log('dry-run ok  ' + line + '  (not written)');
+    console.log('dry-run ok  ' + line + '  ' + baseLine + '  (not written)');
     return;
   }
   const dbUrl = (process.env.FIREBASE_DATABASE_URL || DEFAULT_DB).replace(/\/$/, '');
@@ -211,7 +253,17 @@ async function main() {
     const text = await res.text().catch(() => '');
     die(4, 'Write to ' + RTDB_PATH + ' failed (' + res.status + '). ' + text.slice(0, 300));
   }
-  console.log('wrote ' + RTDB_PATH + '  ' + line + '  as ' + email);
+  const baseUrl = dbUrl + '/' + BASELINE_PATH + '.json?access_token=' + encodeURIComponent(token);
+  const res2 = await fetch(baseUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(baseline)
+  });
+  if (!res2.ok) {
+    const text = await res2.text().catch(() => '');
+    die(4, 'Wrote ' + RTDB_PATH + ' but ' + BASELINE_PATH + ' failed (' + res2.status + '). ' + text.slice(0, 300));
+  }
+  console.log('wrote ' + RTDB_PATH + ' and ' + BASELINE_PATH + '  ' + line + '  ' + baseLine + '  as ' + email);
 }
 
 main().catch(e => die(1, e && e.stack ? e.stack : String(e)));
