@@ -8146,19 +8146,28 @@ function gdBilling(g, mk) {
   }
   return blocks[blocks.length - 1];
 }
+// ARM is all revenue, every month: (memberships + sales/POS + pending) ÷ paying members.
+// Prefer derived_metrics.arm.by_location.{loc}.{YYYY-MM}.arm_all_in. Legacy
+// arm_memberships_only / arm_incl_pending are not displayed. If arm_all_in is
+// missing, use that month's franchise total ÷ paying_members (total is the same sum).
+function gdArmAllIn(pt) {
+  if (!pt || pt.arm_all_in == null || pt.arm_all_in === '') return null;
+  const n = typeof pt.arm_all_in === 'number' ? pt.arm_all_in : parseFloat(pt.arm_all_in);
+  return Number.isFinite(n) ? n : null;
+}
 function gdArmPoint(g, loc, mk) {
+  const row = gdMonthRow(g, loc, mk);
   const by = (((g.derived_metrics || {}).arm || {}).by_location || {})[loc] || {};
   const pt = by[mk];
-  if (pt) {
-    const partial = !!pt.is_partial;
-    const v = partial ? pt.arm_incl_pending : pt.arm_memberships_only;
-    return { value: v == null || v === '' ? null : gdNum(v), partial: partial };
-  }
-  const row = gdMonthRow(g, loc, mk);
-  if (!row || !gdNum(row.paying_members)) return { value: null, partial: !!(row && row.is_partial) };
-  const partial = !!row.is_partial;
-  const num = gdNum(row.memberships) + (partial ? gdNum(row.pending) : 0);
-  return { value: num / gdNum(row.paying_members), partial: partial };
+  const partial = pt ? !!pt.is_partial : !!(row && row.is_partial);
+  const allIn = gdArmAllIn(pt);
+  if (allIn != null) return { value: allIn, partial: partial };
+  const members = row ? gdNum(row.paying_members) : 0;
+  if (!row || !members) return { value: null, partial: partial };
+  const total = (row.total == null || row.total === '')
+    ? gdNum(row.memberships) + gdNum(row.sales_pos) + gdNum(row.pending)
+    : gdNum(row.total);
+  return { value: total / members, partial: partial };
 }
 function gdMoney(n) { return fmtCurrency(Math.round((n + Number.EPSILON) * 100) / 100); }
 function gdArmText(n) {
@@ -8267,12 +8276,13 @@ function renderGymdeskFinancePage() {
 
   if (full) {
     html += '<div class="kpi-grid">';
-    ['waunakee', 'verona', 'east_madison'].forEach(key => {
+    const armOrder = ['waunakee', 'verona', 'east_madison', 'deforest', 'go_ninja_waunakee', 'go_ninja_verona'];
+    armOrder.filter(key => gdMonthRow(g, key, full) || (((g.derived_metrics || {}).arm || {}).by_location || {})[key]).forEach(key => {
       const meta = gdLocMeta(g, key);
       const arm = gdArmPoint(g, key, full);
       const target = meta.target_arm == null ? null : gdNum(meta.target_arm);
       let tone = 'blue';
-      let sub = esc(gdMonthNice(full)) + ' · memberships only';
+      let sub = esc(gdMonthNice(full)) + ' · all revenue';
       if (target != null && arm.value != null) {
         const delta = arm.value - target;
         tone = delta >= -0.001 ? 'green' : 'red';
@@ -8293,13 +8303,13 @@ function renderGymdeskFinancePage() {
   html += '<div style="padding:12px 16px 4px;font-size:12px;color:#6b7280;">Each bar is GymDesk total (memberships + sales' + (curPartial ? ' + pending' : '') + '). * is the in-progress month and is not comparable to a closed month. Filter: ' + (state.gdFinGroup === 'lvlup' ? 'LVLUP only' : state.gdFinGroup === 'ninja' ? 'Go Ninja' : 'all six schools') + '.</div>';
   html += '<div style="position:relative;height:380px;padding:8px 12px 16px;"><canvas id="gdFinRev"></canvas></div></div>';
 
-  html += '<div class="section"><div class="section-header"><h2>ARM trend</h2><div class="badge">vs target</div></div>';
-  html += '<div style="padding:12px 16px 4px;font-size:12px;color:#6b7280;">Closed months use memberships ÷ paying members. The in-progress month adds pending (GymDesk’s per-member figure). Dashed lines are the school targets from the snapshot.</div>';
+  html += '<div class="section"><div class="section-header"><h2>ARM trend</h2><div class="badge">all revenue</div></div>';
+  html += '<div style="padding:12px 16px 4px;font-size:12px;color:#6b7280;">ARM is all revenue ÷ paying members: memberships + sales/POS + pending, including the in-progress month. Dashed lines are the school targets from the snapshot.</div>';
   html += '<div style="position:relative;height:340px;padding:8px 12px 16px;"><canvas id="gdFinArm"></canvas></div></div>';
 
-  html += '<div class="section"><div class="section-header"><h2>Paying members and ARM</h2><div class="badge">' + esc(full ? gdMonthNice(full) : 'No full month') + '</div></div>';
-  html += '<div style="padding:8px 16px 0;font-size:12px;color:#6b7280;">Paying members had at least one payment that month. Do not add them up across months — the year-to-date figure in GymDesk is the peak, not a sum. ARM turns green at or above target.</div>';
-  html += '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr><th>School</th><th style="text-align:right;">Paying</th><th style="text-align:right;">ARM</th><th style="text-align:right;">Target</th><th style="text-align:right;">' + esc(cur ? gdMonthShort(cur, curPartial) + ' total' : 'This month') + '</th></tr></thead><tbody>';
+  html += '<div class="section"><div class="section-header"><h2>Paying members and ARM</h2><div class="badge">' + esc(full ? gdMonthNice(full) : 'No full month') + ' · all revenue</div></div>';
+  html += '<div style="padding:8px 16px 0;font-size:12px;color:#6b7280;">Paying members had at least one payment that month. ARM is all revenue (memberships + sales/POS + pending) ÷ those members. Do not add paying members up across months — the year-to-date figure in GymDesk is the peak, not a sum. ARM turns green at or above target.</div>';
+  html += '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr><th>School</th><th style="text-align:right;">Paying</th><th style="text-align:right;">All-revenue ARM</th><th style="text-align:right;">Target</th><th style="text-align:right;">' + esc(cur ? gdMonthShort(cur, curPartial) + ' total' : 'This month') + '</th></tr></thead><tbody>';
   viewKeys.forEach(key => {
     const meta = gdLocMeta(g, key);
     const row = full ? gdMonthRow(g, key, full) : null;
@@ -9938,7 +9948,7 @@ function planBillingHint(bill) {
   if (bill.mode === 'saved') return 'Your number. Clear the box to use the GymDesk figure.';
   if (bill.mode === 'baseline' || bill.mode === 'gymdesk') {
     const when = planAsOfShort(bill.asOf);
-    return 'GymDesk expected billing' + (when ? ' as of ' + when : '') + (bill.partial ? ', month in progress' : '') + '. Edit to save your own.';
+    return 'GymDesk billing (memberships + sales/POS + pending)' + (when ? ' as of ' + when : '') + (bill.partial ? ', month in progress' : '') + '. Sales and pending are already in this number. Edit to save your own.';
   }
   if (state.plannerBaselineErr) return 'GymDesk billing is not available on this login — enter it here.';
   if (state.plannerBaseline == null) return 'You can type recurring billing now. GymDesk fills this when it is available.';
@@ -10278,7 +10288,10 @@ function renderMonthlyGoalsPage() {
   const monthLabel = MONTHS[parseInt(mk.split('-')[1], 10) - 1] + ' ' + mk.split('-')[0];
   const fixedArm = ARM_VALUES[loc];
   const armTarget = fixedArm != null ? fixedArm : planNum(data.armTarget);
-  const proj = (billingKnown && startN) ? bill.n / startN : null;
+  // All-in projected ARM uses start-of-month members (same count as the billing row),
+  // not the end-of-month goal. Baseline expected_billing is already
+  // memberships + sales/POS + pending, so only planned streams and events are added.
+  const proj = (totalRev != null && startN) ? totalRev / startN : null;
 
   let html = '<div class="loc-selector">';
   LOCATIONS.forEach(l => {
@@ -10349,15 +10362,23 @@ function renderMonthlyGoalsPage() {
     html += '</div>';
   }
   html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--gray-100)">';
-  if (fixedArm != null) html += '<div class="goals-arm-note">' + esc(locObj.short) + ' ARM = $' + fixedArm + '</div>';
+  if (fixedArm != null) html += '<div class="goals-arm-note">' + esc(locObj.short) + ' ARM target = $' + fixedArm + '</div>';
   else {
-    html += '<div class="plan-arm-edit"><span class="goals-arm-note">' + esc(locObj.short) + ' ARM =</span><input class="plan-input" inputmode="decimal" aria-label="ARM target" placeholder="optional" value="' + esc(armTarget == null ? '' : planInputNum(armTarget)) + '" onchange="planEditArm(this.value)"></div>';
+    html += '<div class="plan-arm-edit"><span class="goals-arm-note">' + esc(locObj.short) + ' ARM target =</span><input class="plan-input" inputmode="decimal" aria-label="ARM target" placeholder="optional" value="' + esc(armTarget == null ? '' : planInputNum(armTarget)) + '" onchange="planEditArm(this.value)"></div>';
     html += '<div class="plan-hint">No set target for this school. Leave blank if you don\'t use one.</div>';
   }
   let projCls = '';
   if (proj != null && armTarget != null) projCls = proj + 0.001 >= armTarget ? ' plan-good' : ' plan-bad';
-  html += '<div class="plan-label' + projCls + '" style="margin-top:6px">Projected ARM ' + (proj == null ? '—' : gdArmText(proj)) + '</div>';
-  html += '<div class="plan-hint">Billing ÷ members at the start of the month.</div>';
+  html += '<div class="plan-label' + projCls + '" id="planProjectedArm" style="margin-top:6px">Projected ARM (all revenue) ' + (proj == null ? '—' : gdArmText(proj)) + '</div>';
+  let armHint = 'All revenue ÷ members at the start of the month. All revenue is GymDesk billing plus planned extra from every stream and event.';
+  if (proj != null) {
+    armHint = planMoney(bill.n) + ' billing + ' + planMoney(planned) + ' planned extra, ÷ ' + Number(startN).toLocaleString('en-US') + ' members at the start of the month. Billing already includes memberships, sales/POS, and pending, so those are not added again.';
+  } else if (!billingKnown) {
+    armHint = 'All revenue ÷ members at the start of the month. Enter billing to project it. Billing already includes memberships, sales/POS, and pending.';
+  } else {
+    armHint = 'All revenue ÷ members at the start of the month. Enter the starting member count. Billing already includes memberships, sales/POS, and pending.';
+  }
+  html += '<div class="plan-hint" id="planProjectedArmHint">' + esc(armHint) + '</div>';
   html += '</div></div></div>';
 
   html += '<div class="section"><div class="section-header"><h2>Plan & notes</h2></div><div class="goals-form">';
