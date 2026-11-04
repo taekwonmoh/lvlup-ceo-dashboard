@@ -5458,8 +5458,11 @@ function renderTcSchedule(){
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const navBtn = 'background:none;border:none;cursor:pointer;font-size:18px;padding:2px 10px;color:#4169E1;font-weight:700;';
   const shiftsOf = (s, dk) => Object.entries((tcSchedFor(s.id)[dk]) || {}).map(([sid, sh]) => ({ sid, ...(sh || {}) })).filter(sh => filter === 'all' || sh.loc === filter).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-  // In a filtered view, only show staff who have a shift at that location this week.
-  const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length));
+  // In a filtered view, show staff who have a shift at that location this week —
+  // plus "all-LVLUP" floaters (s.schedAll), who stay schedulable under every LVLUP
+  // location filter even before they have a shift there (e.g. instructors who cover
+  // multiple studios). They don't show under Go Ninja filters.
+  const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length) || (s.schedAll && LVLUP_LOC_IDS.includes(filter)));
   // Draft vs. posted status — staff only ever see the last posted snapshot of this week.
   const weekKey = tcDateKey(days[0]);
   const pubRec = tcPublishedRec(weekKey);
