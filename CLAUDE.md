@@ -3,7 +3,7 @@
 Single-file static app: `index.html` (~1MB, inline JS/CSS, no build step). Deployed to **staff.lvlupma.com** via GitHub Pages. Backed by Firebase Realtime DB (root `ceo`) + Firebase Storage.
 
 - `state` object + `render()`; helpers `fbRef(path)` → `db.ref('ceo/'+path)`, `fbSet`, `fbDebounce`, `esc()`.
-- **The dashboard is UNAUTHENTICATED** — it loads firebase-auth but never signs in. Anything it reads/writes must be allowed by DB/Storage rules *without* a signed-in user.
+- Manager pages require a verified Google account (`DASH_AUTH_REQUIRED`). Access is `staff/{email}` (dots in the email become commas): `role === 'admin'`, or any `role` with `access.dashboard === true`. The `#clock` kiosk is still PIN-only and unsigned-in — paths it reads or writes must stay open without auth.
 
 ## Shared backend — keep in sync with lvlupma.com
 
@@ -17,6 +17,7 @@ This app shares one Firebase project (`lvlup-members-app`) with the **lvlupma.co
 | `ceo/timeclock/*` (staff, schedule, entries, config=geofence, pto, timeoff, trades, pins, holidays, schedulePublished) | dashboard (kiosk at `#clock`) | dashboard |
 | `ceo/cycles`, `ceo/firstFive`, `ceo/applications`, `ceo/inventory`, `ceo/watchlist` | mixed | mixed |
 | `config/rosterCode` (**root, not under ceo**) | set by hand | lvlupma.com roster-upload gate |
+| `finance/gymdesk` (**root, not under ceo**) | bot via `scripts/push_gymdesk_data.mjs` | GymDesk page, finance/admin only |
 
 **Canonical location IDs** (both apps must agree): `waunakee, eastmad, verona, deforest, goninjaW, goninjaV`. Go Ninja = `goninjaW`/`goninjaV` (`GONINJA_LOC_IDS`). **Never `eastmadison`** — the dashboard uses `eastmad`; the website maps `eastmadison`/`east madison` → `eastmad` on the way in.
 
@@ -28,5 +29,29 @@ This app shares one Firebase project (`lvlup-members-app`) with the **lvlupma.co
 
 ## Drift traps (learned 2026-10-29)
 - `config/rosterCode` must be a plain string `"3377"` or `{ code: "..." }` — **not** `{ desk: ... }` (production gate = `deskCodeOk` in lvlupma.com `functions/api/roster-import.js`).
-- Don't add a DB/Storage rule that requires a signed-in user on any path this dashboard touches — it has no auth.
+- Don't add a DB/Storage rule that requires a signed-in user on paths the unsigned `#clock` kiosk or the public members site touch. `finance/gymdesk` is the exception: signed-in finance/admin only (see below).
 - Keep git's rules matching what's deployed; a `firebase deploy` from a stale branch silently reverts live rules.
+
+## GymDesk finance (`finance/gymdesk`)
+
+Sensitive revenue. It lives in Realtime Database, never in this repo and never as a static file. Do not commit `gymdesk_data.json` / `gymdesk_data.csv`, and do not paste live numbers into `index.html`.
+
+- **Page**: Growth → **GymDesk** (`state.activeSection === 'finance'`). `renderGymdeskFinancePage` and `initGymdeskFinanceCharts` in `index.html`. The tab is added only when `dashAuth.canFinance` is true.
+- **Who can see it**: `staff.role === 'admin'`, or `staff.access.finance === true` (boolean, not the string `"true"`). Everyone else, including staff with dashboard access, does not get the tab and the read rule denies them. `staffCanFinance()` is the same check the rules should make.
+- **RTDB path**: root `finance/gymdesk` — not under `ceo/`. A `.read` on `ceo` would cascade to children and cannot be tightened, so this node has to be a sibling of `ceo`. The listener is attached only for finance users. Clients never write it (`.write` is false). The bot’s service account bypasses rules.
+- **Rules** are not in this repo. `database.rules.json` is generated in lvlupma.com by `build-db-rules.py`. Add this block as a sibling of `ceo`, and only if the root rules object does not already set `.read` / `.write` (a parent allow cannot be narrowed). Realtime Database `replace` swaps one match, so the email’s dots are replaced one at a time (the dashboard uses a global replace). Paste:
+
+```json
+"finance": {
+  ".read": false,
+  ".write": false,
+  "gymdesk": {
+    ".read": "auth != null && auth.token.email != null && (root.child('staff').child(auth.token.email.toLowerCase().replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',')).child('role').val() == 'admin' || root.child('staff').child(auth.token.email.toLowerCase().replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',')).child('access').child('finance').val() == true)",
+    ".write": false
+  }
+}
+```
+
+- **Push / one-time seed**: `node scripts/push_gymdesk_data.mjs <path-to-json>` (`--dry-run` validates and does not write). Env: `GOOGLE_APPLICATION_CREDENTIALS` (path to the key file) or `FIREBASE_SERVICE_ACCOUNT_JSON` (the JSON string). Optional `FIREBASE_DATABASE_URL` (default `https://lvlup-members-app-default-rtdb.firebaseio.com`).
+- **Credential Mike creates**: Google Cloud / Firebase service account named for this bot, role **Firebase Realtime Database Admin** only (`roles/firebasedatabase.admin`), JSON key stored on the bot — not in git, not a web API key, not `config/webhookSecret`. That key can write the whole database (rules do not apply to it). Do not grant the bot a broader Firebase Admin role.
+- **Monthly Plan**: for a finance user, an empty **Current membership #** (Waunakee only — that is the only school with a real active count) and an empty **Total Expected Billing** display the GymDesk figure. Nothing is written until someone edits the box, and a value already saved is never replaced.

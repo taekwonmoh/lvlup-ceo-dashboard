@@ -602,6 +602,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .goals-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
 .goals-label{font-size:13px;color:var(--gray-700);flex:1;min-width:200px}
 .goals-input{width:140px;border:1px solid var(--gray-200);border-radius:8px;padding:6px 10px;font-size:14px;font-weight:500;font-family:inherit;text-align:right}
+.goals-input.gd-suggest{border-color:#93c5fd;background:#f8fbff}
 .goals-input:focus{outline:none;border-color:var(--accent)}
 .goals-textarea{width:100%;border:1px solid var(--gray-200);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;min-height:80px;resize:vertical}
 .goals-textarea:focus{outline:none;border-color:var(--accent)}
@@ -829,15 +830,16 @@ const CEO = 'ceo'; // root path in Firebase
    turning it on/off is a one-line, instantly-reversible change. */
 const DASH_AUTH_REQUIRED = true;
 const auth = firebase.auth();
-let dashAuth = { ready: !DASH_AUTH_REQUIRED, user: null, allowed: false, isAdmin: false };
+let dashAuth = { ready: !DASH_AUTH_REQUIRED, user: null, allowed: false, isAdmin: false, canFinance: false };
+function staffCanFinance(s) { return !!s && (s.role === 'admin' || !!(s.access && s.access.finance === true)); }
 auth.onAuthStateChanged(async (u) => {
-  if (!DASH_AUTH_REQUIRED) { dashAuth = { ready: true, user: u || null, allowed: false, isAdmin: false }; return; }
-  if (!u || !u.email || !u.emailVerified) { dashAuth = { ready: true, user: u || null, allowed: false, isAdmin: false }; render(); return; }
+  if (!DASH_AUTH_REQUIRED) { dashAuth = { ready: true, user: u || null, allowed: false, isAdmin: false, canFinance: false }; return; }
+  if (!u || !u.email || !u.emailVerified) { dashAuth = { ready: true, user: u || null, allowed: false, isAdmin: false, canFinance: false }; render(); return; }
   const key = u.email.trim().toLowerCase().replace(/\./g, ',');
   try {
     const s = (await db.ref('staff/' + key).once('value')).val() || {};
-    dashAuth = { ready: true, user: u, allowed: s.role === 'admin' || (!!s.role && !!(s.access && s.access.dashboard === true)), isAdmin: s.role === 'admin' };
-  } catch (e) { dashAuth = { ready: true, user: u, allowed: false, isAdmin: false }; }
+    dashAuth = { ready: true, user: u, allowed: s.role === 'admin' || (!!s.role && !!(s.access && s.access.dashboard === true)), isAdmin: s.role === 'admin', canFinance: staffCanFinance(s) };
+  } catch (e) { dashAuth = { ready: true, user: u, allowed: false, isAdmin: false, canFinance: false }; }
   if (dashAuth.allowed) attachDataListeners();   // re-attach reads authenticated (needed once the DB rules are locked)
   render();
 });
@@ -885,6 +887,9 @@ let state = {
   events: [],
   goals: {},
   financials: { waunakee: {}, eastmad: {}, verona: {} },
+  gymdesk: null,
+  gymdeskErr: null,
+  gdFinGroup: 'all',
   membership: { waunakee: {}, eastmad: {}, verona: {} },
   kpis: {},
   kpisAll: {},
@@ -2098,6 +2103,18 @@ function listenAll() {
     activeListeners.push({ ref: soRef, event: 'value' });
   });
 
+  // GymDesk revenue snapshot. Root path finance/gymdesk (not ceo/) so a parent
+  // read rule on ceo cannot expose it. Attached only for finance/admin users.
+  if (dashAuth.canFinance) {
+    const gdFinRef = db.ref('finance/gymdesk');
+    gdFinRef.on('value', snap => { state.gymdesk = snap.val() || null; state.gymdeskErr = null; render(); }, err => {
+      state.gymdesk = null;
+      state.gymdeskErr = 'GymDesk data is not readable with this account (' + ((err && (err.code || err.message)) || 'permission denied') + ').';
+      render();
+    });
+    activeListeners.push({ ref: gdFinRef, event: 'value' });
+  }
+
   // Feedback tracking (persistent, year-round) — migrate old monthly data once, then listen
   migrateFeedbackTrackingToAll();
   listenFeedbackTracking();
@@ -2144,7 +2161,7 @@ function setSection(s) {
   state.activeSection = s;
   // Remember last-visited sub-section per group so tabs restore correctly
   if (['tasks','events','testing','accountability','inventory','photos'].includes(s)) state.opsSection = s;
-  if (['goals','marketing','scorecard','rocks','financials'].includes(s)) state.growthSection = s;
+  if (['goals','marketing','scorecard','rocks','financials','finance'].includes(s)) state.growthSection = s;
   render();
 }
 function changeWeek(d) { state.weekOffset += d; listenAll(); }
@@ -3117,16 +3134,19 @@ function renderHoldCard(r){
 
 function renderGrowthPage() {
   const s = state.activeSection;
-  const nav = renderGroupSubNav([
+  const growthTabs = [
     { id: 'scorecard',  label: '📊 Scorecard'   },
     { id: 'goals',      label: '🎯 Goals'       },
     { id: 'marketing',  label: '📱 Marketing'   },
     { id: 'financials', label: '💰 Financials'  },
-    // Scale (PIN-gated ACQ.com dashboard) hidden for now — re-add this tab to restore.
-  ]);
+  ];
+  // Revenue tab is finance/admin only. Scale (PIN-gated ACQ) stays hidden.
+  if (dashAuth.canFinance) growthTabs.push({ id: 'finance', label: '💵 GymDesk' });
+  const nav = renderGroupSubNav(growthTabs);
   if (s === 'scorecard')  return nav + renderScorecardPage();
   if (s === 'financials') return nav + renderPerformancePage();
   if (s === 'marketing')  return nav + renderMarketingPage();
+  if (s === 'finance')    return nav + renderGymdeskFinancePage();
   return nav + renderGoalsPage();
 }
 
@@ -3525,6 +3545,7 @@ function renderCrModal(){
 }
 
 function render() {
+  gdDestroyFinanceCharts();
   const app = document.getElementById('app');
   // Kiosk mode — part-timer clock page only. Keeps its own name+PIN gate and is
   // exempt from the manager Google sign-in so staff can punch on a shared device.
@@ -3552,6 +3573,7 @@ function render() {
   if (state.opsSection === 'scorecard') state.opsSection = 'tasks';   // Scorecard moved to Growth
   if (state.growthSection === 'acq') state.growthSection = 'goals';
   if (state.growthSection === 'rocks') state.growthSection = 'scorecard';   // Rocks removed
+  if (state.activeSection === 'finance' && !dashAuth.canFinance) { state.activeSection = 'goals'; state.growthSection = 'goals'; }
   const s = state.activeSection;
 
   app.innerHTML = renderHeader() +
@@ -3559,11 +3581,12 @@ function render() {
      s === 'wall'                                                              ? renderWallPage()    :
      ['tasks','events','testing','accountability','inventory','photos'].includes(s)    ? renderOpsPage()       :
      ['feedback','watchlist','holds','applications','firstfive','reviews','incidents'].includes(s)   ? renderMembersPage()   :
-     ['goals','marketing','scorecard','rocks','financials'].includes(s)       ? renderGrowthPage()    :
+     ['goals','marketing','scorecard','rocks','financials','finance'].includes(s) ? renderGrowthPage() :
      s === 'development'                                                      ? renderResourcesPage() :
      '');
   requestAnimationFrame(initSortable);
   if (state.tcMapLoc) requestAnimationFrame(tcInitMap);
+  if (s === 'finance') requestAnimationFrame(initGymdeskFinanceCharts);
 }
 
 function renderHeader() {
@@ -3572,7 +3595,7 @@ function renderHeader() {
     if (s === 'home') return 'home';
     if (['tasks','events','testing','accountability','inventory','photos'].includes(s)) return 'ops';
     if (['feedback','watchlist','holds','applications','firstfive','reviews','incidents'].includes(s)) return 'members';
-    if (['goals','marketing','monthlyGoals','scorecard','rocks','financials','performance'].includes(s)) return 'growth';
+    if (['goals','marketing','monthlyGoals','scorecard','rocks','financials','performance','finance'].includes(s)) return 'growth';
     if (s === 'development')                                   return 'resources';
     if (s === 'leadership')                                    return 'leadership';
     return null;
@@ -7995,6 +8018,487 @@ function renderEventsPage() {
   return html;
 }
 
+/* ── GymDesk revenue (finance/gymdesk) ────────────────────────────────────────
+   Sensitive. Loaded only for staff.role === 'admin' or staff.access.finance.
+   The node is NOT under ceo/ (fbRef). Clients never write it; the bot PUTs
+   the whole snapshot with a service account. See CLAUDE.md and
+   scripts/push_gymdesk_data.mjs. Do not embed a snapshot in this file. */
+const GD_LOC_COLOR = {
+  waunakee: '#1a1a2e', east_madison: '#0f3460', verona: '#16537e',
+  deforest: '#2d7d9a', go_ninja_waunakee: '#e94560', go_ninja_verona: '#c73e54'
+};
+const GD_SHORT = {
+  waunakee: 'WAU', east_madison: 'E.MAD', verona: 'VER',
+  deforest: 'DEF', go_ninja_waunakee: 'GN-W', go_ninja_verona: 'GN-V'
+};
+const GD_DASH_LOC = {
+  waunakee: 'waunakee', eastmad: 'east_madison', verona: 'verona',
+  deforest: 'deforest', goninjaW: 'go_ninja_waunakee', goninjaV: 'go_ninja_verona'
+};
+const GD_CHART_IDS = ['gdFinRev', 'gdFinArm', 'gdFinPlans', 'gdFinFunnel'];
+
+function gdNum(v) {
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
+function gdLocs(g) { return (g && g.franchise_revenue_2026 && g.franchise_revenue_2026.locations) || {}; }
+function gdGroups(g) { return (g && g.groups) || {}; }
+function gdMonthKeys(g) {
+  const sample = gdLocs(g).waunakee || gdLocs(g).all_locations || {};
+  return Object.keys(sample.months || {}).filter(k => /^\d{4}-\d{2}$/.test(k)).sort();
+}
+function gdMonthRow(g, loc, mk) {
+  const node = gdLocs(g)[loc] || {};
+  return (node.months || {})[mk] || null;
+}
+function gdIsPartial(g, mk) {
+  const row = gdMonthRow(g, 'waunakee', mk) || gdMonthRow(g, 'all_locations', mk);
+  return !!(row && row.is_partial);
+}
+function gdCurrentMonth(g) {
+  const keys = gdMonthKeys(g);
+  const partial = keys.filter(k => gdIsPartial(g, k));
+  if (partial.length) return partial[partial.length - 1];
+  return keys.length ? keys[keys.length - 1] : null;
+}
+function gdFullMonth(g) {
+  const keys = gdMonthKeys(g).filter(k => !gdIsPartial(g, k));
+  return keys.length ? keys[keys.length - 1] : null;
+}
+function gdSumLocs(g, keys, mk, field) {
+  let s = 0;
+  (keys || []).forEach(k => {
+    const node = gdLocs(g)[k] || {};
+    const row = mk === 'ytd' ? node.ytd_totals : (node.months || {})[mk];
+    if (row) s += gdNum(row[field]);
+  });
+  return s;
+}
+function gdGroupKeys(g) {
+  const groups = gdGroups(g);
+  if (state.gdFinGroup === 'lvlup') return groups.lvlup_only || [];
+  if (state.gdFinGroup === 'ninja') return groups.go_ninja || [];
+  return groups.all_in || [];
+}
+function gdLocMeta(g, key) {
+  return (g.locations && g.locations[key]) || { label: key, target_arm: null };
+}
+function gdMonthNice(mk) {
+  if (!mk) return '';
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const m = parseInt(mk.slice(5), 10);
+  return (names[m - 1] || mk) + ' ' + mk.slice(0, 4);
+}
+function gdMonthShort(mk, partial) {
+  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const m = parseInt(mk.slice(5), 10);
+  return (names[m - 1] || mk) + (partial ? '*' : '');
+}
+function gdAsOfInfo(iso) {
+  const t = Date.parse(iso || '');
+  if (!Number.isFinite(t)) return { label: iso || 'unknown', stale: true, ageH: null };
+  const age = Date.now() - t;
+  let label = iso;
+  try {
+    label = new Date(t).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' CT';
+  } catch (e) { label = iso; }
+  return { label: label, stale: age > 18 * 60 * 60 * 1000, ageH: age / 3600000 };
+}
+function gdBilling(g, mk) {
+  const blocks = Object.keys(g || {}).filter(k => k.indexOf('waunakee_billing') === 0).map(k => g[k]).filter(b => b && typeof b === 'object');
+  if (!blocks.length) return null;
+  if (mk) {
+    const hit = blocks.find(b => String(b.period || '').indexOf(mk) !== -1);
+    if (hit) return hit;
+  }
+  return blocks[blocks.length - 1];
+}
+function gdArmPoint(g, loc, mk) {
+  const by = (((g.derived_metrics || {}).arm || {}).by_location || {})[loc] || {};
+  const pt = by[mk];
+  if (pt) {
+    const partial = !!pt.is_partial;
+    const v = partial ? pt.arm_incl_pending : pt.arm_memberships_only;
+    return { value: v == null || v === '' ? null : gdNum(v), partial: partial };
+  }
+  const row = gdMonthRow(g, loc, mk);
+  if (!row || !gdNum(row.paying_members)) return { value: null, partial: !!(row && row.is_partial) };
+  const partial = !!row.is_partial;
+  const num = gdNum(row.memberships) + (partial ? gdNum(row.pending) : 0);
+  return { value: num / gdNum(row.paying_members), partial: partial };
+}
+function gdMoney(n) { return fmtCurrency(Math.round((n + Number.EPSILON) * 100) / 100); }
+function gdArmText(n) {
+  if (n == null || !Number.isFinite(n)) return '—';
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function gdKpi(label, valueHtml, subHtml, tone) {
+  return '<div class="kpi-card ' + (tone || 'blue') + '"><div class="kpi-label">' + esc(label) + '</div><div class="kpi-value currency">' + valueHtml + '</div>' + (subHtml ? '<div class="kpi-sub">' + subHtml + '</div>' : '') + '</div>';
+}
+function gdHatch(hex) {
+  const c = document.createElement('canvas');
+  c.width = 10; c.height = 10;
+  const g = c.getContext('2d');
+  g.fillStyle = hex;
+  g.fillRect(0, 0, 10, 10);
+  g.strokeStyle = 'rgba(255,255,255,0.5)';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(0, 10); g.lineTo(10, 0); g.stroke();
+  return g.createPattern(c, 'repeat');
+}
+function gdDestroyFinanceCharts() {
+  GD_CHART_IDS.forEach(id => {
+    const c = document.getElementById(id);
+    if (c && c._chart) { c._chart.destroy(); c._chart = null; }
+  });
+}
+function setGdFinGroup(g) {
+  if (g !== 'all' && g !== 'lvlup' && g !== 'ninja') return;
+  state.gdFinGroup = g;
+  render();
+}
+
+/* Empty Monthly Plan boxes only. A saved value is left alone and nothing is written until the user edits. */
+function gdPlanSuggestion(loc, mk, fieldId) {
+  if (!dashAuth.canFinance || !state.gymdesk) return null;
+  const g = state.gymdesk;
+  const gdLoc = GD_DASH_LOC[loc];
+  if (!gdLoc) return null;
+  if (fieldId === 'currentMembership') {
+    if (gdLoc !== 'waunakee') return null;
+    const row = ((((g.waunakee_members || {}).growth || {}).months || {})[mk]) || null;
+    if (!row || row.active == null || row.active === '') return null;
+    return { text: String(row.active), note: 'GymDesk active members for this month (Waunakee' + (row.is_partial ? ', month in progress' : '') + '). Shown only while this box is empty — edit to save your number.' };
+  }
+  if (fieldId === 'totalMonthlyRevenue') {
+    const row = gdMonthRow(g, gdLoc, mk);
+    if (!row || row.total == null || row.total === '') return null;
+    const kind = row.is_partial ? 'expected billing (memberships + sales + pending)' : 'collected billing (memberships + sales)';
+    const def = gdLoc === 'deforest' ? ' DeForest is GymDesk gross, pre-split.' : '';
+    return { text: fmtCurrency(row.total), note: 'GymDesk ' + kind + '.' + def + ' Shown only while this box is empty — edit to save your number.' };
+  }
+  return null;
+}
+
+function renderGymdeskFinancePage() {
+  if (!dashAuth.canFinance) return '';
+  const g = state.gymdesk;
+  if (!g) {
+    const err = state.gymdeskErr;
+    return '<div class="section" style="padding:28px 22px;"><h2 style="margin:0 0 8px;font-size:18px;">GymDesk revenue</h2><p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">' + (err ? esc(err) : 'No snapshot has been written to finance/gymdesk yet. The assistant bot pushes one around 7 AM and 10 PM CT.') + '</p>' + (err ? '<p style="margin:8px 0 0;font-size:12px;color:#6b7280;">Admins need the finance read rule deployed. The page never writes this data — only the bot’s service account does.</p>' : '') + '</div>';
+  }
+  if (!g.franchise_revenue_2026 || !g.franchise_revenue_2026.locations) {
+    return '<div class="section" style="padding:28px 22px;"><h2 style="margin:0 0 8px;font-size:18px;">GymDesk revenue</h2><p style="margin:0;font-size:13px;color:#6b7280;">The snapshot at finance/gymdesk is missing franchise revenue. Push a current gymdesk_data.json.</p></div>';
+  }
+
+  const asOf = gdAsOfInfo(g.as_of);
+  const allKeys = gdGroups(g).all_in || [];
+  const lvlKeys = gdGroups(g).lvlup_only || [];
+  const cur = gdCurrentMonth(g);
+  const full = gdFullMonth(g);
+  const curPartial = !!(cur && gdIsPartial(g, cur));
+  const ytdAll = gdSumLocs(g, allKeys, 'ytd', 'total');
+  const ytdAllPend = gdSumLocs(g, allKeys, 'ytd', 'pending');
+  const ytdLvl = gdSumLocs(g, lvlKeys, 'ytd', 'total');
+  const ytdLvlPend = gdSumLocs(g, lvlKeys, 'ytd', 'pending');
+  const fullAll = full ? gdSumLocs(g, allKeys, full, 'total') : 0;
+  const fullLvl = full ? gdSumLocs(g, lvlKeys, full, 'total') : 0;
+  const bill = (cur && gdBilling(g, cur)) || null;
+  const billOk = !!(bill && cur && String(bill.period || '').indexOf(cur) !== -1 && bill.paid != null);
+  const growth = ((g.waunakee_members || {}).growth) || {};
+  const listCounts = ((g.waunakee_members || {}).list_counts) || {};
+  const viewKeys = gdGroupKeys(g);
+
+  let html = '<div>';
+  html += '<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">';
+  html += '<div><h2 style="margin:0 0 4px;font-size:18px;font-weight:800;color:#1a1a2e;">GymDesk revenue</h2>';
+  html += '<div style="font-size:12.5px;color:#6b7280;">Data as of <b style="color:#1a1a2e;">' + esc(asOf.label) + '</b>';
+  if (g.schema_version) html += ' · schema ' + esc(String(g.schema_version));
+  if (g.generated_by) html += ' · ' + esc(String(g.generated_by));
+  html += '</div></div>';
+  html += '<div style="display:flex;gap:4px;background:#fff;border-radius:10px;padding:3px;box-shadow:var(--shadow);">';
+  [['all', 'All schools'], ['lvlup', 'LVLUP only'], ['ninja', 'Go Ninja']].forEach(pair => {
+    const on = state.gdFinGroup === pair[0];
+    html += '<button onclick="setGdFinGroup(\'' + pair[0] + '\')" style="padding:7px 14px;border-radius:8px;border:none;font-size:12.5px;font-weight:700;cursor:pointer;' + (on ? 'background:#1a1a2e;color:#fff;' : 'background:transparent;color:#6b7280;') + '">' + pair[1] + '</button>';
+  });
+  html += '</div></div>';
+
+  if (asOf.stale) {
+    const age = asOf.ageH == null ? 'undated' : (asOf.ageH >= 48 ? Math.round(asOf.ageH / 24) + ' days' : Math.max(1, Math.round(asOf.ageH)) + ' hours');
+    html += '<div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;font-weight:700;">Snapshot is ' + esc(age) + ' old. The bot refreshes around 7 AM and 10 PM CT — treat these figures as stale until the next push.</div>';
+  }
+
+  html += '<div style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.45;"><b>DeForest is GymDesk gross, pre-split.</b> It is inside LVLUP-only totals, but MyStudio collections are not here and the MPK split is not applied. Do not read DeForest gross as LVLUP net.</div>';
+
+  const throughAll = (cur && curPartial) ? ytdAll - gdSumLocs(g, allKeys, cur, 'total') : null;
+  const throughLvl = (cur && curPartial) ? ytdLvl - gdSumLocs(g, lvlKeys, cur, 'total') : null;
+  html += '<div class="kpi-grid">';
+  html += gdKpi('YTD all-in, incl. pending', gdMoney(ytdAll), 'Collected ' + gdMoney(ytdAll - ytdAllPend) + (throughAll == null ? '' : ' · through ' + esc(gdMonthNice(full)) + ' ' + gdMoney(throughAll)), 'blue');
+  html += gdKpi('YTD LVLUP only, incl. pending', gdMoney(ytdLvl), 'Collected ' + gdMoney(ytdLvl - ytdLvlPend) + (throughLvl == null ? '' : ' · through ' + esc(gdMonthNice(full)) + ' ' + gdMoney(throughLvl)) + ' · DeForest gross included', 'blue');
+  if (billOk) {
+    html += gdKpi('Waunakee collected', gdMoney(gdNum(bill.paid)), esc(gdMonthNice(cur)) + (curPartial ? ' · partial' : '') + ' · billing paid', 'green');
+    html += gdKpi('Waunakee pending', gdMoney(gdNum(bill.scheduled)), 'Scheduled, not collected', 'orange');
+    html += gdKpi('Waunakee overdue', gdMoney(gdNum(bill.overdue)), (bill.overdue_count != null ? esc(String(bill.overdue_count)) + ' payment' + (Number(bill.overdue_count) === 1 ? '' : 's') : 'Overdue') , gdNum(bill.overdue) > 0 ? 'red' : 'green');
+  } else if (cur) {
+    const collected = gdSumLocs(g, allKeys, cur, 'memberships') + gdSumLocs(g, allKeys, cur, 'sales_pos');
+    html += gdKpi(gdMonthNice(cur) + ' collected', gdMoney(collected), 'All schools · memberships + sales', 'green');
+    html += gdKpi(gdMonthNice(cur) + ' pending', gdMoney(gdSumLocs(g, allKeys, cur, 'pending')), 'Scheduled + overdue, per franchise report', 'orange');
+    html += gdKpi(gdMonthNice(cur) + ' overdue', '—', 'Overdue is broken out for Waunakee billing only', 'blue');
+  }
+  const activeTxt = growth.active == null ? '—' : Number(growth.active).toLocaleString('en-US');
+  let activeSub = '';
+  if (growth.ytd_growth_pct != null) activeSub += 'YTD growth ' + esc(String(growth.ytd_growth_pct)) + '%';
+  if (growth.avg_monthly_churn_pct != null) activeSub += (activeSub ? ' · ' : '') + 'avg monthly churn ' + esc(String(growth.avg_monthly_churn_pct)) + '%';
+  if (listCounts.members != null) activeSub += (activeSub ? ' · ' : '') + 'roster list ' + esc(String(listCounts.members));
+  html += gdKpi('Waunakee active', activeTxt, activeSub || 'From the GymDesk growth page', 'blue');
+  html += '</div>';
+
+  if (full) {
+    html += '<div class="kpi-grid">';
+    ['waunakee', 'verona', 'east_madison'].forEach(key => {
+      const meta = gdLocMeta(g, key);
+      const arm = gdArmPoint(g, key, full);
+      const target = meta.target_arm == null ? null : gdNum(meta.target_arm);
+      let tone = 'blue';
+      let sub = esc(gdMonthNice(full)) + ' · memberships only';
+      if (target != null && arm.value != null) {
+        const delta = arm.value - target;
+        tone = delta >= -0.001 ? 'green' : 'red';
+        sub += ' · target ' + gdArmText(target) + ' · ' + (delta >= 0 ? '+' : '−') + gdArmText(Math.abs(delta));
+      }
+      html += gdKpi((GD_SHORT[key] || key) + ' ARM', arm.value == null ? '—' : gdArmText(arm.value), sub, tone);
+    });
+    if (fullAll) html += gdKpi(gdMonthNice(full) + ' × 12', gdMoney(fullAll * 12), 'All-in run-rate · that month was ' + gdMoney(fullAll) + (fullLvl ? ' · LVLUP ' + gdMoney(fullLvl * 12) : ''), 'blue');
+    html += '</div>';
+  }
+
+  const curAll = cur ? gdSumLocs(g, allKeys, cur, 'total') : 0;
+  if (cur && billOk) {
+    html += '<div style="font-size:12px;color:#6b7280;margin:-8px 0 16px;">All schools ' + esc(gdMonthNice(cur)) + (curPartial ? ' (partial, includes pending)' : '') + ': ' + gdMoney(curAll) + '. Waunakee franchise total ' + gdMoney(gdSumLocs(g, ['waunakee'], cur, 'total')) + ' (billing paid + scheduled can differ slightly from the franchise report).</div>';
+  }
+
+  html += '<div class="section"><div class="section-header"><h2>Monthly revenue by location</h2><div class="badge">' + (curPartial ? 'hatched = in progress' : 'franchise total') + '</div></div>';
+  html += '<div style="padding:12px 16px 4px;font-size:12px;color:#6b7280;">Each bar is GymDesk total (memberships + sales' + (curPartial ? ' + pending' : '') + '). * is the in-progress month and is not comparable to a closed month. Filter: ' + (state.gdFinGroup === 'lvlup' ? 'LVLUP only' : state.gdFinGroup === 'ninja' ? 'Go Ninja' : 'all six schools') + '.</div>';
+  html += '<div style="position:relative;height:380px;padding:8px 12px 16px;"><canvas id="gdFinRev"></canvas></div></div>';
+
+  html += '<div class="section"><div class="section-header"><h2>ARM trend</h2><div class="badge">vs target</div></div>';
+  html += '<div style="padding:12px 16px 4px;font-size:12px;color:#6b7280;">Closed months use memberships ÷ paying members. The in-progress month adds pending (GymDesk’s per-member figure). Dashed lines are the school targets from the snapshot.</div>';
+  html += '<div style="position:relative;height:340px;padding:8px 12px 16px;"><canvas id="gdFinArm"></canvas></div></div>';
+
+  html += '<div class="section"><div class="section-header"><h2>Paying members and ARM</h2><div class="badge">' + esc(full ? gdMonthNice(full) : 'No full month') + '</div></div>';
+  html += '<div style="padding:8px 16px 0;font-size:12px;color:#6b7280;">Paying members had at least one payment that month. Do not add them up across months — the year-to-date figure in GymDesk is the peak, not a sum. ARM turns green at or above target.</div>';
+  html += '<div style="overflow-x:auto;"><table class="sc-table"><thead><tr><th>School</th><th style="text-align:right;">Paying</th><th style="text-align:right;">ARM</th><th style="text-align:right;">Target</th><th style="text-align:right;">' + esc(cur ? gdMonthShort(cur, curPartial) + ' total' : 'This month') + '</th></tr></thead><tbody>';
+  viewKeys.forEach(key => {
+    const meta = gdLocMeta(g, key);
+    const row = full ? gdMonthRow(g, key, full) : null;
+    const arm = full ? gdArmPoint(g, key, full) : { value: null };
+    const target = meta.target_arm == null ? null : gdNum(meta.target_arm);
+    const curRow = cur ? gdMonthRow(g, key, cur) : null;
+    let armStyle = 'text-align:right;font-variant-numeric:tabular-nums;';
+    if (target != null && arm.value != null) armStyle += arm.value + 0.001 >= target ? 'color:var(--green);font-weight:800;' : 'color:var(--red);font-weight:800;';
+    const name = (GD_SHORT[key] || key) + ' · ' + (meta.label || key) + (meta.partnership ? ' · pre-split' : '');
+    html += '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (GD_LOC_COLOR[key] || '#94a3b8') + ';margin-right:6px;"></span>' + esc(name) + '</td>';
+    html += '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + (row ? Number(gdNum(row.paying_members)).toLocaleString('en-US') : '—') + '</td>';
+    html += '<td style="' + armStyle + '">' + gdArmText(arm.value) + '</td>';
+    html += '<td style="text-align:right;color:#6b7280;">' + (target == null ? '—' : gdArmText(target)) + '</td>';
+    html += '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + (curRow ? gdMoney(gdNum(curRow.total)) : '—') + '</td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  const plansWrap = (g.waunakee_membership_plans || {});
+  const plans = (plansWrap.plans || []).slice().sort((a, b) => gdNum(b.active_count) - gdNum(a.active_count));
+  const mrr = plans.reduce((s, p) => s + gdNum(p.est_monthly_revenue), 0);
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;align-items:start;">';
+  html += '<div class="section"><div class="section-header"><h2>Waunakee plan mix</h2><div class="badge">' + (plansWrap.partial ? 'page 1 of 2' : 'plans') + '</div></div>';
+  html += '<div style="padding:12px 16px 4px;font-size:12px;color:#6b7280;line-height:1.45;">Active members by plan. Est. monthly from these plans: <b>' + gdMoney(mrr) + '</b>. List price before discounts, family pricing, and holds' + (plansWrap.partial ? ', and page 2 was not captured, so this runs above real billing' : '') + '.</div>';
+  html += '<div style="position:relative;height:' + Math.max(280, plans.length * 26) + 'px;padding:8px 12px 16px;"><canvas id="gdFinPlans"></canvas></div></div>';
+
+  const funnel = ((g.waunakee_marketing || {}).funnel) || {};
+  const statuses = ((g.waunakee_marketing || {}).lead_status_counts) || {};
+  const att = g.waunakee_attendance_30d || {};
+  html += '<div class="section"><div class="section-header"><h2>Waunakee leads</h2><div class="badge">funnel</div></div>';
+  html += '<div style="padding:12px 16px 4px;font-size:12px;color:#6b7280;">' + esc((g.waunakee_marketing || {}).funnel_note || 'Leads through active members.') + '</div>';
+  html += '<div style="position:relative;height:240px;padding:8px 12px 8px;"><canvas id="gdFinFunnel"></canvas></div>';
+  const statusOrder = ['unread','new','invited','conversation','booked','contact_later','cold'];
+  const statusKeys = statusOrder.filter(k => statuses[k] != null).concat(Object.keys(statuses).filter(k => statusOrder.indexOf(k) === -1));
+  if (statusKeys.length) {
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:4px 16px 14px;">';
+    statusKeys.forEach(k => {
+      const label = k.replace(/_/g, ' ');
+      html += '<span style="background:#f3f4f6;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;color:#374151;">' + esc(label) + ' ' + esc(String(statuses[k])) + '</span>';
+    });
+    html += '</div>';
+  }
+  if (att.members_per_session != null || att.sessions_per_member != null) {
+    const split = att.gender_split_pct || {};
+    html += '<div style="border-top:1px solid var(--gray-100);padding:12px 16px 14px;font-size:12.5px;color:#374151;line-height:1.45;"><b>Attendance</b> · ' + esc(att.window || 'trailing 30 days') + '<br>' + esc(String(att.members_per_session)) + ' members/session · ' + esc(String(att.sessions_per_member)) + ' sessions/member';
+    if (att.active_members_attending != null) html += ' · ' + esc(String(att.active_members_attending)) + ' members attended';
+    if (split.male != null) html += ' · ' + esc(String(split.male)) + '% male / ' + esc(String(split.female)) + '% female';
+    html += '</div>';
+  }
+  html += '</div></div>';
+
+  const val = (g.derived_metrics || {}).validation || {};
+  if (val.result) {
+    const bad = Array.isArray(val.discrepancies) && val.discrepancies.length;
+    html += '<div style="font-size:12px;color:' + (bad ? '#991b1b' : '#166534') + ';margin:0 0 10px;">' + (bad ? 'Validation found discrepancies.' : 'Franchise totals checked out against the snapshot.') + ' ' + esc(String(val.result)) + '</div>';
+  }
+  const gaps = Array.isArray(g.known_gaps) ? g.known_gaps : [];
+  if (gaps.length) {
+    html += '<details class="section" style="padding:14px 18px;margin-bottom:20px;"><summary style="cursor:pointer;font-weight:800;font-size:13px;color:#1a1a2e;">Known data gaps (' + gaps.length + ')</summary><ul style="margin:10px 0 0 18px;font-size:12.5px;color:#4b5563;line-height:1.55;">' + gaps.slice(0, 20).map(x => '<li>' + esc(String(x)) + '</li>').join('') + '</ul></details>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function initGymdeskFinanceCharts() {
+  if (state.activeSection !== 'finance' || !dashAuth.canFinance || !state.gymdesk || typeof Chart === 'undefined') return;
+  const g = state.gymdesk;
+  if (!g.franchise_revenue_2026) return;
+  const months = gdMonthKeys(g);
+  const keys = gdGroupKeys(g);
+  const moneyTip = {
+    callbacks: {
+      label: function (ctx) {
+        const v = ctx.parsed.y != null ? ctx.parsed.y : ctx.parsed.x;
+        if (v == null || !Number.isFinite(v)) return ctx.dataset.label || '';
+        return (ctx.dataset.label ? ctx.dataset.label + ': ' : '') + gdMoney(v);
+      }
+    }
+  };
+  const baseOpts = { responsive: true, maintainAspectRatio: false, animation: false };
+
+  const rev = document.getElementById('gdFinRev');
+  if (rev) {
+    if (rev._chart) rev._chart.destroy();
+    rev._chart = new Chart(rev, {
+      type: 'bar',
+      data: {
+        labels: months.map(m => gdMonthShort(m, gdIsPartial(g, m))),
+        datasets: keys.map(k => {
+          const color = GD_LOC_COLOR[k] || '#64748b';
+          const meta = gdLocMeta(g, k);
+          return {
+            label: (GD_SHORT[k] || meta.label || k) + (meta.partnership ? ' pre-split' : ''),
+            data: months.map(m => { const row = gdMonthRow(g, k, m); return row ? gdNum(row.total) : 0; }),
+            backgroundColor: months.map(m => gdIsPartial(g, m) ? gdHatch(color) : color),
+            stack: 'rev',
+            borderRadius: 2
+          };
+        })
+      },
+      options: Object.assign({}, baseOpts, {
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font: { size: 11 } } }, tooltip: moneyTip },
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: { stacked: true, beginAtZero: true, ticks: { callback: function (v) { return '$' + Math.round(v / 1000) + 'k'; } } }
+        }
+      })
+    });
+  }
+
+  const arm = document.getElementById('gdFinArm');
+  if (arm) {
+    if (arm._chart) arm._chart.destroy();
+    const datasets = [];
+    keys.forEach(k => {
+      const color = GD_LOC_COLOR[k] || '#64748b';
+      const meta = gdLocMeta(g, k);
+      datasets.push({
+        label: GD_SHORT[k] || meta.label || k,
+        data: months.map(m => gdArmPoint(g, k, m).value),
+        borderColor: color,
+        backgroundColor: color,
+        tension: 0.25,
+        spanGaps: true,
+        pointRadius: 3,
+        borderWidth: 2
+      });
+      if (meta.target_arm != null) {
+        datasets.push({
+          label: (GD_SHORT[k] || k) + ' target',
+          data: months.map(function () { return gdNum(meta.target_arm); }),
+          borderColor: color,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          borderWidth: 1,
+          fill: false
+        });
+      }
+    });
+    arm._chart = new Chart(arm, {
+      type: 'line',
+      data: { labels: months.map(m => gdMonthShort(m, gdIsPartial(g, m))), datasets: datasets },
+      options: Object.assign({}, baseOpts, {
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 }, filter: function (item) { return item.text.indexOf('target') === -1; } } }, tooltip: { callbacks: { label: function (ctx) { const v = ctx.parsed.y; return ctx.dataset.label + ': ' + gdArmText(v); } } } },
+        scales: { y: { ticks: { callback: function (v) { return '$' + v; } } }, x: { grid: { display: false } } }
+      })
+    });
+  }
+
+  const planCanvas = document.getElementById('gdFinPlans');
+  if (planCanvas) {
+    const plans = ((g.waunakee_membership_plans || {}).plans || []).slice().sort((a, b) => gdNum(b.active_count) - gdNum(a.active_count));
+    if (planCanvas._chart) planCanvas._chart.destroy();
+    planCanvas._chart = new Chart(planCanvas, {
+      type: 'bar',
+      data: {
+        labels: plans.map(p => p.name || 'Plan'),
+        datasets: [{
+          label: 'Active',
+          data: plans.map(p => gdNum(p.active_count)),
+          backgroundColor: '#0f3460',
+          borderRadius: 3,
+          plans: plans
+        }]
+      },
+      options: Object.assign({}, baseOpts, {
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                const p = (ctx.dataset.plans || [])[ctx.dataIndex] || {};
+                const lines = [gdNum(p.active_count).toLocaleString('en-US') + ' active'];
+                if (p.est_monthly_revenue != null) lines.push('Est. monthly ' + gdMoney(gdNum(p.est_monthly_revenue)));
+                if (p.price != null) lines.push('List ' + gdMoney(gdNum(p.price)) + (p.billing_period ? ' / ' + String(p.billing_period).replace(/_/g, ' ') : ''));
+                if (p.flag) lines.push(String(p.flag));
+                return lines;
+              }
+            }
+          }
+        },
+        scales: { x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }, y: { grid: { display: false }, ticks: { font: { size: 11 } } } }
+      })
+    });
+  }
+
+  const fun = document.getElementById('gdFinFunnel');
+  if (fun) {
+    const funnel = ((g.waunakee_marketing || {}).funnel) || {};
+    const steps = [['Leads', 'leads'], ['Booked', 'booked'], ['Attended', 'attended'], ['Trials', 'trials'], ['Active', 'active']];
+    if (fun._chart) fun._chart.destroy();
+    fun._chart = new Chart(fun, {
+      type: 'bar',
+      data: {
+        labels: steps.map(s => s[0]),
+        datasets: [{
+          label: 'Waunakee',
+          data: steps.map(s => gdNum(funnel[s[1]])),
+          backgroundColor: ['#1a1a2e', '#0f3460', '#16537e', '#2d7d9a', '#22c55e'],
+          borderRadius: 4
+        }]
+      },
+      options: Object.assign({}, baseOpts, {
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true }, x: { grid: { display: false } } }
+      })
+    });
+  }
+}
+
 /*  -  -  Goals Page  -  -  */
 function getGoalActualRevenue(locId, monthIdx) {
   // Actual revenue = the fresher of the financials entry and the latest
@@ -9349,6 +9853,14 @@ function renderMonthlyGoalsPage(){
     const loc=state.goalsLoc,mk=state.goalsMonth;
     const data=(state.goalsData[loc]||{})[mk]||{};
     const fields=getGoalsFields(loc);
+    function goalShown(f){
+      var stored=data[f.id];
+      var empty=stored===undefined||stored===null||String(stored).trim()==='';
+      if(!empty) return {value:stored, hint:''};
+      var sug=gdPlanSuggestion(loc, mk, f.id);
+      if(!sug) return {value:'', hint:''};
+      return {value:sug.text, hint:sug.note};
+    }
     const locObj=LOCATIONS.find(l=>l.id===loc);
     let html='<div class="loc-selector">';
     LOCATIONS.forEach(l=>{
@@ -9364,13 +9876,13 @@ function renderMonthlyGoalsPage(){
     html+='<div class="section"><div class="section-header"><h2>'+locObj.name+' \u2014 Monthly Goals Planner</h2><div class="badge">'+MONTHS[parseInt(mk.split('-')[1])-1]+' '+mk.split('-')[0]+'</div></div><div class="goals-form">';
     if(!isGoNinja(loc)&&ARM_VALUES[loc])html+='<div class="goals-calc">ARM Value: $'+ARM_VALUES[loc]+'</div>';
     html+='<div class="goals-section-title">Membership Targets</div>';
-    fields.membership.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    fields.membership.forEach(f=>{var s=goalShown(f);html+=renderGoalField(f,s.value,s.hint);});
     if(fields.rationale){
       html+='<div class="goals-section-title">Rationale?</div>';
       fields.rationale.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
     }
     html+='<div class="goals-section-title">Revenue Projection</div>';
-    fields.revenue.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
+    fields.revenue.forEach(f=>{var s=goalShown(f);html+=renderGoalField(f,s.value,s.hint);});
     if(fields.revenueStreams){
       html+='<div class="goals-subsection-title">Revenue Streams:</div>';
       fields.revenueStreams.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
@@ -9384,12 +9896,14 @@ function renderMonthlyGoalsPage(){
     fields.events.forEach(f=>{html+=renderGoalField(f,data[f.id]||'');});
     html+='</div></div>';setTimeout(recalcRevTotal,50);return html;
   }
-  function renderGoalField(field,value){
+  function renderGoalField(field,value,hint){
     var hl=field.highlight?' goals-highlight':'';
+    var sug=hint?' gd-suggest':'';
+    var note=hint?'<div style="font-size:11px;color:#0f3460;margin:-2px 0 8px;line-height:1.35;">'+esc(hint)+'</div>':'';
     if(field.computed){
-      return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" readonly style="background:#e9ecef;cursor:default" /></div>';
+      return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" readonly style="background:#e9ecef;cursor:default" /></div>'+note;
     }
-    if(field.type==='textarea'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><textarea class="goals-input" data-field-id="'+field.id+'" style="min-height:60px;resize:vertical;font-family:inherit;padding:8px" placeholder="Enter details..." onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea></div>';}if(field.type==='text'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>';}return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>';
+    if(field.type==='textarea'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><textarea class="goals-input'+sug+'" data-field-id="'+field.id+'" style="min-height:60px;resize:vertical;font-family:inherit;padding:8px" placeholder="Enter details..." onchange="updateGoalField(\''+field.id+'\',this.value)">'+esc(String(value))+'</textarea></div>'+note;}if(field.type==='text'){return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input'+sug+'" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>'+note;}return '<div class="goals-row'+hl+'"><span class="goals-label">'+esc(field.label)+'</span><input class="goals-input'+sug+'" data-field-id="'+field.id+'" value="'+esc(String(value))+'" placeholder="'+(field.type==='currency'?'$0.00':'0')+'" onChange="updateGoalField(\''+field.id+'\',this.value)" /></div>'+note;
   }
 /*  -  -  Watch List Page  -  -  */
 function setWlFilter(f) { state.wlFilter = f; render(); }
