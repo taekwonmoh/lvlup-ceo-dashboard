@@ -18,6 +18,7 @@ This app shares one Firebase project (`lvlup-members-app`) with the **lvlupma.co
 | `ceo/cycles`, `ceo/firstFive`, `ceo/applications`, `ceo/inventory`, `ceo/watchlist` | mixed | mixed |
 | `config/rosterCode` (**root, not under ceo**) | set by hand | lvlupma.com roster-upload gate |
 | `finance/gymdesk` (**root, not under ceo**) | bot via `scripts/push_gymdesk_data.mjs` | GymDesk page, finance/admin only |
+| `finance/plannerBaseline/{locId}/{YYYY-MM}` | same bot script (aggregates only) | Monthly Plan, any staff with dashboard access |
 
 **Canonical location IDs** (both apps must agree): `waunakee, eastmad, verona, deforest, goninjaW, goninjaV`. Go Ninja = `goninjaW`/`goninjaV` (`GONINJA_LOC_IDS`). **Never `eastmadison`** — the dashboard uses `eastmad`; the website maps `eastmadison`/`east madison` → `eastmad` on the way in.
 
@@ -48,10 +49,23 @@ Sensitive revenue. It lives in Realtime Database, never in this repo and never a
   "gymdesk": {
     ".read": "auth != null && auth.token.email != null && (root.child('staff').child(auth.token.email.toLowerCase().replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',')).child('role').val() == 'admin' || root.child('staff').child(auth.token.email.toLowerCase().replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',')).child('access').child('finance').val() == true)",
     ".write": false
+  },
+  "plannerBaseline": {
+    ".read": "auth != null && auth.token.email != null && (root.child('staff').child(auth.token.email.toLowerCase().replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',')).child('role').val() == 'admin' || (root.child('staff').child(auth.token.email.toLowerCase().replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',')).child('role').val() != null && root.child('staff').child(auth.token.email.toLowerCase().replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',')).child('role').val() != '' && root.child('staff').child(auth.token.email.toLowerCase().replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',').replace('.', ',')).child('access').child('dashboard').val() == true))",
+    ".write": false
   }
 }
 ```
 
 - **Push / one-time seed**: `node scripts/push_gymdesk_data.mjs <path-to-json>` (`--dry-run` validates and does not write). Env: `GOOGLE_APPLICATION_CREDENTIALS` (path to the key file) or `FIREBASE_SERVICE_ACCOUNT_JSON` (the JSON string). Optional `FIREBASE_DATABASE_URL` (default `https://lvlup-members-app-default-rtdb.firebaseio.com`).
 - **Credential Mike creates**: Google Cloud / Firebase service account named for this bot, role **Firebase Realtime Database Admin** only (`roles/firebasedatabase.admin`), JSON key stored on the bot — not in git, not a web API key, not `config/webhookSecret`. That key can write the whole database (rules do not apply to it). Do not grant the bot a broader Firebase Admin role.
-- **Monthly Plan**: for a finance user, an empty **Current membership #** (Waunakee only — that is the only school with a real active count) and an empty **Total Expected Billing** display the GymDesk figure. Nothing is written until someone edits the box, and a value already saved is never replaced.
+
+## Monthly Goals Planner
+
+Growth → Goals → **Monthly Plan** (`renderMonthlyGoalsPage`). One plan per school tab and month at `ceo/monthlyGoals/{locId}/{YYYY-MM}`. Directors use it to see how much revenue they still need **beyond recurring billing**, then build the events and upgrades that close that gap.
+
+- **Billing and headcount** come from `finance/plannerBaseline/{locId}/{YYYY-MM}` = `{ expected_billing, paying_members, as_of }`. `expected_billing` is that month’s GymDesk `memberships + sales_pos + pending`. Canonical loc ids only (`waunakee`, `eastmad`, `verona`, `deforest`, `goninjaW`, `goninjaV`) — the snapshot’s `east_madison` / `go_ninja_*` keys are mapped in `scripts/push_gymdesk_data.mjs`. The same push that writes `finance/gymdesk` PUTs this node (aggregates only). Finance/admin users fall back to `finance/gymdesk` if the baseline is missing. An empty box shows the figure and is not saved until edited; a saved value is never replaced. If neither source can be read, the box is manual.
+- **Revenue plan**: quantity × price. LVLUP rows are new memberships (default $60), leadership upgrades ($299), legacy upgrades ($349), and merchandise (amount only). Go Ninja rows are new memberships (default $50), birthday parties, open gym / drop-ins, and merchandise. There is no fixed belt-test, tournament, or camp row. **Events** are the only place for those: name, date, type (camp, tournament, clinic, seminar, party/social, belt test, other), purpose (leads / profit / retention), and qty × price. “+ Add event” starts a blank row (qty 1, purpose profit). Planned extra feeds the gap bar. Total revenue = billing + planned extra.
+- **Membership plan**: members at the start of the month, intros, close rate (default 80%) → new memberships, attrition % (goal ≤ 3%) → members lost, end-of-month member goal. The calculated new-membership count fills the revenue row unless that quantity is overridden. ARM targets that are already set: Waunakee $210, Verona $200, East Madison $180. DeForest and Go Ninja stay blank (`armTarget`) until someone enters one. Projected ARM = billing ÷ members at the start of the month.
+- **Old fields stay.** `revTesting`, `revTournament`, `revCamps`, `revEvent1` / `revEvent2`, and event #1/#2 name and purpose are copied into `planEvents` the first time that month is opened (`planEventsMigrated`). Old stream dollar totals are copied into `planStreams` (`planStreamsMigrated`). Nothing is deleted. Go Ninja `mvmtMembership` / `afterschoolMembership` stay editable when they already have a value.
+- **Rules** are not in this repo. In lvlupma.com `build-db-rules.py`, `finance/plannerBaseline` is a sibling of `gymdesk`: `.read` any signed-in staff with dashboard access (`staff/{email}` role admin, or a role with `access.dashboard === true`), `.write` false. Do not deploy rules from this repo.
