@@ -1087,8 +1087,8 @@ function weeklyPhotos(board){ return [
   {id:'ph_station',  photo:true, icon:'📸', text:'Instructor Station: deep clean & organize it, then snap a photo.'},
   {id:'ph_signage',  photo:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
 ]; }
-// Weekly Buffer content — 3 scheduled posts, each described for accountability
-const TASK_BUFFER = {id:'cc_content', icon:'📱', contentPillars:true, posts:3, text:'Capture Content: schedule & post 3 pieces of content this week in Buffer — describe each one below.'};
+// Weekly content: upload 3 photos this week right in the dashboard (goes to the marketing bot for approval)
+const TASK_BUFFER = {id:'cc_content', icon:'📱', contentPillars:true, posts:3, text:'Capture Content: upload 3 photos this week right here. They go to marketing for approval.'};
 
 // ── Per-employee daily task lists ──────────────────────────────────────────
 const BRYAN_DAILY = [
@@ -9695,6 +9695,48 @@ function contentPillarsForWeek(wk){
   const p = pairs[((wk % pairs.length) + pairs.length) % pairs.length];
   return p.map(i => CONTENT_PILLARS[i]);
 }
+// Capture Content uploader: photos go to Storage taskPhotos/content/, one record per file in ceo/contentSubmissions (status 'new') for the marketing bot.
+const CONTENT_VIDEO_ENABLED = false;   // flip to true after the contentSubmissions/ storage rule is deployed
+function renderContentUploadBox(section,taskId,active){
+  const id=section+'_'+taskId, acc=CONTENT_VIDEO_ENABLED?'image/*,video/*':'image/*';
+  let h='<div style="margin-left:34px;margin-top:6px;display:flex;flex-direction:column;gap:8px;">';
+  h+='<div id="ccdrop_'+id+'" onclick="document.getElementById(\'ccfile_'+id+'\').click()" ondragover="event.preventDefault();this.style.background=\'#eef2ff\'" ondragleave="this.style.background=\'#f8faff\'" ondrop="event.preventDefault();this.style.background=\'#f8faff\';contentUploadFiles(\''+section+'\',\''+taskId+'\',event.dataTransfer.files)" style="border:2px dashed #93a5ff;border-radius:10px;background:#f8faff;padding:16px;text-align:center;cursor:pointer;">';
+  h+='<div style="font-size:13px;font-weight:700;color:#2c4bff;">📸 Tap to upload or drag photos here</div><div style="font-size:11px;color:var(--gray-500);margin-top:3px;">You can pick several at once.'+(CONTENT_VIDEO_ENABLED?'':' Videos coming soon.')+'</div></div>';
+  h+='<input type="file" multiple accept="'+acc+'" id="ccfile_'+id+'" style="display:none" onchange="contentUploadFiles(\''+section+'\',\''+taskId+'\',this.files);this.value=\'\'">';
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;"><select id="ccpillar_'+id+'" style="font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;">'+active.map(p=>'<option value="'+esc(p.name)+'">'+p.icon+' '+esc(p.name)+'</option>').join('')+'<option value="Other">Other</option></select>';
+  h+='<input id="cccap_'+id+'" type="text" placeholder="Caption (optional)" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;"></div>';
+  h+='<span id="ccstat_'+id+'" style="font-size:11px;color:#888;"></span></div>';
+  return h;
+}
+async function contentUploadFiles(section,taskId,fileList){
+  const id=section+'_'+taskId, files=[...(fileList||[])];
+  const stat=document.getElementById('ccstat_'+id);
+  const ok=files.filter(f=>/^image\//.test(f.type)||(CONTENT_VIDEO_ENABLED&&/^video\//.test(f.type)));
+  if(!ok.length){ alert(CONTENT_VIDEO_ENABLED?'Please pick photos or videos.':'Please pick photos. Videos coming soon.'); return; }
+  const pillar=(document.getElementById('ccpillar_'+id)||{}).value||'';
+  const caption=((document.getElementById('cccap_'+id)||{}).value||'').trim();
+  const emp=getEmpById(state.tasksLoc)||{}, week=getTaskWeekKey(state.tasksDate);
+  let done=0;
+  for(const f of ok){
+    if(stat) stat.textContent='Uploading '+(done+1)+' of '+ok.length+'…';
+    try{
+      const blob=await compressImage(f), isJpg=blob!==f;
+      const ext=isJpg?'jpg':((f.name.split('.').pop()||'jpg').toLowerCase());
+      const path='taskPhotos/content/'+(state.tasksLoc||'unknown')+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
+      const ref=storage.ref(path);
+      if(isJpg) await ref.put(blob,{contentType:'image/jpeg'}); else await ref.put(blob,{contentType:f.type});
+      const url=await ref.getDownloadURL();
+      fbSet('contentSubmissions/cs_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),{url,path,type:/^video\//.test(f.type)?'video':'image',name:f.name||'',sizeBytes:blob.size||f.size||0,uploaderId:state.tasksLoc||'',uploaderName:emp.name||'',school:emp.loc||'',pillar,caption,week,at:Date.now(),status:'new'});
+      // count toward the 3-this-week progress
+      const vals=(taskDoneRec(section,taskId).posts)||{}; let slot=0;
+      for(let i=1;i<=3;i++){ if(!String(vals[i]||'').trim()){ slot=i; break; } }
+      if(slot) taskPostSave(section,taskId,slot,'📸 '+(pillar?pillar+': ':'')+(caption||f.name||'photo'));
+      done++;
+    }catch(e){ alert('Upload failed: '+(e.message||e)); }
+  }
+  if(stat) stat.textContent=done?('✓ '+done+' uploaded and sent to marketing'):'';
+  const c=document.getElementById('cccap_'+id); if(c&&done) c.value='';
+}
 function renderContentPillarsBlock(active){
   let h = '<div style="margin-left:34px;margin-top:8px;display:flex;flex-direction:column;gap:6px;">';
   active.forEach(p => {
@@ -9751,7 +9793,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   let _title, _detail;
   if(_cpActive){
     _title='Capture Content';
-    _detail='This week’s pillars: '+_cpActive.map(p=>p.name).join(' & ')+' — schedule & post 3 this week in Buffer. Tap a pillar for ideas.';
+    _detail='This week’s pillars: '+_cpActive.map(p=>p.name).join(' & ')+'. Upload 3 photos this week right here and they go to marketing for approval. Tap a pillar for ideas.';
   } else {
     const _tx=String(task.text||''), _ci=_tx.indexOf(': ');
     _title=_ci>2?_tx.slice(0,_ci):_tx; _detail=_ci>2?_tx.slice(_ci+2):'';
@@ -9793,7 +9835,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     }
   }
   if(_cpActive){
-    html+='<div style="margin-left:34px;margin-top:6px;"><a href="'+CAPTURE_CONTENT_BUFFER_URL+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#2c4bff;color:#fff;text-decoration:none;border-radius:8px;font-size:12px;font-weight:700;">📲 Schedule in Buffer</a></div>';
+    if(!locked) html+=renderContentUploadBox(section,task.id,_cpActive);
   }
   // Social-post accountability — describe each scheduled post
   if(isPosts){
@@ -9801,7 +9843,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     for(let i=1;i<=task.posts;i++){
       const v=String(postVals[i]||'');
       if(locked){ if(v) html+='<div style="font-size:12px;color:var(--gray-600);padding:5px 10px;background:var(--gray-50);border-radius:6px;"><b>Post '+i+':</b> '+esc(v)+'</div>'; }
-      else html+='<input type="text" value="'+esc(v)+'" placeholder="Post '+i+' — describe what you scheduled…" onchange="taskPostSave(\''+section+'\',\''+task.id+'\','+i+',this.value)" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;color:var(--gray-700);background:#fff;">';
+      else html+='<input type="text" value="'+esc(v)+'" placeholder="Post '+i+': fills in when you upload, or describe it here" onchange="taskPostSave(\''+section+'\',\''+task.id+'\','+i+',this.value)" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;color:var(--gray-700);background:#fff;">';
     }
     html+='</div>';
   }
