@@ -94,6 +94,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .pct-orange { color: var(--orange); }
 .pct-red { color: var(--red); }
 .currency { font-variant-numeric: tabular-nums; }
+/* Scheduler: 7-day grid on wide screens, a single-day view on phones (no sideways scroll) */
+.sc-mobile { display: none; }
+@media (max-width: 700px) { .sc-wide { display: none; } .sc-mobile { display: block; } }
 
 /* Rocks */
 .rock-item { padding: 14px 20px; border-bottom: 1px solid var(--gray-100); display: flex; gap: 12px; align-items: flex-start; }
@@ -5489,7 +5492,7 @@ function renderTcSchedule(){
     else if (nChanged) h += '<div style="margin:8px 20px 0;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="flex:1;min-width:200px;">✏️ <b>' + nChanged + ' unpublished change' + (nChanged === 1 ? '' : 's') + '.</b> Staff still see the version posted ' + esc(pubAgo) + '. Publish to push your edits out.</span>' + (canPub ? '<button onclick="tcPublishOpen()" style="background:#16a34a;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 12px;white-space:nowrap;">📣 Publish &amp; notify</button>' : '') + '</div>'; }
   { const sc = tcSchedScope(); if (sc) h += '<div style="margin:8px 20px 0;background:#eef4ff;border:1px solid #d5e2ff;border-radius:9px;padding:8px 12px;font-size:12px;color:#334;">📋 You’re scheduling <b>' + esc(tcScopeNames(sc) || 'your assigned locations') + '</b>' + (sc.selfId ? ' (and your own shifts)' : '') + '. Other shifts show for context but are view-only.</div>'; }
   const holMap = tcHolidayMap([...new Set(days.map(d => d.getFullYear()))]);
-  h += '<div style="overflow-x:auto;padding:8px 0 0;"><table class="sc-table" style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;min-width:120px;position:sticky;left:0;background:#fff;">Staff</th>';
+  h += '<div class="sc-wide"><div style="overflow-x:auto;padding:8px 0 0;"><table class="sc-table" style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;min-width:120px;position:sticky;left:0;background:#fff;">Staff</th>';
   days.forEach(d => { const hn = holMap[tcDateKey(d)]; h += '<th style="text-align:center;min-width:92px;' + (hn ? 'background:#fff7ed;' : '') + '">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#aaa;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span>' + (hn ? '<br><span title="Paid holiday" style="display:inline-block;margin-top:2px;font-size:9px;font-weight:800;color:#9a3412;background:#ffedd5;border-radius:5px;padding:1px 5px;line-height:1.3;">🎉 ' + esc(hn) + '</span>' : '') + '</th>'; });
   h += '</tr></thead><tbody>';
   if (!rows.length) h += '<tr><td colspan="8" style="padding:16px;text-align:center;color:#aaa;font-size:13px;">No shifts at this location this week.</td></tr>';
@@ -5513,6 +5516,81 @@ function renderTcSchedule(){
     h += '</tr>';
   });
   h += '</tbody></table></div>';
+  h += '</div>';                                                  // /.sc-wide
+  h += renderTcDayView({ days, dow, filter, holMap, shiftsOf, pubRec, weekKey, changedIds, staff });
+  h += '</div>';
+  return h;
+}
+// ── Phone-only single-day view of the Master Schedule (no horizontal scroll) ──
+function tcSchedSetDay(i){ state.schedDay = i; render(); }
+function renderTcDayView(ctx){
+  const { days, dow, filter, holMap, shiftsOf, pubRec, weekKey, changedIds, staff } = ctx;
+  const dowFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const todayKey = tcDateKey(new Date());
+  const todayIdx = days.findIndex(d => tcDateKey(d) === todayKey);
+  let di = state.schedDay;
+  if (typeof di !== 'number' || di < 0 || di > 6) di = todayIdx >= 0 ? todayIdx : 0;
+  const dSel = days[di]; const dkSel = tcDateKey(dSel);
+  // shifts-per-day counts for the selector badges (respects the location filter)
+  const dayCounts = days.map(d => { const dk = tcDateKey(d); return staff.reduce((n, s) => n + shiftsOf(s, dk).length, 0); });
+  let h = '<div class="sc-mobile">';
+  // Day selector — a horizontal strip of Mon…Sun chips
+  h += '<div style="display:flex;gap:6px;overflow-x:auto;padding:12px 16px 8px;-webkit-overflow-scrolling:touch;">';
+  days.forEach((d, i) => {
+    const dk = tcDateKey(d); const act = i === di; const isToday = dk === todayKey; const hn = holMap[dk]; const cnt = dayCounts[i];
+    h += '<button onclick="tcSchedSetDay(' + i + ')" style="flex:0 0 auto;min-width:48px;border-radius:12px;border:1px solid ' + (act ? '#1a1a2e' : (isToday ? '#c7d2fe' : '#e3e6ef')) + ';background:' + (act ? '#1a1a2e' : '#fff') + ';color:' + (act ? '#fff' : '#555') + ';padding:7px 6px 6px;cursor:pointer;text-align:center;line-height:1.15;position:relative;">'
+      + '<div style="font-size:10px;font-weight:700;opacity:.8;">' + dow[d.getDay()] + '</div>'
+      + '<div style="font-size:16px;font-weight:800;margin-top:1px;">' + d.getDate() + '</div>'
+      + '<div style="font-size:9px;margin-top:1px;height:11px;">' + (hn ? '🎉' : (cnt ? '<span style="color:' + (act ? '#c7d2fe' : '#4169E1') + ';font-weight:800;">' + cnt + '</span>' : '<span style="opacity:.4;">·</span>')) + '</div>'
+      + '</button>';
+  });
+  h += '</div>';
+  // Selected-day header
+  const hnSel = holMap[dkSel];
+  h += '<div style="padding:4px 18px 2px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">'
+    + '<span style="font-size:15px;font-weight:800;color:#1a1a2e;">' + dowFull[dSel.getDay()] + '</span>'
+    + '<span style="font-size:13px;color:#8894b0;font-weight:600;">' + (dSel.getMonth() + 1) + '/' + dSel.getDate() + '</span>'
+    + (hnSel ? '<span style="font-size:11px;font-weight:800;color:#9a3412;background:#ffedd5;border-radius:6px;padding:2px 8px;">🎉 ' + esc(hnSel) + '</span>' : '')
+    + '</div>';
+  // Rows for this day: everyone in All view; in a filtered view, those with a shift here + all-LVLUP floaters
+  const dayRows = filter === 'all' ? staff : staff.filter(s => shiftsOf(s, dkSel).length || (s.schedAll && LVLUP_LOC_IDS.includes(filter)));
+  const withShifts = dayRows.filter(s => shiftsOf(s, dkSel).length);
+  const without = dayRows.filter(s => !shiftsOf(s, dkSel).length);
+  const addLoc = filter !== 'all' ? filter : '';
+  if (!dayRows.length) h += '<div style="padding:22px 18px;text-align:center;color:#aaa;font-size:13px;">No one scheduled here on this day.</div>';
+  // Scheduled people — full rows with their shift cards
+  withShifts.forEach(s => {
+    const shifts = shiftsOf(s, dkSel);
+    const postedSet = tcPostedSigSet(s.id, weekKey);
+    const rowChanged = pubRec && changedIds.has(s.id);
+    const wkMin = tcWeekMins(s.id, days);
+    h += '<div style="padding:11px 18px;border-top:1px solid #eef0f6;">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+      + '<span onclick="tcStaffFocus(\'' + s.id + '\')" style="font-size:14px;font-weight:800;color:#1a1a2e;cursor:pointer;border-bottom:1px dotted #b9c0d0;">' + esc(s.name) + '</span>'
+      + '<span style="font-size:10.5px;font-weight:600;color:#8894b0;display:flex;align-items:center;gap:5px;white-space:nowrap;">' + tcFmtHrs(wkMin) + '/wk' + (rowChanged ? '<span style="display:inline-flex;align-items:center;gap:3px;color:#b45309;font-weight:800;"><span style="width:6px;height:6px;border-radius:50%;background:#f59e0b;"></span>edited</span>' : '') + '</span>'
+      + '</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">';
+    shifts.forEach(sh => {
+      const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155';
+      const canEd = tcCanEditShift(sh.loc, s.id); const unpub = pubRec && !postedSet.has(tcShiftSig(dkSel, sh));
+      h += '<div' + (canEd ? ' onclick="tcShiftOpen(\'' + s.id + '\',\'' + dkSel + '\',\'' + sh.sid + '\')"' : '') + ' style="background:' + c + ';color:#fff;border-radius:9px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;' + (unpub ? 'outline:2px solid #f59e0b;outline-offset:1px;' : '') + (canEd ? 'cursor:pointer;' : 'opacity:.62;') + '">'
+        + '<span style="font-size:14px;font-weight:800;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + '</span>'
+        + '<span style="font-size:11px;text-align:right;line-height:1.25;opacity:.92;">' + (loc.short ? esc(loc.short) : '') + (sh.role ? '<br>' + esc(sh.role) : '') + '</span>'
+        + '</div>';
+    });
+    h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dkSel + '\',\'\',\'' + addLoc + '\')" style="background:none;border:1px dashed #cbd3e6;border-radius:9px;color:#6b7694;cursor:pointer;font-size:13px;font-weight:700;width:100%;padding:8px 0;">＋ Add another shift</button>';
+    h += '</div></div>';
+  });
+  // Not scheduled — compact add rows
+  if (without.length) {
+    h += '<div style="padding:12px 18px 4px;font-size:11px;font-weight:800;letter-spacing:.02em;color:#9aa3b5;text-transform:uppercase;border-top:1px solid #eef0f6;">Not scheduled this day — tap ＋ to add</div>';
+    without.forEach(s => {
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 18px;border-top:1px solid #f4f6fb;">'
+        + '<span onclick="tcStaffFocus(\'' + s.id + '\')" style="font-size:13.5px;font-weight:700;color:#334;cursor:pointer;">' + esc(s.name) + ' <span style="font-size:11px;font-weight:600;color:#aaa;">· ' + esc((LOCATIONS.find(l => l.id === s.loc) || {}).short || s.loc || '') + '</span></span>'
+        + '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dkSel + '\',\'\',\'' + addLoc + '\')" title="Add a shift" style="flex:0 0 auto;width:34px;height:34px;border-radius:9px;border:1px dashed #cbd3e6;background:#f7f9ff;color:#4169E1;font-size:18px;font-weight:700;cursor:pointer;line-height:1;">＋</button>'
+        + '</div>';
+    });
+  }
   h += '</div>';
   return h;
 }
