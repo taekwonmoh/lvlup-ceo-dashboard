@@ -1148,6 +1148,14 @@ function lvlupWeekly(board){ return [
   {id:'social_plan',    text:'Social Plan: Plan next week’s social content calendar (separate from posting in Buffer).'},
   {id:'pto_review',     text:'Time-off Review: Review and action any pending PTO / time-off requests.'},
   {id:'post_schedule',  text:'Post Schedule: Post next week’s staff schedule on the dashboard and confirm coverage.'},
+  // About every 2 months: first the week of Mon Nov 9, 2026 (2026-W46), then every 8 weeks.
+  // `every` / `from` are optional — items without them still show every week. LVLUP instructors only.
+  {id:'dust_displays', every:8, from:'2026-W46', text:'Display Dusting: Dust the belt displays and the hooks and wood strips that hang the equipment (about every 2 months).', subs:[
+    'Dust all of the belts that are on the athlete development display.',
+    'Dust all of the color belts that are displayed up above the mirrors or above the bleachers.',
+    'Dust and clean off all of the hooks and the wood strips that are hanging all the equipment.',
+    'Dust the top of those.',
+  ]},
   TASK_BUFFER,
 ]; }
 const BRYAN_WEEKLY = lvlupWeekly('mirror');
@@ -8783,6 +8791,36 @@ const FRONTDESK_EMP_IDS = new Set(['sueK','andyR','marioS','erikaD']);
 function isFrontDesk(empId){return FRONTDESK_EMP_IDS.has(empId);}
 function getDailyTasks(empId){return EMP_DAILY[empId]||(isFrontDesk(empId)?FRONTDESK_DAILY:LVLUP_DAILY);}
 function getWeeklyRec(empId){return EMP_WEEKLY[empId]||(isFrontDesk(empId)?FRONTDESK_WEEKLY:LVLUP_WEEKLY_REC);}
+// Monday (local noon) of a getTaskWeekKey() key. getWeekMonday() uses a different
+// week-1 rule and does not round-trip these keys (2027-W02 is Jan 4, not Jan 11).
+function taskWeekMonday(weekKey){
+  const parts=String(weekKey||'').split('-W');
+  const year=parseInt(parts[0],10), week=parseInt(parts[1],10);
+  if(!year||!week) return null;
+  const dow=new Date(year,0,1,12,0,0,0).getDay();
+  const days0=(1-dow+7)%7;
+  const wk0=Math.ceil((days0+dow+1)/7);
+  const mon=new Date(year,0,1+days0+(week-wk0)*7,12,0,0,0);
+  if(mon.getFullYear()!==year) return null;
+  return mon;
+}
+function weeksBetweenTaskKeys(fromKey,toKey){
+  const a=taskWeekMonday(fromKey), b=taskWeekMonday(toKey);
+  if(!a||!b) return null;
+  return Math.round((b.getTime()-a.getTime())/(7*86400000));
+}
+// Optional cadence on a weekly item: {every:N, from:'YYYY-Www'} is due on `from`
+// and every N weeks after. No `every` means every week — existing tasks are unchanged.
+function weeklyTaskDue(task, weekKey){
+  const n=task&&task.every;
+  if(!n||n<2) return true;
+  const delta=weeksBetweenTaskKeys(task.from, weekKey);
+  if(delta==null||delta<0) return false;
+  return delta%n===0;
+}
+function weeklyTasksFor(empId, weekKey){
+  return getWeeklyRec(empId).filter(t=>weeklyTaskDue(t, weekKey));
+}
 function getMonthlyTasks(empId){return isGoNinja(empId)?GONINJA_MONTHLY:isFrontDesk(empId)?FRONTDESK_MONTHLY:LVLUP_MONTHLY;}
 function getAsNeededTasks(empId){return isGoNinja(empId)?[]:isFrontDesk(empId)?FRONTDESK_ASNEEDED:LVLUP_ASNEEDED;}
 function getCycleTasks(locId){return isGoNinja(locId)?GONINJA_CYCLE:LVLUP_CYCLE;}
@@ -9076,7 +9114,7 @@ function loadHistoryWeekly(empId,weekKey){
   const key=empId+'|'+weekKey;
   if(state.historyWeekly[key]!==undefined)return;
   state.historyWeekly[key]='loading';
-  const rec=getWeeklyRec(empId); const total=rec.length;
+  const rec=weeklyTasksFor(empId, weekKey); const total=rec.length;
   fbRef(empPath(empId)+'/weekly/'+weekKey).once('value').then(snap=>{
     const dd=snap.val()||{}; let done=0; rec.forEach(t=>{if(dd[t.id])done++;});
     state.historyWeekly[key]={done,total};
@@ -9087,7 +9125,7 @@ function loadHistoryWeekly(empId,weekKey){
 function weeklyRequiredStatus(empId,weekKey){
   const locData=state.tasksData[empId]||{};
   const dd=(locData.weekly||{})[weekKey]||{};
-  const rec=getWeeklyRec(empId);
+  const rec=weeklyTasksFor(empId, weekKey);
   const missing=rec.filter(t=>!dd[t.id]);
   return {done:rec.length-missing.length,total:rec.length,missing};
 }
@@ -9286,7 +9324,7 @@ function renderTasksPage(){
   const monthlyData=(locData.monthly||{})[monthKey]||{};
   const dayOfWeek=new Date(dateKey+'T12:00:00').getDay();
   const isSaturday=dayOfWeek===6;
-  const dailyTasks=getDailyTasks(loc).filter(t=>(!t.days||t.days.includes(dayOfWeek))&&!(isSaturday&&(t.id==='spray_mats'||t.id==='j_spray'))),weeklyRec=getWeeklyRec(loc),monthlyTasks=getMonthlyTasks(loc);
+  const dailyTasks=getDailyTasks(loc).filter(t=>(!t.days||t.days.includes(dayOfWeek))&&!(isSaturday&&(t.id==='spray_mats'||t.id==='j_spray'))),weeklyRec=weeklyTasksFor(loc,weekKey),monthlyTasks=getMonthlyTasks(loc);
   const cycleDefs=getCycleTasks(loc);
   const _cInfo=getCurrentCycleInfo();
   const curCycleWeek=_cInfo?_cInfo.weekNum:1;
