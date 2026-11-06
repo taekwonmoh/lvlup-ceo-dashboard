@@ -943,7 +943,7 @@ let state = {
   scMonthly: {},  // monthly LVLUP scorecard:      scMonthly[loc][YYYY-MM][field]  (active/new/cancels/revenue)
   scGoals: {},    // monthly goals:               scGoals[loc][YYYY-MM][metricId]
   cancellations: {}, // cancellation save list:    cancellations[loc][key] = {name,date,reason,notes}
-  cancellationRequests: {}, // form-fed hold/cancellation requests (Apps Script webhook → Firebase)
+  cancellationRequests: {}, // hold/cancellation requests written by lvlupma.com/hold-cancel
   holdsFilter: 'all',
   testingPrep: {}, // testingPrep[cycleTestKey][stepId] = { wau,emad,ver | x, by }
   applications: {}, // Leadership/Legacy/Rollover processing queue
@@ -1945,7 +1945,7 @@ function listenAll() {
   cancelRef.on('value', snap => { state.cancellations = snap.val() || {}; render(); });
   activeListeners.push({ ref: cancelRef, event: 'value' });
 
-  // Hold/cancellation requests (fed by the Google Form via Apps Script webhook)
+  // Hold/cancellation requests (written by lvlupma.com/hold-cancel)
   const crqRef = fbRef('cancellationRequests');
   crqRef.on('value', snap => { state.cancellationRequests = snap.val() || {}; render(); });
   activeListeners.push({ ref: crqRef, event: 'value' });
@@ -3099,14 +3099,14 @@ function renderHoldsPage(){
   const filtered = filter === 'all' ? all : all.filter(r => statusOf(r) === filter);
 
   let h = '<div class="page" style="max-width:960px;">';
-  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🧊 Holds &amp; Cancellations</h2><p style="margin:0;font-size:13px;color:#888;">Membership hold and cancellation requests from the form. Set a status and mark who completed the action.</p></div>';
+  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🧊 Holds &amp; Cancellations</h2><p style="margin:0;font-size:13px;color:#888;">Requests submitted at <a href="https://lvlupma.com/hold-cancel" target="_blank" rel="noopener" style="color:#2c4bff;font-weight:700;text-decoration:none;">lvlupma.com/hold-cancel</a>. Set a status and mark who completed the action.</p></div>';
   const stat = (n, label, color) => '<div style="flex:1;min-width:88px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:12px 14px;text-align:center;box-shadow:var(--shadow);"><div style="font-size:20px;font-weight:800;color:' + color + ';">' + n + '</div><div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;">' + label + '</div></div>';
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' + stat(all.length, 'Total', '#1a1a2e') + stat(counts.pending, 'Pending', '#d97706') + stat(counts.processed, 'Processed', '#2563eb') + stat(counts.frozen, 'Frozen', '#0891b2') + '</div>';
   const chip = (id, label) => '<button onclick="crqSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + label + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + chip('all', 'All') + chip('pending', 'Pending') + chip('processed', 'Processed') + chip('frozen', 'Frozen') + '</div>';
 
   if (!all.length) {
-    h += '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;">No requests yet. Once the form webhook is connected, submissions appear here automatically.</div>';
+    h += '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;">No requests yet. Submissions from <a href="https://lvlupma.com/hold-cancel" target="_blank" rel="noopener" style="color:#2c4bff;font-weight:700;text-decoration:none;">lvlupma.com/hold-cancel</a> appear here automatically.</div>';
     return h + '</div>';
   }
   if (!filtered.length) h += '<div style="text-align:center;padding:28px;color:#aaa;font-size:13px;">No ' + filter + ' requests.</div>';
@@ -3224,6 +3224,9 @@ const STAFF_LINKS = [
   { group: '📈 Program upgrades — these land in the dashboard Applications tab', items: [
     { url: 'lvlupma.com/upgrade?program=adp', href: 'https://lvlupma.com/upgrade?program=adp', desc: '⚠️ Athlete Development Program (ADP) application. Use this — NOT the old Google form (that one no longer reaches us).' },
     { url: 'lvlupma.com/upgrade?program=tiger-leaders', href: 'https://lvlupma.com/upgrade?program=tiger-leaders', desc: 'Tiger Leaders Team application.' },
+  ] },
+  { group: '🧊 Membership changes — these land in Members → Holds & Cancellations', items: [
+    { url: 'lvlupma.com/hold-cancel', href: 'https://lvlupma.com/hold-cancel', desc: '⚠️ Hold or cancellation request for a current member. Use this — NOT the old Google form (forms.gle/L1Kg4Jg77rtQch2W6 no longer reaches us). Add ?location=waunakee, verona, eastmad, or deforest and ?action=hold or cancel to prefill a saved email or QR code.' },
   ] },
   { group: '🛍️ Orders & shop', items: [
     { url: 'lvlupma.com/uniform-order', href: 'https://lvlupma.com/uniform-order', desc: 'Custom uniform / gear order form.' },
@@ -6761,7 +6764,7 @@ function renderCancellationDetails(loc){
   h += '<th style="text-align:left;">Student Name</th><th style="text-align:center;width:130px;">Cancellation Date</th><th style="text-align:left;width:30%;">Reason</th><th style="text-align:left;">Notes for Next Steps</th><th style="width:36px;"></th>';
   h += '</tr></thead><tbody>';
   if (!auto.length && !rows.length){ h += '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--gray-400);font-size:13px;">No cancellations for ' + esc(monthLabel) + '. Form submissions appear here automatically; use “+ Add” for an off-form note.</td></tr>'; }
-  // Auto rows (from the Google Form → read-only student/date/reason, editable next steps)
+  // Auto rows (from lvlupma.com/hold-cancel → read-only student/date/reason, editable next steps)
   auto.forEach(r => {
     const reason = [r.reasonCancel, r.feedback].filter(x => x && String(x).trim()).join(' — ');
     h += '<tr style="background:#f8fbff;">';
