@@ -1243,13 +1243,12 @@ const WALL_TYPES = [
 /*  -  -  Task Definitions  -  -  */
 // ── Shared task building blocks ────────────────────────────────────────────
 const TASK_STOPLIGHT = {id:'stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Review the stoplight report, then send a minimum of 2 Loom videos or 2 postcards — log how many you sent today.'};
-const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students / class counts, check attendance, and post in your location channel about anyone starting today.'};
-const TASK_EOS       = {id:'eos',       cat:'Closing & EOS',   text:'Post your EOS report in Slack at clockout.'};
-// Daily facility-refresh photos — tap to upload straight to the dashboard
-const DAILY_PHOTOS = [
-  {id:'ph_bathroom', cat:'Facility Refresh', photo:true, multi:true, icon:'📸', text:'Bathroom Refresh: freshen up each bathroom, then snap a photo.'},
-  {id:'ph_floor',    cat:'Facility Refresh', photo:true,            icon:'📸', text:'Training Floor: wide photo of the floor + bag racks showing a clean, professional look.'},
-];
+const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students and class counts, and check attendance.'};
+// Wrap-up lives on the dashboard. Old Slack EOS ids (eos, j_eos, eos_report) still satisfy this via TASK_ALIASES.
+const TASK_CLOSING   = {id:'closing', cat:'Closing', text:'Closing Routine: Straighten the training floor, review rosters, and log today’s trials and enrollments on the dashboard scorecard if applicable.'};
+// Bathroom verification photo. `days` is 0=Sun … 6=Sat. Waunakee lead is Mon+Fri; other leads are Monday; front desk is Tue/Wed/Thu/Sat.
+function bathroomPhoto(days){ return {id:'ph_bathroom', cat:'Facility Refresh', photo:true, multi:true, icon:'📸', days:days, text:'Bathroom Refresh: freshen up each bathroom, then snap a photo.'}; }
+const TASK_PH_FLOOR = {id:'ph_floor', cat:'Facility Refresh', photo:true, icon:'📸', text:'Training Floor: wide photo of the floor + bag racks showing a clean, professional look.'};
 // Weekly facility photos — announcement board differs by school (whiteboard at Waunakee, mirror elsewhere)
 function weeklyPhotos(board){ return [
   {id:'ph_announce', photo:true, icon:'📸', text:'Announcements: refresh the ' + board + ' with upcoming events, then snap a photo.'},
@@ -1264,17 +1263,17 @@ const BRYAN_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
   TASK_STOPLIGHT,
   TASK_ROSTERS,
-  ...DAILY_PHOTOS,
-  {id:'closing', cat:'Closing & EOS', text:'Closing Routine & Venue Check: Straighten the training floor, review rosters, and update the location Slack.'},
-  TASK_EOS,
+  bathroomPhoto([1]),
+  TASK_PH_FLOOR,
+  TASK_CLOSING,
 ];
 const ASH_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the facility is ready for students.'},
   TASK_STOPLIGHT,
   TASK_ROSTERS,
-  ...DAILY_PHOTOS,
-  {id:'closing', cat:'Closing & EOS', text:'Closing Routine: Review rosters, straighten the floor, and update the location Slack.'},
-  TASK_EOS,
+  bathroomPhoto([1]),
+  TASK_PH_FLOOR,
+  TASK_CLOSING,
 ];
 const JOEY_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Ensure the instructor station is clean, organized, and ready.'},
@@ -1282,23 +1281,24 @@ const JOEY_DAILY = [
   TASK_ROSTERS,
   {id:'j_wetmop', cat:'Pre-Class Admin', days:[1], text:'Wet mop the training floors before classes.'},
   {id:'j_greenmachine', cat:'Pre-Class Admin', days:[4], photo:true, icon:'📸', text:'Run the green machine on the training floors, then snap a photo.'},
-  ...DAILY_PHOTOS,
-  {id:'j_spray', cat:'Closing & EOS', text:'Spray mop the training floors.'},
-  TASK_EOS,
+  bathroomPhoto([1]),
+  TASK_PH_FLOOR,
+  {id:'j_spray', cat:'Closing', text:'Spray mop the training floors.'},
+  TASK_CLOSING,
 ];
 const TARIK_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
   TASK_STOPLIGHT,
   TASK_ROSTERS,
-  ...DAILY_PHOTOS,
-  {id:'closing', cat:'Closing & EOS', text:'Closing Routine & Venue Check: Straighten the training floor, review rosters, and update the location Slack.'},
-  TASK_EOS,
+  bathroomPhoto([1, 5]),
+  TASK_PH_FLOOR,
+  TASK_CLOSING,
 ];
 const MIRANDA_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Clock in and prep the Go Ninja facility for daily operations.'},
-  {id:'ph_bathroom', cat:'Facility Refresh', photo:true, multi:true, icon:'📸', text:'Bathroom Refresh: freshen up each bathroom, then snap a photo.'},
-  {id:'ph_floor',    cat:'Facility Refresh', photo:true,            icon:'📸', text:'Gym Floor: wide photo of the obstacle / training area showing a clean, professional look.'},
-  {id:'closing', cat:'Closing & EOS', text:'Closing Routine & Bathroom Refresh: Wipe down sinks/counters, sweep floor, empty trash, check soap/paper towels, ensure the front desk is organized, and submit the EOS report via Slack.'},
+  bathroomPhoto([1]),
+  {id:'ph_floor', cat:'Facility Refresh', photo:true, icon:'📸', text:'Gym Floor: wide photo of the obstacle / training area showing a clean, professional look.'},
+  {id:'closing', cat:'Closing', text:'Closing Routine & Bathroom Refresh: Wipe down sinks/counters, sweep floor, empty trash, check soap/paper towels, and ensure the front desk is organized.'},
 ];
 // ── Per-employee weekly task lists ─────────────────────────────────────────
 function lvlupWeekly(board){ return [
@@ -1306,9 +1306,9 @@ function lvlupWeekly(board){ return [
   ...weeklyPhotos(board),
   {id:'mop_mats',  text:'Mat Maintenance: Wet mop the mats.'},
   {id:'dots',      text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
-  {id:'supplies',  text:'Inventory Control: Check supplies and message #inventory with restocking needs.'},
-  {id:'ad_invites',text:'Program Growth: Invite 2 students to try the AD class + post names to #LVLUPHQ.'},
-  {id:'lifelinks', text:'Student Milestones: Review LifeLinks and award belt clips + post to #LVLUPHQ.'},
+  {id:'supplies',  text:'Inventory Control: Check supplies and log restocking needs in Ops → Inventory.'},
+  {id:'ad_invites',hasNotes:true, text:'Program Growth: Invite 2 students to try the AD class — jot their names here.'},
+  {id:'lifelinks', text:'Student Milestones: Review LifeLinks and award belt clips.'},
   {id:'bday_report',    text:'Birthday Outreach: Run the upcoming birthday report and send Birthday Party invitations/offers to eligible families.'},
   {id:'events_promote', text:'Event Promotion: Review upcoming events and promote them to students in class.'},
   {id:'mia_report',     text:'MIA / At-Risk: Run the attendance report and book booster lessons for at-risk students.'},
@@ -1332,12 +1332,12 @@ const ASH_WEEKLY   = lvlupWeekly('mirror');
 const JOEY_WEEKLY  = lvlupWeekly('mirror');
 const TARIK_WEEKLY = lvlupWeekly('whiteboard');
 const MIRANDA_WEEKLY = [
-  {id:'m_party_reset',    text:'Friday Event Prep: Reset the party room for weekend birthday parties + post verification photo to #LVLUPHQ.'},
-  {id:'m_party_cleanup',  text:'Party Room Breakdown: Clean up the party room post-event + post photo to #LVLUPHQ.'},
-  {id:'m_mop_mats',       text:'Mat Maintenance: Mop mats and sanitize obstacles + post photo to #LVLUPHQ.'},
+  {id:'m_party_reset',    photo:true, icon:'📸', text:'Friday Event Prep: Reset the party room for weekend birthday parties, then snap a verification photo.'},
+  {id:'m_party_cleanup',  photo:true, icon:'📸', text:'Party Room Breakdown: Clean up the party room post-event, then snap a photo.'},
+  {id:'m_mop_mats',       photo:true, icon:'📸', text:'Mat Maintenance: Mop mats and sanitize obstacles, then snap a photo.'},
   {id:'ph_station',  photo:true, icon:'📸', text:'Front Desk / Instructor Station: clean & organize it, then snap a photo.'},
   {id:'ph_signage',  photo:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
-  {id:'m_party_supplies', text:'Inventory Control: Check party supplies inventory and message #LVLUPHQ if items are running low.'},
+  {id:'m_party_supplies', text:'Inventory Control: Check party supplies and log anything running low in Ops → Inventory.'},
   TASK_BUFFER,
 ];
 const EMP_DAILY  = {bryanG:BRYAN_DAILY, ash:ASH_DAILY, joeyZ:JOEY_DAILY, mirandaS:MIRANDA_DAILY, tarikM:TARIK_DAILY};
@@ -1385,13 +1385,14 @@ const FRONTDESK_DAILY = [
     'Wipe front desk counters',
     'Refill restroom supplies as needed',
   ]},
-  {id:'fd_eos',         text:'Post EOS report before clocking out.'},
+  // Photo proof is Tue/Wed/Thu/Sat. Bathroom tidying above still happens every shift.
+  bathroomPhoto([2, 3, 4, 6]),
   {id:'fd_next_shift',  text:'Note any outstanding action items for the next shift.'},
 ];
 const FRONTDESK_WEEKLY = [
   {id:'fdw_inventory', text:'Review front desk retail inventory and supplies.'},
   {id:'fdw_restock',   text:'Restock merchandise as needed.'},
-  {id:'fdw_lowstock',  text:'Notify #inventory of low-stock items.'},
+  {id:'fdw_lowstock',  text:'Log low-stock items in Ops → Inventory.'},
   {id:'fdw_displays',  text:'Organize and merchandise retail displays.'},
   {id:'fdw_signage',   text:'Prepare, print, and organize retail signage and promotional materials for:', subs:[
     'Retail products',
@@ -1576,7 +1577,7 @@ const LVLUP_CYCLE_CHECKLIST = [
   {id:'cc_w5_attn',     week:5, text:'Check up on students with low attendance or missing stripes'},
   {id:'cc_w6_tigers',   week:6, text:'Reach out to Tigers about moving up to the beginners class'},
   {id:'cc_w6_sparring', week:6, text:'Contact current yellow belts about purchasing sparring gear'},
-  {id:'cc_w8_sotc',     week:8, text:'Identify and announce the Student of the Cycle — post to #LVLUPHQ'},
+  {id:'cc_w8_sotc',     week:8, text:'Identify and announce the Student of the Cycle'},
   {id:'cc_bday',        week:0, text:'Run a minimum of 2 birthday parties this cycle',  playbook:'birthday_party'},
   {id:'cc_upgrades',    week:0, text:'Upgrade 2 students to AD or Legacy — list their names', hasNotes:true},
   {id:'cc_belts',       week:0, text:'Pro-shop testing prep — belts, stripes, patches & certificates in stock for promotions.'},
@@ -4152,7 +4153,7 @@ function renderPulseBar() {
   let tasksDone = 0, tasksTotal = 0;
   const pulseEmps = dashTasksLocked() ? TASK_EMPLOYEES.filter(emp => emp.id === dashAuth.empId) : TASK_EMPLOYEES;
   pulseEmps.forEach(emp => {
-    const daily = getDailyTasks(emp.id);
+    const daily = dailyTasksForDate(emp.id, todayKey);
     tasksTotal += daily.length;
     const done = ((state.tasksData[emp.id] || {}).daily || {})[todayKey] || {};
     tasksDone += daily.filter(t => done[t.id]).length;
@@ -9393,6 +9394,17 @@ function getEmpById(empId){return TASK_EMPLOYEES.find(e=>e.id===empId)||TASK_EMP
 const FRONTDESK_EMP_IDS = new Set(['sueK','andyR','marioS','erikaD']);
 function isFrontDesk(empId){return FRONTDESK_EMP_IDS.has(empId);}
 function getDailyTasks(empId){return EMP_DAILY[empId]||(isFrontDesk(empId)?FRONTDESK_DAILY:LVLUP_DAILY);}
+// Day-of-week filter shared by the task sheet, the home pulse count, and Tasks > History.
+// `t.days` is 0=Sun … 6=Sat. spray_mats / j_spray are never due on Saturday.
+function dailyTasksForDate(empId, dateKey){
+  const dow=new Date(String(dateKey||'')+'T12:00:00').getDay();
+  const isSat=dow===6;
+  return getDailyTasks(empId).filter(t=>{
+    if(t.days&&!t.days.includes(dow)) return false;
+    if(isSat&&(t.id==='spray_mats'||t.id==='j_spray')) return false;
+    return true;
+  });
+}
 function getWeeklyRec(empId){return EMP_WEEKLY[empId]||(isFrontDesk(empId)?FRONTDESK_WEEKLY:LVLUP_WEEKLY_REC);}
 // Monday (local noon) of a getTaskWeekKey() key. getWeekMonday() uses a different
 // week-1 rule and does not round-trip these keys (2027-W02 is Jan 4, not Jan 11).
@@ -9689,8 +9701,7 @@ function loadHistoryDate(empId,dateKey){
   const key=empId+'|'+dateKey;
   if(state.historyData[key]!==undefined)return;
   state.historyData[key]='loading';
-  const isSat=new Date(dateKey+'T12:00:00').getDay()===6;
-  const tasks=getDailyTasks(empId).filter(t=>!(isSat&&(t.id==='spray_mats'||t.id==='j_spray')));
+  const tasks=dailyTasksForDate(empId, dateKey);
   const total=tasks.length;
   Promise.all([
     fbRef(empPath(empId)+'/daily/'+dateKey).once('value'),
@@ -9926,9 +9937,7 @@ function renderTasksPage(){
   const cycleData=(locData.cycle||{})[cycleKey]||{};
   const monthKey=getTaskMonthKey();
   const monthlyData=(locData.monthly||{})[monthKey]||{};
-  const dayOfWeek=new Date(dateKey+'T12:00:00').getDay();
-  const isSaturday=dayOfWeek===6;
-  const dailyTasks=getDailyTasks(loc).filter(t=>(!t.days||t.days.includes(dayOfWeek))&&!(isSaturday&&(t.id==='spray_mats'||t.id==='j_spray'))),weeklyRec=weeklyTasksFor(loc,weekKey),monthlyTasks=getMonthlyTasks(loc);
+  const dailyTasks=dailyTasksForDate(loc,dateKey),weeklyRec=weeklyTasksFor(loc,weekKey),monthlyTasks=getMonthlyTasks(loc);
   const cycleDefs=getCycleTasks(loc);
   const _cInfo=getCurrentCycleInfo();
   const curCycleWeek=_cInfo?_cInfo.weekNum:1;
@@ -10800,7 +10809,8 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     html+='</div>';
   }
   if(_cpActive){ html+=renderContentPillarsBlock(_cpActive); }
-  // Photo-upload task — tap to add a photo straight to the dashboard
+  // Photo-upload task — tap to add a photo straight to the dashboard.
+  // Available on every role's task sheet, including frontdesk (the Ops > Photos gallery stays hidden for them).
   if(isPhoto){
     html+='<div style="margin-left:34px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">';
     photos.forEach((url,idx)=>{
@@ -11870,9 +11880,9 @@ const LVLUP_PLAYBOOKS = [
       },
       {
         title:'Bathroom Check — Every Single Day',
-        detail:'Paper towels, toilet paper, soap dispensers. Clean mirror. No trash overflow. This is not optional. Parents notice bathrooms and they reflect the school\'s standards. A dirty bathroom communicates that details don\'t matter here.',
-        points:['A clean bathroom is a marketing tool — parents talk about it'],
-        avoid:['Delegating this without checking','Skipping the check when you\'re in a rush']
+        detail:'Paper towels, toilet paper, soap dispensers. Clean mirror. No trash overflow. This tidy happens every opening. Parents notice bathrooms and they reflect the school\'s standards. A dirty bathroom communicates that details don\'t matter here. The verification photo is a separate dashboard task, not a Slack post: School Leads on Monday (Waunakee also Friday); Front Desk on Tuesday, Wednesday, Thursday, and Saturday.',
+        points:['A clean bathroom is a marketing tool — parents talk about it','Upload the Bathroom Refresh photo on the Ops → Tasks item for that day. Do not also post it to #LVLUPHQ.'],
+        avoid:['Delegating this without checking','Skipping the check when you\'re in a rush','Posting the same bathroom photo to Slack after you already uploaded it on the dashboard']
       },
       {
         title:'Roster Review',
@@ -11896,13 +11906,13 @@ const LVLUP_PLAYBOOKS = [
       'Dismiss last class on time',
       'Connect with every parent who waited — 30 seconds minimum, say something specific',
       'Sweep mats',
-      'Spray mop mats — photo to #LVLUPHQ',
+      'Spray mop mats — if the task asks for a photo, upload it on the dashboard',
       'Bathroom check',
       'Shut down TV',
       'Check all doors and windows',
       'Set alarm',
       'Turn off all lights',
-      'Submit EOS report via Slack before leaving the building',
+      'Finish the closing checklist and log today’s trials and enrollments on the dashboard scorecard',
     ],
     steps:[
       {
@@ -11919,9 +11929,9 @@ const LVLUP_PLAYBOOKS = [
       },
       {
         title:'Mat Cleaning',
-        detail:'Sweep first to remove debris, then spray mop. Don\'t skip the sweep — mopping over debris just spreads it. Take a photo of the clean mat and post to #LVLUPHQ.',
-        points:['Photo to #LVLUPHQ — this is accountability and documentation'],
-        avoid:['Mopping without sweeping first','Skipping the photo — it\'s a 10-second habit that builds trust']
+        detail:'Sweep first to remove debris, then spray mop. Don\'t skip the sweep — mopping over debris just spreads it. When the task asks for a photo, upload it on that dashboard task. That upload is the record.',
+        points:['Dashboard photo upload is the documentation — leads see it under Ops → Photos'],
+        avoid:['Mopping without sweeping first','Skipping the photo when the task asks for one','Also posting the same photo to #LVLUPHQ']
       },
       {
         title:'Full Facility Lockdown',
@@ -11930,10 +11940,10 @@ const LVLUP_PLAYBOOKS = [
         avoid:['Locking up from the front without checking the back','Trusting someone else did it without confirming']
       },
       {
-        title:'EOS Report — Before You Leave',
-        detail:'Submit your end-of-session report via Slack before you leave the building. Not from your car. Not later tonight. In the building, before you lock up. If you\'re running late, this still doesn\'t wait.',
-        points:['In the building → EOS report → then lock up and leave'],
-        avoid:['Submitting from the parking lot','Doing it the next morning','Skipping it "just this once"']
+        title:'Dashboard Wrap-Up — Before You Leave',
+        detail:'Finish the closing checklist in Ops → Tasks before you leave the building. Log today’s trials and enrollments on the dashboard scorecard when they apply. There is no separate nightly Slack report. Not from your car. Not later tonight. In the building, before you lock up.',
+        points:['In the building → dashboard closing checklist and scorecard → then lock up and leave'],
+        avoid:['Posting the same wrap-up to #LVLUPHQ','Submitting from the parking lot','Doing it the next morning','Skipping it "just this once"']
       },
     ]
   },
@@ -11951,7 +11961,7 @@ const LVLUP_PLAYBOOKS = [
       'Evaluate consistently — same standard for every student',
       'Every student gets a public acknowledgment after their test',
       'Every family gets a personal word from the instructor',
-      'Photos posted to #LVLUPHQ',
+      'Photos uploaded on the dashboard',
       'Any student who didn\'t pass gets a written plan before you leave',
     ],
     steps:[
@@ -11999,7 +12009,7 @@ const LVLUP_PLAYBOOKS = [
       },
       {
         title:'Document & Follow Up',
-        detail:'Before you leave: post photos to #LVLUPHQ. Log any students who didn\'t pass with a specific plan for next cycle. A student who didn\'t pass but has a clear path forward stays enrolled. A student who didn\'t pass and hears nothing quits.',
+        detail:'Before you leave: upload photos on the dashboard. Log any students who didn\'t pass with a specific plan for next cycle. A student who didn\'t pass but has a clear path forward stays enrolled. A student who didn\'t pass and hears nothing quits. A Slack shoutout is optional if you want to celebrate the class — it does not replace the dashboard record.',
         points:['For students who didn\'t pass — call the parent within 48 hours with a specific plan: "Here\'s exactly what we\'re going to work on this cycle"'],
         avoid:['Assuming a student who didn\'t pass will figure it out on their own','Waiting more than 48 hours for the follow-up call']
       },
@@ -12210,7 +12220,7 @@ const LVLUP_PLAYBOOKS = [
       'Evaluate each student (technique + attitude + effort)',
       'Award stripes with a ceremony — call name, lead class clap',
       'Record all awards in GymDesk',
-      'Post results in #LVLUPHQ',
+      'Log the result on the dashboard — no separate Slack report',
     ],
     steps:[
       { title:'Who Qualifies?',
@@ -12230,7 +12240,7 @@ const LVLUP_PLAYBOOKS = [
         points:['Use their full name: "Class, let\'s congratulate Emma Rodriguez on earning her second stripe!"','If parents are watching, speak clearly so they can hear every word'],
         avoid:['Handing stripes out casually without a moment','Forgetting to record the award in the system'] },
       { title:'Record & Report',
-        detail:'After class, log all stripe awards in GymDesk. Post a brief update in #LVLUPHQ: "Stripe test complete — X students tested at [location]. Great class!"',
+        detail:'After class, log all stripe awards in GymDesk and note the result on the dashboard. A Slack shoutout is optional when you want to celebrate the class. Do not post the same count as required proof.',
         points:['If a student was close but didn\'t qualify, note it so you can target their development','Parents often ask — make sure records are current before they do'],
         avoid:['Not logging until days later','Forgetting students who earned a stripe but left before the ceremony'] },
     ]
@@ -12259,7 +12269,7 @@ const LVLUP_PLAYBOOKS = [
         avoid:['Ignoring absences because "they\'ll probably be back"','Waiting for the student to reach out first'] },
       { title:'End of Week Wrap-Up',
         detail:'At week\'s end, reconcile cards with the digital system. Flag students who are 1–2 classes from stripe eligibility so you can target them with encouragement.',
-        points:['Post in #LVLUPHQ: "X students close to stripe eligibility this week"'],
+        points:['Note who is 1–2 classes away on the dashboard or in GymDesk so the next class can target them'],
         avoid:['Letting card marking fall more than 1 week behind'] },
     ]
   },
@@ -12277,7 +12287,7 @@ const LVLUP_PLAYBOOKS = [
       'Day-of: set up party room 30 min before start',
       'Run structured class (30 min) + party time (30–45 min)',
       'Take photos during class and party',
-      'Post a photo to #LVLUPHQ',
+      'Upload a verification photo on the dashboard task',
       'Follow up within 48 hrs: thank-you + free trial offer',
     ],
     steps:[
@@ -12353,7 +12363,7 @@ const LVLUP_PLAYBOOKS = [
       'Wet mop in sections from back to front',
       'Allow 10–15 min dry time before use',
       'Inspect for sticky spots or missed areas',
-      'Post photo to #LVLUPHQ when done',
+      'Upload a photo on the dashboard task when that task asks for one',
     ],
     steps:[
       { title:'Supplies & Dilution',
@@ -12384,7 +12394,7 @@ const LVLUP_PLAYBOOKS = [
       'Mop or Swiffer the floor from back to front',
       'Restock: paper towels, toilet paper, soap',
       'Take 2 photos: toilet area close-up + overall room',
-      'Post both photos to #LVLUPHQ',
+      'Upload both photos on the Bathroom Refresh task in Ops → Tasks',
     ],
     steps:[
       { title:'Supplies & Safety',
@@ -12403,10 +12413,10 @@ const LVLUP_PLAYBOOKS = [
         detail:'Mop or Swiffer from the back wall toward the door. Get corners and around the toilet base. Let dry. Restock paper towels, toilet paper, and soap.',
         points:['Quick sweep before mopping on heavy traffic days'],
         avoid:['Mopping without sweeping first when there\'s visible debris'] },
-      { title:'Photo & Post',
-        detail:'Take 2 photos: one close-up of the toilet/sink area, one showing the overall bathroom from the doorway. Post both to #LVLUPHQ with a timestamp.',
-        points:['Caption: "Bathrooms clean ✅ [time]"','Make sure lighting is good — a dark blurry photo doesn\'t prove anything'],
-        avoid:['Posting only one photo','Posting a blurry or dark photo'] },
+      {         title:'Photo & Upload',
+        detail:'Take 2 photos: one close-up of the toilet/sink area, one showing the overall bathroom from the doorway. Upload both on the Bathroom Refresh task in Ops → Tasks. That task is Monday for School Leads (Waunakee also Friday) and Tuesday, Wednesday, Thursday, and Saturday for Front Desk. The lobby tidy still happens every shift. Do not also post the photos to #LVLUPHQ.',
+        points:['Make sure lighting is good — a dark blurry photo doesn\'t prove anything','Front Desk can upload from Ops → Tasks even though the Photos gallery tab is hidden for that role'],
+        avoid:['Uploading only one photo','Uploading a blurry or dark photo','Posting the same photos to Slack after they are on the dashboard'] },
     ]
   },
 
@@ -12469,7 +12479,7 @@ const LVLUP_PLAYBOOKS = [
       'Remove old signage completely — never layer over it',
       'Install new signage at eye level',
       'Photo every sign in its installed location',
-      'Post all photos to #LVLUPHQ',
+      'Upload the photos on the Event Signage task in Ops → Tasks',
     ],
     steps:[
       { title:'What Signage Exists',
@@ -12477,13 +12487,13 @@ const LVLUP_PLAYBOOKS = [
         points:['Event signs come down the day after the event — no exceptions','Outdated signs actively undermine your school\'s professionalism'],
         avoid:['Printing new signs before removing the old ones'] },
       { title:'Creating & Printing',
-        detail:'Use the Canva brand template (link in #LVLUPHQ resources). Update text for the current event or promotion. Match the school\'s colors, fonts, and logo. Print on the office printer or order prints for large format.',
-        points:['If you\'re unsure about a design, share in #LVLUPHQ before printing','Brand consistency matters — don\'t improvise fonts or colors'],
+        detail:'Use the Canva brand template. Update text for the current event or promotion. Match the school\'s colors, fonts, and logo. Print on the office printer or order prints for large format.',
+        points:['If you\'re unsure about a design, ask in #LVLUPHQ before printing','Brand consistency matters — don\'t improvise fonts or colors'],
         avoid:['Plain white paper with no formatting — it looks unprofessional','Free-styling a design that doesn\'t match the school brand'] },
       { title:'Installing & Photographing',
         detail:'Remove old signage fully. Clean surface if needed. Install at adult eye level in lobby, child eye level in kids\' areas. Take one photo of each sign in its actual installed location — not on the desk.',
-        points:['Use flash if the lighting is poor','Post all photos together: "Signage updated ✅"','Make sure signs are straight — use a level app if needed'],
-        avoid:['Photographing on the desk instead of installed','Posting without confirming all locations are covered'] },
+        points:['Use flash if the lighting is poor','Upload every installed sign on the Event Signage dashboard task','Make sure signs are straight — use a level app if needed'],
+        avoid:['Photographing on the desk instead of installed','Uploading before every location is covered','Also posting the same photos to #LVLUPHQ'] },
     ]
   },
 
@@ -12513,7 +12523,7 @@ const LVLUP_PLAYBOOKS = [
         avoid:['Letting a student sit on red for weeks without action','Canceling from the system before a retention call is attempted'] },
       { title:'Monthly Roster Sync',
         detail:'At the start of each month, pull active enrollments from GymDesk. Compare to the dashboard roster. Add new enrollments, remove cancelled members, refresh stale statuses.',
-        points:['New enrollments should appear in the dashboard within their first week','Post in #LVLUPHQ: "Roster sync done — X active students"'],
+        points:['New enrollments should appear in the dashboard within their first week','The updated roster on the dashboard is the record — do not also post a "sync done" note to #LVLUPHQ'],
         avoid:['Letting the roster fall multiple months out of date'] },
     ]
   },
@@ -12521,11 +12531,11 @@ const LVLUP_PLAYBOOKS = [
   { id:'student_of_cycle', role:'instructor', category:'Student Records', icon:'🏆', title:'Student of the Cycle', tagline:'Recognize excellence — inspire the whole school.',
     checklist:[
       'Week 6: begin observing standout students across all classes',
-      'Week 7: share candidate list with team in #LVLUPHQ',
+      'Week 7: share the candidate list in a team huddle',
       'Criteria: attitude, improvement, effort, community spirit',
       'Week 8: final decision + notify parent privately before announcement',
       'Announce in class — state the student\'s name and the specific reason',
-      'Post in #LVLUPHQ with name and reason',
+      'Mark the cycle checklist complete on the dashboard',
       'Social media post (with written parent permission)',
       'Mark cycle checklist item as complete',
     ],
@@ -12535,7 +12545,7 @@ const LVLUP_PLAYBOOKS = [
         points:['Consider ALL rank levels — a brand new white belt with outstanding attitude can and should win','Jot down 3–5 names with specific behaviors, not just impressions'],
         avoid:['Defaulting to the highest-ranking student — this award is about character','Picking based on tenure rather than current-cycle performance'] },
       { title:'Team Discussion — Week 7',
-        detail:'Share your candidates in #LVLUPHQ or a team huddle. Get input from every instructor who interacts with the candidates. Narrow to one.',
+        detail:'Share your candidates in a team huddle. Get input from every instructor who interacts with the candidates. Narrow to one.',
         points:['If there\'s genuine debate, either opinion is valid — use consensus','Consider if a student won recently — spread the recognition across the community'],
         avoid:['Making the decision alone without other instructors\' input'] },
       { title:'The Announcement — Week 8',
@@ -12543,7 +12553,7 @@ const LVLUP_PLAYBOOKS = [
         points:['Have a certificate, trophy, or physical recognition item ready','Take a photo immediately after the announcement','Lead the class in a genuine celebration'],
         avoid:['Announcing without parental heads-up','Vague reasoning: be specific about what they did and why it matters'] },
       { title:'Post-Announcement',
-        detail:'Post in #LVLUPHQ: student name + reason. Create a social post with written parent permission. Update any physical Student of the Cycle board. Mark the cycle checklist task as complete.',
+        detail:'Mark the Student of the Cycle item complete on the cycle checklist. Create a social post with written parent permission. Update any physical Student of the Cycle board. A Slack shoutout is optional if you want the team to celebrate — it is not a required post.',
         points:['Social caption should mention the life skill of the current cycle','Tag the family if they consent and are on the platform'],
         avoid:['Posting student info or photos online without confirmed written parent permission'] },
     ]
@@ -12557,7 +12567,7 @@ const LVLUP_PLAYBOOKS = [
       'Package neatly with receipt',
       'Mark order as fulfilled in GymDesk',
       'Notify the customer (call, text, or in-person)',
-      'Flag any low-stock items in #LVLUPHQ',
+      'Log any low-stock items in Ops → Inventory',
     ],
     steps:[
       { title:'Checking for Orders',
@@ -12566,7 +12576,7 @@ const LVLUP_PLAYBOOKS = [
         avoid:['Assuming someone else checked'] },
       { title:'Pulling & Verifying Inventory',
         detail:'Go to physical storage. Pull the exact item — verify size, color, and type match the order. If the item is out of stock, do not substitute without contacting the customer first.',
-        points:['If low stock: flag immediately in #LVLUPHQ so a reorder can happen','If out of stock: contact the customer the same day — offer alternatives or a refund'],
+        points:['If low stock: log it in Ops → Inventory the same shift so a reorder can happen','If out of stock: contact the customer the same day — offer alternatives or a refund'],
         avoid:['Substituting without telling the customer','Ignoring an out-of-stock and letting the order sit'] },
       { title:'Packaging & Marking Fulfilled',
         detail:'Package neatly in a school bag or wrap. Include a receipt. Mark as fulfilled in GymDesk. Place at the front desk with the customer\'s name on it or hand it over directly.',
@@ -12745,7 +12755,7 @@ const LVLUP_PLAYBOOKS = [
       'Get parent permission before tagging students by name or face',
       'Caption: hook → 2–3 sentences → call to action',
       'Use approved school hashtags (listed in Step 4)',
-      'Post screenshot to #LVLUPHQ after publishing',
+      'Log the capture on the dashboard Capture Content task — do not also post a proof screenshot to #LVLUPHQ',
     ],
     steps:[
       { title:'What to Post',
@@ -12765,9 +12775,9 @@ const LVLUP_PLAYBOOKS = [
         points:['5–10 hashtags is the sweet spot','Put hashtags at the end of the caption or in the first comment on Instagram'],
         avoid:['Generic irrelevant tags like #love #instagood','More than 20 hashtags — it looks desperate and harms reach'] },
       { title:'Before You Post Checklist',
-        detail:'Photo quality ✓ | Caption complete ✓ | Student permission if tagging ✓ | School handle in caption or tag ✓ | Hashtags added ✓. Post, take a screenshot, share to #LVLUPHQ.',
+        detail:'Photo quality ✓ | Caption complete ✓ | Student permission if tagging ✓ | School handle in caption or tag ✓ | Hashtags added ✓. Publish on the school account, then log the capture on the dashboard Capture Content task. An optional Slack shoutout is fine when you want the team to celebrate a win — it is not required proof.',
         points:['Stories = timely and informal. Feed posts = permanent and branded. Know which you\'re doing.'],
-        avoid:['Posting and not sharing to #LVLUPHQ — the team can\'t engage if they don\'t know it\'s live'] },
+        avoid:['Posting a proof screenshot to #LVLUPHQ after the dashboard already has the upload','Skipping the dashboard Capture Content task because you posted on social'] },
     ]
   },
 
@@ -13001,10 +13011,10 @@ const LVLUP_POLICY = [
         body:'Be warm, professional, and concise. When parents ask about their child\'s progress, be honest and specific. If a parent is frustrated, listen fully before responding. Never promise something you can\'t deliver.',
         bullets:['Always have something positive to say about every student — even the challenging ones','Do not discuss another family\'s private information with other parents'] },
       { heading:'Internal Communication (Slack)',
-        body:'#LVLUPHQ is the team\'s primary communication channel. Posts should be relevant, positive, and professional. Use threads to keep conversations organized. Sensitive issues (HR, billing disputes, personal conflicts) are never handled in Slack — use direct communication.',
-        bullets:['Required check-ins and photo posts belong in #LVLUPHQ','Avoid venting or complaining in any shared channel','Respond to direct messages from management within the same business day'] },
+        body:'Slack is for real team communication: questions, shift coverage, urgent issues, and celebrating wins. #LVLUPHQ stays professional — use threads, and never handle sensitive issues (HR, billing disputes, personal conflicts) there. Checklists, verification photos, scorecard numbers, and restock items are logged once in the HQ Dashboard. Do not also post that proof to #LVLUPHQ.',
+        bullets:['Verification photos, daily and weekly checklists, scorecard numbers, and Ops → Inventory restocks live in the dashboard only','Use Slack to ask a question (including @jam), swap a shift, flag something urgent, or share an optional team win','Avoid venting or complaining in any shared channel','Respond to direct messages from management within the same business day'] },
       { heading:'Response Times',
-        body:'Messages from management should be acknowledged within 4 hours during your workday. Task-related Slack posts (attendance updates, photo check-ins) should be completed and posted by end of shift.',
+        body:'Messages from management should be acknowledged within 4 hours during your workday. Dashboard tasks — checklists, photo uploads, scorecard numbers, and inventory needs — are finished in the dashboard by end of shift. They are not also posted to Slack.',
         bullets:['If you\'re going to be unavailable for more than 4 hours during scheduled work time, notify your manager proactively'],
         avoid:['Leaving management messages unread without acknowledgment'] },
     ]
