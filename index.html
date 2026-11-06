@@ -2130,6 +2130,9 @@ function listenAll() {
 
   // GymDesk revenue snapshot. Root path finance/gymdesk (not ceo/) so a parent
   // read rule on ceo cannot expose it. Attached only for finance/admin users.
+  // Annual Tracker prefers this when it is loaded. Other staff never subscribe
+  // here — the read rule would error — and instead use finance/plannerBaseline,
+  // which is already listened for every dashboard login.
   if (dashAuth.canFinance) {
     const gdFinRef = db.ref('finance/gymdesk');
     gdFinRef.on('value', snap => { state.gymdesk = snap.val() || null; state.gymdeskErr = null; render(); }, err => {
@@ -8519,15 +8522,96 @@ function initGymdeskFinanceCharts() {
 }
 
 /*  -  -  Goals Page  -  -  */
-function getGoalActualRevenue(locId, monthIdx) {
-  // Actual revenue = the fresher of the financials entry and the latest
-  // nightly EOS "Rev to Date" snapshot (revenue-to-date only grows, so max
-  // = freshest known without ever regressing on corrections)
+// 2026 vacation tracker clock. Tests set state.goalAsOf; the live page does not.
+function goalTrackerNow() {
+  const raw = state && state.goalAsOf;
+  if (raw) {
+    const d = raw instanceof Date ? raw : new Date(raw);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date();
+}
+function goalMonthKey(monthIdx) {
+  return '2026-' + String(monthIdx + 1).padStart(2, '0');
+}
+// Earned GymDesk revenue for one school-month. An in-progress month counts
+// memberships + sales only. total includes scheduled payments that have not
+// been collected, so those are not treated as already earned. A closed month
+// uses the franchise total (pending on a closed month is part of that total).
+function goalEarnedFromGymdeskRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  const hasMem = row.memberships != null && row.memberships !== '';
+  const hasPos = row.sales_pos != null && row.sales_pos !== '';
+  const hasTotal = row.total != null && row.total !== '';
+  if (!hasMem && !hasPos && !hasTotal) return null;
+  const mem = gdNum(row.memberships);
+  const pos = gdNum(row.sales_pos);
+  if (row.is_partial === true) return planCents(mem + pos);
+  if (hasTotal) return planCents(gdNum(row.total));
+  return planCents(mem + pos + gdNum(row.pending));
+}
+// finance/plannerBaseline is readable by every dashboard login. New snapshots
+// store collected separately from expected_billing (which still includes
+// pending, for the Monthly Plan). Older snapshots only have expected_billing:
+// that equals the closed-month total, but on the in-progress month it includes
+// scheduled bills, so it is not earned revenue.
+function goalBaselineEarned(row, monthIdx, now) {
+  if (!row || typeof row !== 'object') return { value: null, pendingOnly: false };
+  if (row.collected != null && row.collected !== '' && planNum(row.collected) != null) {
+    return { value: planCents(planNum(row.collected)), pendingOnly: false };
+  }
+  const expected = planNum(row.expected_billing);
+  const pending = planNum(row.pending);
+  if (expected == null) return { value: null, pendingOnly: false };
+  if (row.is_partial === true) {
+    if (pending != null) return { value: planCents(expected - pending), pendingOnly: false };
+    return { value: null, pendingOnly: true };
+  }
+  if (row.is_partial === false) return { value: planCents(expected), pendingOnly: false };
+  const d = now || new Date();
+  const y = d.getFullYear();
+  if (y === 2026 && monthIdx === d.getMonth()) return { value: null, pendingOnly: true };
+  if (y === 2026 && monthIdx > d.getMonth()) return { value: null, pendingOnly: false };
+  return { value: planCents(expected), pendingOnly: false };
+}
+function goalLegacyRevenue(locId, monthIdx) {
   const monthKeys = ['january','february','march','april','may','june','july','august','september','october','november','december'];
-  const fin = state.financials[locId] || {};
+  const fin = (state.financials && state.financials[locId]) || {};
   const md = fin[monthKeys[monthIdx]] || {};
-  const finVal = parseFloat(md.grossTY) || parseFloat(md.grossRevenue) || 0;
-  return Math.max(finVal, scdLatestRevenue(locId, monthIdx));
+  const finVal = parseFloat(md.grossTY);
+  const finAlt = parseFloat(md.grossRevenue);
+  const finNum = (Number.isFinite(finVal) && finVal > 0) ? finVal : ((Number.isFinite(finAlt) && finAlt > 0) ? finAlt : 0);
+  return Math.max(finNum, scdLatestRevenue(locId, monthIdx));
+}
+// known:false and value 0 means "no earned figure", not a real zero month.
+// pendingOnly means the only sync number still bundles uncollected scheduled billing.
+function getGoalActualDetail(locId, monthIdx, now) {
+  const mk = goalMonthKey(monthIdx);
+  if (state.gymdesk) {
+    const gdLoc = GD_DASH_LOC[locId];
+    const row = gdLoc && gdMonthRow(state.gymdesk, gdLoc, mk);
+    const earned = goalEarnedFromGymdeskRow(row);
+    if (earned != null) return { value: earned, known: true, source: 'gymdesk', pendingOnly: false };
+  }
+  const base = goalBaselineEarned(planBaselineRow(locId, mk), monthIdx, now || goalTrackerNow());
+  if (base.value != null) return { value: base.value, known: true, source: 'baseline', pendingOnly: false };
+  const legacy = goalLegacyRevenue(locId, monthIdx);
+  if (legacy > 0) return { value: legacy, known: true, source: 'legacy', pendingOnly: false };
+  return { value: 0, known: false, source: 'none', pendingOnly: !!base.pendingOnly };
+}
+function getGoalActualRevenue(locId, monthIdx) {
+  return getGoalActualDetail(locId, monthIdx, goalTrackerNow()).value;
+}
+function goalAutoLabel(n) {
+  const x = planCents(n);
+  if (!Number.isFinite(x)) return '0';
+  if (Math.abs(x - Math.round(x)) < 0.001) return String(Math.round(x));
+  return x.toFixed(2);
+}
+function goalSignedMoney(n) {
+  const v = Number(n) || 0;
+  if (v < 0) return '-' + fmtCurrency(Math.abs(v));
+  return '+' + fmtCurrency(v);
 }
 
 function scdLatestRevenue(locId, monthIdx) {
@@ -8557,131 +8641,193 @@ function renderGoalsSubTabs() {
     '</div>';
 }
 
-function renderGoalsPage() {
-  const subNav = renderGoalsSubTabs();
-  if ((state.goalsTab || 'annual') === 'monthly') {
-    return subNav + renderMonthlyGoalsPage();
-  }
-
-  const VACATION_GOAL = 1986100; // sum of all 5 locations' 2026 monthly goals
-  const now = new Date();
-  const currentMonthIdx = now.getMonth();
+function goalTrackerModel(now) {
+  const VACATION_GOAL = 1986100; // company vacation target (not the sum of the monthly goal rows)
+  const clock = now || goalTrackerNow();
+  const year = clock.getFullYear();
+  // before: 2026 has not started. during: prorate the calendar month. after: every month is closed.
+  let trackPhase, currentMonthIdx;
+  if (year < 2026) { trackPhase = 'before'; currentMonthIdx = -1; }
+  else if (year > 2026) { trackPhase = 'after'; currentMonthIdx = 11; }
+  else { trackPhase = 'during'; currentMonthIdx = clock.getMonth(); }
   const allLocs = ['waunakee','eastmad','verona','deforest','goninjaW','goninjaV'];
   const MFULL = ['january','february','march','april','may','june','july','august','september','october','november','december'];
   const MSHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  // Read monthly goals from financials (same source as financials table)
   function getFinGoal(loc, m) {
     const finLoc = (state.financials || {})[loc] || {};
     const fd = finLoc[MFULL[m]] || finLoc[MSHORT[m]] || {};
     return parseFloat(fd.goal) || 0;
   }
 
-  // Build month-by-month data
   let cumulativeActual = 0, cumulativePlanned = 0;
   const monthData = [];
   let latestWithData = -1;
-
   const vacOverride = (state.goals && state.goals.vacationOverride) || {};
+
   for (let m = 0; m < 12; m++) {
-    let monthActual = 0, monthPlanned = 0;
+    const monthOpen = trackPhase === 'after' || (trackPhase === 'during' && m <= currentMonthIdx);
+    let monthActual = 0, monthPlanned = 0, known = false, pendingOnly = false;
     allLocs.forEach(loc => {
-      monthActual  += getGoalActualRevenue(loc, m);
       monthPlanned += getFinGoal(loc, m);
+      if (!monthOpen) return;
+      const detail = getGoalActualDetail(loc, m, clock);
+      monthActual += detail.value;
+      if (detail.known) known = true;
+      else if (detail.pendingOnly) pendingOnly = true;
     });
-    // Per-month manual override: an authoritative company-wide total that takes
-    // precedence over the summed per-location figure (vacation tracker only)
+    monthActual = planCents(monthActual);
     const autoActual = monthActual;
+    const autoKnown = known;
     const ovRaw = vacOverride[MFULL[m]];
     const overridden = ovRaw !== undefined && ovRaw !== null && ovRaw !== '' && Number.isFinite(parseFloat(ovRaw));
-    if (overridden) monthActual = parseFloat(ovRaw);
-    cumulativeActual  += monthActual;
-    cumulativePlanned += monthPlanned;
-    const pace = monthActual - monthPlanned; // this month's +/-
-    const ahead = cumulativeActual - cumulativePlanned; // cumulative +/-
-    const hasData = monthActual > 0;
-    if (hasData) latestWithData = m;
-    monthData.push({ actual: monthActual, planned: monthPlanned, pace, cumActual: cumulativeActual, cumPlanned: cumulativePlanned, ahead, hasData, autoActual, overridden });
+    if (overridden) {
+      monthActual = parseFloat(ovRaw);
+      known = true;
+      pendingOnly = false;
+    }
+    if (monthOpen && known) latestWithData = m;
+    cumulativeActual = planCents(cumulativeActual + monthActual);
+    cumulativePlanned = planCents(cumulativePlanned + monthPlanned);
+    const pace = monthActual - monthPlanned;
+    const ahead = cumulativeActual - cumulativePlanned;
+    monthData.push({
+      actual: monthActual, planned: monthPlanned, pace: pace,
+      cumActual: cumulativeActual, cumPlanned: cumulativePlanned, ahead: ahead,
+      known: known, hasData: known && monthActual > 0,
+      autoActual: autoActual, autoKnown: autoKnown, overridden: overridden,
+      pendingOnly: !known && pendingOnly
+    });
   }
 
-  const ytdActual   = latestWithData >= 0 ? monthData[latestWithData].cumActual : 0;
-  const remaining   = Math.max(VACATION_GOAL - ytdActual, 0);
-  const pct         = Math.min(Math.round(ytdActual / VACATION_GOAL * 100), 100);
-  const monthsLeft  = 12 - currentMonthIdx;
-  // Prorate the in-progress month: compare actuals to the goal *to date*,
-  // not the full-month goal (a half-finished month isn't "behind")
-  const dayOfMonth  = now.getDate();
-  const daysInMonth = new Date(now.getFullYear(), currentMonthIdx + 1, 0).getDate();
-  const cm          = monthData[currentMonthIdx];
-  const proGoal     = cm ? cm.planned * dayOfMonth / daysInMonth : 0;
-  const isCurLatest = latestWithData === currentMonthIdx;
-  const curPace     = latestWithData < 0 ? 0 : isCurLatest ? cm.actual - proGoal : monthData[latestWithData].pace;
-  const cumPace     = latestWithData < 0 ? 0 : isCurLatest ? cm.cumActual - (cm.cumPlanned - cm.planned + proGoal) : monthData[latestWithData].ahead;
-  const won         = ytdActual >= VACATION_GOAL;
+  const dayOfMonth = clock.getDate();
+  const daysInMonth = trackPhase === 'during' ? new Date(year, currentMonthIdx + 1, 0).getDate() : 0;
+  const cm = currentMonthIdx >= 0 ? monthData[currentMonthIdx] : null;
+  const cmKnown = trackPhase === 'during' && !!(cm && cm.known);
+  // In-progress month is measured against the goal earned so far, not the full-month goal.
+  const proGoal = cmKnown ? cm.planned * dayOfMonth / daysInMonth : 0;
+  monthData.forEach((md, i) => {
+    const isCurrent = cmKnown && i === currentMonthIdx;
+    md.isCurrent = trackPhase === 'during' && i === currentMonthIdx;
+    md.displayPace = isCurrent ? md.actual - proGoal : md.pace;
+    md.displayAhead = isCurrent ? md.cumActual - (md.cumPlanned - md.planned + proGoal) : md.ahead;
+  });
+
+  const ytdActual = latestWithData >= 0 ? monthData[latestWithData].cumActual : 0;
+  const remaining = Math.max(VACATION_GOAL - ytdActual, 0);
+  const pct = ytdActual > 0 ? Math.min(Math.round(ytdActual / VACATION_GOAL * 100), 100) : 0;
+  const monthsLeft = trackPhase === 'after' ? 0 : trackPhase === 'before' ? 12 : (12 - currentMonthIdx);
+  let curPace = 0, curPaceKnown = false, curPaceLabel = 'This Month vs Goal';
+  let cumPace = 0, cumPaceLabel = 'Cumulative Pace';
+  if (cmKnown) {
+    curPace = cm.displayPace;
+    curPaceKnown = true;
+    curPaceLabel = 'This Month vs Goal to Date (day ' + dayOfMonth + ' of ' + daysInMonth + ')';
+    cumPace = cm.displayAhead;
+    cumPaceLabel = 'Cumulative Pace';
+  } else if (trackPhase === 'during') {
+    curPaceKnown = false;
+    curPaceLabel = 'This Month vs Goal · no actuals yet';
+    if (latestWithData >= 0) {
+      cumPace = monthData[latestWithData].ahead;
+      cumPaceLabel = 'Cumulative Pace through ' + MSHORT[latestWithData];
+    }
+  } else if (latestWithData >= 0) {
+    curPace = monthData[latestWithData].pace;
+    curPaceKnown = true;
+    curPaceLabel = MSHORT[latestWithData] + ' vs Goal';
+    cumPace = monthData[latestWithData].ahead;
+    cumPaceLabel = 'Cumulative Pace through ' + MSHORT[latestWithData];
+  }
+
+  return {
+    VACATION_GOAL: VACATION_GOAL, MFULL: MFULL, MSHORT: MSHORT,
+    trackPhase: trackPhase, currentMonthIdx: currentMonthIdx,
+    dayOfMonth: dayOfMonth, daysInMonth: daysInMonth, proGoal: proGoal,
+    monthData: monthData, latestWithData: latestWithData,
+    ytdActual: ytdActual, remaining: remaining, pct: pct, monthsLeft: monthsLeft,
+    won: ytdActual >= VACATION_GOAL,
+    curPace: curPace, curPaceKnown: curPaceKnown, curPaceLabel: curPaceLabel,
+    cumPace: cumPace, cumPaceLabel: cumPaceLabel,
+    vacOverride: vacOverride
+  };
+}
+
+function renderGoalsPage() {
+  const subNav = renderGoalsSubTabs();
+  if ((state.goalsTab || 'annual') === 'monthly') {
+    return subNav + renderMonthlyGoalsPage();
+  }
+  const model = goalTrackerModel();
+  const monthData = model.monthData;
+  const vacOverride = model.vacOverride;
+  const MFULL = model.MFULL;
+  const editingActuals = !!state.goalEditActuals;
+  const curPace = model.curPace;
+  const cumPace = model.cumPace;
 
   let html = '<div class="section">';
-
-  // Hero
   html += '<div class="goal-hero">';
   html += '<div class="goal-hero-main">';
   html += '<div class="goal-hero-title">🏖️ 2026 Team Vacation — Revenue Goal</div>';
-  html += '<div class="goal-hero-sub">Hit $' + VACATION_GOAL.toLocaleString() + ' in total revenue across all 5 locations and the team earns a vacation.</div>';
+  html += '<div class="goal-hero-sub">Hit $' + model.VACATION_GOAL.toLocaleString() + ' in total revenue across all 5 locations and the team earns a vacation.</div>';
 
-  if (won) {
+  if (model.won) {
     html += '<div class="goal-hero-amount" style="color:var(--green)">🎉 Goal Reached!</div>';
   } else {
-    html += '<div class="goal-hero-amount">' + fmtCurrency(remaining) + '</div>';
+    html += '<div class="goal-hero-amount">' + fmtCurrency(model.remaining) + '</div>';
     html += '<div class="goal-hero-target">remaining to unlock the vacation</div>';
   }
 
-  html += '<div class="goal-progress-wrap" style="margin-top:14px"><div class="goal-progress-fill" style="width:' + pct + '%"></div><span class="goal-progress-label">' + pct + '%</span></div>';
-  html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray-500);margin-top:4px"><span>' + fmtCurrency(ytdActual) + ' earned</span><span>' + fmtCurrency(VACATION_GOAL) + ' goal</span></div>';
+  html += '<div class="goal-progress-wrap" style="margin-top:14px"><div class="goal-progress-fill" style="width:' + model.pct + '%"></div><span class="goal-progress-label">' + model.pct + '%</span></div>';
+  html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray-500);margin-top:4px"><span>' + fmtCurrency(model.ytdActual) + ' earned</span><span>' + fmtCurrency(model.VACATION_GOAL) + ' goal</span></div>';
   html += '</div>';
 
-  // Stats
   html += '<div class="goal-hero-stats">';
-  html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (curPace >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (curPace >= 0 ? '+' : '') + fmtCurrency(curPace) + '</div><div class="goal-stat-label">' + (isCurLatest ? 'This Month vs Goal to Date (day ' + dayOfMonth + ' of ' + daysInMonth + ')' : 'This Month vs Goal') + '</div></div>';
-  html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (cumPace >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (cumPace >= 0 ? '+' : '') + fmtCurrency(cumPace) + '</div><div class="goal-stat-label">Cumulative Pace</div></div>';
-  html += '<div class="goal-stat"><div class="goal-stat-num">' + monthsLeft + '</div><div class="goal-stat-label">Months Left</div></div>';
-  html += '<div class="goal-stat"><div class="goal-stat-num">' + pct + '%</div><div class="goal-stat-label">Goal Complete</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (model.curPaceKnown ? (curPace >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--gray-400)') + '">' + (model.curPaceKnown ? goalSignedMoney(curPace) : '—') + '</div><div class="goal-stat-label">' + model.curPaceLabel + '</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num" style="color:' + (cumPace >= 0 ? 'var(--green)' : 'var(--red)') + '">' + goalSignedMoney(cumPace) + '</div><div class="goal-stat-label">' + model.cumPaceLabel + '</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num">' + model.monthsLeft + '</div><div class="goal-stat-label">Months Left</div></div>';
+  html += '<div class="goal-stat"><div class="goal-stat-num">' + model.pct + '%</div><div class="goal-stat-label">Goal Complete</div></div>';
   html += '</div>';
   html += '</div>';
 
-  // Monthly grid
-  const editingActuals = !!state.goalEditActuals;
   html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 20px 0;flex-wrap:wrap;">';
   html += '<div style="font-size:12px;color:var(--gray-500);font-weight:600;letter-spacing:0.3px">Monthly Pace — actual vs goal (cumulative)</div>';
   html += '<button onclick="state.goalEditActuals=!state.goalEditActuals;render()" style="border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;background:' + (editingActuals ? '#1a1a2e' : '#f1f3f9') + ';color:' + (editingActuals ? '#fff' : '#555') + ';">' + (editingActuals ? '✓ Done' : '✏️ Adjust actuals') + '</button>';
   html += '</div>';
-  html += '<div style="padding:2px 20px 0;font-size:10px;color:var(--gray-400)">Current-month actuals include the latest nightly EOS revenue reports · the in-progress month is measured against its goal to date. Use “Adjust actuals” to enter an authoritative monthly total that overrides the computed figure.</div>';
+  html += '<div style="padding:2px 20px 0;font-size:10px;color:var(--gray-400)">Actuals come from the GymDesk sync (about 7 AM and 10 PM CT); a month missing from that sync falls back to Financials. The in-progress month counts collected revenue only — scheduled bills still pending are not earned — and is measured against its goal to date. “Adjust actuals” overrides the computed company total.</div>';
   html += '<div class="goal-grid">';
   MONTHS_SHORT.forEach((mon, i) => {
     const md = monthData[i];
-    const isCurrent = i === currentMonthIdx;
+    const isCurrent = md.isCurrent;
     let cls = 'goal-month';
     if (md.hasData) cls += ' has-value';
     if (isCurrent) cls += ' is-current';
-    html += '<div class="' + cls + '">';
+    html += '<div class="' + cls + '" data-goal-month="' + i + '">';
     html += '<div class="month-label">' + mon + (isCurrent ? ' ●' : '') + '</div>';
-    if (md.hasData) {
-      // In-progress month: show pace against the prorated goal-to-date
-      const pace  = isCurrent ? md.actual - proGoal : md.pace;
-      const ahead = isCurrent ? md.cumActual - (md.cumPlanned - md.planned + proGoal) : md.ahead;
+    if (md.known) {
+      const pace = md.displayPace;
+      const ahead = md.displayAhead;
       const paceColor = pace >= 0 ? 'var(--green)' : 'var(--red)';
-      const cumColor  = ahead >= 0 ? 'var(--green)' : 'var(--red)';
-      html += '<div style="font-size:14px;font-weight:800;color:' + paceColor + ';padding:4px 0">' + (pace >= 0 ? '+' : '') + fmtCurrency(pace) + '</div>';
-      html += '<div style="font-size:10px;color:var(--gray-500)">' + (isCurrent ? 'Goal to date: ' + fmtCurrency(proGoal) + ' (of ' + fmtCurrency(md.planned) + ')' : 'Goal: ' + fmtCurrency(md.planned)) + '</div>';
+      const cumColor = ahead >= 0 ? 'var(--green)' : 'var(--red)';
+      const goalLine = (isCurrent && model.trackPhase === 'during')
+        ? 'Goal to date: ' + fmtCurrency(model.proGoal) + ' (of ' + fmtCurrency(md.planned) + ')'
+        : 'Goal: ' + fmtCurrency(md.planned);
+      html += '<div style="font-size:14px;font-weight:800;color:' + paceColor + ';padding:4px 0">' + goalSignedMoney(pace) + '</div>';
+      html += '<div style="font-size:10px;color:var(--gray-500)">' + goalLine + '</div>';
       html += '<div style="font-size:10px;color:var(--gray-500)">Actual: ' + fmtCurrency(md.actual) + '</div>';
-      html += '<div style="font-size:10px;font-weight:700;color:' + cumColor + ';margin-top:3px">' + (ahead >= 0 ? '+' : '') + fmtCurrency(ahead) + ' YTD</div>';
+      html += '<div style="font-size:10px;font-weight:700;color:' + cumColor + ';margin-top:3px">' + goalSignedMoney(ahead) + ' YTD</div>';
     } else if (md.planned > 0) {
       html += '<div style="font-size:12px;color:var(--gray-600);padding:4px 0">—</div>';
       html += '<div style="font-size:10px;color:var(--gray-600)">Goal: ' + fmtCurrency(md.planned) + '</div>';
+      if (md.pendingOnly) html += '<div style="font-size:10px;color:var(--gray-500);margin-top:3px;line-height:1.35">Collected total isn’t on this login yet. Scheduled billing is not counted as earned.</div>';
     } else {
       html += '<div style="font-size:12px;color:var(--gray-700);padding:4px 0">—</div>';
     }
-    if (editingActuals && i <= currentMonthIdx) {
+    const editable = editingActuals && (model.trackPhase === 'after' || i <= model.currentMonthIdx);
+    if (editable) {
       const ovCur = vacOverride[MFULL[i]];
-      html += '<input type="number" step="0.01" value="' + (ovCur !== undefined && ovCur !== null ? ovCur : '') + '" placeholder="auto ' + Math.round(md.autoActual) + '" onchange="goalSetOverride(\'' + MFULL[i] + '\',this.value)" style="width:100%;box-sizing:border-box;margin-top:5px;padding:5px 6px;border:1px solid #cbd5e1;border-radius:6px;font-size:11px;text-align:center;" title="Enter this month&#39;s authoritative total. Clear to revert to the computed value.">';
+      html += '<input type="number" step="0.01" value="' + (ovCur !== undefined && ovCur !== null ? ovCur : '') + '" placeholder="auto ' + goalAutoLabel(md.autoActual) + '" onchange="goalSetOverride(\'' + MFULL[i] + '\',this.value)" style="width:100%;box-sizing:border-box;margin-top:5px;padding:5px 6px;border:1px solid #cbd5e1;border-radius:6px;font-size:11px;text-align:center;" title="Enter this month&#39;s authoritative total. Clear to revert to the computed value.">';
     } else if (md.overridden) {
       html += '<div style="font-size:9px;color:#7c3aed;font-weight:700;margin-top:2px;" title="Manual override — computed figure was ' + fmtCurrency(md.autoActual) + '">✎ adjusted</div>';
     }

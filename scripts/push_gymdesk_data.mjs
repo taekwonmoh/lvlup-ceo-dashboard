@@ -18,6 +18,7 @@
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const RTDB_PATH = 'finance/gymdesk';
 const BASELINE_PATH = 'finance/plannerBaseline';
@@ -183,9 +184,13 @@ function validate(data) {
 
 function cents(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
-// Aggregates only: expected billing (memberships + sales_pos + pending) and
-// paying members for each school-month. Directors read this node; they do
-// not get finance/gymdesk. A full PUT replaces the node so it matches the snapshot.
+// Aggregates only. Directors read this node; they do not get finance/gymdesk.
+// A full PUT replaces the node so it matches the snapshot.
+//   expected_billing — memberships + sales_pos + pending (Monthly Plan gap).
+//   collected — earned revenue. Closed months use total. An in-progress month
+//     (is_partial) is memberships + sales_pos only, so scheduled bills still
+//     pending are not treated as already earned. Annual Tracker reads this.
+//   pending / is_partial — let an older dashboard derive collected if needed.
 function buildPlannerBaseline(data) {
   const out = {};
   const locs = data.franchise_revenue_2026.locations;
@@ -198,8 +203,14 @@ function buildPlannerBaseline(data) {
     out[locId] = {};
     Object.keys(months).forEach(mk => {
       const row = months[mk];
+      const partial = row.is_partial === true;
+      const pending = cents(row.pending);
+      const expected = cents(row.memberships + row.sales_pos + row.pending);
       out[locId][mk] = {
-        expected_billing: cents(row.memberships + row.sales_pos + row.pending),
+        expected_billing: expected,
+        collected: partial ? cents(row.memberships + row.sales_pos) : cents(row.total),
+        pending: pending,
+        is_partial: partial,
         paying_members: row.paying_members,
         as_of: data.as_of
       };
@@ -266,4 +277,9 @@ async function main() {
   console.log('wrote ' + RTDB_PATH + ' and ' + BASELINE_PATH + '  ' + line + '  ' + baseLine + '  as ' + email);
 }
 
-main().catch(e => die(1, e && e.stack ? e.stack : String(e)));
+export { buildPlannerBaseline, validate, cents, GD_KEY_TO_LOC };
+
+const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) {
+  main().catch(e => die(1, e && e.stack ? e.stack : String(e)));
+}
