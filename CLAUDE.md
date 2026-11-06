@@ -94,6 +94,14 @@ Sensitive revenue. It lives in Realtime Database, never in this repo and never a
 - **Push / one-time seed**: `node scripts/push_gymdesk_data.mjs <path-to-json>` (`--dry-run` validates and does not write). Env: `GOOGLE_APPLICATION_CREDENTIALS` (path to the key file) or `FIREBASE_SERVICE_ACCOUNT_JSON` (the JSON string). Optional `FIREBASE_DATABASE_URL` (default `https://lvlup-members-app-default-rtdb.firebaseio.com`).
 - **Credential Mike creates**: Google Cloud / Firebase service account named for this bot, role **Firebase Realtime Database Admin** only (`roles/firebasedatabase.admin`), JSON key stored on the bot — not in git, not a web API key, not `config/webhookSecret`. That key can write the whole database (rules do not apply to it). Do not grant the bot a broader Firebase Admin role.
 
+## Staff checklists
+
+Daily, weekly, and cycle tasks live in `index.html` (`EMP_DAILY`, `FRONTDESK_DAILY`, `lvlupWeekly`, `MIRANDA_WEEKLY`, `FRONTDESK_WEEKLY`, `LVLUP_CYCLE_CHECKLIST`). The dashboard is the only log for those checklists, verification photos, scorecard numbers, and restock items. Do not add a required Slack/`#LVLUPHQ`/`#inventory` proof step for the same work. Slack stays for questions (including `@jam`), shift coverage, urgent issues, and optional wins.
+
+- **Bathroom photo** (`ph_bathroom`, `photo: true`, `multi: true`): `tarikM` on Monday and Friday (`days: [1, 5]`); `bryanG`, `ash`, `joeyZ`, and `mirandaS` on Monday (`days: [1]`); front desk (`sueK`, `andyR`, `marioS`, `erikaD`) on Tuesday, Wednesday, Thursday, and Saturday (`days: [2, 3, 4, 6]`). Front desk still tidies bathrooms every shift inside `fd_lobby`. They upload the photo from Ops → Tasks. Ops → Photos stays hidden for `dashRole === 'frontdesk'`.
+- **Day filter:** `dailyTasksForDate(empId, dateKey)` is what `renderTasksPage`, `renderPulseBar`, and `loadHistoryDate` use. It honors `t.days` and keeps `spray_mats` / `j_spray` off Saturday. A task that is not scheduled that weekday must not count as missed.
+- **Closing:** School leads share `TASK_CLOSING` (Joey included). Old Slack EOS ids still satisfy it through `TASK_ALIASES.closing` (`eos`, `j_eos`, `eos_report`). There is no `fd_eos` task.
+
 ## Monthly Goals Planner
 
 Growth → Goals → **Monthly Plan** (`renderMonthlyGoalsPage`). One plan per school tab and month at `ceo/monthlyGoals/{locId}/{YYYY-MM}`. Directors use it to see how much revenue they still need **beyond recurring billing**, then build the events and upgrades that close that gap.
