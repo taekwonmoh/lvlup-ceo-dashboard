@@ -56,6 +56,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .nav-tab { padding: 7px 12px; border-radius: 8px; border: none; background: transparent; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--gray-500); white-space: nowrap; transition: all 0.15s; }
 .nav-tab.active { background: var(--primary); color: #fff; }
 .nav-tab:not(.active):hover { background: var(--gray-100); }
+.dash-role-pill { display: inline-flex; align-items: center; align-self: center; margin: 0 2px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .01em; white-space: nowrap; border: 1px solid transparent; }
+.dash-role-pill.admin { background: #1a1a2e; color: #fff; }
+.dash-role-pill.lead { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.dash-role-pill.ops { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+.dash-role-pill.frontdesk { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.dash-user-name { align-self: center; max-width: 140px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 700; color: var(--gray-600); padding: 0 4px; }
 
 /* KPI Cards */
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 24px; }
@@ -895,17 +901,177 @@ const CEO = 'ceo'; // root path in Firebase
    turning it on/off is a one-line, instantly-reversible change. */
 const DASH_AUTH_REQUIRED = true;
 const auth = firebase.auth();
-let dashAuth = { ready: !DASH_AUTH_REQUIRED, user: null, allowed: false, isAdmin: false, canFinance: false };
-function staffCanFinance(s) { return !!s && (s.role === 'admin' || !!(s.access && s.access.finance === true)); }
+const DASH_ROLE_IDS = ['admin', 'lead', 'ops', 'frontdesk'];
+const DASH_ROLE_LABEL = { admin: 'Admin', lead: 'School Lead', ops: 'Ops', frontdesk: 'Front Desk' };
+const DASH_SCHOOL_IDS = ['waunakee', 'eastmad', 'verona', 'deforest', 'goninjaW', 'goninjaV'];
+/* Fallback only when staff.dashRole is missing. Untagged staff stay frontdesk
+   so they never inherit executive views. Lead/ops emails are the known seats. */
+const DASH_KNOWN_SEATS = {
+  'tmurrell.lvlupma@gmail.com': { dashRole: 'lead', empId: 'tarikM' },
+  'bgoad.lvlupma@gmail.com': { dashRole: 'lead', empId: 'bryanG' },
+  'amouille.lvlupma@gmail.com': { dashRole: 'lead', empId: 'ash' },
+  'jz.lvlupma@gmail.com': { dashRole: 'lead', empId: 'joeyZ' },
+  'msmith.lvlupma@gmail.com': { dashRole: 'lead', empId: 'mirandaS' },
+  'msk.lvlupma@gmail.com': { dashRole: 'ops', empId: 'sueK' },
+  'ctrevino.lvlupma@gmail.com': { dashRole: 'ops' },
+  'mariosanchez566@gmail.com': { dashRole: 'frontdesk', empId: 'marioS' },
+  'ahoefling7@gmail.com': { dashRole: 'frontdesk', empId: 'sueK' },
+  'andy.roszkowski@gmail.com': { dashRole: 'frontdesk', empId: 'andyR' },
+  'applezgirl69@gmail.com': { dashRole: 'frontdesk', empId: 'erikaD' },
+  'waunakee@lvlupma.com': { dashRole: 'frontdesk', empId: 'sueK' },
+};
+function blankDashAuth(extra) {
+  return Object.assign({
+    ready: true, user: null, allowed: false, isAdmin: false, canFinance: false,
+    dashRole: 'frontdesk', empId: '', schools: [], name: '', access: {}, staffKey: '',
+  }, extra || {});
+}
+let dashAuth = blankDashAuth({ ready: !DASH_AUTH_REQUIRED });
+let _dashSeatAppliedFor = '';
+function staffCanFinance(s) {
+  return !!s && (s.role === 'admin' || s.dashRole === 'admin' || !!(s.access && s.access.finance === true));
+}
+function dashEmailKey(email) { return (email || '').trim().toLowerCase().replace(/\./g, ','); }
+function dashKnownSeat(email) { return DASH_KNOWN_SEATS[(email || '').trim().toLowerCase()] || null; }
+function resolveDashRole(s, email) {
+  const explicit = s && DASH_ROLE_IDS.includes(s.dashRole) ? s.dashRole : '';
+  if (explicit) return explicit;
+  if (s && s.role === 'admin') return 'admin';
+  const known = dashKnownSeat(email);
+  if (known && (known.dashRole === 'lead' || known.dashRole === 'ops')) return known.dashRole;
+  return 'frontdesk';
+}
+function resolveDashEmpId(s, email) {
+  const id = s && typeof s.empId === 'string' ? s.empId : '';
+  if (id && typeof TASK_EMPLOYEES !== 'undefined' && TASK_EMPLOYEES.some(e => e.id === id)) return id;
+  const known = dashKnownSeat(email);
+  if (known && known.empId && typeof TASK_EMPLOYEES !== 'undefined' && TASK_EMPLOYEES.some(e => e.id === known.empId)) return known.empId;
+  return '';
+}
+function dashSchoolsFrom(s) {
+  const raw = s && s.schools;
+  const ids = [];
+  if (Array.isArray(raw)) raw.forEach(k => { if (DASH_SCHOOL_IDS.includes(k) && !ids.includes(k)) ids.push(k); });
+  else if (raw && typeof raw === 'object') DASH_SCHOOL_IDS.forEach(k => { if (raw[k]) ids.push(k); });
+  return ids;
+}
+function dashRoleNow() {
+  if (location.hash === '#clock') return 'admin';
+  if (!DASH_AUTH_REQUIRED) return 'admin';
+  return (dashAuth && DASH_ROLE_IDS.includes(dashAuth.dashRole)) ? dashAuth.dashRole : 'frontdesk';
+}
+function dashCan(feature) {
+  if (location.hash === '#clock' || !DASH_AUTH_REQUIRED) return true;
+  const r = dashRoleNow();
+  if (r === 'admin') return true;
+  const access = (dashAuth && dashAuth.access) || {};
+  switch (feature) {
+    case 'l10': return r === 'lead' || r === 'ops';
+    case 'tasksAll': return r === 'lead' || r === 'ops';
+    case 'photos': return r === 'lead' || r === 'ops';
+    case 'timesheets':
+    case 'payroll': return r === 'ops';
+    case 'shiftEdit': return r === 'lead' || r === 'ops';
+    case 'holds':
+    case 'applications': return r === 'lead' || r === 'ops';
+    case 'timeoffDecide': return r === 'lead' || r === 'ops';
+    case 'growth':
+      if (r === 'lead') return true;
+      if (r === 'ops') return access.growth === true || access.finance === true;
+      return false;
+    case 'growthPages':
+      if (r === 'lead') return true;
+      if (r === 'ops') return access.growth === true;
+      return false;
+    default: return true;
+  }
+}
+function dashSectionAllowed(s) {
+  if (location.hash === '#clock' || !DASH_AUTH_REQUIRED) return true;
+  if (s === 'home' || s === 'development') return true;
+  if (s === 'photos') return dashCan('photos');
+  if (['tasks', 'events', 'testing', 'accountability', 'inventory'].includes(s)) return true;
+  if (s === 'holds') return dashCan('holds');
+  if (s === 'applications') return dashCan('applications');
+  if (['feedback', 'watchlist', 'firstfive', 'reviews', 'incidents'].includes(s)) return true;
+  if (s === 'finance') return !!dashAuth.canFinance && dashCan('growth');
+  if (['goals', 'marketing', 'scorecard', 'financials', 'rocks'].includes(s)) return dashCan('growthPages');
+  return false;
+}
+function dashFallbackSection(s) {
+  if (['tasks', 'events', 'testing', 'accountability', 'inventory', 'photos'].includes(s)) return 'tasks';
+  if (['feedback', 'watchlist', 'holds', 'applications', 'firstfive', 'reviews', 'incidents'].includes(s)) return 'feedback';
+  if (dashSectionAllowed('scorecard')) return 'scorecard';
+  if (dashSectionAllowed('finance')) return 'finance';
+  return 'home';
+}
+function dashGuardSection() {
+  if (!DASH_AUTH_REQUIRED || !dashAuth.allowed) return;
+  if (state.teamAccessOpen && !dashAuth.isAdmin) state.teamAccessOpen = false;
+  const aliases = { performance: 'scorecard', acq: 'scorecard', monthlyGoals: 'goals', l10: 'home', leadership: 'accountability', rocks: 'scorecard' };
+  if (aliases[state.activeSection]) state.activeSection = aliases[state.activeSection];
+  if (!dashSectionAllowed(state.activeSection)) state.activeSection = dashFallbackSection(state.activeSection);
+  if (state.opsSection && !dashSectionAllowed(state.opsSection)) state.opsSection = 'tasks';
+  if (state.growthSection && !dashSectionAllowed(state.growthSection)) {
+    state.growthSection = dashSectionAllowed('scorecard') ? 'scorecard' : (dashSectionAllowed('finance') ? 'finance' : 'scorecard');
+  }
+}
+function dashTasksLocked() {
+  return DASH_AUTH_REQUIRED && dashRoleNow() === 'frontdesk' && !!dashAuth.empId &&
+    typeof TASK_EMPLOYEES !== 'undefined' && TASK_EMPLOYEES.some(e => e.id === dashAuth.empId);
+}
+function enforceDashTaskSeat() {
+  if (!DASH_AUTH_REQUIRED || !dashAuth.user || !dashAuth.user.email) return;
+  const key = dashAuth.user.email.trim().toLowerCase();
+  const id = dashAuth.empId;
+  const valid = !!(id && typeof TASK_EMPLOYEES !== 'undefined' && TASK_EMPLOYEES.some(e => e.id === id));
+  if (_dashSeatAppliedFor !== key) {
+    _dashSeatAppliedFor = key;
+    state._pbDefaulted = false;
+    if (valid) { state.tasksLoc = id; state.wallPostEmp = id; }
+  }
+  if (!state._pbDefaulted) {
+    state._pbDefaulted = true;
+    if (!state.pbRole) {
+      if (dashAuth.dashRole === 'frontdesk') state.pbRole = 'frontdesk';
+      else if (dashAuth.dashRole === 'lead') state.pbRole = 'instructor';
+    }
+  }
+  if (dashTasksLocked()) {
+    state.tasksLoc = id;
+    if (state.tasksTab === 'history') state.tasksTab = 'sheets';
+  }
+}
+function dashAuthFromStaff(u, s, key) {
+  const email = (u && u.email) || '';
+  const dashRole = resolveDashRole(s, email);
+  return {
+    ready: true,
+    user: u,
+    allowed: s.role === 'admin' || (!!s.role && !!(s.access && s.access.dashboard === true)),
+    isAdmin: s.role === 'admin' || dashRole === 'admin',
+    canFinance: staffCanFinance(s),
+    dashRole: dashRole,
+    empId: resolveDashEmpId(s, email),
+    schools: dashSchoolsFrom(s),
+    name: (s && s.name ? String(s.name) : '').trim(),
+    access: (s && s.access && typeof s.access === 'object') ? s.access : {},
+    staffKey: key,
+  };
+}
 auth.onAuthStateChanged(async (u) => {
-  if (!DASH_AUTH_REQUIRED) { dashAuth = { ready: true, user: u || null, allowed: false, isAdmin: false, canFinance: false }; return; }
-  if (!u || !u.email || !u.emailVerified) { dashAuth = { ready: true, user: u || null, allowed: false, isAdmin: false, canFinance: false }; render(); return; }
-  const key = u.email.trim().toLowerCase().replace(/\./g, ',');
+  if (!DASH_AUTH_REQUIRED) { dashAuth = blankDashAuth({ user: u || null, allowed: false, dashRole: 'admin' }); return; }
+  if (!u || !u.email || !u.emailVerified) { dashAuth = blankDashAuth(); state.teamAccessOpen = false; render(); return; }
+  const key = dashEmailKey(u.email);
   try {
     const s = (await db.ref('staff/' + key).once('value')).val() || {};
-    dashAuth = { ready: true, user: u, allowed: s.role === 'admin' || (!!s.role && !!(s.access && s.access.dashboard === true)), isAdmin: s.role === 'admin', canFinance: staffCanFinance(s) };
-  } catch (e) { dashAuth = { ready: true, user: u, allowed: false, isAdmin: false, canFinance: false }; }
-  if (dashAuth.allowed) attachDataListeners();   // re-attach reads authenticated (needed once the DB rules are locked)
+    dashAuth = dashAuthFromStaff(u, s, key);
+  } catch (e) { dashAuth = blankDashAuth({ user: u }); }
+  if (dashAuth.allowed) {
+    enforceDashTaskSeat();
+    attachDataListeners();   // re-attach reads authenticated (needed once the DB rules are locked)
+    if (dashAuth.isAdmin) ensureStaffDirectory();
+  }
   render();
 });
 function dashSignIn(){ const prov = new firebase.auth.GoogleAuthProvider(); prov.setCustomParameters({ prompt: 'select_account' }); auth.signInWithPopup(prov).catch(e => { state.gateMsg = 'Sign-in failed: ' + (e.message || e.code || 'try again'); render(); }); }
@@ -2202,6 +2368,9 @@ function migrateFeedbackTrackingToAll() {
 
 /*  -  -  Navigation  -  -  */
 function setSection(s) {
+  const aliases = { performance: 'scorecard', acq: 'scorecard', monthlyGoals: 'goals', l10: 'home', leadership: 'accountability', rocks: 'scorecard' };
+  if (aliases[s]) s = aliases[s];
+  if (!dashSectionAllowed(s)) s = dashFallbackSection(s);
   state.activeSection = s;
   // Remember last-visited sub-section per group so tabs restore correctly
   if (['tasks','events','testing','accountability','inventory','photos'].includes(s)) state.opsSection = s;
@@ -2427,14 +2596,15 @@ function renderOpsPage() {
   const s = state.activeSection;
   const toPending = tcPendingTimeoffCount();
   const schedBadge = toPending ? ' <span title="' + toPending + ' time-off request' + (toPending === 1 ? '' : 's') + ' awaiting approval" style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#d97706;color:#fff;font-size:10px;font-weight:800;vertical-align:middle;">' + toPending + '</span>' : '';
-  const nav = renderGroupSubNav([
+  const opsTabs = [
     { id: 'tasks',          label: '✅ Tasks'         },
     { id: 'events',         label: '📅 Events'        },
     { id: 'testing',        label: '🥋 Testing'       },
     { id: 'accountability', label: '⏱ Schedule' + schedBadge },
     { id: 'inventory',      label: '📦 Inventory'     },
-    { id: 'photos',         label: '📸 Photos'        },
-  ]);
+  ];
+  if (dashCan('photos')) opsTabs.push({ id: 'photos', label: '📸 Photos' });
+  const nav = renderGroupSubNav(opsTabs);
   const pulse = renderPulseBar();
   if (s === 'events')         return pulse + nav + renderEventsPage();
   if (s === 'testing')        return pulse + nav + renderTestingPrepPage();
@@ -2795,14 +2965,17 @@ function renderMembersPage() {
   const openShirts = f5All().filter(r => !r.shirtGiven).length;
   const openReviews = rvOpenCount();
   const openInc = incOpenCount();
-  const nav = renderGroupSubNav([
-    { id: 'feedback',     label: '👥 Students' },
-    { id: 'holds',        label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') },
-    { id: 'applications', label: '📋 Applications' + (openApps ? ' (' + openApps + ')' : '') },
-    { id: 'firstfive',    label: '🥋 First 5' + (openShirts ? ' (' + openShirts + ')' : '') },
-    { id: 'reviews',      label: '⭐ Reviews' + (openReviews ? ' (' + openReviews + ')' : '') },
-    { id: 'incidents',    label: '🚑 Incidents' + (openInc ? ' (' + openInc + ')' : '') },
-  ]);
+  const memberTabs = [
+    { id: 'feedback',  label: '👥 Students' },
+    { id: 'watchlist', label: '👀 Watchlist' },
+  ];
+  if (dashCan('holds')) memberTabs.push({ id: 'holds', label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') });
+  if (dashCan('applications')) memberTabs.push({ id: 'applications', label: '📋 Applications' + (openApps ? ' (' + openApps + ')' : '') });
+  memberTabs.push({ id: 'firstfive', label: '🥋 First 5' + (openShirts ? ' (' + openShirts + ')' : '') });
+  memberTabs.push({ id: 'reviews', label: '⭐ Reviews' + (openReviews ? ' (' + openReviews + ')' : '') });
+  memberTabs.push({ id: 'incidents', label: '🚑 Incidents' + (openInc ? ' (' + openInc + ')' : '') });
+  const nav = renderGroupSubNav(memberTabs);
+  if (s === 'watchlist') return nav + renderWatchListPage();
   if (s === 'holds') return nav + renderHoldsPage();
   if (s === 'applications') return nav + renderApplicationsPage();
   if (s === 'firstfive') return nav + renderFirstFivePage();
@@ -3178,19 +3351,21 @@ function renderHoldCard(r){
 
 function renderGrowthPage() {
   const s = state.activeSection;
-  const growthTabs = [
-    { id: 'scorecard',  label: '📊 Scorecard'   },
-    { id: 'goals',      label: '🎯 Goals'       },
-    { id: 'marketing',  label: '📱 Marketing'   },
-    { id: 'financials', label: '💰 Financials'  },
-  ];
+  const growthTabs = [];
+  if (dashCan('growthPages')) {
+    growthTabs.push({ id: 'scorecard',  label: '📊 Scorecard'   });
+    growthTabs.push({ id: 'goals',      label: '🎯 Goals'       });
+    growthTabs.push({ id: 'marketing',  label: '📱 Marketing'   });
+    growthTabs.push({ id: 'financials', label: '💰 Financials'  });
+  }
   // Revenue tab is finance/admin only. Scale (PIN-gated ACQ) stays hidden.
-  if (dashAuth.canFinance) growthTabs.push({ id: 'finance', label: '💵 GymDesk' });
+  if (dashAuth.canFinance && dashCan('growth')) growthTabs.push({ id: 'finance', label: '💵 GymDesk' });
   const nav = renderGroupSubNav(growthTabs);
-  if (s === 'scorecard')  return nav + renderScorecardPage();
-  if (s === 'financials') return nav + renderPerformancePage();
-  if (s === 'marketing')  return nav + renderMarketingPage();
-  if (s === 'finance')    return nav + renderGymdeskFinancePage();
+  if (s === 'scorecard' && dashCan('growthPages'))  return nav + renderScorecardPage();
+  if (s === 'financials' && dashCan('growthPages')) return nav + renderPerformancePage();
+  if (s === 'marketing' && dashCan('growthPages'))  return nav + renderMarketingPage();
+  if (s === 'finance' && dashAuth.canFinance && dashCan('growth')) return nav + renderGymdeskFinancePage();
+  if (!dashCan('growthPages')) return nav + (dashAuth.canFinance && dashCan('growth') ? renderGymdeskFinancePage() : '');
   return nav + renderGoalsPage();
 }
 
@@ -3591,6 +3766,151 @@ function renderCrModal(){
   return h;
 }
 
+/* ── Team Access — admins edit staff/{emailKey} without leaving the dashboard ── */
+function staffRecordEmail(key, rec) {
+  if (rec && typeof rec.email === 'string' && rec.email.indexOf('@') > 0) return rec.email.trim().toLowerCase();
+  return String(key || '').replace(/,/g, '.');
+}
+function ensureStaffDirectory() {
+  if (!dashAuth.isAdmin || state._staffListen) return;
+  state._staffListen = true;
+  const ref = db.ref('staff');
+  ref.on('value', snap => {
+    state.staffDir = snap.val() || {};
+    state.staffDirErr = '';
+    if (state.teamAccessOpen) render();
+  }, err => {
+    state.staffDirErr = (err && (err.message || err.code)) || 'Could not read staff';
+    if (state.teamAccessOpen) render();
+  });
+}
+function openTeamAccess() { if (!dashAuth.isAdmin) return; state.teamAccessOpen = true; ensureStaffDirectory(); render(); }
+function closeTeamAccess() { state.teamAccessOpen = false; render(); }
+function teamDashOn(rec) { return !(rec && rec.access && rec.access.dashboard === false); }
+function teamPreserve(key, extra) {
+  const cur = (state.staffDir || {})[key] || {};
+  const role = cur.role === 'admin' ? 'admin' : 'staff';
+  return db.ref('staff/' + key).update(Object.assign({ role: role }, extra || {})).then(function () {
+    return db.ref('staff/' + key + '/access').update({ dashboard: teamDashOn(cur) });
+  }).catch(function (err) { alert('Could not save that login: ' + ((err && err.message) || 'permission denied')); });
+}
+function teamSetDashRole(key, dashRole) { if (DASH_ROLE_IDS.indexOf(dashRole) < 0) return; teamPreserve(key, { dashRole: dashRole }); }
+function teamSetEmp(key, empId) {
+  const id = empId && TASK_EMPLOYEES.some(function (e) { return e.id === empId; }) ? empId : null;
+  teamPreserve(key, { empId: id });
+}
+function teamSetName(key, name) { teamPreserve(key, { name: (name || '').trim() || null }); }
+function teamToggleSchool(key, locId) {
+  if (DASH_SCHOOL_IDS.indexOf(locId) < 0) return;
+  const cur = ((state.staffDir || {})[key] || {}).schools || {};
+  const next = {};
+  DASH_SCHOOL_IDS.forEach(function (id) { if (cur[id]) next[id] = true; });
+  if (next[locId]) delete next[locId]; else next[locId] = true;
+  teamPreserve(key, { schools: Object.keys(next).length ? next : null });
+}
+function teamSetDashboard(key, on) {
+  const cur = (state.staffDir || {})[key] || {};
+  const role = cur.role === 'admin' ? 'admin' : 'staff';
+  db.ref('staff/' + key).update({ role: role }).then(function () {
+    return db.ref('staff/' + key + '/access').update({ dashboard: !!on });
+  }).catch(function (err) { alert('Could not update access: ' + ((err && err.message) || 'permission denied')); });
+}
+function teamRevoke(key) {
+  const rec = (state.staffDir || {})[key] || {};
+  const email = staffRecordEmail(key, rec);
+  if (!confirm('Remove dashboard access for ' + email + '? Their website role stays ' + (rec.role === 'admin' ? 'admin' : 'staff') + ' so the members-site rules stay valid.')) return;
+  teamSetDashboard(key, false);
+}
+function teamRestore(key) { teamSetDashboard(key, true); }
+function teamAccessAdd() {
+  const emailEl = document.getElementById('taEmail');
+  const nameEl = document.getElementById('taName');
+  const roleEl = document.getElementById('taRole');
+  const empEl = document.getElementById('taEmp');
+  const email = ((emailEl && emailEl.value) || '').trim().toLowerCase();
+  if (!email || email.indexOf('@') < 1) { alert('Enter the Google email they sign in with.'); return; }
+  const key = dashEmailKey(email);
+  const cur = (state.staffDir || {})[key] || {};
+  const role = cur.role === 'admin' ? 'admin' : 'staff';
+  const dashRole = roleEl && DASH_ROLE_IDS.indexOf(roleEl.value) >= 0 ? roleEl.value : 'frontdesk';
+  const empId = empEl && TASK_EMPLOYEES.some(function (e) { return e.id === empEl.value; }) ? empEl.value : null;
+  const name = ((nameEl && nameEl.value) || cur.name || '').trim();
+  db.ref('staff/' + key).update({ role: role, dashRole: dashRole, empId: empId, name: name || null }).then(function () {
+    return db.ref('staff/' + key + '/access').update({ dashboard: true });
+  }).then(function () {
+    if (emailEl) emailEl.value = '';
+    if (nameEl) nameEl.value = '';
+  }).catch(function (err) { alert('Could not add that login: ' + ((err && err.message) || 'permission denied')); });
+}
+function renderTeamAccessModal() {
+  const dir = state.staffDir;
+  const sel = 'border:1px solid #e3e6ef;border-radius:8px;padding:6px 8px;font-size:12px;font-family:inherit;background:#fff;';
+  const roleOpts = DASH_ROLE_IDS.map(function (id) { return '<option value="' + id + '">' + esc(DASH_ROLE_LABEL[id]) + '</option>'; }).join('');
+  const empOpts = '<option value="">— none —</option>' + TASK_EMPLOYEES.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('');
+  const rows = dir ? Object.keys(dir).map(function (key) { return { key: key, rec: dir[key] || {} }; }) : [];
+  rows.sort(function (a, b) {
+    const ar = resolveDashRole(a.rec, staffRecordEmail(a.key, a.rec));
+    const br = resolveDashRole(b.rec, staffRecordEmail(b.key, b.rec));
+    const ao = DASH_ROLE_IDS.indexOf(ar), bo = DASH_ROLE_IDS.indexOf(br);
+    if (ao !== bo) return ao - bo;
+    return staffRecordEmail(a.key, a.rec).localeCompare(staffRecordEmail(b.key, b.rec));
+  });
+  const active = rows.filter(function (r) { return teamDashOn(r.rec); });
+  const inactive = rows.filter(function (r) { return !teamDashOn(r.rec); });
+  const rowHtml = function (entry, revoked) {
+    const rec = entry.rec;
+    const key = entry.key;
+    const email = staffRecordEmail(key, rec);
+    const dashRole = resolveDashRole(rec, email);
+    const empId = (rec.empId && TASK_EMPLOYEES.some(function (e) { return e.id === rec.empId; })) ? rec.empId : (resolveDashEmpId(rec, email) || '');
+    const webRole = rec.role === 'admin' ? 'admin' : 'staff';
+    let h = '<div style="padding:12px 0;border-bottom:1px solid #eef0f6;' + (revoked ? 'opacity:.55;' : '') + '">';
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">';
+    h += '<label style="flex:1.2;min-width:160px;font-size:10px;font-weight:800;color:#8892a6;text-transform:uppercase;">Name<input value="' + esc(rec.name || '') + '" onchange="teamSetName(\'' + key + '\',this.value)" style="' + sel + 'width:100%;box-sizing:border-box;margin-top:4px;font-weight:700;color:#1a1a2e;"></label>';
+    h += '<div style="flex:1.6;min-width:200px;"><div style="font-size:10px;font-weight:800;color:#8892a6;text-transform:uppercase;">Login</div><div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-top:6px;word-break:break-all;">' + esc(email) + '</div><div style="font-size:11px;color:#94a3b8;margin-top:2px;">website role · ' + esc(webRole) + '</div></div>';
+    h += '<label style="min-width:140px;font-size:10px;font-weight:800;color:#8892a6;text-transform:uppercase;">Dashboard<select onchange="teamSetDashRole(\'' + key + '\',this.value)" style="' + sel + 'width:100%;margin-top:4px;">' + roleOpts.replace('value="' + dashRole + '"', 'value="' + dashRole + '" selected') + '</select></label>';
+    h += '<label style="flex:1.4;min-width:180px;font-size:10px;font-weight:800;color:#8892a6;text-transform:uppercase;">Checklist<select onchange="teamSetEmp(\'' + key + '\',this.value)" style="' + sel + 'width:100%;margin-top:4px;">' + empOpts.replace('value="' + empId + '"', 'value="' + empId + '" selected') + '</select></label>';
+    h += '<button onclick="' + (revoked ? 'teamRestore' : 'teamRevoke') + '(\'' + key + '\')" style="padding:8px 12px;border-radius:8px;border:1px solid ' + (revoked ? '#86efac' : '#fecaca') + ';background:#fff;color:' + (revoked ? '#15803d' : '#dc2626') + ';font-size:12px;font-weight:800;cursor:pointer;">' + (revoked ? 'Restore' : 'Remove') + '</button>';
+    h += '</div>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">';
+    DASH_SCHOOL_IDS.forEach(function (locId) {
+      const on = !!(rec.schools && rec.schools[locId]);
+      const short = (LOCATIONS.find(function (l) { return l.id === locId; }) || {}).short || locId;
+      h += '<button type="button" onclick="teamToggleSchool(\'' + key + '\',\'' + locId + '\')" style="padding:3px 8px;border-radius:999px;border:1px solid ' + (on ? '#1d4ed8' : '#e3e6ef') + ';background:' + (on ? '#eff6ff' : '#fff') + ';color:' + (on ? '#1d4ed8' : '#64748b') + ';font-size:11px;font-weight:700;cursor:pointer;">' + esc(short) + '</button>';
+    });
+    h += '</div></div>';
+    return h;
+  };
+  let h = '<div onclick="closeTeamAccess()" style="position:fixed;inset:0;background:rgba(15,20,35,.55);z-index:1100;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px;">';
+  h += '<div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px;max-width:980px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.28);">';
+  h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid #eef0f6;">';
+  h += '<div><div style="font-size:17px;font-weight:800;color:#1a1a2e;">👥 Team Access</div><div style="font-size:12px;color:#64748b;margin-top:3px;line-height:1.45;">Who can open this dashboard, which tier they see, and which checklist opens for them. Website role stays <b>admin</b> or <b>staff</b>, and dashboard access stays on, so the members-site rules stay valid.</div></div>';
+  h += '<button onclick="closeTeamAccess()" style="background:#f1f3f9;border:none;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;color:#666;">×</button>';
+  h += '</div>';
+  h += '<div style="padding:16px 20px 8px;">';
+  h += '<div style="font-size:12px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">Add a login</div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">';
+  h += '<input id="taEmail" placeholder="name@email.com" style="' + sel + 'flex:1.4;min-width:180px;padding:8px 10px;">';
+  h += '<input id="taName" placeholder="Display name" style="' + sel + 'flex:1;min-width:120px;padding:8px 10px;">';
+  h += '<select id="taRole" style="' + sel + 'min-width:130px;padding:8px 10px;">' + roleOpts.replace('value="frontdesk"', 'value="frontdesk" selected') + '</select>';
+  h += '<select id="taEmp" style="' + sel + 'flex:1.2;min-width:160px;padding:8px 10px;">' + empOpts + '</select>';
+  h += '<button onclick="teamAccessAdd()" style="padding:8px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;">Add login</button>';
+  h += '</div></div>';
+  h += '<div style="padding:8px 20px 18px;">';
+  if (state.staffDirErr) h += '<div style="background:#fef2f2;color:#b91c1c;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:10px;">' + esc(state.staffDirErr) + '</div>';
+  if (!dir) h += '<div style="color:#94a3b8;font-size:13px;padding:18px 0;">Loading team…</div>';
+  else if (!rows.length) h += '<div style="color:#94a3b8;font-size:13px;padding:18px 0;">No staff logins yet.</div>';
+  else {
+    active.forEach(function (entry) { h += rowHtml(entry, false); });
+    if (inactive.length) {
+      h += '<div style="font-size:11px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin:16px 0 4px;">Removed from the dashboard</div>';
+      inactive.forEach(function (entry) { h += rowHtml(entry, true); });
+    }
+  }
+  h += '</div></div></div>';
+  return h;
+}
+
 function render() {
   gdDestroyFinanceCharts();
   const app = document.getElementById('app');
@@ -3620,7 +3940,9 @@ function render() {
   if (state.opsSection === 'scorecard') state.opsSection = 'tasks';   // Scorecard moved to Growth
   if (state.growthSection === 'acq') state.growthSection = 'goals';
   if (state.growthSection === 'rocks') state.growthSection = 'scorecard';   // Rocks removed
-  if (state.activeSection === 'finance' && !dashAuth.canFinance) { state.activeSection = 'goals'; state.growthSection = 'goals'; }
+  if (state.activeSection === 'finance' && !dashAuth.canFinance) { state.activeSection = dashSectionAllowed('scorecard') ? 'scorecard' : 'home'; state.growthSection = state.activeSection; }
+  enforceDashTaskSeat();
+  dashGuardSection();
   const s = state.activeSection;
 
   app.innerHTML = renderHeader() +
@@ -3630,7 +3952,8 @@ function render() {
      ['feedback','watchlist','holds','applications','firstfive','reviews','incidents'].includes(s)   ? renderMembersPage()   :
      ['goals','marketing','scorecard','rocks','financials','finance'].includes(s) ? renderGrowthPage() :
      s === 'development'                                                      ? renderResourcesPage() :
-     '');
+     '') +
+    (state.teamAccessOpen && dashAuth.isAdmin ? renderTeamAccessModal() : '');
   requestAnimationFrame(initSortable);
   if (state.tcMapLoc) requestAnimationFrame(tcInitMap);
   if (s === 'finance') requestAnimationFrame(initGymdeskFinanceCharts);
@@ -3648,19 +3971,32 @@ function renderHeader() {
     return null;
   };
   const activeGroup = getGroup(cur);
+  const opsTarget = () => { const s = state.opsSection || 'tasks'; return dashSectionAllowed(s) ? s : 'tasks'; };
+  const growthTarget = () => {
+    const s = state.growthSection || 'scorecard';
+    if (dashSectionAllowed(s)) return s;
+    if (dashSectionAllowed('scorecard')) return 'scorecard';
+    if (dashSectionAllowed('finance')) return 'finance';
+    return 'home';
+  };
   const tabs = [
-    { group: 'home',    label: '🏠 Home',     target: () => 'home' },
-    { group: 'ops',     label: '⚙️ Ops',      target: () => state.opsSection     || 'tasks'       },
-    { group: 'members', label: '👥 Members',  target: () => 'feedback'            },
-    { group: 'growth',  label: '📈 Growth',   target: () => state.growthSection  || 'goals'        },
-    { group: 'resources', label: '📚 Training', target: () => 'development' },
-  ];
+    { group: 'home',    label: '🏠 Home',     target: () => 'home', show: true },
+    { group: 'ops',     label: '⚙️ Ops',      target: opsTarget, show: true },
+    { group: 'members', label: '👥 Members',  target: () => 'feedback', show: true },
+    { group: 'growth',  label: '📈 Growth',   target: growthTarget, show: dashCan('growth') },
+    { group: 'resources', label: '📚 Training', target: () => 'development', show: true },
+  ].filter(t => t.show);
+  const role = dashRoleNow();
+  const rolePill = '<span class="dash-role-pill ' + role + '" title="' + esc(DASH_ROLE_LABEL[role] || role) + '">' + esc(DASH_ROLE_LABEL[role] || 'Front Desk') + '</span>';
+  const whoHtml = dashAuth.name ? '<span class="dash-user-name" title="' + esc((dashAuth.user && dashAuth.user.email) || dashAuth.name) + '">' + esc(dashAuth.name) + '</span>' : '';
   return '<div class="header">' +
     '<h1><img src="images/lvlup-logo.png" alt="LVLUP" style="height:32px;width:auto;vertical-align:middle;"> <span style="color:#ccc;font-weight:300;font-size:1.5rem;">/</span> <img src="images/goninja-logo.png" alt="Go Ninja" style="height:30px;width:auto;vertical-align:middle;"> <span style="margin-left:2px;">HQ Dashboard</span></h1>' +
     '<div class="nav-tabs">' +
     tabs.map(t =>
       '<button class="nav-tab ' + (activeGroup === t.group ? 'active' : '') + '" onclick="setSection(\'' + t.target() + '\')">' + t.label + '</button>'
     ).join('') +
+    rolePill + whoHtml +
+    (dashAuth.isAdmin ? '<button class="nav-tab" title="Team Access" onclick="openTeamAccess()">👥 Access</button>' : '') +
     (DASH_AUTH_REQUIRED && dashAuth.user ? '<button class="nav-tab" title="Sign out ' + esc(dashAuth.user.email) + '" onclick="dashSignOut()" style="color:#94a3b8;">⎋</button>' : '') +
     '<button class="nav-tab" title="Lock this device" onclick="gateLock()" style="color:#94a3b8;">🔒</button>' +
     '</div></div>';
@@ -3745,7 +4081,8 @@ function renderPulseBar() {
   const todayKey = new Date().toISOString().split('T')[0];
   const thisWeekKey = getTaskWeekKey(todayKey);
   let tasksDone = 0, tasksTotal = 0;
-  TASK_EMPLOYEES.forEach(emp => {
+  const pulseEmps = dashTasksLocked() ? TASK_EMPLOYEES.filter(emp => emp.id === dashAuth.empId) : TASK_EMPLOYEES;
+  pulseEmps.forEach(emp => {
     const daily = getDailyTasks(emp.id);
     tasksTotal += daily.length;
     const done = ((state.tasksData[emp.id] || {}).daily || {})[todayKey] || {};
@@ -3843,8 +4180,8 @@ function renderHomePage() {
   // 60-Second Story — a kid-friendly story tied to this cycle's life skill / mat chat
   html += renderMatStory(cycle);
 
-  // Weekly Agenda (formerly the L10 meeting) embedded on Home
-  html += '<div style="margin-top:8px">' + renderL10Page() + '</div>';
+  // Weekly L10 agenda stays on Home for admin, school leads, and ops. Front desk does not see it.
+  if (dashCan('l10')) html += '<div style="margin-top:8px">' + renderL10Page() + '</div>';
 
   return html;
 }
@@ -4451,15 +4788,43 @@ function tcMyStaffId(){
   return null;
 }
 function tcSchedScope(){
+  // #clock keeps the original grandfather rule so the unsigned kiosk is unchanged.
+  if (location.hash === '#clock') {
+    if (!DASH_AUTH_REQUIRED || dashAuth.isAdmin) return null;
+    const sc0 = (tcData().schedulers || {})[tcEmailKey((dashAuth.user && dashAuth.user.email) || '')];
+    if (!sc0 || (!(Array.isArray(sc0.locs) && sc0.locs.length) && !sc0.self)) return null;
+    return { locs: new Set(sc0.locs || []), selfId: sc0.self ? tcMyStaffId() : null };
+  }
   if (!DASH_AUTH_REQUIRED || dashAuth.isAdmin) return null;                 // full edit
+  const role = dashRoleNow();
+  if (role === 'ops') return null;                                          // payroll reviewers edit every shift
+  if (role === 'frontdesk') return { locs: new Set(), selfId: null, readOnly: true };
   const sc = (tcData().schedulers || {})[tcEmailKey((dashAuth.user && dashAuth.user.email) || '')];
-  if (!sc || (!(Array.isArray(sc.locs) && sc.locs.length) && !sc.self)) return null;  // grandfathered → full edit
-  return { locs: new Set(sc.locs || []), selfId: sc.self ? tcMyStaffId() : null };
+  if (sc && ((Array.isArray(sc.locs) && sc.locs.length) || sc.self)) {
+    return { locs: new Set(sc.locs || []), selfId: sc.self ? tcMyStaffId() : null };
+  }
+  // School leads edit their staff.schools (plus their own shifts) when no scheduler scope is set.
+  return { locs: new Set(dashAuth.schools || []), selfId: tcMyStaffId() };
 }
 function tcCanEditShift(loc, staffId){
-  const sc = tcSchedScope(); if (!sc) return true;
+  if (location.hash === '#clock') {
+    const scK = tcSchedScope(); if (!scK) return true;
+    if (staffId && scK.selfId && staffId === scK.selfId) return true;
+    return !!loc && scK.locs.has(loc);
+  }
+  if (!dashCan('shiftEdit')) return false;
+  const sc = tcSchedScope(); if (!sc || sc.readOnly) return !sc;
   if (staffId && sc.selfId && staffId === sc.selfId) return true;
   return !!loc && sc.locs.has(loc);
+}
+function tcCanAddShift(staffId, locHint){
+  if (location.hash === '#clock') return true;
+  if (!dashCan('shiftEdit')) return false;
+  const sc = tcSchedScope(); if (!sc) return true;
+  if (sc.readOnly) return false;
+  if (staffId && sc.selfId && staffId === sc.selfId) return true;
+  if (locHint) return sc.locs.has(locHint);
+  return sc.locs.size > 0;
 }
 function tcScopeNames(sc){ return [...(sc ? sc.locs : [])].map(l => (LOCATIONS.find(x => x.id === l) || {}).name || l).join(', '); }
 function tcScopeBlock(){
@@ -4851,8 +5216,14 @@ function renderTcPto(){
   // everyone else sees nothing. Enforced only when the sign-in gate is on (we know the viewer then).
   let visible = ft, selfOnly = false;
   if (DASH_AUTH_REQUIRED) {
-    const email = ((dashAuth.user && dashAuth.user.email) || '').trim().toLowerCase();
-    if (!dashAuth.isAdmin) { visible = email ? ft.filter(s => (s.email || '').trim().toLowerCase() === email) : []; selfOnly = true; }
+    const role = dashRoleNow();
+    if (dashAuth.isAdmin || role === 'ops') { visible = ft; selfOnly = false; }
+    else {
+      const email = ((dashAuth.user && dashAuth.user.email) || '').trim().toLowerCase();
+      const name = (dashAuth.name || '').trim().toLowerCase();
+      visible = ft.filter(s => (email && (s.email || '').trim().toLowerCase() === email) || (name && (s.name || '').trim().toLowerCase() === name));
+      selfOnly = true;
+    }
     if (!visible.length) return '';
   }
   let h = '<div class="section" style="margin-bottom:22px;">';
@@ -4882,19 +5253,22 @@ function renderTcPto(){
 
 function renderAccountabilityPage(){
   let h = '<div class="page" style="max-width:1100px;">';
-  h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;"><div><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Schedule</h2><p style="margin:0;font-size:13px;color:#888;">Clock in/out with geo-fence, weekly timesheet, PTO, and the team schedule.</p></div>';
+  const schedBlurb = dashCan('timesheets')
+    ? 'Clock in/out with geo-fence, weekly timesheet, payroll, and the team schedule.'
+    : (dashCan('shiftEdit') ? 'Weekly schedule, time-off requests, shift edits for your schools, and your PTO.' : 'Read-only weekly schedule, time-off requests, and your own PTO.');
+  h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;"><div><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">⏱ Staff Schedule</h2><p style="margin:0;font-size:13px;color:#888;">' + schedBlurb + '</p></div>';
   h += '<a href="#clock" target="_blank" style="flex-shrink:0;padding:9px 15px;background:#1a1a2e;color:#fff;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;">🖥 Open clock kiosk →</a></div>';
   h += '<div style="background:#eef4ff;border:1px solid #d5e2ff;border-radius:10px;padding:10px 14px;font-size:12px;color:#334;margin-bottom:16px;">Give part-timers the kiosk link — it shows only the clock and their schedule, not the rest of the dashboard: <b>' + esc(location.origin + location.pathname) + '#clock</b></div>';
-  h += renderTcMissedOuts();
+  if (dashCan('timesheets')) h += renderTcMissedOuts();
   h += renderTcTimeoff();        // pending time-off approvals up top, Homebase-style
   h += renderTcClock();
   h += renderTcSchedule();
   h += renderTcTimeoffInfo();
-  h += renderTcTimesheet();
-  h += renderTcPayroll();
-  h += renderTcTrades();
+  if (dashCan('timesheets')) h += renderTcTimesheet();
+  if (dashCan('payroll')) h += renderTcPayroll();
+  if (dashCan('shiftEdit')) h += renderTcTrades();
   h += renderTcPto();
-  h += renderTcSetup();
+  if (dashAuth.isAdmin || !DASH_AUTH_REQUIRED) h += renderTcSetup();
   h += '</div>';
   h += renderTcMapModal();
   h += renderTcShiftModal();
@@ -5378,6 +5752,10 @@ function tcTouchEnd(e){
 function tcPadTime(t){ if (!t) return ''; const p = String(t).split(':'); return String(parseInt(p[0]) || 0).padStart(2, '0') + ':' + String(p[1] || '00').padStart(2, '0'); }
 function tcShiftOpen(staffId, dateKey, sid, defaultLoc){
   const sh = sid ? (((tcSchedFor(staffId)[dateKey]) || {})[sid] || {}) : {};
+  if (location.hash !== '#clock') {
+    if (sid) { if (!tcCanEditShift(sh.loc, staffId)) return; }
+    else if (!tcCanAddShift(staffId, defaultLoc || sh.loc)) return;
+  }
   const st = (tcData().staff || {})[staffId] || {};
   let loc0 = sh.loc || defaultLoc || st.loc || 'waunakee';
   const sc = tcSchedScope();                                   // keep a scoped user's default on a location they can actually save
@@ -5547,7 +5925,7 @@ function renderTcSchedule(){
   else if (nChanged) statusPill = '<span title="Edited since the last post — staff still see the previously posted version until you Publish." style="display:inline-flex;align-items:center;gap:5px;background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:20px;padding:3px 11px;font-size:11.5px;font-weight:800;"><span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;"></span>' + nChanged + ' unpublished change' + (nChanged === 1 ? '' : 's') + '</span>';
   else statusPill = '<span title="Posted and up to date — staff see exactly this." style="display:inline-flex;align-items:center;gap:5px;background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:20px;padding:3px 11px;font-size:11.5px;font-weight:800;">✓ Posted' + (pubAgo ? ' · ' + pubAgo : '') + '</span>';
   let h = '<div class="section" style="margin-bottom:22px;">';
-  const copyBtn = '<button onclick="tcCopyLastWeek()" title="Copy last week\'s shifts into this week" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4169E1;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 11px;">⧉ Copy last week</button>';
+  const copyBtn = dashCan('shiftEdit') ? '<button onclick="tcCopyLastWeek()" title="Copy last week\'s shifts into this week" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4169E1;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 11px;">⧉ Copy last week</button>' : '';
   // "Publish & notify" is for full-edit users (admins / unscoped managers); scoped users focus on editing.
   const publishBtn = tcSchedScope() ? '' : '<button onclick="tcPublishOpen()" title="Save this week as published and notify the team (whole team or just who changed)" style="background:#16a34a;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 12px;box-shadow:0 1px 3px rgba(22,163,74,.35);">📣 Publish &amp; notify</button>';
   const guideBtn = '<button onclick="tcGuideOpen()" title="How to run the schedule, time off, and time cards" style="background:#2f54d6;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 13px;box-shadow:0 1px 3px rgba(47,84,214,.35);">❔ How to use the scheduler</button>';
@@ -5555,12 +5933,12 @@ function renderTcSchedule(){
   // Location filter / legend
   const chip = (id, label, color) => '<button onclick="tcSchedSetLoc(\'' + id + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ' + (filter === id ? (color || '#1a1a2e') : '#e3e6ef') + ';background:' + (filter === id ? (color || '#1a1a2e') : '#fff') + ';color:' + (filter === id ? '#fff' : '#555') + ';font-size:12px;font-weight:700;cursor:pointer;">' + (color ? '<span style="width:9px;height:9px;border-radius:50%;background:' + (filter === id ? '#fff' : color) + ';display:inline-block;"></span>' : '') + label + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:12px 20px 4px;">' + chip('all', 'All locations', null) + LOCATIONS.map(l => chip(l.id, l.name, l.color)).join('') + '</div>';
-  h += '<div style="padding:4px 20px 0;font-size:11.5px;color:#9aa3b5;">Tap a name to see one person’s week · tap a shift to edit · drag a shift to move it · 🎉 = paid holiday' + (pubRec ? ' · <span style="color:#b45309;font-weight:700;">amber outline = edited since last post</span>' : '') + '</div>';
+  h += '<div style="padding:4px 20px 0;font-size:11.5px;color:#9aa3b5;">' + (dashCan('shiftEdit') ? 'Tap a name to see one person’s week · tap a shift to edit · drag a shift to move it · 🎉 = paid holiday' : 'View only — the weekly schedule. Request time off below. Shift editing, timesheets, and payroll are hidden for this login.') + (pubRec && dashCan('shiftEdit') ? ' · <span style="color:#b45309;font-weight:700;">amber outline = edited since last post</span>' : '') + '</div>';
   // Draft-vs-posted explainer (+ inline Publish for full-edit users).
   { const canPub = !tcSchedScope();
-    if (!pubRec) h += '<div style="margin:8px 20px 0;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="flex:1;min-width:200px;">📝 <b>This week is a draft.</b> Staff don’t see anything until you post it — build it out, then publish.</span>' + (canPub ? '<button onclick="tcPublishOpen()" style="background:#16a34a;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 12px;white-space:nowrap;">📣 Publish &amp; notify</button>' : '') + '</div>';
-    else if (nChanged) h += '<div style="margin:8px 20px 0;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="flex:1;min-width:200px;">✏️ <b>' + nChanged + ' unpublished change' + (nChanged === 1 ? '' : 's') + '.</b> Staff still see the version posted ' + esc(pubAgo) + '. Publish to push your edits out.</span>' + (canPub ? '<button onclick="tcPublishOpen()" style="background:#16a34a;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 12px;white-space:nowrap;">📣 Publish &amp; notify</button>' : '') + '</div>'; }
-  { const sc = tcSchedScope(); if (sc) h += '<div style="margin:8px 20px 0;background:#eef4ff;border:1px solid #d5e2ff;border-radius:9px;padding:8px 12px;font-size:12px;color:#334;">📋 You’re scheduling <b>' + esc(tcScopeNames(sc) || 'your assigned locations') + '</b>' + (sc.selfId ? ' (and your own shifts)' : '') + '. Other shifts show for context but are view-only.</div>'; }
+    if (dashCan('shiftEdit') && !pubRec) h += '<div style="margin:8px 20px 0;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="flex:1;min-width:200px;">📝 <b>This week is a draft.</b> ' + (canPub ? 'Staff don’t see anything until you post it — build it out, then publish.' : 'Staff don’t see the week until an admin posts it. You can still edit shifts in your schools.') + '</span>' + (canPub ? '<button onclick="tcPublishOpen()" style="background:#16a34a;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 12px;white-space:nowrap;">📣 Publish &amp; notify</button>' : '') + '</div>';
+    else if (dashCan('shiftEdit') && nChanged) h += '<div style="margin:8px 20px 0;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="flex:1;min-width:200px;">✏️ <b>' + nChanged + ' unpublished change' + (nChanged === 1 ? '' : 's') + '.</b> Staff still see the version posted ' + esc(pubAgo) + '. Publish to push your edits out.</span>' + (canPub ? '<button onclick="tcPublishOpen()" style="background:#16a34a;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:6px 12px;white-space:nowrap;">📣 Publish &amp; notify</button>' : '') + '</div>'; }
+  { const sc = tcSchedScope(); if (sc && dashCan('shiftEdit')) h += '<div style="margin:8px 20px 0;background:#eef4ff;border:1px solid #d5e2ff;border-radius:9px;padding:8px 12px;font-size:12px;color:#334;">📋 You’re scheduling <b>' + esc(tcScopeNames(sc) || 'your assigned locations') + '</b>' + (sc.selfId ? ' (and your own shifts)' : '') + '. Other shifts show for context but are view-only.</div>'; }
   const holMap = tcHolidayMap([...new Set(days.map(d => d.getFullYear()))]);
   h += '<div class="sc-wide"><div style="overflow-x:auto;padding:8px 0 0;"><table class="sc-table" style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;min-width:120px;position:sticky;left:0;background:#fff;">Staff</th>';
   days.forEach(d => { const hn = holMap[tcDateKey(d)]; h += '<th style="text-align:center;min-width:92px;' + (hn ? 'background:#fff7ed;' : '') + '">' + dow[d.getDay()] + '<br><span style="font-weight:400;color:#aaa;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span>' + (hn ? '<br><span title="Paid holiday" style="display:inline-block;margin-top:2px;font-size:9px;font-weight:800;color:#9a3412;background:#ffedd5;border-radius:5px;padding:1px 5px;line-height:1.3;">🎉 ' + esc(hn) + '</span>' : '') + '</th>'; });
@@ -5580,7 +5958,7 @@ function renderTcSchedule(){
       const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
       h += '<td class="tc-cell" data-staff="' + s.id + '" data-dk="' + dk + '" ondragover="tcDragOver(event)" ondragleave="tcDragLeave(event)" ondrop="tcDrop(event,\'' + s.id + '\',\'' + dk + '\')" style="text-align:center;vertical-align:top;padding:4px;background:' + (holMap[dk] ? '#fff7ed' : zebra) + ';' + rowSep + '">';
       shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; const canEd = tcCanEditShift(sh.loc, s.id); const unpub = pubRec && !postedSet.has(tcShiftSig(dk, sh)); const handlers = canEd ? ' draggable="true" ontouchstart="tcTouchStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragstart="tcDragStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragend="tcDragEnd(event)" onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="' + (unpub ? 'Unpublished — tap to edit · drag to move' : 'Tap to edit · drag to move') + '"' : ' title="View only — outside your scheduling locations"'; h += '<div class="tc-shift"' + handlers + ' style="background:' + c + ';color:#fff;border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:11px;line-height:1.25;' + (unpub ? 'outline:2px solid #f59e0b;outline-offset:1px;' : '') + (canEd ? 'cursor:grab;touch-action:none;' : 'cursor:default;opacity:.62;') + '">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
-      h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'\',\'' + (filter !== 'all' ? filter : '') + '\')" title="Add shift" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
+      if (tcCanAddShift(s.id, filter !== 'all' ? filter : s.loc)) h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'\',\'' + (filter !== 'all' ? filter : '') + '\')" title="Add shift" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
       h += '</td>';
     });
     h += '</tr>';
@@ -5648,13 +6026,14 @@ function renderTcDayView(ctx){
         + '<span style="font-size:11px;text-align:right;line-height:1.25;opacity:.92;">' + (loc.short ? esc(loc.short) : '') + (sh.role ? '<br>' + esc(sh.role) : '') + '</span>'
         + '</div>';
     });
-    h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dkSel + '\',\'\',\'' + addLoc + '\')" style="background:none;border:1px dashed #cbd3e6;border-radius:9px;color:#6b7694;cursor:pointer;font-size:13px;font-weight:700;width:100%;padding:8px 0;">＋ Add another shift</button>';
+    if (tcCanAddShift(s.id, addLoc || s.loc)) h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dkSel + '\',\'\',\'' + addLoc + '\')" style="background:none;border:1px dashed #cbd3e6;border-radius:9px;color:#6b7694;cursor:pointer;font-size:13px;font-weight:700;width:100%;padding:8px 0;">＋ Add another shift</button>';
     h += '</div></div>';
   });
   // Not scheduled — compact add rows
-  if (without.length) {
+  const addable = without.filter(s => tcCanAddShift(s.id, addLoc || s.loc));
+  if (addable.length) {
     h += '<div style="padding:12px 18px 4px;font-size:11px;font-weight:800;letter-spacing:.02em;color:#9aa3b5;text-transform:uppercase;border-top:1px solid #eef0f6;">Not scheduled this day — tap ＋ to add</div>';
-    without.forEach(s => {
+    addable.forEach(s => {
       h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 18px;border-top:1px solid #f4f6fb;">'
         + '<span onclick="tcStaffFocus(\'' + s.id + '\')" style="font-size:13.5px;font-weight:700;color:#334;cursor:pointer;">' + esc(s.name) + ' <span style="font-size:11px;font-weight:600;color:#aaa;">· ' + esc((LOCATIONS.find(l => l.id === s.loc) || {}).short || s.loc || '') + '</span></span>'
         + '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dkSel + '\',\'\',\'' + addLoc + '\')" title="Add a shift" style="flex:0 0 auto;width:34px;height:34px;border-radius:9px;border:1px dashed #cbd3e6;background:#f7f9ff;color:#4169E1;font-size:18px;font-weight:700;cursor:pointer;line-height:1;">＋</button>'
@@ -5791,6 +6170,7 @@ function renderTcTimeoffModal(){
   return h;
 }
 function tcTimeoffDecision(id, status){
+  if (location.hash !== '#clock' && !dashCan('timeoffDecide')) return;
   const t = ((tcData().timeoff) || {})[id]; if (!t) return;
   const base = 'timeclock/timeoff/' + id + '/';
   fbSet(base + 'status', status); fbSet(base + 'decidedAt', Date.now());
@@ -5806,7 +6186,7 @@ function tcTimeoffDecision(id, status){
     fbSet(base + 'ptoLogged', null);
   }
 }
-function tcTimeoffDelete(id){ if (!confirm('Remove this time-off request?')) return; fbSet('timeclock/timeoff/' + id, null); }
+function tcTimeoffDelete(id){ if (location.hash !== '#clock' && !dashCan('timeoffDecide')) return; if (!confirm('Remove this time-off request?')) return; fbSet('timeclock/timeoff/' + id, null); }
 
 /* ── Shift trades / coverage ── */
 function tcTradeAll(){ return Object.entries((tcData().trades) || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
@@ -5830,6 +6210,7 @@ async function tcClaimShift(tradeId, empId){
   state.tcSel = null; render();
 }
 function tcTradeDecision(id, status){
+  if (location.hash !== '#clock' && !dashCan('shiftEdit')) return;
   const t = ((tcData().trades) || {})[id]; if (!t) return;
   if (status === 'approved' && t.coverBy) {
     // move the shift from the original person to the coverer
@@ -5857,12 +6238,16 @@ function renderTcTimeoff(){
     let r = '<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;">';
     r += '<div style="flex:1;min-width:180px;"><span style="font-weight:700;font-size:13px;">' + esc(nameOf(t.empId)) + '</span> ' + typeBadge + '<div style="font-size:12px;color:#666;margin-top:1px;">' + esc(fmtCancelDate(t.start)) + (t.end && t.end !== t.start ? ' → ' + esc(fmtCancelDate(t.end)) : '') + ' · ' + tcFmtDays(t.days || 1) + ' day' + ((t.days || 1) > 1 ? 's' : '') + (t.note ? ' · ' + esc(t.note) : '') + '</div></div>';
     if ((t.status || 'pending') === 'pending') {
-      r += '<button onclick="tcTimeoffDecision(\'' + t.id + '\',\'approved\')" style="padding:6px 12px;border:none;border-radius:8px;background:#16a34a;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Approve</button>';
-      r += '<button onclick="tcTimeoffDecision(\'' + t.id + '\',\'denied\')" style="padding:6px 12px;border:1px solid #e3e6ef;border-radius:8px;background:#fff;color:#dc2626;font-size:12px;font-weight:700;cursor:pointer;">Deny</button>';
+      if (dashCan('timeoffDecide')) {
+        r += '<button onclick="tcTimeoffDecision(\'' + t.id + '\',\'approved\')" style="padding:6px 12px;border:none;border-radius:8px;background:#16a34a;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Approve</button>';
+        r += '<button onclick="tcTimeoffDecision(\'' + t.id + '\',\'denied\')" style="padding:6px 12px;border:1px solid #e3e6ef;border-radius:8px;background:#fff;color:#dc2626;font-size:12px;font-weight:700;cursor:pointer;">Deny</button>';
+      } else {
+        r += '<span style="font-size:11px;font-weight:800;color:#d97706;">Pending</span>';
+      }
     } else {
       r += '<span style="font-size:11px;font-weight:800;color:' + (t.status === 'approved' ? '#16a34a' : '#dc2626') + ';">' + (t.status === 'approved' ? '✓ Approved' : '✗ Denied') + '</span>';
     }
-    r += '<button onclick="tcTimeoffDelete(\'' + t.id + '\')" title="Remove" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:14px;">🗑</button>';
+    if (dashCan('timeoffDecide')) r += '<button onclick="tcTimeoffDelete(\'' + t.id + '\')" title="Remove" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:14px;">🗑</button>';
     r += '</div>';
     return r;
   };
@@ -9174,6 +9559,7 @@ function confirmSignOff(){
   state.modalTask=null;render();
 }
 function setTasksLoc(locId){
+  if (dashTasksLocked() && locId !== dashAuth.empId) return;
   state.tasksLoc=locId; state.matChatWeek=null; listenTasks();
 }
 function saveExceptionLog(val){
@@ -9487,16 +9873,21 @@ function renderTasksPage(){
   const dayLabel=dateObj.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   const navLabel=isToday?'Today — '+dayLabel:dayLabel;
   const emp=getEmpById(loc);
+  const taskSwitcher=dashCan('tasksAll');
   let html='<div class="loc-selector">';
-  TASK_EMPLOYEES.forEach(e=>{
-    const isActive=e.id===loc&&state.tasksTab==='sheets';
-    const gn=e.loc==='goninjaW'||e.loc==='goninjaV';
-    const cls=isActive?(gn?'active':'active lvlup'):'';
-    html+='<button class="loc-btn '+cls+'" onclick="state.tasksTab=\'sheets\';setTasksLoc(\''+e.id+'\')" title="'+e.label+'">'+e.name+'</button>';
-  });
-  html+='<button class="loc-btn'+(state.tasksTab==='history'?' active':'')+'" onclick="state.tasksTab=\'history\';render()" style="margin-left:auto;flex-shrink:0;'+(state.tasksTab==='history'?'background:var(--accent);color:#fff':'')+'">📊 History</button>';
+  if(taskSwitcher){
+    TASK_EMPLOYEES.forEach(e=>{
+      const isActive=e.id===loc&&state.tasksTab==='sheets';
+      const gn=e.loc==='goninjaW'||e.loc==='goninjaV';
+      const cls=isActive?(gn?'active':'active lvlup'):'';
+      html+='<button class="loc-btn '+cls+'" onclick="state.tasksTab=\'sheets\';setTasksLoc(\''+e.id+'\')" title="'+e.label+'">'+e.name+'</button>';
+    });
+    html+='<button class="loc-btn'+(state.tasksTab==='history'?' active':'')+'" onclick="state.tasksTab=\'history\';render()" style="margin-left:auto;flex-shrink:0;'+(state.tasksTab==='history'?'background:var(--accent);color:#fff':'')+'">📊 History</button>';
+  }else{
+    html+='<button class="loc-btn active lvlup">'+esc(emp.name)+'</button>';
+  }
   html+='</div>';
-  if(state.tasksTab==='history'){html+=renderHistorySection();return html;}
+  if(taskSwitcher&&state.tasksTab==='history'){html+=renderHistorySection();return html;}
 
   const locSignoffs=locData.weekly_signoff||{};
   const locDnw=locData.did_not_work||{};
@@ -12567,8 +12958,8 @@ function gdSaveCompletion(empId){
   state.gdCompletionSaved=empId;
   render();
 }
-function setDevTab(t){ state.devTab=t; state.gdActiveModule=null; state.devActiveModule=null; state.pbRole=null; state.pbOpen=null; render(); }
-function setPlaybookRole(r){ state.pbRole=r; state.pbOpen=null; render(); }
+function setDevTab(t){ state.devTab=t; state.gdActiveModule=null; state.devActiveModule=null; state.pbOpen=null; if (state._pbRoleTouched) state.pbRole=null; render(); }
+function setPlaybookRole(r){ state._pbRoleTouched=true; state.pbRole=r; state.pbOpen=null; render(); }
 function openPlaybook(id){ state.pbOpen=id; render(); }
 function closePlaybook(){ state.pbOpen=null; render(); }
 function backToPlaybookRoles(){ state.pbRole=null; state.pbOpen=null; render(); }
@@ -12576,7 +12967,7 @@ function togglePbStep(id,idx){
   const key='pb_step_'+id+'_'+idx;
   state[key]=!state[key]; render();
 }
-function setPbView(v){ state.pbView=v; state.pbRole=null; state.pbOpen=null; state.pbPolicyOpen=null; render(); }
+function setPbView(v){ state.pbView=v; state.pbOpen=null; state.pbPolicyOpen=null; if (state._pbRoleTouched) state.pbRole=null; render(); }
 function openPolicy(id){ state.pbPolicyOpen = state.pbPolicyOpen===id ? null : id; render(); }
 function togglePolicySection(pid,idx){ const k='pol_'+pid+'_'+idx; state[k]=!state[k]; render(); }
 
