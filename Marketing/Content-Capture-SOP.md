@@ -5,7 +5,7 @@ Capture and upload by the end of the week:
 - [ ] At least 3 minutes of raw video footage
 - [ ] At least 3 quality photos
 
-Upload all content to the designated shared drive.
+Upload all content on your dashboard weekly **Capture Content** task (it shows the photo back to you and sends it to marketing). LVLUP uploads stay on LVLUP; Go Ninja uploads stay on Go Ninja. The shared drive is only a backup if the dashboard upload fails.
 
 ## Before Recording
 - [ ] Clean camera lens

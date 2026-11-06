@@ -1139,7 +1139,10 @@ let state = {
   acq: { pinLoaded: false, pin: null, unlocked: false, monthOffset: 0, data: {}, _listeningMk: null, pinError: false },
   mktTab: 'content',
   contentRequests: {},
+  contentSubmissions: {},
   taskPhotoFeed: {},
+  photoBrandFilter: '',
+  mktBrandFilter: '',
   incidents: {},
   incDraft: null,
   incFilter: 'all',
@@ -2267,10 +2270,26 @@ function listenAll() {
 
   const crRef = fbRef('contentRequests');
   crRef.on('value', snap => { state.contentRequests = snap.val() || {}; render(); });
+  activeListeners.push({ ref: crRef, event: 'value' });
 
   const photoFeedRef = fbRef('taskPhotoFeed');
   photoFeedRef.on('value', snap => { state.taskPhotoFeed = snap.val() || {}; render(); });
-  activeListeners.push({ ref: crRef, event: 'value' });
+  activeListeners.push({ ref: photoFeedRef, event: 'value' });
+
+  // Staff Capture Content uploads + any synced social posts (Buffer-shaped records welcome).
+  // Read-only here. Writers stay contentUploadFiles (status 'new') and the marketing bot.
+  const csRef = fbRef('contentSubmissions');
+  csRef.on('value', snap => {
+    const incoming = snap.val() || {};
+    const prev = state.contentSubmissions || {};
+    Object.keys(prev).forEach(k => {
+      const row = prev[k];
+      if (!incoming[k] && row && row._optimistic && (Date.now() - (row.at || 0)) < 120000) incoming[k] = row;
+    });
+    state.contentSubmissions = incoming;
+    render();
+  });
+  activeListeners.push({ ref: csRef, event: 'value' });
 
   // Leadership (PIN-gated owner page): PIN, daily tracker, homebase clock, perf, sign-offs
   const ldPinRef = fbRef('leadership/pin');
@@ -3238,25 +3257,37 @@ function renderInventoryPage(){
 
 /* ── Facility Photos gallery — recent daily/weekly photos across all schools ── */
 function photoSetFilter(f){ state.photoFilter = f; render(); }
+function photoSetBrand(b){ if(!viewerCanSeeAllBrands()) return; state.photoBrandFilter = b; state.photoFilter = 'all'; render(); }
 function photoDayLabel(d){ const t=new Date(); t.setHours(0,0,0,0); const dd=new Date(d); dd.setHours(0,0,0,0); const diff=Math.round((t-dd)/86400000); if(diff===0) return 'Today'; if(diff===1) return 'Yesterday'; return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
 function renderPhotosGallery(){
   const feed = Object.entries(state.taskPhotoFeed || {}).map(([id,v]) => ({id,...(v||{})})).filter(x => x && x.url);
   feed.sort((a,b) => (b.at||0)-(a.at||0));
   const filter = state.photoFilter || 'all';
-  const people = [...new Set(feed.map(f => f.who).filter(Boolean))];
-  const shown = (filter==='all' ? feed : feed.filter(f => f.who===filter)).slice(0,150);
+  const canAll = viewerCanSeeAllBrands();
+  const lockedBrand = contentBrandForEmp((dashAuth && dashAuth.empId) || state.tasksLoc);
+  const brandFilter = canAll ? (state.photoBrandFilter || 'all') : lockedBrand;
+  const branded = brandFilter === 'all' ? feed : feed.filter(f => photoItemBrand(f) === brandFilter);
+  const people = [...new Set(branded.map(f => f.who).filter(Boolean))];
+  const shown = (filter==='all' ? branded : branded.filter(f => f.who===filter)).slice(0,150);
   let h = '<div class="page" style="max-width:1100px;">';
-  h += '<div style="margin-bottom:14px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">📸 Facility Photos</h2><p style="margin:0;font-size:13px;color:#888;">Recent daily & weekly photos uploaded from the team’s task sheets — bathrooms, training floor, instructor stations, announcements & event signage.</p></div>';
+  h += '<div style="margin-bottom:14px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">📸 Facility Photos</h2><p style="margin:0;font-size:13px;color:#888;">Recent daily & weekly photos from task sheets. ' + (canAll ? 'LVLUP and Go Ninja are badged — filter by brand so the two schools don’t blend together.' : (lockedBrand === 'GO NINJA' ? 'Showing Go Ninja photos only.' : 'Showing LVLUP photos only.')) + '</p></div>';
+  const bchip = (id,l) => '<button onclick="photoSetBrand(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (brandFilter===id?'#1a1a2e':'#fff') + ';color:' + (brandFilter===id?'#fff':'#333') + ';box-shadow:inset 0 0 0 1px ' + (brandFilter===id?'#1a1a2e':'#e5e7eb') + ';">' + l + '</button>';
+  if(canAll) h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + bchip('all','All brands') + bchip('LVLUP','LVLUP') + bchip('GO NINJA','Go Ninja') + '</div>';
   const chip = (id,l) => '<button onclick="photoSetFilter(\'' + id.replace(/'/g,"\\'") + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter===id?'#1a1a2e':'#f1f3f9') + ';color:' + (filter===id?'#fff':'#555') + ';">' + esc(l) + '</button>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + chip('all','All') + people.map(p => chip(p,p)).join('') + '</div>';
-  if(!shown.length){ h += '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;margin-top:8px;">No photos yet. They’ll appear here as the team taps “Add Photo” on their daily and weekly task sheets.</div>'; return h + '</div>'; }
+  if(!shown.length){ h += '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:13px;background:#fff;border:1px dashed #ddd;border-radius:12px;margin-top:8px;">No photos yet for this brand. They’ll appear here as the team taps “Add Photo” on their task sheets.</div>'; return h + '</div>'; }
   let lastDay='';
   shown.forEach(f => {
     const d=new Date(f.at||0), dayKey=d.toDateString();
     if(dayKey!==lastDay){ if(lastDay) h+='</div>'; h+='<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin:16px 0 8px;">'+esc(photoDayLabel(d))+'</div><div style="display:flex;flex-wrap:wrap;gap:12px;">'; lastDay=dayKey; }
     const tm=d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-    h+='<a href="'+esc(f.url)+'" target="_blank" rel="noopener" style="width:150px;text-decoration:none;color:inherit;display:block;">';
-    h+='<img src="'+esc(f.url)+'" loading="lazy" style="width:150px;height:150px;object-fit:cover;border-radius:10px;border:1px solid #e8eaf0;display:block;">';
+    const pb = photoItemBrand(f);
+    const pLabel = pb === 'GO NINJA' ? 'Go Ninja' : (pb === 'LVLUP' ? 'LVLUP' : '');
+    const pColor = pb === 'GO NINJA' ? '#e94560' : '#0f3460';
+    h+='<a href="'+esc(f.url)+'" target="_blank" rel="noopener" data-photo-brand="'+esc(pb)+'" style="width:150px;text-decoration:none;color:inherit;display:block;">';
+    h+='<div style="position:relative;"><img src="'+esc(f.url)+'" loading="lazy" style="width:150px;height:150px;object-fit:cover;border-radius:10px;border:1px solid #e8eaf0;display:block;">';
+    if(pLabel) h+='<span style="position:absolute;left:6px;top:6px;font-size:9px;font-weight:800;color:#fff;background:'+pColor+';border-radius:5px;padding:2px 6px;letter-spacing:.3px;">'+esc(pLabel)+'</span>';
+    h+='</div>';
     h+='<div style="font-size:11px;font-weight:700;color:#0f3460;margin-top:5px;line-height:1.3;">'+esc(f.label||'Photo')+'</div>';
     h+='<div style="font-size:10px;color:#888;">'+esc(f.who||'')+' · '+tm+'</div>';
     h+='</a>';
@@ -3463,22 +3494,60 @@ function renderMarketingPage() {
   return html;
 }
 
-/* ── Buffer hub — where all social content is scheduled & posted (retired the old Drive content-request board) ── */
-const BUFFER_RESPONSIBLE = ['Joey', 'Miranda', 'Ash', 'Bryan', 'Tarik'];
+/* ── Buffer hub — social posts & Capture Content uploads, split by brand ── */
+const BUFFER_RESPONSIBLE = [
+  { name:'Miranda', brand:'GO NINJA' },
+  { name:'Joey', brand:'LVLUP' },
+  { name:'Ash', brand:'LVLUP' },
+  { name:'Bryan', brand:'LVLUP' },
+  { name:'Tarik', brand:'LVLUP' },
+];
+function setMktBrand(b){ if(!viewerCanSeeAllBrands()) return; state.mktBrandFilter = b; render(); }
 function renderBufferHub(){
-  let h = '<div style="display:flex;flex-direction:column;gap:16px;max-width:760px;">';
+  const canAll = viewerCanSeeAllBrands();
+  const empId = (dashAuth && dashAuth.empId) || state.tasksLoc;
+  const ownBrand = contentBrandForEmp(empId);
+  const filter = canAll ? (state.mktBrandFilter || 'all') : ownBrand;
+  const people = BUFFER_RESPONSIBLE.filter(p => filter === 'all' || p.brand === filter);
+  const posts = marketingContentPosts(filter);
+  let h = '<div style="display:flex;flex-direction:column;gap:16px;max-width:860px;" id="mkt-buffer">';
   h += '<div style="background:linear-gradient(135deg,#2c4bff,#1a1a2e);color:#fff;border-radius:14px;padding:22px 24px;">';
-  h += '<div style="font-size:18px;font-weight:800;">📲 Social posting runs through Buffer</div>';
-  h += '<div style="font-size:13px;opacity:.9;margin-top:6px;line-height:1.5;">Capture content, then schedule &amp; post it in Buffer. Goal: <b>3 posts per week</b>.</div>';
+  h += '<div style="font-size:18px;font-weight:800;">📲 Social posting</div>';
+  h += '<div style="font-size:13px;opacity:.9;margin-top:6px;line-height:1.5;">LVLUP and Go Ninja stay in their own feeds. Staff upload on the weekly Capture Content task; marketing approves from here and schedules in Buffer. Goal: <b>3 posts per week</b>.</div>';
   h += '<a href="' + CAPTURE_CONTENT_BUFFER_URL + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;margin-top:14px;padding:11px 20px;background:#fff;color:#1a1a2e;text-decoration:none;border-radius:9px;font-size:14px;font-weight:800;">📲 Open Buffer →</a>';
   h += '</div>';
+  if(canAll){
+    const pill = (id, label) => '<button onclick="setMktBrand(\'' + id + '\')" style="padding:6px 14px;border-radius:999px;border:none;cursor:pointer;font-size:12px;font-weight:800;background:' + (filter===id?'#1a1a2e':'#f1f3f9') + ';color:' + (filter===id?'#fff':'#555') + ';">' + label + '</button>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + pill('all','All brands') + pill('LVLUP','LVLUP') + pill('GO NINJA','Go Ninja') + '</div>';
+  } else {
+    h += '<div style="font-size:12px;font-weight:800;color:' + (ownBrand==='GO NINJA'?'#e94560':'#0f3460') + ';">' + (ownBrand==='GO NINJA' ? '🥷 Showing Go Ninja posts only' : '🥋 Showing LVLUP posts only') + '</div>';
+  }
   h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);">';
   h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:4px;">👥 Responsible each week</div>';
-  h += '<div style="font-size:12px;color:#888;margin-bottom:12px;">Each schedules &amp; posts 3 pieces of content per week. Tracked on the weekly <b>Capture Content</b> task.</div>';
-  h += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
-  BUFFER_RESPONSIBLE.forEach(n => { h += '<span style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#eef2ff;color:#0f3460;border-radius:999px;font-size:13px;font-weight:700;">👤 ' + esc(n) + '</span>'; });
-  h += '</div></div>';
+  h += '<div style="font-size:12px;color:#888;margin-bottom:12px;">Each brand schedules its own 3 posts. Go Ninja is not mixed into the LVLUP list.</div>';
+  ['LVLUP','GO NINJA'].forEach(b => {
+    if(filter !== 'all' && filter !== b) return;
+    const group = people.filter(p => p.brand === b);
+    if(!group.length) return;
+    const color = b === 'GO NINJA' ? '#e94560' : '#0f3460';
+    const bg = b === 'GO NINJA' ? '#fff1f2' : '#eef2ff';
+    h += '<div style="font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + color + ';margin:8px 0 6px;">' + (b==='GO NINJA'?'Go Ninja':'LVLUP') + '</div>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">';
+    group.forEach(p => { h += '<span style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:' + bg + ';color:' + color + ';border-radius:999px;font-size:13px;font-weight:700;">👤 ' + esc(p.name) + '</span>'; });
+    h += '</div>';
+  });
   h += '</div>';
+  h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);">';
+  h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:4px;">🖼️ Posts &amp; uploads</div>';
+  h += '<div style="font-size:12px;color:#888;margin-bottom:12px;">Photos instructors uploaded on their dashboard, plus any scheduled or published posts synced into <span style="font-family:monospace;">contentSubmissions</span>. Each card is badged LVLUP or Go Ninja.</div>';
+  if(!posts.length){
+    h += '<div style="text-align:center;padding:28px 16px;color:#aaa;font-size:13px;border:1px dashed #e5e7eb;border-radius:12px;">No ' + (filter==='all'?'':'matching ') + 'posts yet.</div>';
+  } else {
+    h += '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
+    posts.forEach(p => { h += '<div style="width:220px;max-width:100%;">' + renderContentCard(p) + '</div>'; });
+    h += '</div>';
+  }
+  h += '</div></div>';
   return h;
 }
 
@@ -9884,7 +9953,8 @@ function renderTasksPage(){
     });
     html+='<button class="loc-btn'+(state.tasksTab==='history'?' active':'')+'" onclick="state.tasksTab=\'history\';render()" style="margin-left:auto;flex-shrink:0;'+(state.tasksTab==='history'?'background:var(--accent);color:#fff':'')+'">📊 History</button>';
   }else{
-    html+='<button class="loc-btn active lvlup">'+esc(emp.name)+'</button>';
+    const gn=isGoNinja(emp.id);
+    html+='<button class="loc-btn active'+(gn?'':' lvlup')+'">'+esc(emp.name)+'</button>';
   }
   html+='</div>';
   if(taskSwitcher&&state.tasksTab==='history'){html+=renderHistorySection();return html;}
@@ -10033,6 +10103,21 @@ function renderTasksPage(){
   if(state.modalTask)html+=renderInitialsModal();
   return html;
 }
+function taskSheetDone(section, task, rec){
+  if(!rec) return false;
+  if(task.photo) return ((rec.photos)||[]).length>0;
+  if(task.posts){
+    let n=0;
+    const posts=rec.posts||{};
+    for(let i=1;i<=(task.posts||0);i++){ if(String(posts[i]||'').trim()) n++; }
+    if(task.contentPillars){
+      const ups=mergedContentUploads(state.tasksLoc, getTaskWeekKey(state.tasksDate), rec).filter(r=>r._thisWeek);
+      n=Math.max(n, ups.length);
+    }
+    return n>=task.posts;
+  }
+  return true;
+}
 function renderTaskSection(section,title,tasks,completionData,customTasksObj,locked){
   const key=section,collapsed=state.collapsedSections[key];
   const empId=state.tasksLoc;
@@ -10040,7 +10125,7 @@ function renderTaskSection(section,title,tasks,completionData,customTasksObj,loc
   // Apply saved drag order to the main task list
   const orderedTasks=applyTaskOrder(empId,section,tasks);
   const allTasks=[...orderedTasks,...customArr];
-  const completed=allTasks.filter(t=>completionData[t.id]).length,total=allTasks.length;
+  const completed=allTasks.filter(t=>taskSheetDone(section,t,completionData[t.id])).length,total=allTasks.length;
   const pillCls=completed===total&&total>0?'complete':completed>0?'partial':'empty';
   let html='<div class="task-section">';
   const lockBadge=locked?'<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:999px;margin-left:8px;">🔒 Locked</span>':'';
@@ -10273,13 +10358,279 @@ function contentPillarsForWeek(wk){
   const p = pairs[((wk % pairs.length) + pairs.length) % pairs.length];
   return p.map(i => CONTENT_PILLARS[i]);
 }
+// Go Ninja rotates the same ideas, but the values pillar is not labeled LVLUP.
+function contentPillarsForEmp(empId){
+  return contentPillarsForWeek(getContentWeekIndex()).map(p => {
+    if(!p.values || !isGoNinja(empId)) return p;
+    return { name:'Go Ninja Values', icon:'⭐', values:true };
+  });
+}
+function viewerCanSeeAllBrands(){
+  if(location.hash === '#clock' || !DASH_AUTH_REQUIRED) return true;
+  return !!(dashAuth && (dashAuth.isAdmin || dashAuth.dashRole === 'admin'));
+}
+function contentBrandForEmp(empId){ return isGoNinja(empId) ? 'GO NINJA' : 'LVLUP'; }
+function contentTime(rec){
+  const raw = rec && (rec.at != null ? rec.at : (rec.ts != null ? rec.ts : (rec.createdAt || rec.sentAt || rec.dueAt)));
+  if(raw == null || raw === '') return 0;
+  if(typeof raw === 'number' && isFinite(raw)) return raw;
+  const n = Number(raw);
+  if(isFinite(n) && n > 1e11) return n;
+  const p = Date.parse(String(raw));
+  return isNaN(p) ? 0 : p;
+}
+function contentWeekFromTime(ms){
+  if(!ms) return '';
+  const d = new Date(ms);
+  if(isNaN(d.getTime())) return '';
+  const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  return getTaskWeekKey(ds);
+}
+// Brand of a content submission or a synced social post.
+// Explicit `brand` wins. Otherwise school / empId / channel / profile name.
+// Returns '' when the record cannot be classified (HQ "All" still shows it).
+function contentBrandOf(rec){
+  if(!rec || typeof rec !== 'object') return '';
+  const explicit = String(rec.brand || rec.schoolBrand || '').trim().toLowerCase().replace(/[_-]+/g,' ');
+  if(/go\s*ninja|^ninja$|^gn$|^goninja$/.test(explicit)) return 'GO NINJA';
+  if(/^lvl\s*up$|^lvlup$/.test(explicit)) return 'LVLUP';
+  const id = String(rec.uploaderId || rec.empId || rec.staffId || rec.userId || '').trim();
+  if(isGoNinja(id) || isGoNinja(rec.school) || isGoNinja(rec.loc)) return 'GO NINJA';
+  const blob = [rec.school, rec.loc, rec.location, rec.channel, rec.channelName, rec.profile, rec.profileName, rec.account, rec.accountName, rec.page, rec.pageName, rec.uploaderName, rec.who, rec.author].filter(Boolean).join(' ').toLowerCase();
+  if(/go\s*ninja|goninja|\bninja\b/.test(blob)) return 'GO NINJA';
+  if(id && TASK_EMPLOYEES.some(e => e.id === id) && !isGoNinja(id)) return 'LVLUP';
+  if(LVLUP_LOC_IDS.includes(rec.school) || LVLUP_LOC_IDS.includes(rec.loc)) return 'LVLUP';
+  if(/lvlup|lvl up|east\s*mad|eastmadison|waunakee|verona|deforest/.test(blob)) return 'LVLUP';
+  return '';
+}
+function photoItemBrand(f){
+  return contentBrandOf({ brand:f.brand, uploaderId:f.empId, empId:f.empId, school:f.school || f.loc, loc:f.loc, uploaderName:f.who, channel:f.channel, channelName:f.channelName, profileName:f.profileName });
+}
+function contentMediaUrl(rec){
+  if(!rec) return '';
+  const direct = rec.url || rec.image || rec.imageUrl || rec.mediaUrl || rec.thumbnail || rec.thumb || rec.photo;
+  if(typeof direct === 'string') return direct;
+  if(direct && typeof direct === 'object' && typeof direct.url === 'string') return direct.url;
+  const lists = [rec.media, rec.assets, rec.images, rec.photos];
+  for(let i=0;i<lists.length;i++){
+    const list = lists[i];
+    if(!Array.isArray(list) || !list.length) continue;
+    const m = list[0];
+    if(typeof m === 'string') return m;
+    if(m && typeof m === 'object'){
+      const u = m.url || m.thumbnail || m.image || m.thumbnailUrl;
+      if(typeof u === 'string') return u;
+    }
+  }
+  return '';
+}
+function safeMediaUrl(u){
+  const s = String(u || '').trim();
+  if(/^https?:\/\//i.test(s) || /^data:image\//i.test(s) || /^blob:/i.test(s)) return s;
+  return '';
+}
+function contentAll(){
+  const bag = state.contentSubmissions || {};
+  return Object.keys(bag).map(id => Object.assign({ id:id }, bag[id] || {})).filter(r => {
+    return !!(contentMediaUrl(r) || r.caption || r.text || r.pillar || r.name || r.status);
+  });
+}
+function contentUploaderMatches(rec, empId){
+  if(!rec || !empId) return false;
+  const ids = [rec.uploaderId, rec.empId, rec.staffId, rec.userId].map(x => String(x || '').trim()).filter(Boolean);
+  if(ids.indexOf(empId) >= 0) return true;
+  const emp = TASK_EMPLOYEES.find(e => e.id === empId);
+  const short = emp ? (((/\(([^)]+)\)/.exec(emp.name || '') || [])[1] || '').trim().toLowerCase()) : '';
+  const name = String(rec.uploaderName || rec.who || rec.author || '').toLowerCase();
+  if(short && short.length > 2 && name.indexOf(short) >= 0) return true;
+  if(empId === 'mirandaS'){
+    const blob = (ids.join(' ') + ' ' + name).toLowerCase();
+    if(/miranda|msmith/.test(blob)) return true;
+    if(/smith/.test(name) && contentBrandOf(rec) === 'GO NINJA') return true;
+  }
+  return false;
+}
+function contentTouchesWeek(rec, weekKey){
+  if(!rec || !weekKey) return false;
+  if(rec.week && String(rec.week) === String(weekKey)) return true;
+  const w = contentWeekFromTime(contentTime(rec));
+  return !!w && w === String(weekKey);
+}
+function contentIsRecent(rec){
+  const t = contentTime(rec);
+  if(!t) return false;
+  return (Date.now() - t) < 21 * 86400000 && (Date.now() - t) > -86400000;
+}
+// LVLUP instructors see LVLUP posts, and media tied to another LVLUP school stays on that school.
+// Go Ninja (mirandaS) sees every Go Ninja post / upload and nothing from LVLUP.
+function contentVisibleOnStaffDash(rec, empId){
+  const want = contentBrandForEmp(empId);
+  if(contentBrandOf(rec) !== want) return false;
+  if(want === 'LVLUP'){
+    const emp = TASK_EMPLOYEES.find(e => e.id === empId);
+    const sch = rec.school || rec.loc || '';
+    if(sch && emp && LVLUP_LOC_IDS.includes(sch) && sch !== emp.loc && contentMediaUrl(rec) && !contentUploaderMatches(rec, empId)) return false;
+  }
+  return true;
+}
+function mergedContentUploads(empId, weekKey, taskRec){
+  const brand = contentBrandForEmp(empId);
+  const out = [];
+  const seen = {};
+  function consider(rec){
+    if(!rec) return;
+    const b = contentBrandOf(rec);
+    if(b && b !== brand) return;
+    if(!contentUploaderMatches(rec, empId) && !rec._mine) return;
+    const thisWeek = contentTouchesWeek(rec, weekKey);
+    if(!thisWeek && !contentIsRecent(rec)) return;
+    const url = safeMediaUrl(contentMediaUrl(rec));
+    const key = url || rec.id;
+    if(!key || seen[key]) return;
+    seen[key] = 1;
+    out.push(Object.assign({}, rec, { url:url, _thisWeek:thisWeek }));
+  }
+  contentAll().forEach(consider);
+  if(taskRec){
+    const ups = taskRec.uploads;
+    if(ups && typeof ups === 'object' && !Array.isArray(ups)){
+      Object.keys(ups).forEach(id => {
+        const v = ups[id];
+        if(!v) return;
+        const rec = typeof v === 'string'
+          ? { id:id, url:v, uploaderId:empId, brand:brand, week:weekKey, at:taskRec.ts || Date.now(), status:'new', _mine:true }
+          : Object.assign({ id:id, uploaderId:empId, brand:brand, week:v.week || weekKey, _mine:true }, v);
+        consider(rec);
+      });
+    }
+  }
+  out.sort((a,b) => contentTime(b) - contentTime(a));
+  return out;
+}
+function contentBrandPosts(brand, weekKey){
+  return contentAll().filter(r => {
+    if(contentBrandOf(r) !== brand) return false;
+    return contentTouchesWeek(r, weekKey) || contentIsRecent(r);
+  }).sort((a,b) => contentTime(b) - contentTime(a));
+}
+function marketingContentPosts(filter){
+  const weekKey = getTaskWeekKey(new Date().toISOString().split('T')[0]);
+  let rows = contentAll().filter(r => contentTouchesWeek(r, weekKey) || contentIsRecent(r) || (!contentTime(r) && r.week && String(r.week) === weekKey));
+  if(!viewerCanSeeAllBrands()){
+    const empId = (dashAuth && dashAuth.empId) || state.tasksLoc;
+    rows = rows.filter(r => contentVisibleOnStaffDash(r, empId));
+  } else if(filter && filter !== 'all'){
+    rows = rows.filter(r => contentBrandOf(r) === filter);
+  }
+  return rows.sort((a,b) => contentTime(b) - contentTime(a));
+}
+function contentStatusMeta(status){
+  const s = String(status || 'new').toLowerCase();
+  if(s === 'new' || s === 'uploaded' || s === 'pending' || s === 'needs_approval') return { text:'Uploaded', bg:'#dcfce7', color:'#15803d' };
+  if(s === 'approved') return { text:'Approved', bg:'#dbeafe', color:'#1d4ed8' };
+  if(s === 'scheduled' || s === 'sending') return { text:'Scheduled', bg:'#fef3c7', color:'#b45309' };
+  if(s === 'published' || s === 'posted' || s === 'sent') return { text:'Posted', bg:'#ede9fe', color:'#6d28d9' };
+  if(s === 'error' || s === 'rejected') return { text:s.charAt(0).toUpperCase() + s.slice(1), bg:'#fee2e2', color:'#b91c1c' };
+  return { text:s.charAt(0).toUpperCase() + s.slice(1), bg:'#f1f5f9', color:'#475569' };
+}
+function contentIsVideo(rec){
+  const url = contentMediaUrl(rec);
+  return /^video/i.test(String(rec && rec.type || '')) || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
+}
+function renderContentCard(rec, opts){
+  opts = opts || {};
+  const url = safeMediaUrl(rec.url || contentMediaUrl(rec));
+  const brand = contentBrandOf(rec);
+  const st = contentStatusMeta(rec.status);
+  const who = rec.uploaderName || rec.who || rec.author || '';
+  const cap = rec.caption || rec.text || rec.pillar || rec.name || 'Post';
+  const bColor = brand === 'GO NINJA' ? '#e94560' : '#0f3460';
+  const bLabel = brand === 'GO NINJA' ? 'Go Ninja' : (brand === 'LVLUP' ? 'LVLUP' : 'Brand');
+  const school = rec.school || rec.loc || rec.location || '';
+  let h = '<div data-content-brand="' + esc(brand) + '" data-content-id="' + esc(rec.id || '') + '" style="background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,.04);">';
+  if(url && !contentIsVideo(rec)){
+    h += '<a href="' + esc(url) + '" target="_blank" rel="noopener"><img alt="' + esc(cap) + '" src="' + esc(url) + '" style="width:100%;height:' + (opts.compact ? '112' : '132') + 'px;object-fit:cover;display:block;border-radius:8px;background:#f1f5f9;"></a>';
+  } else if(url){
+    h += '<div style="height:72px;border-radius:8px;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;">🎬 Video uploaded</div>';
+  }
+  h += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">';
+  h += '<span style="font-size:9px;font-weight:800;color:#fff;background:' + bColor + ';border-radius:5px;padding:2px 6px;letter-spacing:.3px;">' + esc(bLabel) + '</span>';
+  h += '<span style="font-size:9px;font-weight:800;background:' + st.bg + ';color:' + st.color + ';border-radius:5px;padding:2px 6px;">' + esc(st.text) + '</span>';
+  if(opts.yours) h += '<span style="font-size:9px;font-weight:800;background:#ecfdf5;color:#047857;border-radius:5px;padding:2px 6px;">Your upload</span>';
+  h += '</div>';
+  h += '<div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-top:5px;line-height:1.35;">' + esc(cap) + '</div>';
+  if(who || school) h += '<div style="font-size:10px;color:#888;margin-top:2px;">' + esc([who, school].filter(Boolean).join(' · ')) + '</div>';
+  h += '</div>';
+  return h;
+}
+function renderStaffContentFeed(section, taskId){
+  const empId = state.tasksLoc;
+  const weekKey = getTaskWeekKey(state.tasksDate);
+  const brand = contentBrandForEmp(empId);
+  const brandLabel = brand === 'GO NINJA' ? 'Go Ninja' : 'LVLUP';
+  const taskRec = taskDoneRec(section, taskId);
+  const mine = mergedContentUploads(empId, weekKey, taskRec);
+  const mineWeek = mine.filter(r => r._thisWeek);
+  const posts = contentBrandPosts(brand, weekKey).filter(r => contentVisibleOnStaffDash(r, empId));
+  const goal = 3;
+  const n = mineWeek.length;
+  const mineKeys = {};
+  mine.forEach(m => { if(m.id) mineKeys[m.id] = 1; if(m.url) mineKeys[m.url] = 1; });
+  const others = posts.filter(p => !(p.id && mineKeys[p.id]) && !(contentMediaUrl(p) && mineKeys[safeMediaUrl(contentMediaUrl(p))]));
+  let h = '<div id="ccfeed_' + section + '_' + taskId + '" data-brand-feed="' + esc(brand) + '" style="margin-left:34px;margin-top:8px;">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;">';
+  h += '<div style="font-size:13px;font-weight:800;color:#1a1a2e;">' + (brand === 'GO NINJA' ? '🥷' : '🥋') + ' ' + brandLabel + ' posts</div>';
+  h += '<div data-upload-count="' + n + '" style="font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:' + (n >= goal ? '#dcfce7' : '#fef3c7') + ';color:' + (n >= goal ? '#15803d' : '#b45309') + ';">' + n + '/' + goal + ' uploaded this week</div>';
+  h += '</div>';
+  if(n > 0){
+    h += '<div data-upload-confirm="1" style="background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:8px;padding:8px 12px;font-size:12.5px;font-weight:700;margin-bottom:8px;">✓ Photo uploaded — ' + n + ' ' + brandLabel + ' photo' + (n === 1 ? '' : 's') + ' on your dashboard this week.</div>';
+  } else {
+    h += '<div style="font-size:12px;color:#64748b;margin-bottom:8px;">Upload a photo above. It shows here as soon as it lands — ' + brandLabel + ' only.</div>';
+  }
+  if(mine.length){
+    h += '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;">';
+    mine.forEach(r => { h += '<div style="width:160px;max-width:100%;">' + renderContentCard(r, { yours:true, compact:true }) + '</div>'; });
+    h += '</div>';
+  }
+  if(others.length){
+    h += '<div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin:4px 0 6px;">Other ' + brandLabel + ' posts</div>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:10px;">';
+    others.forEach(r => { h += '<div style="width:200px;max-width:100%;">' + renderContentCard(r) + '</div>'; });
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+function contentRemember(id, rec){
+  const cur = Object.assign({}, state.contentSubmissions || {});
+  cur[id] = rec;
+  state.contentSubmissions = cur;
+}
+function contentPatchTask(section, taskId, csId, meta, slot, postText){
+  const emp = state.tasksLoc;
+  const info = taskPathFor(section);
+  if(!state.tasksData[emp]) state.tasksData[emp] = {};
+  if(!state.tasksData[emp][info.sPath]) state.tasksData[emp][info.sPath] = {};
+  if(!state.tasksData[emp][info.sPath][info.sKey]) state.tasksData[emp][info.sPath][info.sKey] = {};
+  const cur = Object.assign({}, state.tasksData[emp][info.sPath][info.sKey][taskId] || {});
+  const uploads = Object.assign({}, cur.uploads || {});
+  uploads[csId] = meta;
+  const posts = Object.assign({}, cur.posts || {});
+  if(slot) posts[slot] = postText;
+  cur.uploads = uploads;
+  cur.posts = posts;
+  cur.ts = Date.now();
+  state.tasksData[emp][info.sPath][info.sKey][taskId] = cur;
+}
 // Capture Content uploader: photos go to Storage taskPhotos/content/, one record per file in ceo/contentSubmissions (status 'new') for the marketing bot.
+// `brand` is additive (LVLUP | GO NINJA). url, uploaderId, school, week, pillar, caption, status stay so the bot keeps working.
 const CONTENT_VIDEO_ENABLED = true;   // videos go to Storage contentSubmissions/ (rule deployed 2026-11-04)
 function renderContentUploadBox(section,taskId,active){
   const id=section+'_'+taskId, acc=CONTENT_VIDEO_ENABLED?'image/*,video/*':'image/*';
+  const brandLabel = isGoNinja(state.tasksLoc) ? 'Go Ninja' : 'LVLUP';
   let h='<div style="margin-left:34px;margin-top:6px;display:flex;flex-direction:column;gap:8px;">';
   h+='<div id="ccdrop_'+id+'" onclick="document.getElementById(\'ccfile_'+id+'\').click()" ondragover="event.preventDefault();this.style.background=\'#eef2ff\'" ondragleave="this.style.background=\'#f8faff\'" ondrop="event.preventDefault();this.style.background=\'#f8faff\';contentUploadFiles(\''+section+'\',\''+taskId+'\',event.dataTransfer.files)" style="border:2px dashed #93a5ff;border-radius:10px;background:#f8faff;padding:16px;text-align:center;cursor:pointer;">';
-  h+='<div style="font-size:13px;font-weight:700;color:#2c4bff;">📸 Tap to upload or drag photos or videos here</div><div style="font-size:11px;color:var(--gray-500);margin-top:3px;">You can pick several at once.'+(CONTENT_VIDEO_ENABLED?' Videos up to 250 MB.':' Videos coming soon.')+'</div></div>';
+  h+='<div style="font-size:13px;font-weight:700;color:#2c4bff;">📸 Tap to upload a '+brandLabel+' photo or video</div><div style="font-size:11px;color:var(--gray-500);margin-top:3px;">You can pick several at once.'+(CONTENT_VIDEO_ENABLED?' Videos up to 250 MB.':' Videos coming soon.')+' It shows on this dashboard as soon as it uploads.</div></div>';
   h+='<input type="file" multiple accept="'+acc+'" id="ccfile_'+id+'" style="display:none" onchange="contentUploadFiles(\''+section+'\',\''+taskId+'\',this.files);this.value=\'\'">';
   h+='<div style="display:flex;gap:6px;flex-wrap:wrap;"><select id="ccpillar_'+id+'" style="font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;">'+active.map(p=>'<option value="'+esc(p.name)+'">'+p.icon+' '+esc(p.name)+'</option>').join('')+'<option value="Other">Other</option></select>';
   h+='<input id="cccap_'+id+'" type="text" placeholder="Caption (optional)" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;"></div>';
@@ -10293,7 +10644,9 @@ async function contentUploadFiles(section,taskId,fileList){
   if(!ok.length){ alert(CONTENT_VIDEO_ENABLED?'Please pick photos or videos.':'Please pick photos. Videos coming soon.'); return; }
   const pillar=(document.getElementById('ccpillar_'+id)||{}).value||'';
   const caption=((document.getElementById('cccap_'+id)||{}).value||'').trim();
-  const emp=getEmpById(state.tasksLoc)||{}, week=getTaskWeekKey(state.tasksDate);
+  const emp=TASK_EMPLOYEES.find(e=>e.id===state.tasksLoc)||{}, week=getTaskWeekKey(state.tasksDate);
+  const brand=contentBrandForEmp(state.tasksLoc);
+  const {base}=taskPathFor(section);
   let done=0;
   for(const f of ok){
     if(stat) stat.textContent='Uploading '+(done+1)+' of '+ok.length+'…';
@@ -10306,15 +10659,24 @@ async function contentUploadFiles(section,taskId,fileList){
       const ref=storage.ref(path);
       if(isJpg) await ref.put(blob,{contentType:'image/jpeg'}); else await ref.put(blob,{contentType:f.type});
       const url=await ref.getDownloadURL();
-      fbSet('contentSubmissions/cs_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),{url,path,type:/^video\//.test(f.type)?'video':'image',name:f.name||'',sizeBytes:blob.size||f.size||0,uploaderId:state.tasksLoc||'',uploaderName:emp.name||'',school:emp.loc||'',pillar,caption,week,at:Date.now(),status:'new'});
-      // count toward the 3-this-week progress
+      const csId='cs_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      const at=Date.now();
+      const postText=(isVid?'🎬 ':'📸 ')+(pillar?pillar+': ':'')+(caption||f.name||'upload');
+      const stored={url,path,type:isVid?'video':'image',name:f.name||'',sizeBytes:blob.size||f.size||0,uploaderId:state.tasksLoc||'',empId:state.tasksLoc||'',uploaderName:emp.name||'',school:emp.loc||'',brand,pillar,caption,week,at,status:'new'};
+      fbSet('contentSubmissions/'+csId, stored);
+      contentRemember(csId, Object.assign({_optimistic:true}, stored));
+      const meta={url,type:stored.type,pillar,caption,name:stored.name,at,status:'new',brand,week};
+      fbSet(base+taskId+'/uploads/'+csId, meta);
       const vals=(taskDoneRec(section,taskId).posts)||{}; let slot=0;
       for(let i=1;i<=3;i++){ if(!String(vals[i]||'').trim()){ slot=i; break; } }
-      if(slot) taskPostSave(section,taskId,slot,(/^video\//.test(f.type)?'🎬 ':'📸 ')+(pillar?pillar+': ':'')+(caption||f.name||'upload'));
+      if(slot) taskPostSave(section,taskId,slot,postText);
+      contentPatchTask(section, taskId, csId, meta, slot, postText);
       done++;
     }catch(e){ alert('Upload failed: '+(e.message||e)); }
   }
-  if(stat) stat.textContent=done?('✓ '+done+' uploaded and sent to marketing'):'';
+  if(done) render();
+  const stat2=document.getElementById('ccstat_'+id);
+  if(stat2) stat2.textContent=done?('✓ '+done+' uploaded — showing on your '+ (brand==='GO NINJA'?'Go Ninja':'LVLUP') +' dashboard'):'';
   const c=document.getElementById('cccap_'+id); if(c&&done) c.value='';
 }
 function renderContentPillarsBlock(active){
@@ -10344,6 +10706,8 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   const photos=(doneData&&doneData.photos)||[];
   const postVals=(doneData&&doneData.posts)||{};
   let postsFilled=0; if(isPosts){ for(let i=1;i<=task.posts;i++){ if(String(postVals[i]||'').trim()) postsFilled++; } }
+  const _uploadCount = (isPosts && task.contentPillars) ? mergedContentUploads(state.tasksLoc, getTaskWeekKey(state.tasksDate), doneData||{}).filter(r => r._thisWeek).length : 0;
+  if(isPosts && task.contentPillars) postsFilled = Math.max(postsFilled, _uploadCount);
   let isDone;
   if(isPhoto) isDone=photos.length>0;
   else if(isPosts) isDone=postsFilled>=task.posts;
@@ -10369,11 +10733,12 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     html+='<div class="task-check"'+attr+'></div>';
   }
   // Split "Action: detail" into a bold action line + a lighter how/done line
-  const _cpActive = task.contentPillars ? contentPillarsForWeek(getContentWeekIndex()) : null;
+  const _cpActive = task.contentPillars ? contentPillarsForEmp(state.tasksLoc) : null;
   let _title, _detail;
   if(_cpActive){
+    const _brandName = isGoNinja(state.tasksLoc) ? 'Go Ninja' : 'LVLUP';
     _title='Capture Content';
-    _detail='This week’s pillars: '+_cpActive.map(p=>p.name).join(' & ')+'. Upload 3 photos this week right here and they go to marketing for approval. Tap a pillar for ideas.';
+    _detail='This week’s '+_brandName+' pillars: '+_cpActive.map(p=>p.name).join(' & ')+'. Upload 3 '+_brandName+' photos this week. They show up here and go to marketing for approval.';
   } else {
     const _tx=String(task.text||''), _ci=_tx.indexOf(': ');
     _title=_ci>2?_tx.slice(0,_ci):_tx; _detail=_ci>2?_tx.slice(_ci+2):'';
@@ -10387,7 +10752,8 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   }
   if(isPosts){
     const ok=postsFilled>=task.posts;
-    html+='<span title="Posts described" style="flex-shrink:0;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+(ok?'#dcfce7':'#fef3c7')+';color:'+(ok?'#15803d':'#b45309')+';">'+postsFilled+'/'+task.posts+' described</span>';
+    const _plabel = task.contentPillars ? (postsFilled+'/'+task.posts+' uploaded') : (postsFilled+'/'+task.posts+' described');
+    html+='<span title="'+(task.contentPillars?'Photos uploaded this week':'Posts described')+'" style="flex-shrink:0;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+(ok?'#dcfce7':'#fef3c7')+';color:'+(ok?'#15803d':'#b45309')+';">'+_plabel+'</span>';
   }
   if(isPhoto){
     const ok=photos.length>0;
@@ -10416,12 +10782,18 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   }
   if(_cpActive){
     if(!locked) html+=renderContentUploadBox(section,task.id,_cpActive);
+    html+=renderStaffContentFeed(section,task.id);
   }
   // Social-post accountability — describe each scheduled post
   if(isPosts){
+    const _slotUploads = task.contentPillars ? mergedContentUploads(state.tasksLoc, getTaskWeekKey(state.tasksDate), doneData||{}).filter(r => r._thisWeek) : [];
     html+='<div style="margin-left:34px;display:flex;flex-direction:column;gap:6px;">';
     for(let i=1;i<=task.posts;i++){
-      const v=String(postVals[i]||'');
+      let v=String(postVals[i]||'');
+      if(!v && _slotUploads[i-1]){
+        const u=_slotUploads[i-1];
+        v=(contentIsVideo(u)?'🎬 ':'📸 ')+(u.pillar?u.pillar+': ':'')+(u.caption||u.name||'upload');
+      }
       if(locked){ if(v) html+='<div style="font-size:12px;color:var(--gray-600);padding:5px 10px;background:var(--gray-50);border-radius:6px;"><b>Post '+i+':</b> '+esc(v)+'</div>'; }
       else html+='<input type="text" value="'+esc(v)+'" placeholder="Post '+i+': fills in when you upload, or describe it here" onchange="taskPostSave(\''+section+'\',\''+task.id+'\','+i+',this.value)" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;color:var(--gray-700);background:#fff;">';
     }
