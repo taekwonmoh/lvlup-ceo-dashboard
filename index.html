@@ -888,9 +888,36 @@ const firebaseConfig = {
   appId: "1:440131514498:web:46165370923bc74994849b"
 };
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const storage = firebase.storage();
+// Local labeled fixtures only. Never true on staff.lvlupma.com, and never
+// opens the production Firebase app. Query must be exactly holdCancelFixtures=1.
+function crqLocalFixtureMode() {
+  try {
+    const host = String(location.hostname || '');
+    if (host !== 'localhost' && host !== '127.0.0.1') return false;
+    return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(String(location.search || ''));
+  } catch (e) { return false; }
+}
+function crqStubRef() {
+  const snap = { val() { return null; } };
+  const r = {
+    on() { return r; },
+    off() { return r; },
+    once(event, cb) { if (typeof cb === 'function') cb(snap); return Promise.resolve(snap); },
+    set() { return Promise.resolve(); },
+    update() { return Promise.resolve(); },
+    orderByChild() { return r; },
+    orderByKey() { return r; },
+    limitToLast() { return r; },
+    limitToFirst() { return r; },
+    equalTo() { return r; },
+    child() { return crqStubRef(); },
+  };
+  return r;
+}
+const CRQ_FIXTURE_BOOT = crqLocalFixtureMode();
+if (!CRQ_FIXTURE_BOOT) firebase.initializeApp(firebaseConfig);
+const db = CRQ_FIXTURE_BOOT ? { ref() { return crqStubRef(); } } : firebase.database();
+const storage = CRQ_FIXTURE_BOOT ? { ref() { return { put() { return { then() { return this; }, catch() { return this; } }; } }; } } : firebase.storage();
 const CEO = 'ceo'; // root path in Firebase
 
 /* ── Manager-dashboard sign-in gate (Phase 1a) ──────────────────────────────
@@ -900,7 +927,7 @@ const CEO = 'ceo'; // root path in Firebase
    name+PIN gate). Controlled by a flag: OFF = exactly today's behaviour, so
    turning it on/off is a one-line, instantly-reversible change. */
 const DASH_AUTH_REQUIRED = true;
-const auth = firebase.auth();
+const auth = CRQ_FIXTURE_BOOT ? { onAuthStateChanged() {}, signOut() { return Promise.resolve(); } } : firebase.auth();
 const DASH_ROLE_IDS = ['admin', 'lead', 'ops', 'frontdesk'];
 const DASH_ROLE_LABEL = { admin: 'Admin', lead: 'School Lead', ops: 'Ops', frontdesk: 'Front Desk' };
 const DASH_SCHOOL_IDS = ['waunakee', 'eastmad', 'verona', 'deforest', 'goninjaW', 'goninjaV'];
@@ -1060,6 +1087,7 @@ function dashAuthFromStaff(u, s, key) {
   };
 }
 auth.onAuthStateChanged(async (u) => {
+  if (crqLocalFixtureMode()) return;
   if (!DASH_AUTH_REQUIRED) { dashAuth = blankDashAuth({ user: u || null, allowed: false, dashRole: 'admin' }); return; }
   if (!u || !u.email || !u.emailVerified) { dashAuth = blankDashAuth(); state.teamAccessOpen = false; render(); return; }
   const key = dashEmailKey(u.email);
@@ -1081,14 +1109,17 @@ function dashSignOut(){ auth.signOut(); }
 // Using REST API directly (SDK WebSocket connection unreliable for secondary databases)
 const EVENTS_DB_URL = 'https://va-dashboard-bf7ca-default-rtdb.firebaseio.com/ceo';
 function evtRestGet(path) {
+  if (crqLocalFixtureMode()) return Promise.resolve(null);
   return fetch(EVENTS_DB_URL + '/' + path + '.json').then(r => r.json());
 }
 function evtRestSet(path, data) {
+  if (crqLocalFixtureMode()) return Promise.resolve(null);
   return fetch(EVENTS_DB_URL + '/' + path + '.json', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
   }).then(r => r.json());
 }
 function evtRestDelete(path) {
+  if (crqLocalFixtureMode()) return Promise.resolve(null);
   return fetch(EVENTS_DB_URL + '/' + path + '.json', { method: 'DELETE' });
 }
 function loadEvents() {
@@ -2067,9 +2098,10 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s || 
 function linkify(s) { return esc(s).replace(/(https?:\/\/[^\s<>"]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline">$1</a>'); }
 
 /*  -  -  Firebase Helpers  -  -  */
-function fbRef(path) { return db.ref(CEO + '/' + path); }
+function fbRef(path) { return crqLocalFixtureMode() ? crqStubRef() : db.ref(CEO + '/' + path); }
 
 function fbSet(path, val) {
+  if (crqLocalFixtureMode()) return;
   fbRef(path).set(val);
 }
 
@@ -2980,7 +3012,7 @@ function appCopyForAta(id, btn){
 
 function renderMembersPage() {
   const s = state.activeSection;
-  const pending = crqAll().filter(r => !r.status).length;
+  const pending = crqAll().filter(crqIsPending).length;
   const openApps = appAll().filter(a => !appIsDone(a)).length;
   const openShirts = f5All().filter(r => !r.shirtGiven).length;
   const openReviews = rvOpenCount();
@@ -2989,14 +3021,14 @@ function renderMembersPage() {
     { id: 'feedback',  label: '👥 Students' },
     { id: 'watchlist', label: '👀 Watchlist' },
   ];
-  if (dashCan('holds')) memberTabs.push({ id: 'holds', label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') });
+  if (crqStaffCanReview()) memberTabs.push({ id: 'holds', label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') });
   if (dashCan('applications')) memberTabs.push({ id: 'applications', label: '📋 Applications' + (openApps ? ' (' + openApps + ')' : '') });
   memberTabs.push({ id: 'firstfive', label: '🥋 First 5' + (openShirts ? ' (' + openShirts + ')' : '') });
   memberTabs.push({ id: 'reviews', label: '⭐ Reviews' + (openReviews ? ' (' + openReviews + ')' : '') });
   memberTabs.push({ id: 'incidents', label: '🚑 Incidents' + (openInc ? ' (' + openInc + ')' : '') });
   const nav = renderGroupSubNav(memberTabs);
   if (s === 'watchlist') return nav + renderWatchListPage();
-  if (s === 'holds') return nav + renderHoldsPage();
+  if (s === 'holds' && crqStaffCanReview()) return nav + renderHoldsPage();
   if (s === 'applications') return nav + renderApplicationsPage();
   if (s === 'firstfive') return nav + renderFirstFivePage();
   if (s === 'reviews') return nav + renderReviewsPage();
@@ -3191,7 +3223,22 @@ const CRQ_STATUSES = [
 const CRQ_LOC = { waunakee: 'Waunakee', verona: 'Verona', eastmad: 'East Madison', deforest: 'DeForest' };
 
 function crqAll(){ return Object.entries(state.cancellationRequests || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
-function crqSetStatus(id, status){ const cur = ((state.cancellationRequests || {})[id] || {}).status; fbSet('cancellationRequests/' + id + '/status', cur === status ? null : status); }
+// New website records omit status. Pending is exactly the absence of a status.
+function crqIsPending(r){ return !r.status; }
+function crqStaffCanReview(){
+  if (typeof location !== 'undefined' && location && location.hash === '#clock') return false;
+  return dashCan('holds');
+}
+function crqSetStatus(id, status){
+  const rec = (state.cancellationRequests || {})[id] || {};
+  const cur = rec.status;
+  const next = cur === status ? null : status;
+  if (crqStatusNeedsManualConfirm(rec, next)) {
+    const ok = (typeof confirm === 'function') && confirm('This request is not verified eligible. Unknown or unresolved good standing and payment stay on manual review. Continue only as a staff decision. This does not charge a fee, complete the hold or cancellation, or reactivate billing.');
+    if (!ok) return;
+  }
+  fbSet('cancellationRequests/' + id + '/status', next);
+}
 function crqSetCompletedBy(id, val){ fbDebounce('cancellationRequests/' + id + '/completedBy', (val || '').trim().toUpperCase() || null); }
 function crqSetCancelDate(id, val){ fbSet('cancellationRequests/' + id + '/cancelDate', val || null); }
 function crqSetNotes(id, val){ fbDebounce('cancellationRequests/' + id + '/retentionNotes', (val || '').trim() || null); }
@@ -3298,7 +3345,238 @@ function renderPhotosGallery(){
   return h;
 }
 
+// Keys read from ceo/cancellationRequests. Flat, or the same names under
+// serverReview. Website PR 51 was not readable from this repo (GitHub 404),
+// so these names are the request's own words — not a synonym list.
+function crqPickReview(r, key){
+  if (!r || typeof r !== 'object') return undefined;
+  if (r[key] != null && r[key] !== '') return r[key];
+  const box = r.serverReview;
+  if (box && typeof box === 'object' && box[key] != null && box[key] !== '') return box[key];
+  return undefined;
+}
+function crqVerificationState(value){
+  if (typeof value !== 'string') return 'unknown';
+  const s = value.trim().toLowerCase();
+  if (s === 'eligible') return 'eligible';
+  if (s === 'not_eligible' || s === 'ineligible' || s === 'unresolved' || s === 'blocked' || s === 'not_in_good_standing') return 'not_eligible';
+  return 'unknown';
+}
+function crqVerificationLabel(state){
+  if (state === 'eligible') return 'Eligible';
+  if (state === 'not_eligible') return 'Not eligible — manual review';
+  return 'Unknown — manual review';
+}
+function crqReviewModel(r){
+  const good = crqVerificationState(crqPickReview(r, 'goodstanding'));
+  const payment = crqVerificationState(crqPickReview(r, 'paymentVerification'));
+  const combined = (good === 'not_eligible' || payment === 'not_eligible') ? 'not_eligible'
+    : (good === 'eligible' && payment === 'eligible') ? 'eligible'
+    : 'unknown';
+  return {
+    pending: !r.status,
+    noticeReceiptDate: crqPickReview(r, 'noticeReceiptDate'),
+    earliestCompletionDate: crqPickReview(r, 'earliestCompletionDate'),
+    goodstanding: good,
+    paymentVerification: payment,
+    combined: combined,
+    agreement: crqAgreementSummary(crqPickReview(r, 'agreementEvidence')),
+    checkbox: !!(r && r.acknowledged === true),
+    reasons: crqReviewReasonList(crqPickReview(r, 'reviewReasons')),
+    feesEnabled: false,
+  };
+}
+function crqStatusNeedsManualConfirm(r, nextStatus){
+  if (!nextStatus) return false;
+  return crqReviewModel(r || {}).combined !== 'eligible';
+}
+function crqAgreementSummary(value){
+  if (value == null || value === '') return { present: false, lines: [] };
+  if (typeof value === 'string') {
+    const s = value.trim();
+    if (!s) return { present: false, lines: [] };
+    if (s.length > 160) return { present: true, lines: ['Agreement evidence is on the record. The long text is not expanded here.'] };
+    return { present: true, lines: [s] };
+  }
+  if (typeof value === 'object') {
+    const lines = [];
+    ['acknowledged', 'recordedAt', 'version', 'noticeId', 'hash', 'source'].forEach(k => {
+      if (value[k] != null && value[k] !== '') lines.push(k + ': ' + String(value[k]).slice(0, 120));
+    });
+    if (!lines.length) lines.push('Agreement evidence is on the record.');
+    return { present: true, lines };
+  }
+  return { present: false, lines: [] };
+}
+function crqReviewReasonList(value){
+  if (value == null || value === '') return [];
+  const arr = Array.isArray(value) ? value : [value];
+  const out = [];
+  arr.forEach(item => {
+    if (item == null || item === '') return;
+    if (typeof item === 'string' || typeof item === 'number') {
+      const s = String(item).trim();
+      if (s) out.push(s.slice(0, 300));
+      return;
+    }
+    if (typeof item === 'object') {
+      const s = [item.code || item.reason || item.id, item.message || item.detail || item.text]
+        .filter(x => x != null && String(x).trim())
+        .map(x => String(x).trim())
+        .join(' — ');
+      if (s) out.push(s.slice(0, 300));
+    }
+  });
+  return out;
+}
+function crqDisplayDate(value, kind){
+  if (value == null || value === '') return '';
+  const raw = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return fmtCancelDate(raw);
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return raw.slice(0, 40);
+  if (kind === 'date') {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    return fmtCancelDate(parts);
+  }
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+  }).format(d);
+}
+function crqLabeledFixtures(){
+  const label = 'TEST FIXTURE — not a real member';
+  return {
+    'test-fixture-cancel-notice': {
+      fixtureLabel: label,
+      name: 'TEST FIXTURE Cancel Notice',
+      email: 'cancel-notice@example.test',
+      location: 'waunakee',
+      rank: 'Beginner',
+      action: 'Cancellation',
+      reasonCancel: 'Moving away',
+      feedback: 'TEST FIXTURE feedback',
+      timestamp: '2026-10-01T15:00:00.000Z',
+      receivedAt: Date.parse('2026-10-01T15:00:00.000Z'),
+      holdStart: '2026-09-01',
+      noticeReceiptDate: '2026-10-08T05:00:00.000Z',
+      earliestCompletionDate: '2026-11-07',
+      goodstanding: 'unknown',
+      paymentVerification: 'unknown',
+      acknowledged: true,
+      agreementEvidence: { acknowledged: true, recordedAt: '2026-10-08T05:00:00.000Z', version: 'hold-cancel-ack' },
+      reviewReasons: ['Obligations unresolved — notice still on the record', 'No trusted balance check'],
+    },
+    'test-fixture-both-eligible': {
+      fixtureLabel: label,
+      name: 'TEST FIXTURE Both Eligible',
+      email: 'both-eligible@example.test',
+      location: 'verona',
+      action: 'Cancellation',
+      reasonCancel: 'Financial Reasons',
+      timestamp: '2026-10-10T15:00:00.000Z',
+      receivedAt: Date.parse('2026-10-10T15:00:00.000Z'),
+      noticeReceiptDate: '2026-10-10T15:00:00.000Z',
+      earliestCompletionDate: '2026-11-09',
+      goodstanding: 'eligible',
+      paymentVerification: 'eligible',
+      agreementEvidence: { acknowledged: true, recordedAt: '2026-10-10T15:00:00.000Z', version: 'hold-cancel-ack' },
+      reviewReasons: ['Server marked both checks eligible. Staff still approve by hand.'],
+    },
+    'test-fixture-hold-blocked': {
+      fixtureLabel: label,
+      name: 'TEST FIXTURE Hold Blocked',
+      email: 'hold-blocked@example.test',
+      location: 'eastmad',
+      action: '1 Month Hold',
+      reasonHold: 'Travel',
+      holdStart: '2026-11-01',
+      timestamp: '2026-11-01T16:00:00.000Z',
+      receivedAt: Date.parse('2026-11-01T16:00:00.000Z'),
+      noticeReceiptDate: '2026-11-01T16:00:00.000Z',
+      goodstanding: 'not_eligible',
+      paymentVerification: 'unknown',
+      reviewReasons: ['Good standing is not eligible. Payment check is unknown.'],
+    },
+    'test-fixture-legacy-pending': {
+      fixtureLabel: label,
+      name: 'TEST FIXTURE Legacy Pending',
+      email: 'legacy-pending@example.test',
+      location: 'deforest',
+      action: 'Cancellation',
+      reasonCancel: 'Schedule conflict',
+      timestamp: '2026-09-15T14:00:00.000Z',
+      receivedAt: Date.parse('2026-09-15T14:00:00.000Z'),
+    },
+    'test-fixture-legacy-processed': {
+      fixtureLabel: label,
+      name: 'TEST FIXTURE Legacy Processed',
+      email: 'legacy-processed@example.test',
+      location: 'waunakee',
+      action: 'Cancellation',
+      reasonCancel: 'Medical',
+      status: 'processed',
+      completedBy: 'TF',
+      timestamp: '2026-09-02T14:00:00.000Z',
+      receivedAt: Date.parse('2026-09-02T14:00:00.000Z'),
+    },
+  };
+}
+function crqBootLabeledFixtures(){
+  const role = /(?:\?|&)holdCancelRole=frontdesk(?:&|$)/.test(String(location.search || '')) ? 'frontdesk' : 'lead';
+  dashAuth = blankDashAuth({
+    ready: true,
+    allowed: true,
+    user: { email: 'fixture-lead@example.test', emailVerified: true },
+    dashRole: role,
+    name: role === 'frontdesk' ? 'Fixture Desk' : 'Fixture Lead',
+    isAdmin: false,
+  });
+  state.cancellationRequests = crqLabeledFixtures();
+  state.activeSection = 'holds';
+  state.holdsFilter = 'all';
+  render();
+  const conn = document.getElementById('connStatus');
+  if (conn) conn.textContent = 'Fixtures only — not connected';
+}
+function crqFixtureSetRole(role){
+  if (!crqLocalFixtureMode()) return;
+  if (role !== 'lead' && role !== 'frontdesk' && role !== 'ops' && role !== 'admin') return;
+  dashAuth.dashRole = role;
+  dashAuth.isAdmin = role === 'admin';
+  render();
+}
+function renderCrqReview(r){
+  const m = crqReviewModel(r);
+  const row = (k, v) => '<div><b style="color:#64748b;font-weight:700;">' + k + '</b> ' + v + '</div>';
+  let h = '<div data-crq-review="1" data-crq-verification="' + m.combined + '" data-crq-pending="' + (m.pending ? '1' : '0') + '" style="margin-top:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#334155;line-height:1.55;">';
+  h += '<div style="font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#64748b;margin-bottom:4px;">Server review</div>';
+  h += row('Notice receipt', m.noticeReceiptDate ? esc(crqDisplayDate(m.noticeReceiptDate, 'instant')) + ' <span style="color:#94a3b8;">America/Chicago</span>' : '<span data-crq-notice="missing">Not on this record</span>');
+  h += row('Earliest completion', m.earliestCompletionDate ? '<span data-crq-earliest="' + esc(String(m.earliestCompletionDate).slice(0, 40)) + '">' + esc(crqDisplayDate(m.earliestCompletionDate, 'date')) + '</span>' : '<span data-crq-earliest="missing">Not on this record</span>');
+  h += '<div style="color:#64748b;margin:4px 0 6px;">30 calendar days start at the original server receipt. Days already on hold are not notice credit. This screen does not recompute that date.</div>';
+  h += row('Good standing', '<span data-crq-goodstanding="' + m.goodstanding + '">' + esc(crqVerificationLabel(m.goodstanding)) + '</span>');
+  h += row('Payment', '<span data-crq-payment="' + m.paymentVerification + '">' + esc(crqVerificationLabel(m.paymentVerification)) + '</span>');
+  h += '<div data-crq-gymdesk="no-loader" style="margin-top:4px;">No trusted Gymdesk or balance check is connected. A missing or unknown check stays <b>Unknown — manual review</b> and is never shown as eligible.</div>';
+  h += '<div data-crq-identity="typed" style="margin-top:4px;">Name and email were typed on the form. They are not a verified member link.</div>';
+  if (m.agreement.present) {
+    h += '<div data-crq-agreement="present" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Agreement evidence</b><div>' + m.agreement.lines.map(line => esc(line)).join('<br>') + '</div></div>';
+  } else {
+    h += '<div data-crq-agreement="missing" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Agreement evidence</b> Not on this record.' + (m.checkbox ? ' The form checkbox was submitted.' : '') + '</div>';
+  }
+  if (m.reasons.length) {
+    h += '<div data-crq-reasons="' + m.reasons.length + '" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Review reasons</b><ul style="margin:4px 0 0;padding-left:18px;">' + m.reasons.map(reason => '<li>' + esc(reason) + '</li>').join('') + '</ul></div>';
+  } else {
+    h += '<div data-crq-reasons="0" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Review reasons</b> None on this record.</div>';
+  }
+  h += '<div data-hold-fee-policy="draft-disabled" aria-disabled="true" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#f1f5f9;color:#64748b;">Monthly hold fee ($10–$15) and proposed 30-day tuition with hold-fee overlap credit are draft and disabled. Nothing here calculates or bills a fee.</div>';
+  h += '<div style="margin-top:6px;font-weight:700;color:#0f3460;">Staff still approve by hand. This does not complete a hold or cancellation, charge a card, or reactivate billing.</div>';
+  h += '</div>';
+  return h;
+}
+
 function renderHoldsPage(){
+  if (!crqStaffCanReview()) return '';
   const all = crqAll().sort((a, b) => (b.receivedAt || 0) - (a.receivedAt || 0));
   const filter = state.holdsFilter || 'all';
   const statusOf = r => r.status || 'pending';
@@ -3307,7 +3585,13 @@ function renderHoldsPage(){
   const filtered = filter === 'all' ? all : all.filter(r => statusOf(r) === filter);
 
   let h = '<div class="page" style="max-width:960px;">';
-  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🧊 Holds &amp; Cancellations</h2><p style="margin:0;font-size:13px;color:#888;">Requests submitted at <a href="https://lvlupma.com/hold-cancel" target="_blank" rel="noopener" style="color:#2c4bff;font-weight:700;text-decoration:none;">lvlupma.com/hold-cancel</a>. Set a status and mark who completed the action.</p></div>';
+  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🧊 Holds &amp; Cancellations</h2><p style="margin:0;font-size:13px;color:#888;">Requests submitted at <a href="https://lvlupma.com/hold-cancel" target="_blank" rel="noopener" style="color:#2c4bff;font-weight:700;text-decoration:none;">lvlupma.com/hold-cancel</a>. Notice dates, verification, agreement evidence, and review reasons come from the server record. Set a status only as a manual staff decision.</p></div>';
+  if (crqLocalFixtureMode()) {
+    h += '<div data-crq-fixture-banner="1" style="margin-bottom:12px;padding:10px 12px;border-radius:10px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:12.5px;font-weight:700;">TEST FIXTURES — not real members. Writes are stubbed. Nothing is saved to Firebase, Gymdesk, or the roster.<span style="display:block;margin-top:8px;font-weight:600;">';
+    h += '<button type="button" onclick="crqFixtureSetRole(\'lead\')" style="margin-right:6px;padding:4px 10px;border-radius:8px;border:1px solid #c2410c;background:#fff;font-weight:800;cursor:pointer;">Lead view</button>';
+    h += '<button type="button" onclick="crqFixtureSetRole(\'frontdesk\')" style="padding:4px 10px;border-radius:8px;border:1px solid #c2410c;background:#fff;font-weight:800;cursor:pointer;">Front desk view</button>';
+    h += '</span></div>';
+  }
   const stat = (n, label, color) => '<div style="flex:1;min-width:88px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:12px 14px;text-align:center;box-shadow:var(--shadow);"><div style="font-size:20px;font-weight:800;color:' + color + ';">' + n + '</div><div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;">' + label + '</div></div>';
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' + stat(all.length, 'Total', '#1a1a2e') + stat(counts.pending, 'Pending', '#d97706') + stat(counts.processed, 'Processed', '#2563eb') + stat(counts.frozen, 'Frozen', '#0891b2') + '</div>';
   const chip = (id, label) => '<button onclick="crqSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + label + '</button>';
@@ -3324,6 +3608,7 @@ function renderHoldsPage(){
 }
 
 function renderHoldCard(r){
+  if (!crqStaffCanReview()) return '';
   const locN = CRQ_LOC[r.location] || r.location || '';
   const action = r.action || '';
   const isCancel = /cancel/i.test(action);
@@ -3336,6 +3621,7 @@ function renderHoldCard(r){
   h += '<div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;">';
   h += '<div style="flex:1;min-width:180px;">';
   h += '<div style="font-size:15px;font-weight:800;color:#1a1a2e;">' + esc(r.name || '—') + '</div>';
+  if (r.fixtureLabel) h += '<div data-crq-fixture-label="1" style="display:inline-block;margin-top:4px;font-size:10px;font-weight:800;color:#9a3412;background:#ffedd5;padding:2px 8px;border-radius:999px;">' + esc(r.fixtureLabel) + '</div>';
   h += '<div style="font-size:11px;color:#888;margin-top:2px;">' + esc(locN) + (r.rank ? ' · ' + esc(r.rank) : '') + (r.email ? ' · ' + esc(r.email) : '') + '</div>';
   h += '</div>';
   if (st === 'pending') h += '<span style="flex-shrink:0;font-size:10px;font-weight:800;color:#d97706;background:#fffbeb;padding:3px 9px;border-radius:6px;">● PENDING</span>';
@@ -3349,6 +3635,7 @@ function renderHoldCard(r){
   if (isHold && r.resumeDate) h += '<div><b style="color:#0891b2;font-weight:700;">Resumes on:</b> ' + esc(fmtCancelDate(r.resumeDate)) + '</div>';
   if (r.feedback) h += '<div style="font-style:italic;color:#777;margin-top:2px;">“' + esc(r.feedback) + '”</div>';
   h += '</div>';
+  h += renderCrqReview(r);
   if (isCancel) {
     h += '<div style="margin-top:10px;">';
     h += '<label style="display:block;font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Next steps to save them</label>';
@@ -7227,7 +7514,8 @@ function renderCancellationDetails(loc){
     const reason = [r.reasonCancel, r.feedback].filter(x => x && String(x).trim()).join(' — ');
     h += '<tr style="background:#f8fbff;">';
     h += '<td style="font-weight:600;color:#0f3460;">' + esc(r.name || '—') + ' <span title="From the cancellation form" style="font-size:9px;font-weight:800;color:#2563eb;background:#dbeafe;padding:1px 6px;border-radius:999px;vertical-align:middle;">FORM</span>' + (r.rank ? '<div style="font-size:10px;color:#94a3b8;font-weight:600;">' + esc(r.rank) + '</div>' : '') + '</td>';
-    h += '<td style="text-align:center;color:#555;">' + cancelFmtDate(r.cancelDate || r.timestamp) + '</td>';
+    const earliestShown = crqPickReview(r, 'earliestCompletionDate');
+    h += '<td style="text-align:center;color:#555;">' + cancelFmtDate(r.cancelDate || r.timestamp) + (earliestShown ? '<div style="font-size:10px;color:#64748b;font-weight:700;">Earliest ' + esc(crqDisplayDate(earliestShown, 'date')) + '</div>' : '') + '</td>';
     h += '<td style="color:#555;font-size:12.5px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;">' + (reason ? esc(reason) : '<span style="color:#bbb;">—</span>') + '</td>';
     h += '<td><input value="' + esc(r.retentionNotes || '') + '" placeholder="Next steps to save them..." onchange="crqSetNotes(\'' + r.id + '\',this.value)" style="' + inCss + 'border-color:' + (r.retentionNotes ? '#16a34a' : 'var(--gray-200)') + ';" /></td>';
     h += '<td style="text-align:center;"><a href="#" onclick="setSection(\'holds\');return false;" title="Open in Holds &amp; Cancellations" style="text-decoration:none;color:#94a3b8;font-size:14px;">↗</a></td>';
@@ -14025,6 +14313,7 @@ function renderDevelopmentPage() {
 }
 
   async function init() {
+  if (crqLocalFixtureMode()) { crqBootLabeledFixtures(); return; }
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
   // Restore ACQ session unlock from sessionStorage
   if (sessionStorage && sessionStorage.getItem('acqUnlocked') === '1') state.acq.unlocked = true;
