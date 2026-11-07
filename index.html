@@ -888,9 +888,36 @@ const firebaseConfig = {
   appId: "1:440131514498:web:46165370923bc74994849b"
 };
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const storage = firebase.storage();
+// Local labeled fixtures only. Never true on staff.lvlupma.com, and never
+// opens the production Firebase app. Query must be exactly holdCancelFixtures=1.
+function crqLocalFixtureMode() {
+  try {
+    const host = String(location.hostname || '');
+    if (host !== 'localhost' && host !== '127.0.0.1') return false;
+    return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(String(location.search || ''));
+  } catch (e) { return false; }
+}
+function crqStubRef() {
+  const snap = { val() { return null; } };
+  const r = {
+    on() { return r; },
+    off() { return r; },
+    once(event, cb) { if (typeof cb === 'function') cb(snap); return Promise.resolve(snap); },
+    set() { return Promise.resolve(); },
+    update() { return Promise.resolve(); },
+    orderByChild() { return r; },
+    orderByKey() { return r; },
+    limitToLast() { return r; },
+    limitToFirst() { return r; },
+    equalTo() { return r; },
+    child() { return crqStubRef(); },
+  };
+  return r;
+}
+const CRQ_FIXTURE_BOOT = crqLocalFixtureMode();
+if (!CRQ_FIXTURE_BOOT) firebase.initializeApp(firebaseConfig);
+const db = CRQ_FIXTURE_BOOT ? { ref() { return crqStubRef(); } } : firebase.database();
+const storage = CRQ_FIXTURE_BOOT ? { ref() { return { put() { return { then() { return this; }, catch() { return this; } }; } }; } } : firebase.storage();
 const CEO = 'ceo'; // root path in Firebase
 
 /* ── Manager-dashboard sign-in gate (Phase 1a) ──────────────────────────────
@@ -900,7 +927,7 @@ const CEO = 'ceo'; // root path in Firebase
    name+PIN gate). Controlled by a flag: OFF = exactly today's behaviour, so
    turning it on/off is a one-line, instantly-reversible change. */
 const DASH_AUTH_REQUIRED = true;
-const auth = firebase.auth();
+const auth = CRQ_FIXTURE_BOOT ? { onAuthStateChanged() {}, signOut() { return Promise.resolve(); } } : firebase.auth();
 const DASH_ROLE_IDS = ['admin', 'lead', 'ops', 'frontdesk'];
 const DASH_ROLE_LABEL = { admin: 'Admin', lead: 'School Lead', ops: 'Ops', frontdesk: 'Front Desk' };
 const DASH_SCHOOL_IDS = ['waunakee', 'eastmad', 'verona', 'deforest', 'goninjaW', 'goninjaV'];
@@ -1060,6 +1087,7 @@ function dashAuthFromStaff(u, s, key) {
   };
 }
 auth.onAuthStateChanged(async (u) => {
+  if (crqLocalFixtureMode()) return;
   if (!DASH_AUTH_REQUIRED) { dashAuth = blankDashAuth({ user: u || null, allowed: false, dashRole: 'admin' }); return; }
   if (!u || !u.email || !u.emailVerified) { dashAuth = blankDashAuth(); state.teamAccessOpen = false; render(); return; }
   const key = dashEmailKey(u.email);
@@ -1081,14 +1109,17 @@ function dashSignOut(){ auth.signOut(); }
 // Using REST API directly (SDK WebSocket connection unreliable for secondary databases)
 const EVENTS_DB_URL = 'https://va-dashboard-bf7ca-default-rtdb.firebaseio.com/ceo';
 function evtRestGet(path) {
+  if (crqLocalFixtureMode()) return Promise.resolve(null);
   return fetch(EVENTS_DB_URL + '/' + path + '.json').then(r => r.json());
 }
 function evtRestSet(path, data) {
+  if (crqLocalFixtureMode()) return Promise.resolve(null);
   return fetch(EVENTS_DB_URL + '/' + path + '.json', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
   }).then(r => r.json());
 }
 function evtRestDelete(path) {
+  if (crqLocalFixtureMode()) return Promise.resolve(null);
   return fetch(EVENTS_DB_URL + '/' + path + '.json', { method: 'DELETE' });
 }
 function loadEvents() {
@@ -2067,9 +2098,10 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s || 
 function linkify(s) { return esc(s).replace(/(https?:\/\/[^\s<>"]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline">$1</a>'); }
 
 /*  -  -  Firebase Helpers  -  -  */
-function fbRef(path) { return db.ref(CEO + '/' + path); }
+function fbRef(path) { return crqLocalFixtureMode() ? crqStubRef() : db.ref(CEO + '/' + path); }
 
 function fbSet(path, val) {
+  if (crqLocalFixtureMode()) return;
   fbRef(path).set(val);
 }
 
@@ -2980,7 +3012,7 @@ function appCopyForAta(id, btn){
 
 function renderMembersPage() {
   const s = state.activeSection;
-  const pending = crqAll().filter(r => !r.status).length;
+  const pending = crqAll().filter(crqIsPending).length;
   const openApps = appAll().filter(a => !appIsDone(a)).length;
   const openShirts = f5All().filter(r => !r.shirtGiven).length;
   const openReviews = rvOpenCount();
@@ -2989,14 +3021,14 @@ function renderMembersPage() {
     { id: 'feedback',  label: '👥 Students' },
     { id: 'watchlist', label: '👀 Watchlist' },
   ];
-  if (dashCan('holds')) memberTabs.push({ id: 'holds', label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') });
+  if (crqStaffCanReview()) memberTabs.push({ id: 'holds', label: '🧊 Holds & Cancellations' + (pending ? ' (' + pending + ')' : '') });
   if (dashCan('applications')) memberTabs.push({ id: 'applications', label: '📋 Applications' + (openApps ? ' (' + openApps + ')' : '') });
   memberTabs.push({ id: 'firstfive', label: '🥋 First 5' + (openShirts ? ' (' + openShirts + ')' : '') });
   memberTabs.push({ id: 'reviews', label: '⭐ Reviews' + (openReviews ? ' (' + openReviews + ')' : '') });
   memberTabs.push({ id: 'incidents', label: '🚑 Incidents' + (openInc ? ' (' + openInc + ')' : '') });
   const nav = renderGroupSubNav(memberTabs);
   if (s === 'watchlist') return nav + renderWatchListPage();
-  if (s === 'holds') return nav + renderHoldsPage();
+  if (s === 'holds' && crqStaffCanReview()) return nav + renderHoldsPage();
   if (s === 'applications') return nav + renderApplicationsPage();
   if (s === 'firstfive') return nav + renderFirstFivePage();
   if (s === 'reviews') return nav + renderReviewsPage();
@@ -3191,7 +3223,22 @@ const CRQ_STATUSES = [
 const CRQ_LOC = { waunakee: 'Waunakee', verona: 'Verona', eastmad: 'East Madison', deforest: 'DeForest' };
 
 function crqAll(){ return Object.entries(state.cancellationRequests || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
-function crqSetStatus(id, status){ const cur = ((state.cancellationRequests || {})[id] || {}).status; fbSet('cancellationRequests/' + id + '/status', cur === status ? null : status); }
+// New website records omit status. Pending is exactly the absence of a status.
+function crqIsPending(r){ return !r.status; }
+function crqStaffCanReview(){
+  if (typeof location !== 'undefined' && location && location.hash === '#clock') return false;
+  return dashCan('holds');
+}
+function crqSetStatus(id, status){
+  const rec = (state.cancellationRequests || {})[id] || {};
+  const cur = rec.status;
+  const next = cur === status ? null : status;
+  if (crqStatusNeedsManualConfirm(rec, next)) {
+    const ok = (typeof confirm === 'function') && confirm('This only updates the staff queue. Processed and Frozen are bookkeeping on this list, not an eligibility approval, and not a Gymdesk or billing action.');
+    if (!ok) return;
+  }
+  fbSet('cancellationRequests/' + id + '/status', next);
+}
 function crqSetCompletedBy(id, val){ fbDebounce('cancellationRequests/' + id + '/completedBy', (val || '').trim().toUpperCase() || null); }
 function crqSetCancelDate(id, val){ fbSet('cancellationRequests/' + id + '/cancelDate', val || null); }
 function crqSetNotes(id, val){ fbDebounce('cancellationRequests/' + id + '/retentionNotes', (val || '').trim() || null); }
@@ -3298,7 +3345,421 @@ function renderPhotosGallery(){
   return h;
 }
 
+// Stored by lvlupma.com buildSubmission on ceo/cancellationRequests.
+// notice.receivedOn, notice.earliestCompletionOn, review.reasons,
+// agreement.*, eligibility.*. Legacy rows omit these objects.
+function crqReasonList(value){
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  value.forEach(item => {
+    if (typeof item !== 'string') return;
+    const s = item.trim();
+    if (s && out.indexOf(s) < 0) out.push(s.slice(0, 80));
+  });
+  return out;
+}
+function crqReasonLabel(code){
+  const labels = {
+    not_auto_approved: 'Not auto-approved',
+    billing_draft_not_active: 'Billing draft is not active',
+    existing_contract_staff_review: 'Existing contract stays with staff',
+    account_state_unavailable: 'Account state unavailable',
+    past_due: 'Past due',
+    balance_unverified: 'Balance unverified',
+    pending_cancellation_unverified: 'Pending cancellation unverified',
+    pending_cancellation: 'Pending cancellation',
+    notice_period_not_elapsed: 'Notice period has not elapsed',
+    requested_completion_before_notice: 'Requested completion is before the notice date',
+    notice_tuition_unresolved: 'Notice tuition is unresolved',
+    active_hold: 'Active hold on the account',
+    active_hold_unknown: 'Active hold unknown',
+    hold_fee_does_not_satisfy_tuition: 'A hold fee does not satisfy tuition',
+    seven_day_advance_not_met: 'Seven-day advance not met',
+    hold_limits_unverified: 'Hold limits unverified',
+  };
+  return labels[code] || code;
+}
+function crqEligibilityView(r){
+  const e = r && r.eligibility;
+  if (!e || typeof e !== 'object') return { state: 'unknown', label: 'Unknown — manual review' };
+  const decision = e.decision === 'gate_passed' || e.decision === 'manual_review' ? e.decision : '';
+  if (decision === 'gate_passed' && e.verifiedGoodStanding === true && e.liveVerification !== true) {
+    return { state: 'gate_passed', label: 'Gate passed — live verification no. Not an approval.' };
+  }
+  if (decision === 'manual_review' || e.verifiedGoodStanding === false) return { state: 'manual_review', label: 'Unknown — manual review' };
+  return { state: 'unknown', label: 'Unknown — manual review' };
+}
+function crqNoticeView(r){
+  if (!r || typeof r !== 'object' || !Object.prototype.hasOwnProperty.call(r, 'notice')) return { kind: 'missing' };
+  if (r.notice == null) return { kind: 'none' };
+  if (typeof r.notice !== 'object') return { kind: 'missing' };
+  return {
+    kind: 'notice',
+    receivedOn: typeof r.notice.receivedOn === 'string' ? r.notice.receivedOn : '',
+    earliestCompletionOn: typeof r.notice.earliestCompletionOn === 'string' ? r.notice.earliestCompletionOn : '',
+    timezone: typeof r.notice.timezone === 'string' ? r.notice.timezone : '',
+    holdDaysCredited: r.notice.holdDaysCredited,
+    completion: r.notice.completion || '',
+    autoComplete: r.notice.autoComplete === true,
+    reasons: crqReasonList(r.notice.reasons),
+  };
+}
+function crqReviewModel(r){
+  const row = r || {};
+  const notice = crqNoticeView(row);
+  const eligibility = crqEligibilityView(row);
+  const review = row.review && typeof row.review === 'object' ? row.review : null;
+  const agreement = row.agreement && typeof row.agreement === 'object' ? row.agreement : null;
+  return {
+    pending: !row.status,
+    notice: notice,
+    eligibility: eligibility,
+    reviewReasons: review ? crqReasonList(review.reasons) : [],
+    eligibilityReasons: row.eligibility && typeof row.eligibility === 'object' ? crqReasonList(row.eligibility.reasons) : [],
+    agreement: agreement,
+    feeActive: !!(row.fee && row.fee.inEffect === true),
+    draftActive: !!(row.billingDraft && row.billingDraft.active === true),
+    feesEnabled: false,
+  };
+}
+function crqStatusNeedsManualConfirm(r, nextStatus){
+  return !!nextStatus;
+}
+function crqFeeSnapshot(){
+  return {
+    reviewStatus: 'pending_mike_review',
+    published: false,
+    enabled: false,
+    approved: false,
+    inEffect: false,
+    appliedAmountCents: null,
+    currency: 'USD',
+    substitutesForTuition: false,
+    substitutesForNoticeObligation: false,
+    appliesToExistingHolds: false,
+    appliesToExistingAgreements: false,
+    collection: 'none',
+  };
+}
+function crqBillingDraftSnapshot(){
+  return {
+    marking: 'FINAL REVIEW DRAFT ONLY — not an active member agreement and not billing automation.',
+    status: 'final_review_draft',
+    clauseId: '2026-11-07-notice-tuition-draft',
+    active: false,
+    memberAgreement: false,
+    automation: false,
+    applied: false,
+    model: 'tuition_prorated_over_all_notice_days_replaces_hold_fee_on_overlap',
+    priorHoldDaysCountAsNotice: false,
+    doubleChargeSameDays: false,
+    creditPaidHoldFeeOnOverlappingDays: true,
+    prorationDenominator: null,
+    feeAmountCents: null,
+    feeBasis: null,
+    chargeDates: null,
+    refundMechanism: null,
+    effectiveDate: null,
+    computedTuitionCents: null,
+    computedCreditCents: null,
+    appliesToExistingHolds: false,
+    appliesToExistingAgreements: false,
+    manualReviewRequired: true,
+    unresolved: ['proration_denominator', 'hold_fee_amount', 'fee_basis_per_student_or_family', 'charge_dates', 'refund_mechanism', 'effective_date'],
+  };
+}
+function crqContractReview(){
+  return {
+    existingMemberContracts: 'preserved_for_staff_review',
+    retroactive: false,
+    noticeClockScope: 'this_written_request_only',
+    feeEffectiveDate: null,
+    appliesToExistingHolds: false,
+  };
+}
+function crqUnavailableEligibility(){
+  return {
+    decision: 'manual_review',
+    verifiedGoodStanding: false,
+    autoApproved: false,
+    liveVerification: false,
+    availability: 'unavailable',
+    accountSource: 'none',
+    balanceCents: null,
+    pastDue: null,
+    pendingCancellation: null,
+    activeHold: null,
+    holdFee: null,
+    reasons: ['account_state_unavailable'],
+  };
+}
+function crqAgreementRecord(name, email, acceptedAt){
+  return {
+    version: '2026-11-07-notice-clock',
+    text: 'I understand that LVLUP requires a 30-day notice for cancellation..  If a scheduled payment falls within the next 30 days from today, I authorize that final payment to be processed. For holds, it must be requested before the next scheduled payment. Cancellation requires 30 days\u2019 written notice beginning on the date LVLUP receives your written cancellation request, including during an active hold. Time already spent on hold does not count toward this notice period. Submitting this form sends a request only. It does not approve a hold or a cancellation.',
+    acceptedAt: acceptedAt,
+    signerName: name,
+    signerEmail: email,
+    memberLinkage: 'unverified_form_identity',
+    memberId: null,
+  };
+}
+function crqCancelNotice(receivedOn){
+  return {
+    receivedOn: receivedOn,
+    beginsOn: receivedOn,
+    periodDays: 30,
+    earliestCompletionOn: '2026-12-06',
+    timezone: 'America/Chicago',
+    clockSource: 'cancellation_request_receipt',
+    holdDaysCredited: 0,
+    priorHoldDaysCountAsNotice: false,
+    noticeDateSatisfied: false,
+    sufficientForCompletion: false,
+    autoComplete: false,
+    completion: 'blocked',
+    billingApplied: false,
+    reasons: ['notice_period_not_elapsed', 'notice_tuition_unresolved', 'active_hold_unknown'],
+  };
+}
+function crqLabeledFixtures(){
+  const label = 'TEST FIXTURE — not a real member';
+  const acceptedAt = '2026-11-06T12:00:00-06:00';
+  const cancelName = 'TEST FIXTURE Cancel Notice';
+  const cancelEmail = 'cancel-notice@example.test';
+  const holdName = 'TEST FIXTURE Hold Request';
+  const holdEmail = 'hold-request@example.test';
+  const gateName = 'TEST FIXTURE Gate Passed';
+  const gateEmail = 'gate-passed@example.test';
+  return {
+    'test-fixture-cancel-notice': {
+      fixtureLabel: label,
+      name: cancelName,
+      email: cancelEmail,
+      location: 'waunakee',
+      rank: 'Beginner',
+      action: 'Cancellation',
+      reasonHold: '',
+      holdStart: '',
+      reasonCancel: 'Moving away',
+      feedback: 'TEST FIXTURE feedback',
+      acknowledged: true,
+      timestamp: acceptedAt,
+      receivedAt: Date.parse(acceptedAt),
+      source: 'hold-cancel-page',
+      agreement: crqAgreementRecord(cancelName, cancelEmail, acceptedAt),
+      fee: crqFeeSnapshot(),
+      billingDraft: crqBillingDraftSnapshot(),
+      contractReview: crqContractReview(),
+      eligibility: crqUnavailableEligibility(),
+      notice: crqCancelNotice('2026-11-06'),
+      review: {
+        required: true,
+        autoApproved: false,
+        sevenDayAdvance: 'not_applicable',
+        holdLimits: 'not_applicable',
+        reasons: ['not_auto_approved', 'billing_draft_not_active', 'existing_contract_staff_review', 'account_state_unavailable', 'notice_period_not_elapsed', 'notice_tuition_unresolved', 'active_hold_unknown'],
+      },
+      ignoredClientClaims: [],
+    },
+    'test-fixture-hold': {
+      fixtureLabel: label,
+      name: holdName,
+      email: holdEmail,
+      location: 'eastmad',
+      rank: '',
+      action: '1 Month Hold',
+      reasonHold: 'Travel',
+      holdStart: '2026-11-07',
+      reasonCancel: '',
+      feedback: '',
+      acknowledged: true,
+      timestamp: acceptedAt,
+      receivedAt: Date.parse(acceptedAt),
+      source: 'hold-cancel-page',
+      agreement: crqAgreementRecord(holdName, holdEmail, acceptedAt),
+      fee: crqFeeSnapshot(),
+      billingDraft: crqBillingDraftSnapshot(),
+      contractReview: crqContractReview(),
+      eligibility: crqUnavailableEligibility(),
+      notice: null,
+      review: {
+        required: true,
+        autoApproved: false,
+        sevenDayAdvance: 'not_met',
+        holdLimits: 'unverified',
+        reasons: ['not_auto_approved', 'billing_draft_not_active', 'existing_contract_staff_review', 'account_state_unavailable', 'seven_day_advance_not_met', 'hold_limits_unverified'],
+      },
+      ignoredClientClaims: [],
+    },
+    'test-fixture-gate-passed': {
+      fixtureLabel: label,
+      name: gateName,
+      email: gateEmail,
+      location: 'verona',
+      rank: '',
+      action: 'Cancellation',
+      reasonHold: '',
+      holdStart: '',
+      reasonCancel: 'Financial Reasons',
+      feedback: '',
+      acknowledged: true,
+      timestamp: acceptedAt,
+      receivedAt: Date.parse(acceptedAt),
+      source: 'hold-cancel-page',
+      agreement: crqAgreementRecord(gateName, gateEmail, acceptedAt),
+      fee: crqFeeSnapshot(),
+      billingDraft: crqBillingDraftSnapshot(),
+      contractReview: crqContractReview(),
+      eligibility: {
+        decision: 'gate_passed',
+        verifiedGoodStanding: true,
+        autoApproved: false,
+        liveVerification: false,
+        availability: 'available',
+        accountSource: 'trusted_fixture',
+        balanceCents: 0,
+        pastDue: false,
+        pendingCancellation: false,
+        activeHold: true,
+        holdFee: 'paid',
+        reasons: [],
+      },
+      notice: {
+        receivedOn: '2026-11-06',
+        beginsOn: '2026-11-06',
+        periodDays: 30,
+        earliestCompletionOn: '2026-12-06',
+        timezone: 'America/Chicago',
+        clockSource: 'cancellation_request_receipt',
+        holdDaysCredited: 0,
+        priorHoldDaysCountAsNotice: false,
+        noticeDateSatisfied: false,
+        sufficientForCompletion: false,
+        autoComplete: false,
+        completion: 'blocked',
+        billingApplied: false,
+        reasons: ['notice_period_not_elapsed', 'notice_tuition_unresolved', 'active_hold', 'hold_fee_does_not_satisfy_tuition'],
+      },
+      review: {
+        required: true,
+        autoApproved: false,
+        sevenDayAdvance: 'not_applicable',
+        holdLimits: 'not_applicable',
+        reasons: ['not_auto_approved', 'billing_draft_not_active', 'existing_contract_staff_review', 'notice_period_not_elapsed', 'notice_tuition_unresolved', 'active_hold', 'hold_fee_does_not_satisfy_tuition'],
+      },
+      ignoredClientClaims: [],
+    },
+    'test-fixture-legacy-pending': {
+      fixtureLabel: label,
+      name: 'TEST FIXTURE Legacy Pending',
+      email: 'legacy-pending@example.test',
+      location: 'deforest',
+      action: 'Cancellation',
+      reasonCancel: 'Schedule conflict',
+      timestamp: '2026-09-15T14:00:00-05:00',
+      receivedAt: Date.parse('2026-09-15T14:00:00-05:00'),
+      source: 'hold-cancel-page',
+    },
+    'test-fixture-legacy-processed': {
+      fixtureLabel: label,
+      name: 'TEST FIXTURE Legacy Processed',
+      email: 'legacy-processed@example.test',
+      location: 'waunakee',
+      action: 'Cancellation',
+      reasonCancel: 'Medical',
+      status: 'processed',
+      completedBy: 'TF',
+      timestamp: '2026-09-02T14:00:00-05:00',
+      receivedAt: Date.parse('2026-09-02T14:00:00-05:00'),
+      source: 'hold-cancel-page',
+    },
+  };
+}
+function crqBootLabeledFixtures(){
+  const role = /(?:\?|&)holdCancelRole=frontdesk(?:&|$)/.test(String(location.search || '')) ? 'frontdesk' : 'lead';
+  dashAuth = blankDashAuth({
+    ready: true,
+    allowed: true,
+    user: { email: 'fixture-lead@example.test', emailVerified: true },
+    dashRole: role,
+    name: role === 'frontdesk' ? 'Fixture Desk' : 'Fixture Lead',
+    isAdmin: false,
+  });
+  state.cancellationRequests = crqLabeledFixtures();
+  state.activeSection = 'holds';
+  state.holdsFilter = 'all';
+  render();
+  const conn = document.getElementById('connStatus');
+  if (conn) conn.textContent = 'Fixtures only — not connected';
+}
+function crqFixtureSetRole(role){
+  if (!crqLocalFixtureMode()) return;
+  if (role !== 'lead' && role !== 'frontdesk' && role !== 'ops' && role !== 'admin') return;
+  dashAuth.dashRole = role;
+  dashAuth.isAdmin = role === 'admin';
+  render();
+}
+function crqReasonHtml(codes){
+  if (!codes.length) return '';
+  return '<ul style="margin:4px 0 0;padding-left:18px;">' + codes.map(code => '<li><code>' + esc(code) + '</code> — ' + esc(crqReasonLabel(code)) + '</li>').join('') + '</ul>';
+}
+function renderCrqReview(r){
+  const m = crqReviewModel(r);
+  const row = (k, v) => '<div><b style="color:#64748b;font-weight:700;">' + k + '</b> ' + v + '</div>';
+  let h = '<div data-crq-review="1" data-crq-verification="' + m.eligibility.state + '" data-crq-pending="' + (m.pending ? '1' : '0') + '" style="margin-top:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#334155;line-height:1.55;">';
+  h += '<div style="font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#64748b;margin-bottom:4px;">Server review</div>';
+  if (m.notice.kind === 'notice') {
+    h += row('Notice receipt', m.notice.receivedOn ? '<span data-crq-notice="' + esc(m.notice.receivedOn) + '">' + esc(fmtCancelDate(m.notice.receivedOn)) + '</span>' + (m.notice.timezone ? ' <span style="color:#94a3b8;">' + esc(m.notice.timezone) + '</span>' : '') : '<span data-crq-notice="missing">Not on this record</span>');
+    h += row('Earliest completion', m.notice.earliestCompletionOn ? '<span data-crq-earliest="' + esc(m.notice.earliestCompletionOn) + '">' + esc(fmtCancelDate(m.notice.earliestCompletionOn)) + '</span>' : '<span data-crq-earliest="missing">Not on this record</span>');
+    h += row('Hold days credited', esc(m.notice.holdDaysCredited === 0 || m.notice.holdDaysCredited ? String(m.notice.holdDaysCredited) : '—'));
+    if (m.notice.reasons.length) h += '<div data-crq-notice-reasons="' + m.notice.reasons.length + '" style="margin-top:4px;"><b style="color:#64748b;font-weight:700;">Notice reasons</b>' + crqReasonHtml(m.notice.reasons) + '</div>';
+  } else if (m.notice.kind === 'none') {
+    h += '<div data-crq-notice="none">No cancellation notice on this request.</div>';
+  } else {
+    h += '<div data-crq-notice="missing">Notice dates are not on this record. Unknown — manual review.</div>';
+  }
+  h += '<div style="color:#64748b;margin:4px 0 6px;">30 calendar days start on notice.receivedOn. Days already on hold are not notice credit. This screen does not recompute that date.</div>';
+  h += row('Eligibility', '<span data-crq-eligibility-state="' + m.eligibility.state + '">' + esc(m.eligibility.label) + '</span>');
+  const live = r && r.eligibility && r.eligibility.liveVerification === true;
+  h += '<div data-crq-gymdesk="no-loader">Live account verification: ' + (live ? 'yes' : 'no') + '. No trusted Gymdesk or balance loader is connected. Unknown stays manual review and is never eligible.</div>';
+  if (r && r.eligibility && typeof r.eligibility === 'object') {
+    const e = r.eligibility;
+    h += '<div data-crq-eligibility="1" style="margin-top:4px;color:#475569;">';
+    h += 'decision ' + esc(e.decision || '—') + ' · verifiedGoodStanding ' + (e.verifiedGoodStanding === true ? 'true' : 'false');
+    h += ' · availability ' + esc(e.availability || '—') + ' · source ' + esc(e.accountSource || '—');
+    h += '</div>';
+    if (m.eligibilityReasons.length) h += '<div data-crq-eligibility-reasons="' + m.eligibilityReasons.length + '"><b style="color:#64748b;font-weight:700;">Eligibility reasons</b>' + crqReasonHtml(m.eligibilityReasons) + '</div>';
+  }
+  h += '<div data-crq-identity="typed" style="margin-top:4px;">Name and email were typed on the form. They are not a verified member link.</div>';
+  if (m.agreement) {
+    const link = m.agreement.memberLinkage === 'unverified_form_identity' ? 'unverified form identity' : (m.agreement.memberLinkage || 'not linked');
+    h += '<div data-crq-agreement="present" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Agreement</b> version ' + esc(m.agreement.version || '—') + ' · accepted ' + esc(m.agreement.acceptedAt || '—') + ' · ' + esc(link) + ' · member id ' + (m.agreement.memberId == null ? 'none' : esc(String(m.agreement.memberId))) + '</div>';
+  } else {
+    h += '<div data-crq-agreement="missing" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Agreement</b> Not on this record.</div>';
+  }
+  if (m.reviewReasons.length) {
+    h += '<div data-crq-reasons="' + m.reviewReasons.length + '" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Review reasons</b>' + crqReasonHtml(m.reviewReasons) + '</div>';
+  } else {
+    h += '<div data-crq-reasons="0" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Review reasons</b> None on this record.</div>';
+  }
+  const feeOnRecord = r && r.fee && typeof r.fee === 'object';
+  const draftOnRecord = r && r.billingDraft && typeof r.billingDraft === 'object';
+  h += '<div data-hold-fee-policy="inactive" aria-disabled="true" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#f1f5f9;color:#64748b;">';
+  if (feeOnRecord && (r.fee.inEffect === true || r.fee.enabled === true)) h += 'A fee flag is on the record. This screen does not bill or turn it on. ';
+  else if (feeOnRecord) h += 'Hold fee is not in effect (collection ' + esc(r.fee.collection || 'none') + '). ';
+  else h += 'Hold fee state is not on this record. ';
+  if (draftOnRecord && r.billingDraft.active === true) h += 'A tuition draft flag is on the record. This screen does not calculate it. ';
+  else if (draftOnRecord) h += 'Tuition draft is not active. ';
+  else h += 'Tuition draft is not on this record. ';
+  h += 'This screen does not calculate a fee or turn billing on.</div>';
+  h += '<div style="margin-top:6px;font-weight:700;color:#0f3460;">Processed and Frozen only update this queue. They are not an eligibility approval and they do not change Gymdesk or billing.</div>';
+  h += '</div>';
+  return h;
+}
+
 function renderHoldsPage(){
+  if (!crqStaffCanReview()) return '';
   const all = crqAll().sort((a, b) => (b.receivedAt || 0) - (a.receivedAt || 0));
   const filter = state.holdsFilter || 'all';
   const statusOf = r => r.status || 'pending';
@@ -3307,7 +3768,13 @@ function renderHoldsPage(){
   const filtered = filter === 'all' ? all : all.filter(r => statusOf(r) === filter);
 
   let h = '<div class="page" style="max-width:960px;">';
-  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🧊 Holds &amp; Cancellations</h2><p style="margin:0;font-size:13px;color:#888;">Requests submitted at <a href="https://lvlupma.com/hold-cancel" target="_blank" rel="noopener" style="color:#2c4bff;font-weight:700;text-decoration:none;">lvlupma.com/hold-cancel</a>. Set a status and mark who completed the action.</p></div>';
+  h += '<div style="margin-bottom:16px;"><h2 style="margin:0 0 2px;font-size:18px;font-weight:800;color:#1a1a2e;">🧊 Holds &amp; Cancellations</h2><p style="margin:0;font-size:13px;color:#888;">Requests submitted at <a href="https://lvlupma.com/hold-cancel" target="_blank" rel="noopener" style="color:#2c4bff;font-weight:700;text-decoration:none;">lvlupma.com/hold-cancel</a>. Notice dates, verification, agreement evidence, and review reasons come from the server record. Set a status only as a manual staff decision.</p></div>';
+  if (crqLocalFixtureMode()) {
+    h += '<div data-crq-fixture-banner="1" style="margin-bottom:12px;padding:10px 12px;border-radius:10px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:12.5px;font-weight:700;">TEST FIXTURES — not real members. Writes are stubbed. Nothing is saved to Firebase, Gymdesk, or the roster.<span style="display:block;margin-top:8px;font-weight:600;">';
+    h += '<button type="button" onclick="crqFixtureSetRole(\'lead\')" style="margin-right:6px;padding:4px 10px;border-radius:8px;border:1px solid #c2410c;background:#fff;font-weight:800;cursor:pointer;">Lead view</button>';
+    h += '<button type="button" onclick="crqFixtureSetRole(\'frontdesk\')" style="padding:4px 10px;border-radius:8px;border:1px solid #c2410c;background:#fff;font-weight:800;cursor:pointer;">Front desk view</button>';
+    h += '</span></div>';
+  }
   const stat = (n, label, color) => '<div style="flex:1;min-width:88px;background:#fff;border:1px solid #e8eaf0;border-radius:12px;padding:12px 14px;text-align:center;box-shadow:var(--shadow);"><div style="font-size:20px;font-weight:800;color:' + color + ';">' + n + '</div><div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;">' + label + '</div></div>';
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' + stat(all.length, 'Total', '#1a1a2e') + stat(counts.pending, 'Pending', '#d97706') + stat(counts.processed, 'Processed', '#2563eb') + stat(counts.frozen, 'Frozen', '#0891b2') + '</div>';
   const chip = (id, label) => '<button onclick="crqSetFilter(\'' + id + '\')" style="padding:5px 13px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:' + (filter === id ? '#1a1a2e' : '#f1f3f9') + ';color:' + (filter === id ? '#fff' : '#555') + ';">' + label + '</button>';
@@ -3324,6 +3791,7 @@ function renderHoldsPage(){
 }
 
 function renderHoldCard(r){
+  if (!crqStaffCanReview()) return '';
   const locN = CRQ_LOC[r.location] || r.location || '';
   const action = r.action || '';
   const isCancel = /cancel/i.test(action);
@@ -3336,6 +3804,7 @@ function renderHoldCard(r){
   h += '<div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;">';
   h += '<div style="flex:1;min-width:180px;">';
   h += '<div style="font-size:15px;font-weight:800;color:#1a1a2e;">' + esc(r.name || '—') + '</div>';
+  if (r.fixtureLabel) h += '<div data-crq-fixture-label="1" style="display:inline-block;margin-top:4px;font-size:10px;font-weight:800;color:#9a3412;background:#ffedd5;padding:2px 8px;border-radius:999px;">' + esc(r.fixtureLabel) + '</div>';
   h += '<div style="font-size:11px;color:#888;margin-top:2px;">' + esc(locN) + (r.rank ? ' · ' + esc(r.rank) : '') + (r.email ? ' · ' + esc(r.email) : '') + '</div>';
   h += '</div>';
   if (st === 'pending') h += '<span style="flex-shrink:0;font-size:10px;font-weight:800;color:#d97706;background:#fffbeb;padding:3px 9px;border-radius:6px;">● PENDING</span>';
@@ -3349,6 +3818,7 @@ function renderHoldCard(r){
   if (isHold && r.resumeDate) h += '<div><b style="color:#0891b2;font-weight:700;">Resumes on:</b> ' + esc(fmtCancelDate(r.resumeDate)) + '</div>';
   if (r.feedback) h += '<div style="font-style:italic;color:#777;margin-top:2px;">“' + esc(r.feedback) + '”</div>';
   h += '</div>';
+  h += renderCrqReview(r);
   if (isCancel) {
     h += '<div style="margin-top:10px;">';
     h += '<label style="display:block;font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Next steps to save them</label>';
@@ -7227,7 +7697,8 @@ function renderCancellationDetails(loc){
     const reason = [r.reasonCancel, r.feedback].filter(x => x && String(x).trim()).join(' — ');
     h += '<tr style="background:#f8fbff;">';
     h += '<td style="font-weight:600;color:#0f3460;">' + esc(r.name || '—') + ' <span title="From the cancellation form" style="font-size:9px;font-weight:800;color:#2563eb;background:#dbeafe;padding:1px 6px;border-radius:999px;vertical-align:middle;">FORM</span>' + (r.rank ? '<div style="font-size:10px;color:#94a3b8;font-weight:600;">' + esc(r.rank) + '</div>' : '') + '</td>';
-    h += '<td style="text-align:center;color:#555;">' + cancelFmtDate(r.cancelDate || r.timestamp) + '</td>';
+    const earliestShown = r.notice && r.notice.earliestCompletionOn;
+    h += '<td style="text-align:center;color:#555;">' + cancelFmtDate(r.cancelDate || r.timestamp) + (earliestShown ? '<div style="font-size:10px;color:#64748b;font-weight:700;">Earliest ' + esc(fmtCancelDate(earliestShown)) + '</div>' : '') + '</td>';
     h += '<td style="color:#555;font-size:12.5px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;">' + (reason ? esc(reason) : '<span style="color:#bbb;">—</span>') + '</td>';
     h += '<td><input value="' + esc(r.retentionNotes || '') + '" placeholder="Next steps to save them..." onchange="crqSetNotes(\'' + r.id + '\',this.value)" style="' + inCss + 'border-color:' + (r.retentionNotes ? '#16a34a' : 'var(--gray-200)') + ';" /></td>';
     h += '<td style="text-align:center;"><a href="#" onclick="setSection(\'holds\');return false;" title="Open in Holds &amp; Cancellations" style="text-decoration:none;color:#94a3b8;font-size:14px;">↗</a></td>';
@@ -14025,6 +14496,7 @@ function renderDevelopmentPage() {
 }
 
   async function init() {
+  if (crqLocalFixtureMode()) { crqBootLabeledFixtures(); return; }
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
   // Restore ACQ session unlock from sessionStorage
   if (sessionStorage && sessionStorage.getItem('acqUnlocked') === '1') state.acq.unlocked = true;
