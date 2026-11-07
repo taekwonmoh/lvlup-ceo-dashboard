@@ -3234,7 +3234,7 @@ function crqSetStatus(id, status){
   const cur = rec.status;
   const next = cur === status ? null : status;
   if (crqStatusNeedsManualConfirm(rec, next)) {
-    const ok = (typeof confirm === 'function') && confirm('This request is not verified eligible. Unknown or unresolved good standing and payment stay on manual review. Continue only as a staff decision. This does not charge a fee, complete the hold or cancellation, or reactivate billing.');
+    const ok = (typeof confirm === 'function') && confirm('This only updates the staff queue. Processed and Frozen are bookkeeping on this list, not an eligibility approval, and not a Gymdesk or billing action.');
     if (!ok) return;
   }
   fbSet('cancellationRequests/' + id + '/status', next);
@@ -3345,159 +3345,310 @@ function renderPhotosGallery(){
   return h;
 }
 
-// Keys read from ceo/cancellationRequests. Flat, or the same names under
-// serverReview. Website PR 51 was not readable from this repo (GitHub 404),
-// so these names are the request's own words — not a synonym list.
-function crqPickReview(r, key){
-  if (!r || typeof r !== 'object') return undefined;
-  if (r[key] != null && r[key] !== '') return r[key];
-  const box = r.serverReview;
-  if (box && typeof box === 'object' && box[key] != null && box[key] !== '') return box[key];
-  return undefined;
+// Stored by lvlupma.com buildSubmission on ceo/cancellationRequests.
+// notice.receivedOn, notice.earliestCompletionOn, review.reasons,
+// agreement.*, eligibility.*. Legacy rows omit these objects.
+function crqReasonList(value){
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  value.forEach(item => {
+    if (typeof item !== 'string') return;
+    const s = item.trim();
+    if (s && out.indexOf(s) < 0) out.push(s.slice(0, 80));
+  });
+  return out;
 }
-function crqVerificationState(value){
-  if (typeof value !== 'string') return 'unknown';
-  const s = value.trim().toLowerCase();
-  if (s === 'eligible') return 'eligible';
-  if (s === 'not_eligible' || s === 'ineligible' || s === 'unresolved' || s === 'blocked' || s === 'not_in_good_standing') return 'not_eligible';
-  return 'unknown';
+function crqReasonLabel(code){
+  const labels = {
+    not_auto_approved: 'Not auto-approved',
+    billing_draft_not_active: 'Billing draft is not active',
+    existing_contract_staff_review: 'Existing contract stays with staff',
+    account_state_unavailable: 'Account state unavailable',
+    past_due: 'Past due',
+    balance_unverified: 'Balance unverified',
+    pending_cancellation_unverified: 'Pending cancellation unverified',
+    pending_cancellation: 'Pending cancellation',
+    notice_period_not_elapsed: 'Notice period has not elapsed',
+    requested_completion_before_notice: 'Requested completion is before the notice date',
+    notice_tuition_unresolved: 'Notice tuition is unresolved',
+    active_hold: 'Active hold on the account',
+    active_hold_unknown: 'Active hold unknown',
+    hold_fee_does_not_satisfy_tuition: 'A hold fee does not satisfy tuition',
+    seven_day_advance_not_met: 'Seven-day advance not met',
+    hold_limits_unverified: 'Hold limits unverified',
+  };
+  return labels[code] || code;
 }
-function crqVerificationLabel(state){
-  if (state === 'eligible') return 'Eligible';
-  if (state === 'not_eligible') return 'Not eligible — manual review';
-  return 'Unknown — manual review';
+function crqEligibilityView(r){
+  const e = r && r.eligibility;
+  if (!e || typeof e !== 'object') return { state: 'unknown', label: 'Unknown — manual review' };
+  const decision = e.decision === 'gate_passed' || e.decision === 'manual_review' ? e.decision : '';
+  if (decision === 'gate_passed' && e.verifiedGoodStanding === true && e.liveVerification !== true) {
+    return { state: 'gate_passed', label: 'Gate passed — live verification no. Not an approval.' };
+  }
+  if (decision === 'manual_review' || e.verifiedGoodStanding === false) return { state: 'manual_review', label: 'Unknown — manual review' };
+  return { state: 'unknown', label: 'Unknown — manual review' };
+}
+function crqNoticeView(r){
+  if (!r || typeof r !== 'object' || !Object.prototype.hasOwnProperty.call(r, 'notice')) return { kind: 'missing' };
+  if (r.notice == null) return { kind: 'none' };
+  if (typeof r.notice !== 'object') return { kind: 'missing' };
+  return {
+    kind: 'notice',
+    receivedOn: typeof r.notice.receivedOn === 'string' ? r.notice.receivedOn : '',
+    earliestCompletionOn: typeof r.notice.earliestCompletionOn === 'string' ? r.notice.earliestCompletionOn : '',
+    timezone: typeof r.notice.timezone === 'string' ? r.notice.timezone : '',
+    holdDaysCredited: r.notice.holdDaysCredited,
+    completion: r.notice.completion || '',
+    autoComplete: r.notice.autoComplete === true,
+    reasons: crqReasonList(r.notice.reasons),
+  };
 }
 function crqReviewModel(r){
-  const good = crqVerificationState(crqPickReview(r, 'goodstanding'));
-  const payment = crqVerificationState(crqPickReview(r, 'paymentVerification'));
-  const combined = (good === 'not_eligible' || payment === 'not_eligible') ? 'not_eligible'
-    : (good === 'eligible' && payment === 'eligible') ? 'eligible'
-    : 'unknown';
+  const row = r || {};
+  const notice = crqNoticeView(row);
+  const eligibility = crqEligibilityView(row);
+  const review = row.review && typeof row.review === 'object' ? row.review : null;
+  const agreement = row.agreement && typeof row.agreement === 'object' ? row.agreement : null;
   return {
-    pending: !r.status,
-    noticeReceiptDate: crqPickReview(r, 'noticeReceiptDate'),
-    earliestCompletionDate: crqPickReview(r, 'earliestCompletionDate'),
-    goodstanding: good,
-    paymentVerification: payment,
-    combined: combined,
-    agreement: crqAgreementSummary(crqPickReview(r, 'agreementEvidence')),
-    checkbox: !!(r && r.acknowledged === true),
-    reasons: crqReviewReasonList(crqPickReview(r, 'reviewReasons')),
+    pending: !row.status,
+    notice: notice,
+    eligibility: eligibility,
+    reviewReasons: review ? crqReasonList(review.reasons) : [],
+    eligibilityReasons: row.eligibility && typeof row.eligibility === 'object' ? crqReasonList(row.eligibility.reasons) : [],
+    agreement: agreement,
+    feeActive: !!(row.fee && row.fee.inEffect === true),
+    draftActive: !!(row.billingDraft && row.billingDraft.active === true),
     feesEnabled: false,
   };
 }
 function crqStatusNeedsManualConfirm(r, nextStatus){
-  if (!nextStatus) return false;
-  return crqReviewModel(r || {}).combined !== 'eligible';
+  return !!nextStatus;
 }
-function crqAgreementSummary(value){
-  if (value == null || value === '') return { present: false, lines: [] };
-  if (typeof value === 'string') {
-    const s = value.trim();
-    if (!s) return { present: false, lines: [] };
-    if (s.length > 160) return { present: true, lines: ['Agreement evidence is on the record. The long text is not expanded here.'] };
-    return { present: true, lines: [s] };
-  }
-  if (typeof value === 'object') {
-    const lines = [];
-    ['acknowledged', 'recordedAt', 'version', 'noticeId', 'hash', 'source'].forEach(k => {
-      if (value[k] != null && value[k] !== '') lines.push(k + ': ' + String(value[k]).slice(0, 120));
-    });
-    if (!lines.length) lines.push('Agreement evidence is on the record.');
-    return { present: true, lines };
-  }
-  return { present: false, lines: [] };
+function crqFeeSnapshot(){
+  return {
+    reviewStatus: 'pending_mike_review',
+    published: false,
+    enabled: false,
+    approved: false,
+    inEffect: false,
+    appliedAmountCents: null,
+    currency: 'USD',
+    substitutesForTuition: false,
+    substitutesForNoticeObligation: false,
+    appliesToExistingHolds: false,
+    appliesToExistingAgreements: false,
+    collection: 'none',
+  };
 }
-function crqReviewReasonList(value){
-  if (value == null || value === '') return [];
-  const arr = Array.isArray(value) ? value : [value];
-  const out = [];
-  arr.forEach(item => {
-    if (item == null || item === '') return;
-    if (typeof item === 'string' || typeof item === 'number') {
-      const s = String(item).trim();
-      if (s) out.push(s.slice(0, 300));
-      return;
-    }
-    if (typeof item === 'object') {
-      const s = [item.code || item.reason || item.id, item.message || item.detail || item.text]
-        .filter(x => x != null && String(x).trim())
-        .map(x => String(x).trim())
-        .join(' — ');
-      if (s) out.push(s.slice(0, 300));
-    }
-  });
-  return out;
+function crqBillingDraftSnapshot(){
+  return {
+    marking: 'FINAL REVIEW DRAFT ONLY — not an active member agreement and not billing automation.',
+    status: 'final_review_draft',
+    clauseId: '2026-11-07-notice-tuition-draft',
+    active: false,
+    memberAgreement: false,
+    automation: false,
+    applied: false,
+    model: 'tuition_prorated_over_all_notice_days_replaces_hold_fee_on_overlap',
+    priorHoldDaysCountAsNotice: false,
+    doubleChargeSameDays: false,
+    creditPaidHoldFeeOnOverlappingDays: true,
+    prorationDenominator: null,
+    feeAmountCents: null,
+    feeBasis: null,
+    chargeDates: null,
+    refundMechanism: null,
+    effectiveDate: null,
+    computedTuitionCents: null,
+    computedCreditCents: null,
+    appliesToExistingHolds: false,
+    appliesToExistingAgreements: false,
+    manualReviewRequired: true,
+    unresolved: ['proration_denominator', 'hold_fee_amount', 'fee_basis_per_student_or_family', 'charge_dates', 'refund_mechanism', 'effective_date'],
+  };
 }
-function crqDisplayDate(value, kind){
-  if (value == null || value === '') return '';
-  const raw = String(value).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return fmtCancelDate(raw);
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return raw.slice(0, 40);
-  if (kind === 'date') {
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-    return fmtCancelDate(parts);
-  }
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Chicago',
-    year: 'numeric', month: 'short', day: 'numeric',
-    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-  }).format(d);
+function crqContractReview(){
+  return {
+    existingMemberContracts: 'preserved_for_staff_review',
+    retroactive: false,
+    noticeClockScope: 'this_written_request_only',
+    feeEffectiveDate: null,
+    appliesToExistingHolds: false,
+  };
+}
+function crqUnavailableEligibility(){
+  return {
+    decision: 'manual_review',
+    verifiedGoodStanding: false,
+    autoApproved: false,
+    liveVerification: false,
+    availability: 'unavailable',
+    accountSource: 'none',
+    balanceCents: null,
+    pastDue: null,
+    pendingCancellation: null,
+    activeHold: null,
+    holdFee: null,
+    reasons: ['account_state_unavailable'],
+  };
+}
+function crqAgreementRecord(name, email, acceptedAt){
+  return {
+    version: '2026-11-07-notice-clock',
+    text: 'I understand that LVLUP requires a 30-day notice for cancellation..  If a scheduled payment falls within the next 30 days from today, I authorize that final payment to be processed. For holds, it must be requested before the next scheduled payment. Cancellation requires 30 days\u2019 written notice beginning on the date LVLUP receives your written cancellation request, including during an active hold. Time already spent on hold does not count toward this notice period. Submitting this form sends a request only. It does not approve a hold or a cancellation.',
+    acceptedAt: acceptedAt,
+    signerName: name,
+    signerEmail: email,
+    memberLinkage: 'unverified_form_identity',
+    memberId: null,
+  };
+}
+function crqCancelNotice(receivedOn){
+  return {
+    receivedOn: receivedOn,
+    beginsOn: receivedOn,
+    periodDays: 30,
+    earliestCompletionOn: '2026-12-06',
+    timezone: 'America/Chicago',
+    clockSource: 'cancellation_request_receipt',
+    holdDaysCredited: 0,
+    priorHoldDaysCountAsNotice: false,
+    noticeDateSatisfied: false,
+    sufficientForCompletion: false,
+    autoComplete: false,
+    completion: 'blocked',
+    billingApplied: false,
+    reasons: ['notice_period_not_elapsed', 'notice_tuition_unresolved', 'active_hold_unknown'],
+  };
 }
 function crqLabeledFixtures(){
   const label = 'TEST FIXTURE — not a real member';
+  const acceptedAt = '2026-11-06T12:00:00-06:00';
+  const cancelName = 'TEST FIXTURE Cancel Notice';
+  const cancelEmail = 'cancel-notice@example.test';
+  const holdName = 'TEST FIXTURE Hold Request';
+  const holdEmail = 'hold-request@example.test';
+  const gateName = 'TEST FIXTURE Gate Passed';
+  const gateEmail = 'gate-passed@example.test';
   return {
     'test-fixture-cancel-notice': {
       fixtureLabel: label,
-      name: 'TEST FIXTURE Cancel Notice',
-      email: 'cancel-notice@example.test',
+      name: cancelName,
+      email: cancelEmail,
       location: 'waunakee',
       rank: 'Beginner',
       action: 'Cancellation',
+      reasonHold: '',
+      holdStart: '',
       reasonCancel: 'Moving away',
       feedback: 'TEST FIXTURE feedback',
-      timestamp: '2026-10-01T15:00:00.000Z',
-      receivedAt: Date.parse('2026-10-01T15:00:00.000Z'),
-      holdStart: '2026-09-01',
-      noticeReceiptDate: '2026-10-08T05:00:00.000Z',
-      earliestCompletionDate: '2026-11-07',
-      goodstanding: 'unknown',
-      paymentVerification: 'unknown',
       acknowledged: true,
-      agreementEvidence: { acknowledged: true, recordedAt: '2026-10-08T05:00:00.000Z', version: 'hold-cancel-ack' },
-      reviewReasons: ['Obligations unresolved — notice still on the record', 'No trusted balance check'],
+      timestamp: acceptedAt,
+      receivedAt: Date.parse(acceptedAt),
+      source: 'hold-cancel-page',
+      agreement: crqAgreementRecord(cancelName, cancelEmail, acceptedAt),
+      fee: crqFeeSnapshot(),
+      billingDraft: crqBillingDraftSnapshot(),
+      contractReview: crqContractReview(),
+      eligibility: crqUnavailableEligibility(),
+      notice: crqCancelNotice('2026-11-06'),
+      review: {
+        required: true,
+        autoApproved: false,
+        sevenDayAdvance: 'not_applicable',
+        holdLimits: 'not_applicable',
+        reasons: ['not_auto_approved', 'billing_draft_not_active', 'existing_contract_staff_review', 'account_state_unavailable', 'notice_period_not_elapsed', 'notice_tuition_unresolved', 'active_hold_unknown'],
+      },
+      ignoredClientClaims: [],
     },
-    'test-fixture-both-eligible': {
+    'test-fixture-hold': {
       fixtureLabel: label,
-      name: 'TEST FIXTURE Both Eligible',
-      email: 'both-eligible@example.test',
-      location: 'verona',
-      action: 'Cancellation',
-      reasonCancel: 'Financial Reasons',
-      timestamp: '2026-10-10T15:00:00.000Z',
-      receivedAt: Date.parse('2026-10-10T15:00:00.000Z'),
-      noticeReceiptDate: '2026-10-10T15:00:00.000Z',
-      earliestCompletionDate: '2026-11-09',
-      goodstanding: 'eligible',
-      paymentVerification: 'eligible',
-      agreementEvidence: { acknowledged: true, recordedAt: '2026-10-10T15:00:00.000Z', version: 'hold-cancel-ack' },
-      reviewReasons: ['Server marked both checks eligible. Staff still approve by hand.'],
-    },
-    'test-fixture-hold-blocked': {
-      fixtureLabel: label,
-      name: 'TEST FIXTURE Hold Blocked',
-      email: 'hold-blocked@example.test',
+      name: holdName,
+      email: holdEmail,
       location: 'eastmad',
+      rank: '',
       action: '1 Month Hold',
       reasonHold: 'Travel',
-      holdStart: '2026-11-01',
-      timestamp: '2026-11-01T16:00:00.000Z',
-      receivedAt: Date.parse('2026-11-01T16:00:00.000Z'),
-      noticeReceiptDate: '2026-11-01T16:00:00.000Z',
-      goodstanding: 'not_eligible',
-      paymentVerification: 'unknown',
-      reviewReasons: ['Good standing is not eligible. Payment check is unknown.'],
+      holdStart: '2026-11-07',
+      reasonCancel: '',
+      feedback: '',
+      acknowledged: true,
+      timestamp: acceptedAt,
+      receivedAt: Date.parse(acceptedAt),
+      source: 'hold-cancel-page',
+      agreement: crqAgreementRecord(holdName, holdEmail, acceptedAt),
+      fee: crqFeeSnapshot(),
+      billingDraft: crqBillingDraftSnapshot(),
+      contractReview: crqContractReview(),
+      eligibility: crqUnavailableEligibility(),
+      notice: null,
+      review: {
+        required: true,
+        autoApproved: false,
+        sevenDayAdvance: 'not_met',
+        holdLimits: 'unverified',
+        reasons: ['not_auto_approved', 'billing_draft_not_active', 'existing_contract_staff_review', 'account_state_unavailable', 'seven_day_advance_not_met', 'hold_limits_unverified'],
+      },
+      ignoredClientClaims: [],
+    },
+    'test-fixture-gate-passed': {
+      fixtureLabel: label,
+      name: gateName,
+      email: gateEmail,
+      location: 'verona',
+      rank: '',
+      action: 'Cancellation',
+      reasonHold: '',
+      holdStart: '',
+      reasonCancel: 'Financial Reasons',
+      feedback: '',
+      acknowledged: true,
+      timestamp: acceptedAt,
+      receivedAt: Date.parse(acceptedAt),
+      source: 'hold-cancel-page',
+      agreement: crqAgreementRecord(gateName, gateEmail, acceptedAt),
+      fee: crqFeeSnapshot(),
+      billingDraft: crqBillingDraftSnapshot(),
+      contractReview: crqContractReview(),
+      eligibility: {
+        decision: 'gate_passed',
+        verifiedGoodStanding: true,
+        autoApproved: false,
+        liveVerification: false,
+        availability: 'available',
+        accountSource: 'trusted_fixture',
+        balanceCents: 0,
+        pastDue: false,
+        pendingCancellation: false,
+        activeHold: true,
+        holdFee: 'paid',
+        reasons: [],
+      },
+      notice: {
+        receivedOn: '2026-11-06',
+        beginsOn: '2026-11-06',
+        periodDays: 30,
+        earliestCompletionOn: '2026-12-06',
+        timezone: 'America/Chicago',
+        clockSource: 'cancellation_request_receipt',
+        holdDaysCredited: 0,
+        priorHoldDaysCountAsNotice: false,
+        noticeDateSatisfied: false,
+        sufficientForCompletion: false,
+        autoComplete: false,
+        completion: 'blocked',
+        billingApplied: false,
+        reasons: ['notice_period_not_elapsed', 'notice_tuition_unresolved', 'active_hold', 'hold_fee_does_not_satisfy_tuition'],
+      },
+      review: {
+        required: true,
+        autoApproved: false,
+        sevenDayAdvance: 'not_applicable',
+        holdLimits: 'not_applicable',
+        reasons: ['not_auto_approved', 'billing_draft_not_active', 'existing_contract_staff_review', 'notice_period_not_elapsed', 'notice_tuition_unresolved', 'active_hold', 'hold_fee_does_not_satisfy_tuition'],
+      },
+      ignoredClientClaims: [],
     },
     'test-fixture-legacy-pending': {
       fixtureLabel: label,
@@ -3506,8 +3657,9 @@ function crqLabeledFixtures(){
       location: 'deforest',
       action: 'Cancellation',
       reasonCancel: 'Schedule conflict',
-      timestamp: '2026-09-15T14:00:00.000Z',
-      receivedAt: Date.parse('2026-09-15T14:00:00.000Z'),
+      timestamp: '2026-09-15T14:00:00-05:00',
+      receivedAt: Date.parse('2026-09-15T14:00:00-05:00'),
+      source: 'hold-cancel-page',
     },
     'test-fixture-legacy-processed': {
       fixtureLabel: label,
@@ -3518,8 +3670,9 @@ function crqLabeledFixtures(){
       reasonCancel: 'Medical',
       status: 'processed',
       completedBy: 'TF',
-      timestamp: '2026-09-02T14:00:00.000Z',
-      receivedAt: Date.parse('2026-09-02T14:00:00.000Z'),
+      timestamp: '2026-09-02T14:00:00-05:00',
+      receivedAt: Date.parse('2026-09-02T14:00:00-05:00'),
+      source: 'hold-cancel-page',
     },
   };
 }
@@ -3547,30 +3700,60 @@ function crqFixtureSetRole(role){
   dashAuth.isAdmin = role === 'admin';
   render();
 }
+function crqReasonHtml(codes){
+  if (!codes.length) return '';
+  return '<ul style="margin:4px 0 0;padding-left:18px;">' + codes.map(code => '<li><code>' + esc(code) + '</code> — ' + esc(crqReasonLabel(code)) + '</li>').join('') + '</ul>';
+}
 function renderCrqReview(r){
   const m = crqReviewModel(r);
   const row = (k, v) => '<div><b style="color:#64748b;font-weight:700;">' + k + '</b> ' + v + '</div>';
-  let h = '<div data-crq-review="1" data-crq-verification="' + m.combined + '" data-crq-pending="' + (m.pending ? '1' : '0') + '" style="margin-top:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#334155;line-height:1.55;">';
+  let h = '<div data-crq-review="1" data-crq-verification="' + m.eligibility.state + '" data-crq-pending="' + (m.pending ? '1' : '0') + '" style="margin-top:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#334155;line-height:1.55;">';
   h += '<div style="font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#64748b;margin-bottom:4px;">Server review</div>';
-  h += row('Notice receipt', m.noticeReceiptDate ? esc(crqDisplayDate(m.noticeReceiptDate, 'instant')) + ' <span style="color:#94a3b8;">America/Chicago</span>' : '<span data-crq-notice="missing">Not on this record</span>');
-  h += row('Earliest completion', m.earliestCompletionDate ? '<span data-crq-earliest="' + esc(String(m.earliestCompletionDate).slice(0, 40)) + '">' + esc(crqDisplayDate(m.earliestCompletionDate, 'date')) + '</span>' : '<span data-crq-earliest="missing">Not on this record</span>');
-  h += '<div style="color:#64748b;margin:4px 0 6px;">30 calendar days start at the original server receipt. Days already on hold are not notice credit. This screen does not recompute that date.</div>';
-  h += row('Good standing', '<span data-crq-goodstanding="' + m.goodstanding + '">' + esc(crqVerificationLabel(m.goodstanding)) + '</span>');
-  h += row('Payment', '<span data-crq-payment="' + m.paymentVerification + '">' + esc(crqVerificationLabel(m.paymentVerification)) + '</span>');
-  h += '<div data-crq-gymdesk="no-loader" style="margin-top:4px;">No trusted Gymdesk or balance check is connected. A missing or unknown check stays <b>Unknown — manual review</b> and is never shown as eligible.</div>';
-  h += '<div data-crq-identity="typed" style="margin-top:4px;">Name and email were typed on the form. They are not a verified member link.</div>';
-  if (m.agreement.present) {
-    h += '<div data-crq-agreement="present" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Agreement evidence</b><div>' + m.agreement.lines.map(line => esc(line)).join('<br>') + '</div></div>';
+  if (m.notice.kind === 'notice') {
+    h += row('Notice receipt', m.notice.receivedOn ? '<span data-crq-notice="' + esc(m.notice.receivedOn) + '">' + esc(fmtCancelDate(m.notice.receivedOn)) + '</span>' + (m.notice.timezone ? ' <span style="color:#94a3b8;">' + esc(m.notice.timezone) + '</span>' : '') : '<span data-crq-notice="missing">Not on this record</span>');
+    h += row('Earliest completion', m.notice.earliestCompletionOn ? '<span data-crq-earliest="' + esc(m.notice.earliestCompletionOn) + '">' + esc(fmtCancelDate(m.notice.earliestCompletionOn)) + '</span>' : '<span data-crq-earliest="missing">Not on this record</span>');
+    h += row('Hold days credited', esc(m.notice.holdDaysCredited === 0 || m.notice.holdDaysCredited ? String(m.notice.holdDaysCredited) : '—'));
+    if (m.notice.reasons.length) h += '<div data-crq-notice-reasons="' + m.notice.reasons.length + '" style="margin-top:4px;"><b style="color:#64748b;font-weight:700;">Notice reasons</b>' + crqReasonHtml(m.notice.reasons) + '</div>';
+  } else if (m.notice.kind === 'none') {
+    h += '<div data-crq-notice="none">No cancellation notice on this request.</div>';
   } else {
-    h += '<div data-crq-agreement="missing" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Agreement evidence</b> Not on this record.' + (m.checkbox ? ' The form checkbox was submitted.' : '') + '</div>';
+    h += '<div data-crq-notice="missing">Notice dates are not on this record. Unknown — manual review.</div>';
   }
-  if (m.reasons.length) {
-    h += '<div data-crq-reasons="' + m.reasons.length + '" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Review reasons</b><ul style="margin:4px 0 0;padding-left:18px;">' + m.reasons.map(reason => '<li>' + esc(reason) + '</li>').join('') + '</ul></div>';
+  h += '<div style="color:#64748b;margin:4px 0 6px;">30 calendar days start on notice.receivedOn. Days already on hold are not notice credit. This screen does not recompute that date.</div>';
+  h += row('Eligibility', '<span data-crq-eligibility-state="' + m.eligibility.state + '">' + esc(m.eligibility.label) + '</span>');
+  const live = r && r.eligibility && r.eligibility.liveVerification === true;
+  h += '<div data-crq-gymdesk="no-loader">Live account verification: ' + (live ? 'yes' : 'no') + '. No trusted Gymdesk or balance loader is connected. Unknown stays manual review and is never eligible.</div>';
+  if (r && r.eligibility && typeof r.eligibility === 'object') {
+    const e = r.eligibility;
+    h += '<div data-crq-eligibility="1" style="margin-top:4px;color:#475569;">';
+    h += 'decision ' + esc(e.decision || '—') + ' · verifiedGoodStanding ' + (e.verifiedGoodStanding === true ? 'true' : 'false');
+    h += ' · availability ' + esc(e.availability || '—') + ' · source ' + esc(e.accountSource || '—');
+    h += '</div>';
+    if (m.eligibilityReasons.length) h += '<div data-crq-eligibility-reasons="' + m.eligibilityReasons.length + '"><b style="color:#64748b;font-weight:700;">Eligibility reasons</b>' + crqReasonHtml(m.eligibilityReasons) + '</div>';
+  }
+  h += '<div data-crq-identity="typed" style="margin-top:4px;">Name and email were typed on the form. They are not a verified member link.</div>';
+  if (m.agreement) {
+    const link = m.agreement.memberLinkage === 'unverified_form_identity' ? 'unverified form identity' : (m.agreement.memberLinkage || 'not linked');
+    h += '<div data-crq-agreement="present" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Agreement</b> version ' + esc(m.agreement.version || '—') + ' · accepted ' + esc(m.agreement.acceptedAt || '—') + ' · ' + esc(link) + ' · member id ' + (m.agreement.memberId == null ? 'none' : esc(String(m.agreement.memberId))) + '</div>';
+  } else {
+    h += '<div data-crq-agreement="missing" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Agreement</b> Not on this record.</div>';
+  }
+  if (m.reviewReasons.length) {
+    h += '<div data-crq-reasons="' + m.reviewReasons.length + '" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Review reasons</b>' + crqReasonHtml(m.reviewReasons) + '</div>';
   } else {
     h += '<div data-crq-reasons="0" style="margin-top:6px;"><b style="color:#64748b;font-weight:700;">Review reasons</b> None on this record.</div>';
   }
-  h += '<div data-hold-fee-policy="draft-disabled" aria-disabled="true" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#f1f5f9;color:#64748b;">Monthly hold fee ($10–$15) and proposed 30-day tuition with hold-fee overlap credit are draft and disabled. Nothing here calculates or bills a fee.</div>';
-  h += '<div style="margin-top:6px;font-weight:700;color:#0f3460;">Staff still approve by hand. This does not complete a hold or cancellation, charge a card, or reactivate billing.</div>';
+  const feeOnRecord = r && r.fee && typeof r.fee === 'object';
+  const draftOnRecord = r && r.billingDraft && typeof r.billingDraft === 'object';
+  h += '<div data-hold-fee-policy="inactive" aria-disabled="true" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#f1f5f9;color:#64748b;">';
+  if (feeOnRecord && (r.fee.inEffect === true || r.fee.enabled === true)) h += 'A fee flag is on the record. This screen does not bill or turn it on. ';
+  else if (feeOnRecord) h += 'Hold fee is not in effect (collection ' + esc(r.fee.collection || 'none') + '). ';
+  else h += 'Hold fee state is not on this record. ';
+  if (draftOnRecord && r.billingDraft.active === true) h += 'A tuition draft flag is on the record. This screen does not calculate it. ';
+  else if (draftOnRecord) h += 'Tuition draft is not active. ';
+  else h += 'Tuition draft is not on this record. ';
+  h += 'This screen does not calculate a fee or turn billing on.</div>';
+  h += '<div style="margin-top:6px;font-weight:700;color:#0f3460;">Processed and Frozen only update this queue. They are not an eligibility approval and they do not change Gymdesk or billing.</div>';
   h += '</div>';
   return h;
 }
@@ -7514,8 +7697,8 @@ function renderCancellationDetails(loc){
     const reason = [r.reasonCancel, r.feedback].filter(x => x && String(x).trim()).join(' — ');
     h += '<tr style="background:#f8fbff;">';
     h += '<td style="font-weight:600;color:#0f3460;">' + esc(r.name || '—') + ' <span title="From the cancellation form" style="font-size:9px;font-weight:800;color:#2563eb;background:#dbeafe;padding:1px 6px;border-radius:999px;vertical-align:middle;">FORM</span>' + (r.rank ? '<div style="font-size:10px;color:#94a3b8;font-weight:600;">' + esc(r.rank) + '</div>' : '') + '</td>';
-    const earliestShown = crqPickReview(r, 'earliestCompletionDate');
-    h += '<td style="text-align:center;color:#555;">' + cancelFmtDate(r.cancelDate || r.timestamp) + (earliestShown ? '<div style="font-size:10px;color:#64748b;font-weight:700;">Earliest ' + esc(crqDisplayDate(earliestShown, 'date')) + '</div>' : '') + '</td>';
+    const earliestShown = r.notice && r.notice.earliestCompletionOn;
+    h += '<td style="text-align:center;color:#555;">' + cancelFmtDate(r.cancelDate || r.timestamp) + (earliestShown ? '<div style="font-size:10px;color:#64748b;font-weight:700;">Earliest ' + esc(fmtCancelDate(earliestShown)) + '</div>' : '') + '</td>';
     h += '<td style="color:#555;font-size:12.5px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;">' + (reason ? esc(reason) : '<span style="color:#bbb;">—</span>') + '</td>';
     h += '<td><input value="' + esc(r.retentionNotes || '') + '" placeholder="Next steps to save them..." onchange="crqSetNotes(\'' + r.id + '\',this.value)" style="' + inCss + 'border-color:' + (r.retentionNotes ? '#16a34a' : 'var(--gray-200)') + ';" /></td>';
     h += '<td style="text-align:center;"><a href="#" onclick="setSection(\'holds\');return false;" title="Open in Holds &amp; Cancellations" style="text-decoration:none;color:#94a3b8;font-size:14px;">↗</a></td>';

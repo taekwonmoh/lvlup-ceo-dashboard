@@ -191,119 +191,125 @@ Object.entries(fixtures).forEach(([id, row]) => {
   check(String(row.fixtureLabel || '').indexOf('TEST FIXTURE') === 0, id + ' is labeled as a test fixture');
   check(String(row.email || '').endsWith('@example.test'), id + ' uses an example.test address');
   check(String(row.name || '').indexOf('TEST FIXTURE') === 0, id + ' name is a fixture name');
-  check(!('holdFee' in row) && !('fee' in row) && !('amountDue' in row), id + ' has no fee amount');
+  const saved = JSON.stringify(row);
+  check(saved.indexOf('$15') < 0 && saved.indexOf('1500') < 0, id + ' does not store a fee amount');
+  check(!('noticeReceiptDate' in row) && !('goodstanding' in row) && !('paymentVerification' in row) && !('serverReview' in row), id + ' does not use guessed field names');
 });
-check(!('status' in fixtures['test-fixture-cancel-notice']), 'new cancellation notice omits status');
-check(!('status' in fixtures['test-fixture-both-eligible']), 'eligible fixture omits status');
-check(!('status' in fixtures['test-fixture-hold-blocked']), 'hold fixture omits status');
-check(!('status' in fixtures['test-fixture-legacy-pending']), 'legacy pending omits status');
-check(fixtures['test-fixture-legacy-processed'].status === 'processed', 'existing processed record keeps status');
 
-check(crqIsPending(fixtures['test-fixture-cancel-notice']) === true, 'omitted status counts pending');
-check(crqIsPending({ status: '' }) === true, 'empty status counts pending');
+const cancel = fixtures['test-fixture-cancel-notice'];
+const hold = fixtures['test-fixture-hold'];
+const gate = fixtures['test-fixture-gate-passed'];
+const legacy = fixtures['test-fixture-legacy-pending'];
+check(!('status' in cancel) && !('status' in hold) && !('status' in gate) && !('status' in legacy), 'new website records omit status');
+check(fixtures['test-fixture-legacy-processed'].status === 'processed', 'existing processed record keeps status');
+check(crqIsPending(cancel) === true && crqIsPending({ status: '' }) === true, 'omitted status counts pending');
 check(crqIsPending(fixtures['test-fixture-legacy-processed']) === false, 'processed status is not pending');
 
-const cancelModel = crqReviewModel(fixtures['test-fixture-cancel-notice']);
-check(cancelModel.pending === true, 'cancel notice model is pending');
-check(cancelModel.noticeReceiptDate === '2026-10-08T05:00:00.000Z', 'notice receipt is the server field, not the older timestamp');
-check(cancelModel.earliestCompletionDate === '2026-11-07', 'earliest completion is the server date');
-check(cancelModel.earliestCompletionDate !== fixtures['test-fixture-cancel-notice'].holdStart, 'hold start is not used as the completion date');
-check(cancelModel.combined === 'unknown', 'unknown good standing and payment stay unknown');
-check(cancelModel.feesEnabled === false, 'fee policy is disabled');
-check(cancelModel.reasons.length === 2, 'review reasons are read from the record');
-check(cancelModel.agreement.present === true, 'agreement evidence is shown when the server stored it');
+check(cancel.notice.receivedOn === '2026-11-06', 'notice.receivedOn is the Chicago receipt date');
+check(cancel.notice.earliestCompletionOn === '2026-12-06', 'notice.earliestCompletionOn is 30 calendar days later');
+check(cancel.notice.holdDaysCredited === 0, 'hold days credited stay 0');
+check(cancel.notice.autoComplete === false && cancel.notice.completion === 'blocked', 'notice cannot auto-complete');
+check(hold.notice === null, 'a hold stores notice as null');
+check(cancel.agreement.memberLinkage === 'unverified_form_identity', 'agreement linkage is unverified form identity');
+check(cancel.agreement.memberId === null, 'agreement member id is null');
+check(cancel.agreement.version === '2026-11-07-notice-clock', 'agreement version matches the website');
+check(cancel.eligibility.decision === 'manual_review', 'unavailable account is manual review');
+check(cancel.eligibility.verifiedGoodStanding === false, 'unavailable account is not verified good standing');
+check(cancel.eligibility.liveVerification === false, 'live verification is false');
+check(cancel.eligibility.reasons[0] === 'account_state_unavailable', 'eligibility reason is account_state_unavailable');
+check(cancel.review.autoApproved === false && cancel.review.reasons.indexOf('not_auto_approved') >= 0, 'review is not auto-approved');
+check(cancel.review.reasons.indexOf('notice_period_not_elapsed') >= 0, 'review.reasons includes the notice clock');
+check(cancel.fee.inEffect === false && cancel.fee.enabled === false && cancel.fee.appliedAmountCents === null, 'fee snapshot is inactive');
+check(cancel.billingDraft.active === false && cancel.billingDraft.computedTuitionCents === null, 'billing draft is inactive');
+check(gate.eligibility.decision === 'gate_passed' && gate.eligibility.verifiedGoodStanding === true, 'trusted zero balance can pass the gate');
+check(gate.eligibility.liveVerification === false && gate.review.autoApproved === false, 'a passed gate is not a live approval');
+check(gate.notice.reasons.indexOf('hold_fee_does_not_satisfy_tuition') >= 0, 'a paid hold fee does not satisfy tuition');
 
-const half = crqReviewModel({ goodstanding: 'eligible', paymentVerification: 'unknown' });
-check(half.combined === 'unknown', 'eligible good standing with unknown payment is not eligible');
-check(crqReviewModel({ goodstanding: true, paymentVerification: true }).combined === 'unknown', 'booleans are not a trusted eligible state');
-check(crqReviewModel({ goodstanding: 'yes', paymentVerification: 'yes' }).combined === 'unknown', 'unrecognized verification is unknown');
-check(crqReviewModel({ goodstanding: 'not_eligible', paymentVerification: 'eligible' }).combined === 'not_eligible', 'a not-eligible check stays not eligible');
-check(crqReviewModel({ goodstanding: 'eligible', paymentVerification: 'eligible' }).combined === 'eligible', 'both server eligible values display as eligible');
-
-const nested = crqReviewModel({
-  serverReview: {
-    noticeReceiptDate: '2026-10-08T05:00:00.000Z',
-    earliestCompletionDate: '2026-11-07',
-    goodstanding: 'unknown',
-    paymentVerification: 'unknown',
-    reviewReasons: ['nested reason'],
-    agreementEvidence: { acknowledged: true, version: 'hold-cancel-ack' },
-  },
-});
-check(nested.noticeReceiptDate === '2026-10-08T05:00:00.000Z', 'serverReview.noticeReceiptDate is read');
-check(nested.reasons[0] === 'nested reason', 'serverReview.reviewReasons is read');
-
-const longAgreement = crqReviewModel({ agreementEvidence: 'x'.repeat(400) });
-check(longAgreement.agreement.lines[0].indexOf('not expanded') >= 0, 'long agreement text is not expanded');
+const cancelModel = crqReviewModel(cancel);
+check(cancelModel.notice.receivedOn === '2026-11-06', 'model reads notice.receivedOn');
+check(cancelModel.notice.earliestCompletionOn === '2026-12-06', 'model reads notice.earliestCompletionOn');
+check(cancelModel.eligibility.state === 'manual_review', 'unavailable eligibility renders as manual review');
+check(cancelModel.feesEnabled === false, 'fee policy stays disabled');
+check(crqReviewModel(legacy).eligibility.state === 'unknown', 'legacy row with no eligibility object is unknown');
+check(crqReviewModel(legacy).notice.kind === 'missing', 'legacy row with no notice object is missing');
+check(crqReviewModel({ notice: null, eligibility: { decision: 'manual_review', verifiedGoodStanding: false, liveVerification: false } }).notice.kind === 'none', 'explicit null notice is a non-cancellation');
+check(crqReviewModel(gate).eligibility.state === 'gate_passed', 'gate_passed is labeled separately from eligible');
+check(crqReviewModel({ eligibility: { decision: 'gate_passed', verifiedGoodStanding: true, liveVerification: true } }).eligibility.state === 'unknown', 'a claimed live check is not treated as eligible');
+check(crqReviewModel({ goodstanding: 'eligible', paymentVerification: 'eligible' }).eligibility.state === 'unknown', 'guessed eligible strings are unknown');
 
 state.cancellationRequests = fixtures;
 sandbox.__writes.length = 0;
 const page = renderHoldsPage();
 check(sandbox.__writes.length === 0, 'rendering the queue does not write');
-check(page.indexOf('TEST FIXTURE Cancel Notice') >= 0, 'lead queue shows the labeled cancel fixture');
-check(page.indexOf('data-crq-verification="unknown"') >= 0, 'unknown verification is marked unknown');
-check(page.indexOf('data-crq-earliest="2026-11-07"') >= 0, 'server earliest date is displayed unchanged');
-check(page.indexOf('data-crq-earliest="2026-09-01"') < 0, 'hold start is not displayed as the earliest date');
-check(page.indexOf('data-hold-fee-policy="draft-disabled"') >= 0, 'hold fee policy is draft and disabled');
-check(page.indexOf('data-crq-gymdesk="no-loader"') >= 0, 'missing Gymdesk loader is stated');
-check(page.indexOf('data-crq-identity="typed"') >= 0, 'typed identity is marked unverified');
-check(page.indexOf('Obligations unresolved') >= 0, 'review reasons render');
-check(page.indexOf('Not a verified member link') >= 0 || page.indexOf('not a verified member link') >= 0, 'identity line is visible');
-check((page.match(/● PENDING/g) || []).length === 4, 'four omitted-status fixtures are pending and the processed one is not');
+check(page.indexOf('data-crq-notice="2026-11-06"') >= 0, 'receipt date rendered from notice.receivedOn');
+check(page.indexOf('data-crq-earliest="2026-12-06"') >= 0, 'earliest date rendered from notice.earliestCompletionOn');
+check(page.indexOf('data-crq-earliest="2026-11-07"') < 0, 'hold start is not the earliest completion date');
+check(page.indexOf('data-crq-verification="manual_review"') >= 0, 'unavailable standing is manual review');
+check(page.indexOf('data-crq-verification="unknown"') >= 0, 'legacy row is unknown');
+check(page.indexOf('data-crq-verification="eligible"') < 0, 'nothing is labeled eligible');
+check(page.indexOf('data-crq-verification="gate_passed"') >= 0, 'gate passed is shown as a gate, not an approval');
+check(page.indexOf('not_auto_approved') >= 0, 'review.reasons are visible');
+check(page.indexOf('unverified_form_identity') >= 0 || page.indexOf('unverified form identity') >= 0, 'typed identity is not a verified member link');
+check(page.indexOf('data-crq-identity="typed"') >= 0, 'identity line is on the card');
+check(page.indexOf('data-hold-fee-policy="inactive"') >= 0, 'fee policy is inactive');
+check(page.indexOf('$15') < 0 && page.indexOf('1500') < 0, 'the queue does not print a fee amount');
+check((page.match(/● PENDING/g) || []).length === 4, 'four omitted-status fixtures are pending');
 
-const eligibleCard = renderHoldCard(Object.assign({ id: 'test-fixture-both-eligible' }, fixtures['test-fixture-both-eligible']));
-check(eligibleCard.indexOf('data-crq-verification="eligible"') >= 0, 'both-eligible fixture can display eligible');
-check(eligibleCard.indexOf('Staff still approve by hand') >= 0, 'eligible still requires a manual staff decision');
-check(eligibleCard.indexOf('crqAutoComplete') < 0, 'there is no automatic completion control');
-
-const legacyCard = renderHoldCard(Object.assign({ id: 'test-fixture-legacy-pending' }, fixtures['test-fixture-legacy-pending']));
-check(legacyCard.indexOf('data-crq-notice="missing"') >= 0, 'legacy record without a notice date says it is not on the record');
-check(legacyCard.indexOf('● PENDING') >= 0, 'legacy omitted status still shows pending');
-check(crqStatusNeedsManualConfirm(fixtures['test-fixture-legacy-pending'], 'processed') === true, 'unknown legacy record needs a manual confirm before processed');
-check(crqStatusNeedsManualConfirm(fixtures['test-fixture-both-eligible'], 'processed') === false, 'server-eligible record uses the existing status control');
-check(crqStatusNeedsManualConfirm(fixtures['test-fixture-legacy-processed'], null) === false, 'clearing a status does not need the verification confirm');
+const gateCard = renderHoldCard(Object.assign({ id: 'test-fixture-gate-passed' }, gate));
+check(gateCard.indexOf('not an approval') >= 0 || gateCard.indexOf('Not an approval') >= 0, 'gate passed still says it is not an approval');
+check(gateCard.indexOf('not_auto_approved') >= 0, 'gate-passed card keeps review reasons');
+check(crqStatusNeedsManualConfirm(gate, 'processed') === true, 'a passed gate still needs the bookkeeping confirm');
+check(crqStatusNeedsManualConfirm(legacy, 'frozen') === true, 'legacy unknown still needs the bookkeeping confirm');
+check(crqStatusNeedsManualConfirm(cancel, null) === false, 'clearing a status does not need the confirm');
 
 sandbox.confirm = function () { return false; };
 sandbox.__writes.length = 0;
 crqSetStatus('test-fixture-cancel-notice', 'processed');
-check(sandbox.__writes.length === 0, 'declining the manual confirm does not write status');
+check(sandbox.__writes.length === 0, 'declining the confirm does not write');
 
-sandbox.confirm = function () { return true; };
+let confirmText = '';
+sandbox.confirm = function (msg) { confirmText = msg; return true; };
 sandbox.__writes.length = 0;
-crqSetStatus('test-fixture-cancel-notice', 'processed');
+crqSetStatus('test-fixture-gate-passed', 'processed');
+check(confirmText.indexOf('staff queue') >= 0, 'confirm says this is the staff queue');
+check(confirmText.indexOf('bookkeeping') >= 0, 'confirm says bookkeeping');
+check(confirmText.indexOf('not an eligibility approval') >= 0, 'confirm says it is not an eligibility approval');
+check(confirmText.indexOf('Gymdesk') >= 0 && confirmText.indexOf('billing') >= 0, 'confirm says it is not a Gymdesk or billing action');
 check(sandbox.__writes.length === 1, 'accepting the confirm writes one field');
-check(sandbox.__writes[0].path === 'cancellationRequests/test-fixture-cancel-notice/status', 'the only write is the existing status field');
-check(sandbox.__writes[0].val === 'processed', 'status is the staff choice');
+check(sandbox.__writes[0].path === 'cancellationRequests/test-fixture-gate-passed/status', 'the only write is status');
+check(sandbox.__writes[0].val === 'processed', 'status is the staff bookkeeping choice');
 
-sandbox.__writes.length = 0;
-crqSetStatus('test-fixture-both-eligible', 'frozen');
-check(sandbox.__writes.length === 1 && sandbox.__writes[0].val === 'frozen', 'eligible status change still goes through the manual button');
-check(sandbox.__writes[0].path.indexOf('goodstanding') < 0, 'status change does not write verification');
+state.cancellationRequests['test-fixture-gate-passed'] = Object.assign({}, gate, { status: 'processed' });
+const after = renderHoldCard(Object.assign({ id: 'test-fixture-gate-passed' }, state.cancellationRequests['test-fixture-gate-passed']));
+check(after.indexOf('● PENDING') < 0, 'processed card is no longer pending');
+check(after.indexOf('not_auto_approved') >= 0, 'review reasons stay visible after status is set');
+check(after.indexOf('notice_period_not_elapsed') >= 0, 'notice reasons stay visible after status is set');
+check(after.indexOf('data-crq-verification="gate_passed"') >= 0, 'status does not rewrite eligibility');
 
 sandbox.location.hash = '#clock';
-check(renderHoldCard(Object.assign({ id: 'test-fixture-cancel-notice' }, fixtures['test-fixture-cancel-notice'])) === '', 'kiosk clock does not render a request card');
+check(renderHoldCard(Object.assign({ id: 'test-fixture-cancel-notice' }, cancel)) === '', 'kiosk clock does not render a request card');
 sandbox.location.hash = '';
 
 dashAuth.dashRole = 'frontdesk';
 state.activeSection = 'holds';
+state.cancellationRequests = fixtures;
 const desk = renderMembersPage();
 check(desk.indexOf('cancel-notice@example.test') < 0, 'front desk members page does not include request emails');
-check(desk.indexOf('agreementEvidence') < 0, 'front desk members page does not include agreement evidence');
+check(desk.indexOf('unverified_form_identity') < 0, 'front desk members page does not include agreement linkage');
 check(desk.indexOf('Holds &amp; Cancellations') < 0 && desk.indexOf('Holds & Cancellations') < 0, 'front desk does not get the holds tab');
 
 asLead();
 const scdMonthKey = grab('scdMonthKey');
 state.cancellationRequests = {
-  'test-fixture-scorecard': Object.assign({}, fixtures['test-fixture-cancel-notice'], {
-    timestamp: scdMonthKey() + '-03T15:00:00.000Z',
+  'test-fixture-scorecard': Object.assign({}, cancel, {
+    timestamp: scdMonthKey() + '-03T15:00:00-06:00',
     location: 'waunakee',
     action: 'Cancellation',
   }),
 };
-state.scorecardDaily = {};
 const details = renderCancellationDetails('waunakee');
-check(details.indexOf('Earliest') >= 0, 'scorecard shows the server earliest date');
-check(details.indexOf('hold-cancel-ack') < 0, 'scorecard does not repeat agreement evidence');
+check(details.indexOf('Earliest') >= 0, 'scorecard shows notice.earliestCompletionOn');
+check(details.indexOf('2026-11-07-notice-clock') < 0, 'scorecard does not repeat the agreement version');
 check(details.indexOf('data-crq-gymdesk') < 0, 'scorecard does not repeat the verification panel');
 
 if (failed) {
