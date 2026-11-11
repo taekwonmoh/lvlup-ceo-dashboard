@@ -1277,7 +1277,10 @@ const TASK_STOPLIGHT = {id:'stoplight', cat:'Pre-Class Admin', count:true, min:2
 const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students and class counts, and check attendance.'};
 // Wrap-up lives on the dashboard. Old Slack EOS ids (eos, j_eos, eos_report) still satisfy this via TASK_ALIASES.
 const TASK_CLOSING   = {id:'closing', cat:'Closing', text:'Closing Routine: Straighten the training floor, review rosters, and log today’s trials and enrollments on the dashboard scorecard if applicable.'};
-// Bathroom verification photo. `days` is 0=Sun … 6=Sat. Waunakee lead is Mon+Fri; other leads are Monday; front desk is Tue/Wed/Thu/Sat.
+// Bathroom verification photo. `days` is 0=Sun … 6=Sat. Leads are Monday only.
+// Front desk days are chosen per school in frontDeskBathroomDays (Tue–Sat, open days only).
+// A day that is not in `days` is omitted by dailyTasksForDate, so it is not a miss.
+// Training-floor photos stay daily. Front desk still tidies bathrooms every shift inside fd_lobby.
 function bathroomPhoto(days){ return {id:'ph_bathroom', cat:'Facility Refresh', photo:true, multi:true, icon:'📸', days:days, text:'Bathroom Refresh: freshen up each bathroom, then snap a photo.'}; }
 const TASK_PH_FLOOR = {id:'ph_floor', cat:'Facility Refresh', photo:true, icon:'📸', text:'Training Floor: wide photo of the floor + bag racks showing a clean, professional look.'};
 // Weekly facility photos — announcement board differs by school (whiteboard at Waunakee, mirror elsewhere)
@@ -1321,7 +1324,7 @@ const TARIK_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
   TASK_STOPLIGHT,
   TASK_ROSTERS,
-  bathroomPhoto([1, 5]),
+  bathroomPhoto([1]),
   TASK_PH_FLOOR,
   TASK_CLOSING,
 ];
@@ -1416,8 +1419,7 @@ const FRONTDESK_DAILY = [
     'Wipe front desk counters',
     'Refill restroom supplies as needed',
   ]},
-  // Photo proof is Tue/Wed/Thu/Sat. Bathroom tidying above still happens every shift.
-  bathroomPhoto([2, 3, 4, 6]),
+  // Bathroom photo is added per school in getDailyTasks (Tue–Sat, open days only). Tidying above still happens every shift.
   {id:'fd_next_shift',  text:'Note any outstanding action items for the next shift.'},
 ];
 const FRONTDESK_WEEKLY = [
@@ -9864,9 +9866,27 @@ function isGoNinja(empOrLocId){
 function getEmpById(empId){return TASK_EMPLOYEES.find(e=>e.id===empId)||TASK_EMPLOYEES[0];}
 const FRONTDESK_EMP_IDS = new Set(['sueK','andyR','marioS','erikaD']);
 function isFrontDesk(empId){return FRONTDESK_EMP_IDS.has(empId);}
-function getDailyTasks(empId){return EMP_DAILY[empId]||(isFrontDesk(empId)?FRONTDESK_DAILY:LVLUP_DAILY);}
+// Front desk bathroom photo: every open day after Monday. Leads own Monday.
+// Mon–Thu every location is open, Friday is Waunakee only, Saturday is every location except DeForest.
+function frontDeskBathroomDays(empId){
+  const loc=(getEmpById(empId)||{}).loc;
+  const days=[2,3,4];
+  if(loc==='waunakee') days.push(5);
+  if(loc!=='deforest') days.push(6);
+  return days;
+}
+function getDailyTasks(empId){
+  const base=EMP_DAILY[empId]||(isFrontDesk(empId)?FRONTDESK_DAILY:LVLUP_DAILY);
+  if(!isFrontDesk(empId)) return base;
+  const photo=bathroomPhoto(frontDeskBathroomDays(empId));
+  const out=base.slice();
+  const lobby=out.findIndex(t=>t.id==='fd_lobby');
+  if(lobby>=0) out.splice(lobby+1,0,photo); else out.push(photo);
+  return out;
+}
 // Day-of-week filter shared by the task sheet, the home pulse count, and Tasks > History.
 // `t.days` is 0=Sun … 6=Sat. spray_mats / j_spray are never due on Saturday.
+// A task whose `days` skip today is left out of the count, so it is not missed.
 function dailyTasksForDate(empId, dateKey){
   const dow=new Date(String(dateKey||'')+'T12:00:00').getDay();
   const isSat=dow===6;
