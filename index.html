@@ -1277,11 +1277,15 @@ const TASK_STOPLIGHT = {id:'stoplight', cat:'Pre-Class Admin', count:true, min:2
 const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students and class counts, and check attendance.'};
 // Wrap-up lives on the dashboard. Old Slack EOS ids (eos, j_eos, eos_report) still satisfy this via TASK_ALIASES.
 const TASK_CLOSING   = {id:'closing', cat:'Closing', text:'Closing Routine: Straighten the training floor, review rosters, and log today’s trials and enrollments on the dashboard scorecard if applicable.'};
-// Bathroom verification photo. `days` is 0=Sun … 6=Sat. Waunakee lead is Mon+Fri; other leads are Monday; front desk is Tue/Wed/Thu/Sat.
-function bathroomPhoto(days){ return {id:'ph_bathroom', cat:'Facility Refresh', photo:true, multi:true, icon:'📸', days:days, text:'Bathroom Refresh: freshen up each bathroom, then snap a photo.'}; }
+// Bathroom verification photo. Once per week on the weekly sheet (Monday–Sunday week key),
+// for every instructor seat and every front desk seat. It is not on the daily checklist
+// and has no weekday filter, so the other six days are not missed. Training-floor photos
+// stay daily. Front desk still tidies bathrooms every shift inside fd_lobby.
+function bathroomPhoto(){ return {id:'ph_bathroom', photo:true, multi:true, icon:'📸', text:'Bathroom Refresh: Once this week, freshen up each bathroom, then snap a photo.'}; }
 const TASK_PH_FLOOR = {id:'ph_floor', cat:'Facility Refresh', photo:true, icon:'📸', text:'Training Floor: wide photo of the floor + bag racks showing a clean, professional look.'};
 // Weekly facility photos — announcement board differs by school (whiteboard at Waunakee, mirror elsewhere)
 function weeklyPhotos(board){ return [
+  bathroomPhoto(),
   {id:'ph_announce', photo:true, icon:'📸', text:'Announcements: refresh the ' + board + ' with upcoming events, then snap a photo.'},
   {id:'ph_station',  photo:true, icon:'📸', text:'Instructor Station: deep clean & organize it, then snap a photo.'},
   {id:'ph_signage',  photo:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
@@ -1294,7 +1298,6 @@ const BRYAN_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
   TASK_STOPLIGHT,
   TASK_ROSTERS,
-  bathroomPhoto([1]),
   TASK_PH_FLOOR,
   TASK_CLOSING,
 ];
@@ -1302,7 +1305,6 @@ const ASH_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the facility is ready for students.'},
   TASK_STOPLIGHT,
   TASK_ROSTERS,
-  bathroomPhoto([1]),
   TASK_PH_FLOOR,
   TASK_CLOSING,
 ];
@@ -1312,7 +1314,6 @@ const JOEY_DAILY = [
   TASK_ROSTERS,
   {id:'j_wetmop', cat:'Pre-Class Admin', days:[1], text:'Wet mop the training floors before classes.'},
   {id:'j_greenmachine', cat:'Pre-Class Admin', days:[4], photo:true, icon:'📸', text:'Run the green machine on the training floors, then snap a photo.'},
-  bathroomPhoto([1]),
   TASK_PH_FLOOR,
   {id:'j_spray', cat:'Closing', text:'Spray mop the training floors.'},
   TASK_CLOSING,
@@ -1321,13 +1322,11 @@ const TARIK_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
   TASK_STOPLIGHT,
   TASK_ROSTERS,
-  bathroomPhoto([1, 5]),
   TASK_PH_FLOOR,
   TASK_CLOSING,
 ];
 const MIRANDA_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Clock in and prep the Go Ninja facility for daily operations.'},
-  bathroomPhoto([1]),
   {id:'ph_floor', cat:'Facility Refresh', photo:true, icon:'📸', text:'Gym Floor: wide photo of the obstacle / training area showing a clean, professional look.'},
   {id:'closing', cat:'Closing', text:'Closing Routine & Bathroom Refresh: Wipe down sinks/counters, sweep floor, empty trash, check soap/paper towels, and ensure the front desk is organized.'},
 ];
@@ -1363,6 +1362,7 @@ const ASH_WEEKLY   = lvlupWeekly('mirror');
 const JOEY_WEEKLY  = lvlupWeekly('mirror');
 const TARIK_WEEKLY = lvlupWeekly('whiteboard');
 const MIRANDA_WEEKLY = [
+  bathroomPhoto(),
   {id:'m_party_reset',    photo:true, icon:'📸', text:'Friday Event Prep: Reset the party room for weekend birthday parties, then snap a verification photo.'},
   {id:'m_party_cleanup',  photo:true, icon:'📸', text:'Party Room Breakdown: Clean up the party room post-event, then snap a photo.'},
   {id:'m_mop_mats',       photo:true, icon:'📸', text:'Mat Maintenance: Mop mats and sanitize obstacles, then snap a photo.'},
@@ -1416,11 +1416,11 @@ const FRONTDESK_DAILY = [
     'Wipe front desk counters',
     'Refill restroom supplies as needed',
   ]},
-  // Photo proof is Tue/Wed/Thu/Sat. Bathroom tidying above still happens every shift.
-  bathroomPhoto([2, 3, 4, 6]),
+  // Bathroom photo proof is weekly (FRONTDESK_WEEKLY). Tidying above still happens every shift.
   {id:'fd_next_shift',  text:'Note any outstanding action items for the next shift.'},
 ];
 const FRONTDESK_WEEKLY = [
+  bathroomPhoto(),
   {id:'fdw_inventory', text:'Review front desk retail inventory and supplies.'},
   {id:'fdw_restock',   text:'Restock merchandise as needed.'},
   {id:'fdw_lowstock',  text:'Log low-stock items in Ops → Inventory.'},
