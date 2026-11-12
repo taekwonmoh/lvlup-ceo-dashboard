@@ -6623,8 +6623,10 @@ function tcToggleSlack(id){ const cur = !!((tcData().staff || {})[id] || {}).sla
 
 /* ── Time-off requests ── */
 function tcTimeoffAll(){ return Object.entries((tcData().timeoff) || {}).map(([id, v]) => ({ id, ...(v || {}) })); }
+function tcTimeoffStatus(t){ return (t && t.status) || 'pending'; }
+function tcToggleShowApproved(){ state.tcShowApproved = !state.tcShowApproved; render(); }
 function tcDaysInclusive(a, b){ const d1 = new Date(a + 'T00:00:00'), d2 = new Date((b || a) + 'T00:00:00'); if (isNaN(d1) || isNaN(d2)) return 1; return Math.max(1, Math.round((d2 - d1) / 86400000) + 1); }
-function tcPendingTimeoffCount(){ return tcTimeoffAll().filter(t => (t.status || 'pending') === 'pending').length; }
+function tcPendingTimeoffCount(){ return tcTimeoffAll().filter(t => tcTimeoffStatus(t) === 'pending').length; }
 // Kiosk entry — open the request form bound to the staffer. No PIN and no geolocation:
 // time off can be requested from any device, on or off site (a manager still approves it).
 function tcRequestTimeoff(id){ tcTimeoffReqOpen(id, 'kiosk'); }
@@ -6768,33 +6770,56 @@ function renderTcTimeoff(){
   const all = tcTimeoffAll().sort((a, b) => (b.reqAt || 0) - (a.reqAt || 0));
   if (!all.length && !tcStaffList().length) return '';
   const nameOf = eid => ((tcData().staff || {})[eid] || {}).name || '—';
-  const pending = all.filter(t => (t.status || 'pending') === 'pending');
-  const decided = all.filter(t => (t.status || 'pending') !== 'pending').slice(0, 12);
-  let h = '<div class="section" style="margin-bottom:22px;">';
-  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><h2 style="margin:0;">🏝 Time-off requests</h2>' + (pending.length ? '<span style="font-size:11px;font-weight:800;color:#d97706;background:#fffbeb;padding:3px 9px;border-radius:6px;">' + pending.length + ' pending</span>' : '') + '</span><button onclick="tcTimeoffReqOpen(\'\',\'dash\')" title="File a time-off request (yours or on behalf of a staffer)" style="background:#1a1a2e;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:7px 13px;">🏝 Request time off</button></div>';
+  // Approved requests stay in timeclock/timeoff. This list only hides them.
+  // Denied stays visible: a denial is still something the team looks up, and it
+  // does not pile up the way approved history does. Any other non-approved
+  // status stays in the working list too.
+  const pending = all.filter(t => tcTimeoffStatus(t) === 'pending');
+  const denied = all.filter(t => tcTimeoffStatus(t) === 'denied');
+  const approved = all.filter(t => tcTimeoffStatus(t) === 'approved');
+  const open = all.filter(t => tcTimeoffStatus(t) !== 'approved' && tcTimeoffStatus(t) !== 'denied').concat(denied);
+  const showApproved = !!state.tcShowApproved && approved.length > 0;
+  let h = '<div class="section" data-timeoff-panel="1" data-timeoff-show-approved="' + (showApproved ? '1' : '0') + '" style="margin-bottom:22px;">';
+  const pendingBadge = pending.length ? '<span data-timeoff-pending="' + pending.length + '" style="font-size:11px;font-weight:800;color:#d97706;background:#fffbeb;padding:3px 9px;border-radius:6px;">' + pending.length + ' pending</span>' : '';
+  const approvedToggle = approved.length
+    ? '<button type="button" onclick="tcToggleShowApproved()" aria-pressed="' + (showApproved ? 'true' : 'false') + '" data-timeoff-toggle="approved" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:12px;font-weight:700;padding:4px 2px;text-decoration:underline;text-underline-offset:2px;">' + (showApproved ? 'Hide approved' : 'Show approved (' + approved.length + ')') + '</button>'
+    : '';
+  h += '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><h2 style="margin:0;">🏝 Time-off requests</h2>' + pendingBadge + '</span><span style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' + approvedToggle + '<button onclick="tcTimeoffReqOpen(\'\',\'dash\')" title="File a time-off request (yours or on behalf of a staffer)" style="background:#1a1a2e;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;padding:7px 13px;">🏝 Request time off</button></span></div>';
   h += '<div style="padding:8px 20px 16px;">';
   if (!all.length) h += '<div style="color:#aaa;font-size:13px;">No requests yet. Tap <b>Request time off</b> above, or staff can submit from the clock kiosk — either way they land here for approval.</div>';
-  const row = t => {
-    const range = t.start + (t.end && t.end !== t.start ? ' → ' + t.end : '');
+  else if (!open.length && !showApproved) h += '<div data-timeoff-empty="open" style="color:#64748b;font-size:13px;">No open requests. ' + approved.length + ' approved ' + (approved.length === 1 ? 'request is' : 'requests are') + ' still on file — use <b>Show approved</b> to look back. Nothing is deleted.</div>';
+  const row = (t, bucket) => {
     const typeBadge = t.type === 'pto' ? '<span style="font-size:10px;font-weight:800;color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:6px;">PTO</span>' : '<span style="font-size:10px;font-weight:800;color:#64748b;background:#f1f5f9;padding:2px 7px;border-radius:6px;">Unpaid</span>';
-    let r = '<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;">';
+    let r = '<div data-timeoff-id="' + esc(t.id) + '" data-timeoff-status="' + esc(tcTimeoffStatus(t)) + '" data-timeoff-bucket="' + bucket + '" style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #f1f3f9;flex-wrap:wrap;">';
     r += '<div style="flex:1;min-width:180px;"><span style="font-weight:700;font-size:13px;">' + esc(nameOf(t.empId)) + '</span> ' + typeBadge + '<div style="font-size:12px;color:#666;margin-top:1px;">' + esc(fmtCancelDate(t.start)) + (t.end && t.end !== t.start ? ' → ' + esc(fmtCancelDate(t.end)) : '') + ' · ' + tcFmtDays(t.days || 1) + ' day' + ((t.days || 1) > 1 ? 's' : '') + (t.note ? ' · ' + esc(t.note) : '') + '</div></div>';
-    if ((t.status || 'pending') === 'pending') {
+    if (tcTimeoffStatus(t) === 'pending') {
       if (dashCan('timeoffDecide')) {
         r += '<button onclick="tcTimeoffDecision(\'' + t.id + '\',\'approved\')" style="padding:6px 12px;border:none;border-radius:8px;background:#16a34a;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Approve</button>';
         r += '<button onclick="tcTimeoffDecision(\'' + t.id + '\',\'denied\')" style="padding:6px 12px;border:1px solid #e3e6ef;border-radius:8px;background:#fff;color:#dc2626;font-size:12px;font-weight:700;cursor:pointer;">Deny</button>';
       } else {
         r += '<span style="font-size:11px;font-weight:800;color:#d97706;">Pending</span>';
       }
+    } else if (t.status === 'approved') {
+      r += '<span style="font-size:11px;font-weight:800;color:#16a34a;">✓ Approved</span>';
+    } else if (t.status === 'denied') {
+      r += '<span style="font-size:11px;font-weight:800;color:#dc2626;">✗ Denied</span>';
     } else {
-      r += '<span style="font-size:11px;font-weight:800;color:' + (t.status === 'approved' ? '#16a34a' : '#dc2626') + ';">' + (t.status === 'approved' ? '✓ Approved' : '✗ Denied') + '</span>';
+      r += '<span style="font-size:11px;font-weight:800;color:#d97706;">' + esc(t.status) + '</span>';
     }
     if (dashCan('timeoffDecide')) r += '<button onclick="tcTimeoffDelete(\'' + t.id + '\')" title="Remove" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:14px;">🗑</button>';
     r += '</div>';
     return r;
   };
-  pending.forEach(t => h += row(t));
-  decided.forEach(t => h += row(t));
+  h += '<div data-timeoff-list="open">';
+  open.forEach(t => h += row(t, 'open'));
+  h += '</div>';
+  if (showApproved) {
+    h += '<div data-timeoff-list="approved" style="margin-top:14px;padding-top:10px;border-top:1px dashed #e3e6ef;">';
+    h += '<div style="font-size:11px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;">Approved</div>';
+    h += '<div style="font-size:11px;color:#94a3b8;margin:2px 0 6px;">Still saved for payroll and history. Hidden from this list unless you open it.</div>';
+    approved.forEach(t => h += row(t, 'approved'));
+    h += '</div>';
+  }
   h += '</div></div>';
   return h;
 }
@@ -9819,6 +9844,7 @@ state.tcSel          = null;         // clock UI: selected employee id
 state.tcPin          = '';           // clock UI: PIN entry buffer
 state.tcMsg          = null;         // clock UI: transient status message {type,text}
 state.tcWeekOffset   = 0;            // timesheet week navigation
+state.tcShowApproved = false;        // Schedule time-off list: approved rows stay hidden until asked
 state.tcSetup        = false;        // show/hide admin setup panel
 state.tcMapLoc       = null;         // geofence map picker: location id whose map modal is open
 state.tcShiftEdit    = null;         // schedule shift add/edit modal state
