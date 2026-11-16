@@ -160,6 +160,9 @@ const renderTcTimeoff = grab('renderTcTimeoff');
 const renderTcShiftModal = grab('renderTcShiftModal');
 const tcShiftOpen = grab('tcShiftOpen');
 const tcShiftSave = grab('tcShiftSave');
+const tcWeekMins = grab('tcWeekMins');
+const renderTcOffModal = grab('renderTcOffModal');
+const tcOffOpen = grab('tcOffOpen');
 const tcStaffLabel = grab('tcStaffLabel');
 const tcSchedStaff = grab('tcSchedStaff');
 const tcClockStaff = grab('tcClockStaff');
@@ -408,6 +411,50 @@ dashAuth.isAdmin = true;
 dashAuth.dashRole = 'admin';
 state.tcShiftEdit = null;
 
+const wednesday = tcDateKey(new Date(new Date(tuesday + 'T12:00:00').getTime() + 86400000));
+const thursday = tcDateKey(new Date(new Date(wednesday + 'T12:00:00').getTime() + 86400000));
+state.schedLoc = 'all';
+state.timeclock.schedule.tc_ash = {};
+state.timeclock.schedule.tc_ash[wednesday] = { s1: { start: '16:00', end: '19:00', loc: 'eastmad', role: 'Lead' } };
+state.timeclock.timeoff = {
+  to_ash: { empId: 'tc_ash', start: tuesday, end: wednesday, days: 2, type: 'pto', status: 'approved', note: 'dentist' },
+  to_bryan: { empId: 'tc_bryan', start: tuesday, end: tuesday, days: 1, type: 'unpaid', status: 'pending', note: 'maybe' },
+  to_joey: { empId: 'tc_joey', start: tuesday, end: tuesday, days: 1, type: 'pto', status: 'denied', note: 'no' },
+};
+const beforeMins = tcWeekMins('tc_ash', tcSchedDays());
+const grid = renderTcSchedule();
+check(beforeMins === tcWeekMins('tc_ash', tcSchedDays()) && beforeMins === 180, 'time off does not change weekly scheduled hours');
+function cellOf(html, id, dk) {
+  const mark = 'data-staff="' + id + '" data-dk="' + dk + '"';
+  const i = html.indexOf(mark);
+  if (i < 0) return '';
+  return html.slice(i, html.indexOf('</td>', i));
+}
+const ashTue = cellOf(grid, 'tc_ash', tuesday);
+const ashWed = cellOf(grid, 'tc_ash', wednesday);
+const ashThu = cellOf(grid, 'tc_ash', thursday);
+const bryTue = cellOf(grid, 'tc_bryan', tuesday);
+const joeyTue = cellOf(grid, 'tc_joey', tuesday);
+check(ashTue.indexOf('data-timeoff-block="approved"') >= 0 && ashTue.indexOf('PTO') >= 0, 'approved PTO blocks the first day of the range');
+check(ashWed.indexOf('data-timeoff-block="approved"') >= 0, 'a multi-day range blocks the last day too');
+check(ashTue.indexOf("tcShiftOpen('tc_ash','" + tuesday) < 0, 'a blocked day does not show the add button');
+check(ashThu.indexOf('data-timeoff-block') < 0 && ashThu.indexOf("tcShiftOpen('tc_ash','" + thursday) >= 0, 'the day after the range is a normal add cell');
+check(ashWed.indexOf('data-shift-conflict="1"') >= 0 && ashWed.indexOf('4p') >= 0, 'a shift on a time-off day stays and is flagged');
+check(bryTue.indexOf('data-timeoff-block="pending"') >= 0 && bryTue.indexOf("tcShiftOpen('tc_bryan','" + tuesday) >= 0, 'pending time off is a hint and still allows a shift');
+check(joeyTue.indexOf('data-timeoff-block') < 0, 'a denied request does not show on the grid');
+tcOffOpen('tc_ash', tuesday);
+const detail = renderTcOffModal();
+check(detail.indexOf('dentist') >= 0 && detail.indexOf('data-timeoff-add="1"') >= 0, 'the block opens the time-off details and an explicit add-shift action');
+state.tcOffView = null;
+state.tcTeamLoc = 'all';
+state.timeclock.schedulePublished[monday] = state.timeclock.schedulePublished[monday] || { publishedAt: Date.now(), snap: {} };
+state.timeclock.schedulePublished[monday].snap.tc_ash = [wednesday + '|16:00|19:00|eastmad|Lead'];
+const postedGrid = renderTcTeamSchedule();
+const postedTue = cellOf(postedGrid, 'tc_ash', tuesday);
+const postedBry = cellOf(postedGrid, 'tc_bryan', tuesday);
+check(postedTue.indexOf('data-timeoff-block="approved"') >= 0, 'the posted schedule shows approved time off');
+check(postedBry.indexOf('data-timeoff-block') < 0, 'the posted schedule hides pending requests');
+
 if (process.argv.includes('--modal')) {
   dashAuth.isAdmin = true;
   dashAuth.dashRole = 'admin';
@@ -419,6 +466,32 @@ if (process.argv.includes('--modal')) {
   fs.writeFileSync(out, `<!doctype html><html><head><meta charset="utf-8"><title>Add time off</title>
 <style>body{margin:0;background:#e8edf5;font-family:system-ui,Segoe UI,sans-serif;}</style>
 </head><body>${modal}</body></html>`);
+  console.log('wrote ' + out);
+}
+
+if (process.argv.includes('--grid')) {
+  state.schedLoc = 'all';
+  state.tcOffView = null;
+  state.tcShiftEdit = null;
+  state.timeclock.schedulePublished = {};
+  const page = renderTcSchedule();
+  const out = process.argv[process.argv.indexOf('--grid') + 1] || '/tmp/schedule-timeoff-grid.html';
+  fs.writeFileSync(out, `<!doctype html><html><head><meta charset="utf-8"><title>Schedule time off</title>
+<style>
+  body { margin:0; background:#eef2f7; font-family:system-ui,Segoe UI,sans-serif; color:#1a1a2e; }
+  .wrap { max-width:1100px; margin:24px auto; }
+  .section { background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); overflow:hidden; }
+  .section-header { padding:16px 20px; border-bottom:1px solid #f1f5f9; }
+  .section-header h2 { font-size:15px; font-weight:700; margin:0; }
+  .sc-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .sc-table th { background:#f8fafc; padding:10px 12px; text-align:left; font-size:11px; text-transform:uppercase; color:#64748b; border-bottom:2px solid #e2e8f0; }
+  .sc-table td { padding:8px 12px; border-bottom:1px solid #f1f5f9; }
+  .sc-mobile { display:none; }
+  .tc-off { display:block; width:100%; box-sizing:border-box; margin:0 0 3px; padding:7px 4px; border-radius:6px; border:1px solid #f3b4bc; color:#9f1239; background:repeating-linear-gradient(-45deg,#fde8ea,#fde8ea 5px,#fff 5px,#fff 10px); font:inherit; font-size:10px; font-weight:800; line-height:1.25; text-align:center; }
+  .tc-off .k { display:block; font-size:9px; letter-spacing:.04em; text-transform:uppercase; }
+  .tc-off.pending { border-color:#fcd34d; color:#92400e; background:#fffbeb; font-weight:700; padding:4px; }
+  .tc-off-flag { font-size:9px; font-weight:800; color:#be123c; background:#fff1f2; border-radius:5px; padding:2px 4px; margin-bottom:3px; line-height:1.3; }
+</style></head><body><div class="wrap">${page}</div></body></html>`);
   console.log('wrote ' + out);
 }
 
