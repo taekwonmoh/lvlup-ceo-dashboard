@@ -479,6 +479,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .task-item:hover{background:var(--gray-50)}
 .task-item.done{background:var(--green-light)}
 .task-item.done .task-text{text-decoration:line-through;color:var(--gray-400)}
+.task-item.needs-review{background:#fffbeb}
+.task-item.needs-review .task-text{text-decoration:none;color:var(--gray-800)}
+.proof-box{margin-left:34px;display:flex;flex-direction:column;gap:8px}
+.proof-meta{margin-left:34px;font-size:11px;color:#92400e;font-weight:700;line-height:1.4}
+.proof-saved{margin-left:34px;font-size:12px;color:var(--gray-600);padding:6px 10px;background:var(--gray-50);border-radius:6px;border-left:2px solid var(--gray-300);white-space:pre-wrap}
 .task-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--gray-300);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:11px;font-weight:700;transition:all .15s}
 .task-check.checked{background:var(--green);border-color:var(--green);color:#fff}
 .task-text{flex:1;font-size:13px;line-height:1.4}
@@ -1273,28 +1278,31 @@ const WALL_TYPES = [
 
 /*  -  -  Task Definitions  -  -  */
 // ── Shared task building blocks ────────────────────────────────────────────
-const TASK_STOPLIGHT = {id:'stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'sent', playbook:'student_outreach', text:'Stoplight Outreach: Review the stoplight report, then send a minimum of 2 Loom videos or 2 postcards — log how many you sent today.'};
-const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', text:'Open GymDesk rosters: note new students and class counts, and check attendance.'};
+const TASK_STOPLIGHT = {id:'stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'students', autoOnly:true, playbook:'student_outreach', proof:{kind:'stoplight', min:2}, text:'Reach 2 students on the stoplight: Log each student on the Students page with a method and your initials. This completes from those names. A number by itself does not.'};
+const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', hasNotes:true, proof:{kind:'note', placeholder:'Class counts, then new or trial first names — or no new / no trials'}, text:'Check today rosters: Class counts for the day (Tigers 7, Kids 11, Teens 5) and first names of any new or trial students, or no new / no trials.'};
 // Wrap-up lives on the dashboard. Old Slack EOS ids (eos, j_eos, eos_report) still satisfy this via TASK_ALIASES.
-const TASK_CLOSING   = {id:'closing', cat:'Closing', text:'Closing Routine: Straighten the training floor, review rosters, and log today’s trials and enrollments on the dashboard scorecard if applicable.'};
+const TASK_CLOSING   = {id:'closing', cat:'Closing', proof:{kind:'scorecard', noteOptional:true, notePlaceholder:'One-line note if something is still outstanding (optional)'}, text:'Close the school: Log trials and enrollments today (0 is fine). Add a one-line note if something is outstanding. The floor photo covers straightening the floor.'};
 // Bathroom verification photo. `days` is 0=Sun … 6=Sat. Leads are Monday only.
 // Front desk days are chosen per school in frontDeskBathroomDays (Tue–Sat, open days only).
 // A day that is not in `days` is omitted by dailyTasksForDate, so it is not a miss.
 // Training-floor photos stay daily. Front desk still tidies bathrooms every shift inside fd_lobby.
-function bathroomPhoto(days){ return {id:'ph_bathroom', cat:'Facility Refresh', photo:true, multi:true, icon:'📸', days:days, text:'Bathroom Refresh: freshen up each bathroom, then snap a photo.'}; }
-const TASK_PH_FLOOR = {id:'ph_floor', cat:'Facility Refresh', photo:true, icon:'📸', text:'Training Floor: wide photo of the floor + bag racks showing a clean, professional look.'};
+// priorPhoto: this task already required a photo before the proof system. The sheet still
+// requires the photo. Older records with no proofV still count in history the old way.
+function bathroomPhoto(days){ return {id:'ph_bathroom', cat:'Facility Refresh', photo:true, priorPhoto:true, multi:true, icon:'📸', days:days, text:'Bathroom Refresh: freshen up each bathroom, then snap a photo.'}; }
+const TASK_PH_FLOOR = {id:'ph_floor', cat:'Facility Refresh', photo:true, priorPhoto:true, icon:'📸', text:'Training Floor: wide photo of the floor + bag racks showing a clean, professional look.'};
 // Weekly facility photos — announcement board differs by school (whiteboard at Waunakee, mirror elsewhere)
 function weeklyPhotos(board){ return [
-  {id:'ph_announce', photo:true, icon:'📸', text:'Announcements: refresh the ' + board + ' with upcoming events, then snap a photo.'},
-  {id:'ph_station',  photo:true, icon:'📸', text:'Instructor Station: deep clean & organize it, then snap a photo.'},
-  {id:'ph_signage',  photo:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
+  {id:'ph_announce', photo:true, priorPhoto:true, icon:'📸', text:'Announcements: refresh the ' + board + ' with upcoming events, then snap a photo.'},
+  {id:'ph_station',  photo:true, priorPhoto:true, icon:'📸', text:'Instructor Station: deep clean and organize it, then snap a photo.'},
+  {id:'ph_signage',  photo:true, priorPhoto:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
 ]; }
 // Weekly content: upload 3 photos this week right in the dashboard (goes to the marketing bot for approval)
 const TASK_BUFFER = {id:'cc_content', icon:'📱', contentPillars:true, posts:3, text:'Capture Content: upload 3 photos this week right here. They go to marketing for approval.'};
 
 // ── Per-employee daily task lists ──────────────────────────────────────────
+const TASK_OPEN_PHOTO = {id:'opening', cat:'Pre-Class Admin', photo:true, icon:'📸'};
 const BRYAN_DAILY = [
-  {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
+  Object.assign({}, TASK_OPEN_PHOTO, {text:'Open the school: One wide photo of the instructor station with the TV announcements on.'}),
   TASK_STOPLIGHT,
   TASK_ROSTERS,
   bathroomPhoto([1]),
@@ -1302,7 +1310,7 @@ const BRYAN_DAILY = [
   TASK_CLOSING,
 ];
 const ASH_DAILY = [
-  {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the facility is ready for students.'},
+  Object.assign({}, TASK_OPEN_PHOTO, {text:'Open the school: One wide photo of the instructor station with the TV announcements on.'}),
   TASK_STOPLIGHT,
   TASK_ROSTERS,
   bathroomPhoto([1]),
@@ -1310,18 +1318,18 @@ const ASH_DAILY = [
   TASK_CLOSING,
 ];
 const JOEY_DAILY = [
-  {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Ensure the instructor station is clean, organized, and ready.'},
+  Object.assign({}, TASK_OPEN_PHOTO, {text:'Open the school: One wide photo of the instructor station, clean and ready.'}),
   TASK_STOPLIGHT,
   TASK_ROSTERS,
-  {id:'j_wetmop', cat:'Pre-Class Admin', days:[1], text:'Wet mop the training floors before classes.'},
-  {id:'j_greenmachine', cat:'Pre-Class Admin', days:[4], photo:true, icon:'📸', text:'Run the green machine on the training floors, then snap a photo.'},
+  {id:'j_wetmop', cat:'Pre-Class Admin', days:[1], text:'Wet-mop the floor (Monday): Wet mop the training floors before classes.'},
+  {id:'j_greenmachine', cat:'Pre-Class Admin', days:[4], photo:true, priorPhoto:true, icon:'📸', text:'Run the green machine on the training floors, then snap a photo.'},
   bathroomPhoto([1]),
   TASK_PH_FLOOR,
-  {id:'j_spray', cat:'Closing', text:'Spray mop the training floors.'},
+  {id:'j_spray', cat:'Closing', text:'Spray-mop the floor: Spray mop the training floors.'},
   TASK_CLOSING,
 ];
 const TARIK_DAILY = [
-  {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Turn on TV announcements and ensure the instructor station is clean, organized, and ready.'},
+  Object.assign({}, TASK_OPEN_PHOTO, {text:'Open the school: One wide photo of the instructor station with the TV announcements on.'}),
   TASK_STOPLIGHT,
   TASK_ROSTERS,
   bathroomPhoto([1]),
@@ -1329,31 +1337,31 @@ const TARIK_DAILY = [
   TASK_CLOSING,
 ];
 const MIRANDA_DAILY = [
-  {id:'opening', cat:'Pre-Class Admin', text:'Opening Routine: Clock in and prep the Go Ninja facility for daily operations.'},
+  {id:'opening', cat:'Pre-Class Admin', photo:true, icon:'📸', text:'Open Go Ninja: One prep photo of the floor and the front, ready for the day.'},
   bathroomPhoto([1]),
-  {id:'ph_floor', cat:'Facility Refresh', photo:true, icon:'📸', text:'Gym Floor: wide photo of the obstacle / training area showing a clean, professional look.'},
-  {id:'closing', cat:'Closing', text:'Closing Routine & Bathroom Refresh: Wipe down sinks/counters, sweep floor, empty trash, check soap/paper towels, and ensure the front desk is organized.'},
+  {id:'ph_floor', cat:'Facility Refresh', photo:true, priorPhoto:true, icon:'📸', text:'Gym Floor: wide photo of the obstacle / training area showing a clean, professional look.'},
+  {id:'closing', cat:'Closing', photo:true, icon:'📸', hasNotes:true, proof:{kind:'photoNote', placeholder:'What is left for the next day, or All clear'}, text:'Close Go Ninja: Closing photo of the front desk and lobby, plus a one-line note if anything is left, or All clear. The bathroom photo stays Monday only.'},
 ];
 // ── Per-employee weekly task lists ─────────────────────────────────────────
 function lvlupWeekly(board){ return [
-  {id:'schedule',  text:'Monday Schedule Check: Review the week’s schedule to confirm proper class & assistant coverage.'},
+  {id:'schedule', hasNotes:true, proof:{kind:'note', none:'Coverage is set', placeholder:'Holes and who is covering'}, text:'Confirm this week coverage: Coverage is set, or note the holes and who is covering.'},
   ...weeklyPhotos(board),
-  {id:'mop_mats',  text:'Mat Maintenance: Wet mop the mats.'},
-  {id:'dots',      text:'Facility Inspection: Check target dots on the floor and replace as needed.'},
-  {id:'supplies',  text:'Inventory Control: Check supplies and log restocking needs in Ops → Inventory.'},
-  {id:'ad_invites',hasNotes:true, text:'Program Growth: Invite 2 students to try the AD class — jot their names here.'},
-  {id:'lifelinks', text:'Student Milestones: Review LifeLinks and award belt clips.'},
-  {id:'bday_report',    text:'Birthday Outreach: Run the upcoming birthday report and send Birthday Party invitations/offers to eligible families.'},
-  {id:'events_promote', text:'Event Promotion: Review upcoming events and promote them to students in class.'},
-  {id:'mia_report',     text:'MIA / At-Risk: Run the attendance report and book booster lessons for at-risk students.'},
-  {id:'lead_audit',     text:'Lead Follow-up Audit: Make sure no new lead has sat more than 48 hours without contact.'},
-  {id:'new_checkin',    text:'30-Day Check-in: Call new students around day 30 to make sure they’re loving it.'},
-  {id:'social_plan',    text:'Social Plan: Plan next week’s social content calendar (separate from posting in Buffer).'},
-  {id:'pto_review',     text:'Time-off Review: Review and action any pending PTO / time-off requests.'},
-  {id:'post_schedule',  text:'Post Schedule: Post next week’s staff schedule on the dashboard and confirm coverage.'},
+  {id:'mop_mats', photo:true, icon:'📸', text:'Wet-mop the mats: Photo of the mopped floor.'},
+  {id:'dots', photo:true, proof:{kind:'photoOrNone', none:'All good — none needed', placeholder:'Replaced N dots'}, text:'Inspect floor dots: Replaced N dots (with a photo), or All good — none needed.'},
+  {id:'supplies', proof:{kind:'choice', none:'No restock needed', placeholder:'What you logged in Ops → Inventory'}, text:'Check supplies and log restocks: Completes when a restock is logged in Ops → Inventory, or you choose No restock needed.'},
+  {id:'ad_invites', hasNotes:true, proof:{kind:'lines', min:2, placeholder:'One student name per line. Talked to parents, not yet scheduled is ok.'}, text:'Invite 2 students to AD: Two student names. Talked to parents, not yet scheduled is ok — names are still required.'},
+  {id:'lifelinks', hasNotes:true, proof:{kind:'lines', min:1, none:'None due this week', placeholder:'One student name per line'}, text:'Award LifeLink clips: Names of students who received clips, or None due this week.'},
+  {id:'bday_report', proof:{kind:'invites', none:'No eligible birthdays this week', noneNeedsNote:true}, text:'Invite birthday families: For each family, log the child, the parent or family, how you reached them, and the birthday month. No eligible birthdays this week is allowed with a one-line note. A party you book can be logged here too.'},
+  {id:'events_promote', hasNotes:true, proof:{kind:'note', none:'No upcoming events this week', placeholder:'Event names and which classes you told'}, text:'Promote this week events in class: Event names and which classes you told, or No upcoming events this week.'},
+  {id:'mia_report', proof:{kind:'rows', min:1, store:'rows', none:'No at-risk students this week', noneNeedsNote:true, fields:[{key:'name',label:'Student'},{key:'date',label:'Booster date',type:'date'}]}, text:'Book booster lessons for at-risk students: Student name and the booster date, or No at-risk students this week with a one-line note.'},
+  {id:'lead_audit', hasNotes:true, proof:{kind:'note', none:'All leads contacted', placeholder:'Names still open and the next action'}, text:'Clear leads older than 48 hours: All leads contacted, or the names still open and the next action.'},
+  {id:'new_checkin', proof:{kind:'rows', min:1, store:'rows', none:'No one at day 30 this week', fields:[{key:'name',label:'Student'},{key:'date',label:'Date called',type:'date'},{key:'result',label:'Result (3–5 words)'}]}, text:'Call this week 30-day students: Student name, date called, and a short result, or No one at day 30 this week.'},
+  {id:'social_plan', hasNotes:true, proof:{kind:'lines', min:3, none:'See this week Capture Content uploads', placeholder:'One post idea per line: topic and pillar'}, text:'Plan next week social posts: Three short post ideas (topic and pillar), or point at the Capture Content uploads already in the dashboard.'},
+  {id:'pto_review', hasNotes:true, proof:{kind:'note', none:'No pending requests', placeholder:'Who you approved or declined'}, text:'Action pending time-off: No pending requests, or note each request you approved or declined.'},
+  {id:'post_schedule', hasNotes:true, proof:{kind:'note', none:'Next week is published', placeholder:'Coverage note if something is still open'}, text:'Publish next week schedule: Next week is published on the dashboard, or note what is still open.'},
   // About every 2 months: first the week of Mon Nov 9, 2026 (2026-W46), then every 8 weeks.
   // `every` / `from` are optional — items without them still show every week. LVLUP instructors only.
-  {id:'dust_displays', every:8, from:'2026-W46', text:'Display Dusting: Dust the belt displays and the hooks and wood strips that hang the equipment (about every 2 months).', subs:[
+  {id:'dust_displays', every:8, from:'2026-W46', photo:true, icon:'📸', text:'Display Dusting: Dust the belt displays and the hooks and wood strips that hang the equipment (about every 2 months), then snap a photo.', subs:[
     'Dust all of the belts that are on the athlete development display.',
     'Dust all of the color belts that are displayed up above the mirrors or above the bleachers.',
     'Dust and clean off all of the hooks and the wood strips that are hanging all the equipment.',
@@ -1366,12 +1374,12 @@ const ASH_WEEKLY   = lvlupWeekly('mirror');
 const JOEY_WEEKLY  = lvlupWeekly('mirror');
 const TARIK_WEEKLY = lvlupWeekly('whiteboard');
 const MIRANDA_WEEKLY = [
-  {id:'m_party_reset',    photo:true, icon:'📸', text:'Friday Event Prep: Reset the party room for weekend birthday parties, then snap a verification photo.'},
-  {id:'m_party_cleanup',  photo:true, icon:'📸', text:'Party Room Breakdown: Clean up the party room post-event, then snap a photo.'},
-  {id:'m_mop_mats',       photo:true, icon:'📸', text:'Mat Maintenance: Mop mats and sanitize obstacles, then snap a photo.'},
-  {id:'ph_station',  photo:true, icon:'📸', text:'Front Desk / Instructor Station: clean & organize it, then snap a photo.'},
-  {id:'ph_signage',  photo:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
-  {id:'m_party_supplies', text:'Inventory Control: Check party supplies and log anything running low in Ops → Inventory.'},
+  {id:'m_party_reset',    photo:true, priorPhoto:true, icon:'📸', text:'Friday Event Prep: Reset the party room for weekend birthday parties, then snap a verification photo.'},
+  {id:'m_party_cleanup',  photo:true, priorPhoto:true, proof:{kind:'photoOrNone', none:'No party this week'}, text:'Party Room Breakdown: Photo after the party, or No party this week.'},
+  {id:'m_mop_mats',       photo:true, priorPhoto:true, icon:'📸', text:'Mat Maintenance: Mop mats and sanitize obstacles, then snap a photo.'},
+  {id:'ph_station',  photo:true, priorPhoto:true, icon:'📸', text:'Front Desk / Instructor Station: clean and organize it, then snap a photo.'},
+  {id:'ph_signage',  photo:true, priorPhoto:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
+  {id:'m_party_supplies', proof:{kind:'choice', none:'No restock needed', placeholder:'What you logged in Ops → Inventory'}, text:'Check party supplies: Log anything low in Ops → Inventory, or No restock needed.'},
   TASK_BUFFER,
 ];
 const EMP_DAILY  = {bryanG:BRYAN_DAILY, ash:ASH_DAILY, joeyZ:JOEY_DAILY, mirandaS:MIRANDA_DAILY, tarikM:TARIK_DAILY};
@@ -1392,6 +1400,307 @@ const TASK_ALIASES = {
 // True if task `tid` is satisfied by the day's completion record `dd`,
 // counting the current ID or any of its legacy aliases.
 function taskDone(dd, tid){ if (dd[tid]) return true; const al = TASK_ALIASES[tid]; return !!(al && al.some(a => dd[a])); }
+// Days before this still score fd_questions, so older front-desk totals do not move.
+// From this day on it is not a scored task. Answering questions belongs in fd_followups.
+const FD_QUESTIONS_SCORED_BEFORE = '2026-11-16';
+const BURST_WINDOW_MS = 60000;
+const BURST_MIN = 4;
+function taskRecord(dd, tid){
+  if(!dd) return null;
+  if(dd[tid]) return dd[tid];
+  const al = TASK_ALIASES[tid];
+  if(al){ for(let i=0;i<al.length;i++){ if(dd[al[i]]) return dd[al[i]]; } }
+  return null;
+}
+function taskForProof(section, task){
+  if(!task) return task;
+  if(section!=='cycle') return task;
+  if(task.proof||task.photo||task.hasNotes||task.count||task.posts||task.priorPhoto) return task;
+  const t=(task.text||'').toLowerCase();
+  if(/clean|mop|sanitize|dust/.test(t)) return Object.assign({}, task, {photo:true, proof:{kind:'photo'}});
+  if(/announce|promote|signage|social|recap|feedback|email/.test(t)) return Object.assign({}, task, {hasNotes:true, proof:{kind:'note', placeholder:'What you announced or sent'}});
+  if(/outreach|invite|book|birthday|tiger|yellow|at-risk|attendance|student of|enroll/.test(t)) return Object.assign({}, task, {hasNotes:true, proof:{kind:'note', placeholder:'Names and what you did'}});
+  return task;
+}
+function proofKindOf(task){
+  if(!task) return 'check';
+  if(task.proof&&task.proof.kind) return task.proof.kind;
+  if(task.autoOnly) return 'stoplight';
+  if(task.photo&&task.hasNotes) return 'photoNote';
+  if(task.photo) return 'photo';
+  if(task.count) return 'count';
+  if(task.hasNotes) return 'note';
+  if(task.posts) return 'posts';
+  return 'check';
+}
+function proofNonePhrase(task){ return (task&&task.proof&&task.proof.none) ? String(task.proof.none) : ''; }
+function proofNoneMatch(task, text){
+  const phrase=proofNonePhrase(task);
+  if(!phrase) return false;
+  return String(text||'').trim().toLowerCase()===phrase.trim().toLowerCase();
+}
+function proofLines(text){
+  return String(text||'').split(/\n|,/).map(s=>s.trim()).filter(s=>s.length>1);
+}
+function proofFieldsOk(task, rec){
+  if(!rec) return false;
+  const kind=proofKindOf(task);
+  const notes=String(rec.notes||'').trim();
+  const p=(task&&task.proof)||{};
+  if(kind==='check'||kind==='posts') return true;
+  if(kind==='note'||kind==='lines'){
+    if(!notes) return false;
+    if(rec.none||proofNoneMatch(task, notes)) return true;
+    const min=p.min||task.min||0;
+    if(min&&proofLines(notes).length<min) return false;
+    return true;
+  }
+  if(kind==='photo') return ((rec.photos)||[]).length>0;
+  if(kind==='photoNote') return ((rec.photos)||[]).length>0 && !!notes;
+  if(kind==='photoOrNone'){
+    if(rec.none||proofNoneMatch(task, notes)) return true;
+    return !!notes && ((rec.photos)||[]).length>0;
+  }
+  if(kind==='count'){
+    const min=(p.min||task.min||1);
+    return Number(rec.count)>=min;
+  }
+  if(kind==='stoplight'){
+    const min=(p.min||task.min||2);
+    if(!rec.auto) return false;
+    if(!(Number(rec.count)>=min)) return false;
+    if(!notes) return false;
+    const named=notes.split(',').map(s=>s.trim()).filter(s=>/\([^)]+·[^)]+\)/.test(s));
+    return named.length>=min;
+  }
+  if(kind==='scorecard'){
+    const fields=(p.fields&&p.fields.length)?p.fields:[{key:'trials'},{key:'enrollments'}];
+    for(let i=0;i<fields.length;i++){
+      const n=Number(rec[fields[i].key]);
+      if(!Number.isFinite(n)||n<0) return false;
+    }
+    return true;
+  }
+  if(kind==='choice'){
+    if(rec.none||proofNoneMatch(task, rec.choice||notes)) return true;
+    return !!String(rec.choice||notes||'').trim();
+  }
+  if(kind==='invites'){
+    if(rec.none&&String(rec.noneNote||notes||'').trim()) return true;
+    const invites=Array.isArray(rec.invites)?rec.invites:[];
+    const okInvite=invites.some(r=>r&&String(r.child||'').trim()&&String(r.family||'').trim()&&String(r.method||'').trim()&&String(r.month||'').trim());
+    const bookings=Array.isArray(rec.bookings)?rec.bookings:[];
+    const okBook=bookings.some(r=>r&&String(r.child||'').trim()&&String(r.family||'').trim()&&String(r.date||'').trim());
+    return okInvite||okBook;
+  }
+  if(kind==='bookings'){
+    const min=p.min||task.min||2;
+    const rows=Array.isArray(rec.bookings)?rec.bookings:[];
+    return rows.filter(r=>r&&String(r.child||'').trim()&&String(r.family||'').trim()&&String(r.date||'').trim()).length>=min;
+  }
+  if(kind==='rows'){
+    if(rec.none&&(!p.noneNeedsNote||String(rec.noneNote||notes||'').trim())) return true;
+    const min=p.min||1;
+    const rows=Array.isArray(rec.rows)?rec.rows:[];
+    const fields=p.fields||[];
+    const good=rows.filter(r=>r&&fields.every(f=>String(r[f.key]||'').trim()||f.optional));
+    return good.length>=min;
+  }
+  return !!notes;
+}
+function taskPostsFilled(task, rec){
+  if(!task||!task.posts) return 0;
+  let n=0;
+  const posts=(rec&&rec.posts)||{};
+  for(let i=1;i<=task.posts;i++){ if(String(posts[i]||'').trim()) n++; }
+  if(task.contentPillars&&typeof mergedContentUploads==='function'){
+    try{
+      const ups=mergedContentUploads(state.tasksLoc, getTaskWeekKey(state.tasksDate), rec||{}).filter(r=>r._thisWeek);
+      n=Math.max(n, ups.length);
+    }catch(e){}
+  }
+  return n;
+}
+// Legacy records (no proofV) count whenever the record exists — the same rule as
+// taskDone — so past bonus math does not move. New saves set proofV and count
+// only when the proof is filled and an unconfirmed burst is not sitting on them.
+function taskBonusComplete(task, rec){
+  if(!rec||typeof rec!=='object') return false;
+  if(!rec.proofV) return true;
+  if(rec.burst&&!rec.burstOk) return false;
+  if(task&&task.posts) return taskPostsFilled(task, rec)>=task.posts;
+  if(task&&task.proof) return proofFieldsOk(task, rec);
+  if(task&&task.priorPhoto) return ((rec.photos)||[]).length>0;
+  return proofFieldsOk(task, rec);
+}
+function taskSheetDone(section, task, rec){
+  task=taskForProof(section, task);
+  if(!taskBonusComplete(task, rec)) return false;
+  if(!rec||!rec.proofV){
+    if(task&&task.posts) return taskPostsFilled(task, rec)>=(task.posts||0);
+    if(task&&task.priorPhoto) return ((rec.photos)||[]).length>0;
+  }
+  return true;
+}
+function scoreTaskList(tasks, dd){
+  let done=0;
+  const items=[];
+  (tasks||[]).forEach(t=>{
+    const rec=taskRecord(dd, t.id);
+    const verified=taskBonusComplete(t, rec);
+    if(verified) done++;
+    items.push({id:t.id, text:t.text, verified, rec:rec||null});
+  });
+  const needsReview=items.some(i=>i.rec&&i.rec.proofV&&i.rec.burst&&!i.rec.burstOk);
+  return {done, total:(tasks||[]).length, needsReview, items};
+}
+function taskBurstIds(entries){
+  const pts=(entries||[]).filter(e=>e&&e.ts!=null&&!e.photo).slice().sort((a,b)=>a.ts-b.ts);
+  const flagged={};
+  for(let i=0;i<pts.length;i++){
+    let j=i;
+    while(j<pts.length&&pts[j].ts-pts[i].ts<=BURST_WINDOW_MS) j++;
+    if(j-i>=BURST_MIN){ for(let k=i;k<j;k++) flagged[pts[k].id]=true; }
+  }
+  return Object.keys(flagged);
+}
+function proofIsPhotoSave(task, payload){
+  if(!payload) return false;
+  const kind=proofKindOf(task);
+  if(payload.none&&(kind==='photoOrNone'||kind==='choice'||kind==='note')) return false;
+  if(kind==='photo'||kind==='photoNote'||(task&&task.priorPhoto)) return true;
+  if(kind==='photoOrNone'&&payload.photos&&payload.photos.length&&!payload.none) return true;
+  if(task&&task.photo&&!task.proof&&payload.photos&&payload.photos.length) return true;
+  return false;
+}
+function findTaskDef(section, taskId, empId){
+  empId=empId||state.tasksLoc;
+  let list=[];
+  if(section==='daily') list=getDailyTasks(empId);
+  else if(section==='weekly') list=getWeeklyRec(empId);
+  else if(section==='monthly') list=getMonthlyTasks(empId);
+  else if(section==='cycle_checklist') list=getCycleChecklist(empId);
+  else if(section==='cycle'){
+    const defs=getCycleTasks(empId)||{};
+    Object.keys(defs).forEach(w=>{ list=list.concat((defs[w]&&defs[w].tasks)||[]); });
+  }
+  return (list||[]).find(t=>t.id===taskId)||null;
+}
+function resolveTask(section, taskId, empId){
+  return taskForProof(section, findTaskDef(section, taskId, empId)||{id:taskId});
+}
+function taskBucket(empId, section, sKey){
+  const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
+  const emp=state.tasksData[empId]||{};
+  return {sPath, bucket:((emp[sPath]||{})[sKey])||{}};
+}
+function attachBurst(section, taskId, payload){
+  const task=resolveTask(section, taskId);
+  if(proofIsPhotoSave(task, payload)) return payload;
+  const info=taskPathFor(section);
+  const {bucket}=taskBucket(state.tasksLoc, section, info.sKey);
+  const entries=[];
+  Object.keys(bucket).forEach(id=>{
+    if(id===taskId) return;
+    const rec=bucket[id];
+    if(!rec||!rec.ts) return;
+    const t=resolveTask(section, id);
+    entries.push({id, ts:rec.ts, photo:proofIsPhotoSave(t, rec)});
+  });
+  entries.push({id:taskId, ts:payload.ts, photo:false});
+  const flagged=taskBurstIds(entries);
+  if(flagged.indexOf(taskId)>=0) payload.burst=true;
+  flagged.forEach(id=>{
+    if(id===taskId) return;
+    const rec=bucket[id];
+    if(rec&&rec.proofV&&!rec.burst&&!rec.burstOk){
+      rec.burst=true;
+      fbSet(info.base+id+'/burst', true);
+    }
+  });
+  if(flagged.length>=BURST_MIN){
+    fbSet(empPath(state.tasksLoc)+'/needsReview/'+info.sPath+'/'+info.sKey, {burst:true, at:Date.now(), ids:flagged});
+  }
+  return payload;
+}
+function writeTask(section, taskId, payload){
+  const info=taskPathFor(section);
+  const emp=state.tasksLoc;
+  if(!state.tasksData[emp]) state.tasksData[emp]={};
+  if(!state.tasksData[emp][info.sPath]) state.tasksData[emp][info.sPath]={};
+  if(!state.tasksData[emp][info.sPath][info.sKey]) state.tasksData[emp][info.sPath][info.sKey]={};
+  if(payload==null) delete state.tasksData[emp][info.sPath][info.sKey][taskId];
+  else state.tasksData[emp][info.sPath][info.sKey][taskId]=payload;
+  fbSet(info.base+taskId, payload);
+}
+function proofSummaryText(task, rec){
+  if(!rec) return '';
+  const parts=[];
+  if(rec.notes) parts.push(String(rec.notes));
+  if(rec.noneNote&&rec.noneNote!==rec.notes) parts.push(String(rec.noneNote));
+  if(rec.count!=null&&proofKindOf(task)==='stoplight') parts.push(rec.count+' named on the Students page');
+  ['trials','enrollments','red','yellow','green'].forEach(k=>{ if(rec[k]!=null&&rec[k]!=='') parts.push(k+': '+rec[k]); });
+  (rec.invites||[]).forEach(r=>{ if(r&&(r.child||r.family)) parts.push([r.child,r.family,r.method,r.month].filter(Boolean).join(' · ')); });
+  (rec.bookings||[]).forEach(r=>{ if(r&&(r.child||r.family)) parts.push([r.child,r.family,r.date].filter(Boolean).join(' · ')); });
+  (rec.rows||[]).forEach(r=>{ if(!r) return; parts.push(Object.keys(r).map(k=>r[k]).filter(Boolean).join(' · ')); });
+  return parts.filter(Boolean).join('\n');
+}
+function proofWhenLabel(ts){
+  if(!ts) return '';
+  try{
+    return new Date(ts).toLocaleString('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+' CT';
+  }catch(e){ return ''; }
+}
+function proofBadges(rec){
+  if(!rec||!rec.proofV) return '';
+  const bits=[];
+  if(rec.auto) bits.push('Auto from Students');
+  if(rec.burst&&!rec.burstOk) bits.push('Needs review');
+  else if(rec.burst&&rec.burstOk) bits.push('Review confirmed'+(rec.burstOkBy?(' by '+rec.burstOkBy):''));
+  if(rec.nextDay) bits.push('Next-day backfill');
+  if(rec.afterHours) bits.push('After hours');
+  if(rec.noClock) bits.push('No clock-in');
+  if(rec.reusedPhoto) bits.push('Reused photo');
+  const when=proofWhenLabel(rec.ts);
+  if(when) bits.unshift(when);
+  return bits.join(' · ');
+}
+function dashCanReviewProof(){
+  return !!(dashAuth&&(dashAuth.isAdmin||dashCan('tasksAll')));
+}
+function confirmBurstAt(empId, section, sKey, taskId){
+  if(!dashCanReviewProof()) return;
+  const sPath=section==='weekly'?'weekly':section==='cycle_checklist'?'cycle_checklist':section==='monthly'?'monthly':section==='cycle'?'cycle':'daily';
+  const key=empId+'|'+sKey;
+  const pack=section==='weekly'?(state.historyWeekly[key]||null):(state.historyData[key]||null);
+  let rec=null;
+  if(pack&&pack.items){ const item=pack.items.find(i=>i.id===taskId); if(item) rec=item.rec; }
+  if(!rec){
+    const live=(((state.tasksData[empId]||{})[sPath]||{})[sKey]||{})[taskId];
+    if(live) rec=live;
+  }
+  if(!rec) return;
+  const next=Object.assign({}, rec, {burstOk:true, burstOkAt:Date.now(), burstOkBy:(dashAuth&&(dashAuth.name||(dashAuth.user&&dashAuth.user.email)))||'manager'});
+  fbSet(empPath(empId)+'/'+sPath+'/'+sKey+'/'+taskId, next);
+  if(state.tasksLoc===empId){
+    const info=taskPathFor(section);
+    if(info.sKey===sKey){
+      if(!state.tasksData[empId][sPath]) state.tasksData[empId][sPath]={};
+      if(!state.tasksData[empId][sPath][sKey]) state.tasksData[empId][sPath][sKey]={};
+      state.tasksData[empId][sPath][sKey][taskId]=next;
+    }
+  }
+  if(pack&&pack.items){
+    pack.items.forEach(item=>{
+      if(item.id!==taskId) return;
+      item.rec=next;
+      item.verified=taskBonusComplete(resolveTask(section, taskId, empId), next);
+    });
+    pack.done=pack.items.filter(i=>i.verified).length;
+    pack.needsReview=pack.items.some(i=>i.rec&&i.rec.proofV&&i.rec.burst&&!i.rec.burstOk);
+  }
+  render();
+}
 const EMP_WEEKLY = {bryanG:BRYAN_WEEKLY,ash:ASH_WEEKLY,joeyZ:JOEY_WEEKLY,mirandaS:MIRANDA_WEEKLY, tarikM:TARIK_WEEKLY};
 // Legacy shared arrays kept as fallback ────────────────────────────────────
 const LVLUP_DAILY = BRYAN_DAILY;
@@ -1399,19 +1708,20 @@ const LVLUP_WEEKLY_REC = BRYAN_WEEKLY;
 const GONINJA_DAILY = MIRANDA_DAILY;
 const GONINJA_WEEKLY_REC = MIRANDA_WEEKLY;
 const LVLUP_MONTHLY = [
-  {id:'lm_reviews',  text:'Google Reviews: Ask 2 happy families for a review and respond to every new review.'},
-  {id:'lm_checkin',  text:'Team Check-in: 1:1 / coaching check-in with your assistant instructors.'},
-  {id:'lm_sanitize', text:'Deep Sanitize: Monthly deep-sanitize of all mats and high-touch surfaces.'},
+  {id:'lm_reviews', hasNotes:true, proof:{kind:'lines', min:2, none:'Asked, they declined', placeholder:'One family name per line'}, text:'Google Reviews: Ask 2 happy families for a review. List the family names, or Asked, they declined.'},
+  {id:'lm_checkin', proof:{kind:'rows', min:1, store:'rows', fields:[{key:'name',label:'Assistant'},{key:'date',label:'Date',type:'date'}]}, text:'Team Check-in: 1:1 with your assistant instructors — name and date.'},
+  {id:'lm_sanitize', photo:true, icon:'📸', text:'Deep Sanitize: Monthly deep-sanitize of all mats and high-touch surfaces, then snap a photo.'},
 ];
 // Front desk staff (Waunakee, Verona)
+// fd_questions is not a scored task from FD_QUESTIONS_SCORED_BEFORE forward.
+// Days before that cutoff still include it so older completion totals stay put.
 const FRONTDESK_DAILY = [
-  {id:'fd_messages',    text:'Check and respond to all parent messages, emails, and missed calls.'},
-  {id:'fd_followups',   text:'Log any follow-up action items.'},
-  {id:'fd_notify_msk',  text:'Notify the location lead instructor of any membership-related issues requiring follow-up.'},
-  {id:'fd_questions',   text:'Answer parent questions at the front desk.'},
-  {id:'fd_retail',      text:'Check and fulfill GymDesk for pending retail orders.'},
-  {id:'fd_gear',        text:'Assist members with retail purchases and sparring gear fittings.'},
-  {id:'fd_lobby',       text:'Maintain a clean, organized, and welcoming front lobby.', subs:[
+  {id:'fd_messages', hasNotes:true, proof:{kind:'note', none:'None today', placeholder:'How many you handled. Name any family that needs a follow-up.'}, text:'Clear today inbox: How many messages or calls you handled, or None today. If someone needs a follow-up, name the family.'},
+  {id:'fd_followups', hasNotes:true, proof:{kind:'note', none:'None today', placeholder:'Family and what to do, one per line'}, text:'Log follow-ups: Family and what to do, or None today.'},
+  {id:'fd_notify_msk', hasNotes:true, proof:{kind:'note', none:'None today', placeholder:'Family, the issue, and that the lead was told'}, text:'Flag membership issues for the lead: Family name, the issue, and that the lead was told, or None today.'},
+  {id:'fd_retail', hasNotes:true, proof:{kind:'note', none:'0 pending', placeholder:'How many you fulfilled and the member names'}, text:'Fulfill pending retail orders: How many you fulfilled and the member names, or 0 pending.'},
+  {id:'fd_gear', hasNotes:true, proof:{kind:'note', none:'None today', placeholder:'Names of members you helped'}, text:'Help with gear and retail: Names of members you helped, or None today.'},
+  {id:'fd_lobby', photo:true, icon:'📸', text:'Reset the lobby: One lobby or front-desk photo during the shift.', subs:[
     'Straighten lobby and retail displays',
     'Clean front entrance doors',
     'Empty trash',
@@ -1420,28 +1730,28 @@ const FRONTDESK_DAILY = [
     'Refill restroom supplies as needed',
   ]},
   // Bathroom photo is added per school in getDailyTasks (Tue–Sat, open days only). Tidying above still happens every shift.
-  {id:'fd_next_shift',  text:'Note any outstanding action items for the next shift.'},
+  {id:'fd_next_shift', hasNotes:true, proof:{kind:'note', none:'All clear', placeholder:'What is left for the next shift'}, text:'Write the shift handoff: What is left for the next shift, or All clear. A blank note cannot complete this.'},
 ];
 const FRONTDESK_WEEKLY = [
-  {id:'fdw_inventory', text:'Review front desk retail inventory and supplies.'},
-  {id:'fdw_restock',   text:'Restock merchandise as needed.'},
-  {id:'fdw_lowstock',  text:'Log low-stock items in Ops → Inventory.'},
-  {id:'fdw_displays',  text:'Organize and merchandise retail displays.'},
-  {id:'fdw_signage',   text:'Prepare, print, and organize retail signage and promotional materials for:', subs:[
+  {id:'fdw_inventory', hasNotes:true, proof:{kind:'note', none:'Par levels look fine', placeholder:'What is running low'}, text:'Count the front-desk retail: A short count of anything low, or Par levels look fine.'},
+  {id:'fdw_restock', photo:true, proof:{kind:'photoOrNone', none:'Nothing to restock'}, text:'Restock the floor: Photo of the restocked display, or Nothing to restock.'},
+  {id:'fdw_lowstock', proof:{kind:'choice', none:'No restock needed', placeholder:'What you logged in Ops → Inventory'}, text:'Log low stock: An inventory request this week, or No restock needed.'},
+  {id:'fdw_displays', photo:true, icon:'📸', text:'Reset retail displays: One photo of the displays.'},
+  {id:'fdw_signage', photo:true, proof:{kind:'photoOrNone', none:'No new signage this week'}, text:'Update front-desk signage: Photo of the current signage, or No new signage this week.', subs:[
     'Retail products',
     'Seasonal promotions',
     'Front desk displays',
     'Upcoming events',
   ]},
-  {id:'fdw_backup',      text:'Data Backup: Back up the dashboard data (the dashboard flags this weekly).'},
-  {id:'fdw_lead_audit',  text:'Lead Follow-up Audit: Make sure no new lead has sat more than 48 hours without contact.'},
-  {id:'fdw_new_checkin', text:'30-Day Check-in: Call new students around day 30 to make sure they’re loving it.'},
-  {id:'fdw_payroll',     text:'Payroll Review (every 2 weeks): Approve timesheets and review payroll before the pay run.'},
+  {id:'fdw_backup', hasNotes:true, proof:{kind:'note', none:'Backup saved this week', placeholder:'Where the backup file was saved'}, text:'Data Backup: Back up the dashboard data. Backup saved this week, or note where the file was saved.'},
+  {id:'fdw_lead_audit', hasNotes:true, proof:{kind:'note', none:'All leads contacted', placeholder:'Names still open and the next action'}, text:'Clear leads older than 48 hours: All leads contacted, or the names still open and the next action.'},
+  {id:'fdw_new_checkin', proof:{kind:'rows', min:1, store:'rows', none:'No one at day 30 this week', fields:[{key:'name',label:'Student'},{key:'date',label:'Date called',type:'date'},{key:'result',label:'Result (3–5 words)'}]}, text:'Call this week 30-day students: Student name, date called, and a short result, or No one at day 30 this week.'},
+  {id:'fdw_payroll', hasNotes:true, proof:{kind:'note', none:'Approved', placeholder:'Missing punches, long shifts, or issues sent to Mike'}, text:'Review timesheets: Approved, plus any flags, or the list of issues sent to Mike.'},
 ];
 const FRONTDESK_MONTHLY = [
-  {id:'fm_reviews', text:'Google Reviews: Ask 2 happy families for a review and respond to every new review.'},
-  {id:'fm_gbp',     text:'Google Business Profile: Update holiday hours, photos, and the current promo.'},
-  {id:'fm_par',     text:'Retail Par-Levels: Reorder uniforms, belts, and gear for new students.'},
+  {id:'fm_reviews', hasNotes:true, proof:{kind:'lines', min:2, none:'Asked, they declined', placeholder:'One family name per line'}, text:'Google Reviews: Ask 2 happy families for a review. List the family names, or Asked, they declined.'},
+  {id:'fm_gbp', photo:true, proof:{kind:'photoOrNone', none:'No change needed'}, text:'Google Business Profile: Photo of the live profile, or No change needed.'},
+  {id:'fm_par', proof:{kind:'choice', none:'Par is fine', placeholder:'What you reordered'}, text:'Retail Par-Levels: Log the reorder, or Par is fine.'},
 ];
 // ── "As needed" reference lists — not tracked / no sign-off, shown for context ──
 const LVLUP_ASNEEDED = [
@@ -1599,38 +1909,38 @@ const GONINJA_CYCLE = {
 // LVLUP instructor cycle checklist — one list per cycle, grouped by week
 const LVLUP_CYCLE_CHECKLIST = [
   // ── Week 1 — Cycle Launch ──
-  {id:'cc_w1_announce', week:1, text:'Announce the new cycle theme and life skill to all classes'},
-  {id:'cc_w1_stoplight',week:1, text:'Reset stoplight report — run baseline Red/Yellow/Green for the new cycle'},
-  {id:'cc_w1_outreach', week:1, playbook:'student_outreach', text:'Outreach to students who didn\'t test last cycle — send Loom videos'},
-  {id:'cc_w1_bbt',      week:1, text:'Send black belt testing requirements to any students on track'},
+  {id:'cc_w1_announce', week:1, hasNotes:true, proof:{kind:'note', placeholder:'What you announced'}, text:'Announce the new cycle theme and life skill to all classes: One line on what you announced.'},
+  {id:'cc_w1_stoplight',week:1, proof:{kind:'scorecard', fields:[{key:'red',label:'Red'},{key:'yellow',label:'Yellow'},{key:'green',label:'Green'}]}, text:'Publish the cycle baseline stoplight: Counts for red, yellow, and green at the start of the cycle.'},
+  {id:'cc_w1_outreach', week:1, autoOnly:true, min:1, proof:{kind:'stoplight', min:1}, playbook:'student_outreach', text:'Reach students who did not test: Log them on the Students page (method and initials). This completes from those names.'},
+  {id:'cc_w1_bbt',      week:1, hasNotes:true, proof:{kind:'note', none:'No one on track', placeholder:'Who you sent requirements to'}, text:'Send black belt testing requirements to any students on track: Names, or No one on track.'},
   // ── Week 2 ──
-  {id:'cc_w2_retain',   week:2, text:'Plan and post a retention event'},
-  {id:'cc_w3_attn',     week:3, text:'Check up on students with low attendance or missing stripes'},
-  {id:'cc_w4_revenue',  week:4, text:'Plan and post a revenue / new members event'},
-  {id:'cc_w5_attn',     week:5, text:'Check up on students with low attendance or missing stripes'},
-  {id:'cc_w6_tigers',   week:6, text:'Reach out to Tigers about moving up to the beginners class'},
-  {id:'cc_w6_sparring', week:6, text:'Contact current yellow belts about purchasing sparring gear'},
-  {id:'cc_w8_sotc',     week:8, text:'Identify and announce the Student of the Cycle'},
-  {id:'cc_bday',        week:0, text:'Run a minimum of 2 birthday parties this cycle',  playbook:'birthday_party'},
-  {id:'cc_upgrades',    week:0, text:'Upgrade 2 students to AD or Legacy — list their names', hasNotes:true},
-  {id:'cc_belts',       week:0, text:'Pro-shop testing prep — belts, stripes, patches & certificates in stock for promotions.'},
-  {id:'cc_survey',      week:8, text:'End-of-cycle parent satisfaction survey (NPS) — send after testing.'},
+  {id:'cc_w2_retain',   week:2, hasNotes:true, proof:{kind:'note', placeholder:'Event name and where you posted it'}, text:'Plan and post a retention event: Event name and where you posted it.'},
+  {id:'cc_w3_attn',     week:3, proof:{kind:'rows', min:1, store:'rows', none:'No one to follow up', fields:[{key:'name',label:'Student'},{key:'did',label:'What you did'}]}, text:'Follow up with low-attendance or missing-stripe students: Names and what you did (text, booster, Loom).'},
+  {id:'cc_w4_revenue',  week:4, hasNotes:true, proof:{kind:'note', placeholder:'Event name and where you posted it'}, text:'Plan and post a revenue / new members event: Event name and where you posted it.'},
+  {id:'cc_w5_attn',     week:5, proof:{kind:'rows', min:1, store:'rows', none:'No one to follow up', fields:[{key:'name',label:'Student'},{key:'did',label:'What you did'}]}, text:'Follow up with low-attendance or missing-stripe students: Names and what you did (text, booster, Loom).'},
+  {id:'cc_w6_tigers',   week:6, hasNotes:true, proof:{kind:'lines', min:1, none:'No Tigers ready', placeholder:'One student name per line'}, text:'Invite ready Tigers up: Names you contacted, or No Tigers ready.'},
+  {id:'cc_w6_sparring', week:6, hasNotes:true, proof:{kind:'lines', min:1, none:'No new yellow belts', placeholder:'One student name per line'}, text:'Contact new yellow belts about gear: Names you contacted, or No new yellow belts.'},
+  {id:'cc_w8_sotc',     week:8, hasNotes:true, proof:{kind:'note', placeholder:'Student name'}, text:'Name Student of the Cycle: The student name.'},
+  {id:'cc_bday',        week:0, proof:{kind:'bookings', min:2}, playbook:'birthday_party', text:'Book a party: 2 birthday parties this cycle. Child name, family or guardian, and party date for each.'},
+  {id:'cc_upgrades',    week:0, hasNotes:true, proof:{kind:'lines', min:2, placeholder:'One student name per line'}, text:'Upgrade 2 students to AD or Legacy: List their names.'},
+  {id:'cc_belts',       week:0, hasNotes:true, proof:{kind:'note', none:'In stock', placeholder:'Belts, stripes, patches, certificates — what you checked'}, text:'Confirm testing inventory: What is in stock (belts, stripes, patches, certificates), or In stock.'},
+  {id:'cc_survey',      week:8, hasNotes:true, proof:{kind:'note', placeholder:'Date sent and how (email or link)'}, text:'Send the parent survey: Date sent and how (email or link).'},
 ];
 const FRONTDESK_CYCLE_CHECKLIST = [
   // ── Ongoing (any time this cycle) ──
-  {id:'fd_cc_parties',   week:0, text:'Book a minimum of 2 birthday parties this cycle', playbook:'birthday_party'},
-  {id:'fd_cc_events',    week:0, text:'Add all upcoming cycle events to the dashboard so they display on the members site', playbook:'add_dashboard_event'},
+  {id:'fd_cc_parties',   week:0, proof:{kind:'bookings', min:2}, playbook:'birthday_party', text:'Book a party: 2 birthday parties this cycle. Child name, family or guardian, and party date for each.'},
+  {id:'fd_cc_events',    week:0, hasNotes:true, proof:{kind:'note', placeholder:'Event names now on the dashboard'}, text:'Add all upcoming cycle events to the dashboard so they display on the members site: List the event names you added.', playbook:'add_dashboard_event'},
   // ── Week 1 ──
-  {id:'fd_cc_signage',   week:1, text:'Prep & print all new cycle signage — life skill, promotions, and upcoming events. Organize and hand off to lead instructor for hanging.'},
-  {id:'fd_cc_bday_blast', week:1, text:'Run birthday report + send party outreach emails for current and next 3 months', playbook:'birthday_party'},
+  {id:'fd_cc_signage',   week:1, hasNotes:true, proof:{kind:'note', placeholder:'What you printed and who you handed it to'}, text:'Prep and print all new cycle signage — life skill, promotions, and upcoming events. Note what you printed and who you handed it to.'},
+  {id:'fd_cc_bday_blast', week:1, hasNotes:true, proof:{kind:'lines', min:1, placeholder:'One family or child name per line. Put the email count on the first line.'}, text:'Send the cycle birthday invitations: How many emails you sent, and the family or child names (paste from the report is fine).', playbook:'birthday_party'},
   // ── Week 4 ──
-  {id:'fd_cc_tigers',    week:4, text:'Review Tiger class — send move-up emails for any students confirmed ready by instructor', playbook:'email_tigers'},
+  {id:'fd_cc_tigers',    week:4, hasNotes:true, proof:{kind:'lines', min:1, none:'No Tigers ready', placeholder:'One student name per line'}, text:'Review Tiger class — send move-up emails for students the instructor confirmed. List the names, or No Tigers ready.', playbook:'email_tigers'},
   // ── Week 6 ──
-  {id:'fd_cc_yb',        week:6, text:'Review Yellow Belt students — send gear + program emails for any new yellow belts', playbook:'email_yellow_belt'},
+  {id:'fd_cc_yb',        week:6, hasNotes:true, proof:{kind:'lines', min:1, none:'No new yellow belts', placeholder:'One student name per line'}, text:'Review Yellow Belt students — send gear and program emails for new yellow belts. List the names, or No new yellow belts.', playbook:'email_yellow_belt'},
   // ── Week 8 ──
-  {id:'fd_cc_sotc_input', week:8, text:'Share Student of the Cycle input with lead instructor — which students stood out this cycle?'},
-  {id:'fd_cc_belts',  week:0, text:'Pro-shop testing prep — order & stock belts, patches and certificates for promotions.'},
-  {id:'fd_cc_photog', week:6, text:'Book photographer / plan photos for testing & graduation day.'},
+  {id:'fd_cc_sotc_input', week:8, hasNotes:true, proof:{kind:'lines', min:1, placeholder:'One student name per line'}, text:'Share Student of the Cycle input with the lead instructor: Student names who stood out.'},
+  {id:'fd_cc_belts',  week:0, hasNotes:true, proof:{kind:'note', none:'In stock', placeholder:'What you ordered or confirmed in stock'}, text:'Pro-shop testing prep — order and stock belts, patches, and certificates. Note what you confirmed, or In stock.'},
+  {id:'fd_cc_photog', week:6, proof:{kind:'rows', min:1, store:'rows', fields:[{key:'name',label:'Photographer'},{key:'date',label:'Date booked',type:'date'}]}, text:'Book photographer for testing and graduation: Photographer name and the date booked.'},
 ];
 
 /* ── Mat Chat Scripts (ATA Legacy Pro) ── */
@@ -4622,13 +4932,17 @@ function renderPulseBar() {
   // ── Today's tasks across all employees ──
   const todayKey = new Date().toISOString().split('T')[0];
   const thisWeekKey = getTaskWeekKey(todayKey);
-  let tasksDone = 0, tasksTotal = 0;
+  let tasksDone = 0, tasksTotal = 0, pulseReview = 0;
   const pulseEmps = dashTasksLocked() ? TASK_EMPLOYEES.filter(emp => emp.id === dashAuth.empId) : TASK_EMPLOYEES;
   pulseEmps.forEach(emp => {
     const daily = dailyTasksForDate(emp.id, todayKey);
     tasksTotal += daily.length;
     const done = ((state.tasksData[emp.id] || {}).daily || {})[todayKey] || {};
-    tasksDone += daily.filter(t => done[t.id]).length;
+    daily.forEach(t => {
+      const rec = taskRecord(done, t.id);
+      if (taskBonusComplete(t, rec)) tasksDone++;
+      else if (rec && rec.proofV && rec.burst && !rec.burstOk) pulseReview++;
+    });
   });
 
   const chip = (bg, border, text, icon, section) =>
@@ -4643,7 +4957,7 @@ function renderPulseBar() {
     '📅', 'events');
   bar += chip(tasksTotal > 0 && tasksDone === tasksTotal ? '#f0fdf4' : '#f9fafb',
     tasksTotal > 0 && tasksDone === tasksTotal ? '#86efac' : '#e5e7eb',
-    'Tasks: ' + tasksDone + ' / ' + tasksTotal + ' Today',
+    'Tasks: ' + tasksDone + ' / ' + tasksTotal + ' Today' + (pulseReview ? (' · ' + pulseReview + ' need review') : ''),
     '✅', 'tasks');
   bar += '</div>';
   return bar;
@@ -9883,6 +10197,8 @@ state.historyMonthNum  = new Date().getMonth()+1;
 state.historyData      = {};       // empId+'|'+dateKey → {done,total,dayOff}|'loading'|undefined
 state.historySigns     = {};       // empId+'|'+weekKey → {signed,initials}|'loading'|undefined
 state.historyWeekly    = {};       // empId+'|'+weekKey → {done,total}|'loading'|null  (weekly-task completion)
+state.historyFocus     = null;     // {empId, dateKey} proof panel on Tasks → History
+state.proofRows        = {};       // taskId → extra proof rows the user added
 
 function isGoNinja(empOrLocId){
   const emp=TASK_EMPLOYEES.find(e=>e.id===empOrLocId);
@@ -9916,11 +10232,19 @@ function getDailyTasks(empId){
 function dailyTasksForDate(empId, dateKey){
   const dow=new Date(String(dateKey||'')+'T12:00:00').getDay();
   const isSat=dow===6;
-  return getDailyTasks(empId).filter(t=>{
+  let list=getDailyTasks(empId).filter(t=>{
     if(t.days&&!t.days.includes(dow)) return false;
     if(isSat&&(t.id==='spray_mats'||t.id==='j_spray')) return false;
     return true;
   });
+  // fd_questions stayed on the scored list through 2026-11-15. After that it is dropped.
+  if(isFrontDesk(empId)&&dateKey&&dateKey<FD_QUESTIONS_SCORED_BEFORE){
+    const q={id:'fd_questions', legacyOnly:true, text:'Answer parent questions at the front desk.'};
+    const idx=list.findIndex(t=>t.id==='fd_notify_msk');
+    if(idx>=0) list=list.slice(0,idx+1).concat([q],list.slice(idx+1));
+    else list=list.concat([q]);
+  }
+  return list;
 }
 function getWeeklyRec(empId){return EMP_WEEKLY[empId]||(isFrontDesk(empId)?FRONTDESK_WEEKLY:LVLUP_WEEKLY_REC);}
 // Monday (local noon) of a getTaskWeekKey() key. getWeekMonday() uses a different
@@ -10059,11 +10383,12 @@ function listenGoals(){
 
 /*  -  -  Task Completion  -  -  */
 function completeTask(section,taskId){
-  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),ts=Date.now();
-  const monthKey=getTaskMonthKey(),cycleKey=getCycleChecklistKey();
-  const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
-  const sKey=section==='cycle_checklist'||section==='cycle'?cycleKey:section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
-  fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,{ts});
+  const task=resolveTask(section, taskId);
+  const kind=proofKindOf(task);
+  if(task.autoOnly||kind==='stoplight') return;
+  if(kind!=='check') return;
+  const payload=attachBurst(section, taskId, {ts:Date.now(), proofV:1});
+  writeTask(section, taskId, payload);
 }
 // Resolve the Firebase path + current completion record for a task in a section
 function taskPathFor(section){
@@ -10085,9 +10410,11 @@ async function taskPhotoUpload(section,taskId,input){
     const ref=storage.ref('taskPhotos/'+state.tasksLoc+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.jpg');
     if(blob!==file){ await ref.put(blob,{contentType:'image/jpeg'}); } else { await ref.put(blob); }
     const url=await ref.getDownloadURL();
-    const {base}=taskPathFor(section);
-    const photos=(taskDoneRec(section,taskId).photos||[]).concat(url);
-    fbSet(base+taskId,{ts:Date.now(),photos});
+    const prev=taskDoneRec(section,taskId)||{};
+    const photos=(prev.photos||[]).concat(url);
+    const payload=Object.assign({}, prev, {ts:Date.now(), proofV:1, photos});
+    delete payload.burst;
+    writeTask(section, taskId, payload);
     // Index into the recent-photos feed (cross-school gallery)
     const list=section==='weekly'?getWeeklyRec(state.tasksLoc):getDailyTasks(state.tasksLoc);
     const t=(list||[]).find(x=>x.id===taskId); const label=((t&&t.text)||taskId).split(':')[0].trim();
@@ -10096,9 +10423,10 @@ async function taskPhotoUpload(section,taskId,input){
   }catch(e){ if(stat)stat.textContent=''; alert('Photo upload failed: '+(e.message||e)); }
 }
 function taskPhotoRemove(section,taskId,idx){
-  const {base}=taskPathFor(section); const rec=taskDoneRec(section,taskId);
+  const rec=Object.assign({}, taskDoneRec(section,taskId)||{});
   const photos=(rec.photos||[]).slice(); photos.splice(idx,1);
-  if(photos.length) fbSet(base+taskId,{ts:rec.ts||Date.now(),photos}); else fbSet(base+taskId,null);
+  if(photos.length){ rec.photos=photos; rec.ts=rec.ts||Date.now(); writeTask(section,taskId,rec); }
+  else writeTask(section,taskId,null);
 }
 // Social-post accountability task: save each post description + keep the record "done" when all are filled
 function taskPostSave(section,taskId,n,value){
@@ -10106,26 +10434,313 @@ function taskPostSave(section,taskId,n,value){
   fbSet(base+taskId+'/posts/'+n,(value||'').trim()||null);
   fbSet(base+taskId+'/ts',Date.now());
 }
-function completeTaskWithNotes(section,taskId){
+function completeTaskWithNotes(section,taskId,forced){
+  const task=resolveTask(section, taskId);
   const el=document.getElementById('notes_'+section+'_'+taskId);
-  const notes=(el?el.value.trim():'');
-  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),ts=Date.now();
-  const monthKey=getTaskMonthKey(),cycleKey=getCycleChecklistKey();
-  const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
-  const sKey=section==='cycle_checklist'||section==='cycle'?cycleKey:section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
-  const payload={ts};
-  if(notes)payload.notes=notes;
-  fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,payload);
+  const notes=(forced!=null?String(forced):((el&&el.value)||'')).trim();
+  if(!notes){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
+  const min=(task.proof&&task.proof.min)||0;
+  if(min&&!proofNoneMatch(task, notes)&&proofLines(notes).length<min){
+    if(el){el.style.borderColor='var(--red)';el.focus();}
+    return;
+  }
+  const prev=Object.assign({}, taskDoneRec(section, taskId)||{});
+  delete prev.burst; delete prev.burstOk; delete prev.burstOkAt; delete prev.burstOkBy;
+  const payload=Object.assign(prev, {ts:Date.now(), proofV:1, notes});
+  if(proofNoneMatch(task, notes)) payload.none=true;
+  else delete payload.none;
+  attachBurst(section, taskId, payload);
+  writeTask(section, taskId, payload);
 }
 function completeTaskCount(section,taskId){
+  const task=resolveTask(section, taskId);
+  if(task.autoOnly||proofKindOf(task)==='stoplight') return;
   const el=document.getElementById('count_'+section+'_'+taskId);
   const n=el?parseInt(el.value,10):NaN;
-  if(!Number.isFinite(n)||n<1){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
-  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey),ts=Date.now();
-  const monthKey=getTaskMonthKey(),cycleKey=getCycleChecklistKey();
-  const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
-  const sKey=section==='cycle_checklist'||section==='cycle'?cycleKey:section==='monthly'?monthKey:section==='weekly'?weekKey:dateKey;
-  fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,{ts,count:n});
+  const min=(task.min||(task.proof&&task.proof.min)||1);
+  if(!Number.isFinite(n)||n<min){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
+  const payload=attachBurst(section, taskId, {ts:Date.now(), proofV:1, count:n});
+  writeTask(section, taskId, payload);
+}
+function proofSaveStructured(section, taskId){
+  const task=resolveTask(section, taskId);
+  const kind=proofKindOf(task);
+  const payload={ts:Date.now(), proofV:1};
+  if(kind==='scorecard'){
+    const fields=(task.proof&&task.proof.fields&&task.proof.fields.length)?task.proof.fields:[{key:'trials',label:'Trials today'},{key:'enrollments',label:'Enrollments today'}];
+    fields.forEach(f=>{
+      const el=document.getElementById('pf_'+section+'_'+taskId+'_'+f.key);
+      const n=el?Number(el.value):NaN;
+      payload[f.key]=Number.isFinite(n)?n:null;
+    });
+    const noteEl=document.getElementById('notes_'+section+'_'+taskId);
+    if(noteEl&&noteEl.value.trim()) payload.notes=noteEl.value.trim();
+  }else if(kind==='invites'){
+    payload.invites=proofReadInviteRows(section, taskId);
+    payload.bookings=proofReadBookingRows(section, taskId);
+    const noneEl=document.getElementById('pf_'+section+'_'+taskId+'_none');
+    if(noneEl&&noneEl.value.trim()){ payload.none=true; payload.noneNote=noneEl.value.trim(); payload.notes=payload.noneNote; }
+  }else if(kind==='bookings'){
+    payload.bookings=proofReadBookingRows(section, taskId);
+  }else if(kind==='rows'){
+    const fields=task.proof.fields||[];
+    const count=(state.proofRows&&state.proofRows[taskId])||Math.max(task.proof.min||1, 1);
+    const rows=[];
+    for(let i=0;i<count;i++){
+      const row={};
+      let any=false;
+      fields.forEach(f=>{
+        const el=document.getElementById('pf_'+section+'_'+taskId+'_'+i+'_'+f.key);
+        const v=el?String(el.value||'').trim():'';
+        if(v) any=true;
+        row[f.key]=v;
+      });
+      if(any) rows.push(row);
+    }
+    payload.rows=rows;
+    const noneEl=document.getElementById('pf_'+section+'_'+taskId+'_none');
+    if(noneEl&&noneEl.value.trim()){ payload.none=true; payload.noneNote=noneEl.value.trim(); payload.notes=payload.noneNote; }
+  }else if(kind==='choice'){
+    const el=document.getElementById('notes_'+section+'_'+taskId);
+    const notes=el?el.value.trim():'';
+    if(!notes){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
+    payload.notes=notes;
+    payload.choice=notes;
+  }
+  if(!proofFieldsOk(task, payload)){
+    const warn=document.getElementById('pfstat_'+section+'_'+taskId);
+    if(warn) warn.textContent='Add the required proof before this can be completed.';
+    return;
+  }
+  attachBurst(section, taskId, payload);
+  writeTask(section, taskId, payload);
+  if(kind==='invites'||kind==='bookings') mirrorPartyBookings(payload.bookings||[]);
+  render();
+}
+function proofReadInviteRows(section, taskId){
+  const n=(state.proofRows&&state.proofRows[taskId+'__inv'])||1;
+  const rows=[];
+  for(let i=0;i<n;i++){
+    const row={};
+    ['child','family','method','month'].forEach(k=>{
+      const el=document.getElementById('pf_'+section+'_'+taskId+'_inv_'+i+'_'+k);
+      row[k]=el?String(el.value||'').trim():'';
+    });
+    if(row.child||row.family||row.method||row.month) rows.push(row);
+  }
+  return rows;
+}
+function proofReadBookingRows(section, taskId){
+  const n=(state.proofRows&&state.proofRows[taskId+'__book'])||((proofKindOf(resolveTask(section, taskId))==='bookings')?2:1);
+  const rows=[];
+  for(let i=0;i<n;i++){
+    const row={};
+    ['child','family','date'].forEach(k=>{
+      const el=document.getElementById('pf_'+section+'_'+taskId+'_book_'+i+'_'+k);
+      row[k]=el?String(el.value||'').trim():'';
+    });
+    if(row.child||row.family||row.date) rows.push(row);
+  }
+  return rows;
+}
+function proofAddRow(taskKey, min){
+  if(!state.proofRows) state.proofRows={};
+  const cur=state.proofRows[taskKey]||min||1;
+  state.proofRows[taskKey]=cur+1;
+  render();
+}
+function proofSlotCount(key, min, existing){
+  if(state.proofRows&&state.proofRows[key]) return state.proofRows[key];
+  return Math.max(min||1, existing||0);
+}
+const PROOF_INVITE_METHODS=['Email','Text','Call','In person'];
+const PROOF_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function proofFieldInput(id, label, type, value, options){
+  let control;
+  if(type==='select'){
+    control='<select id="'+id+'" style="flex:1;min-width:110px;font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;"><option value="">'+esc(label)+'</option>'+(options||[]).map(o=>'<option value="'+esc(o)+'"'+(value===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';
+  }else{
+    control='<input id="'+id+'" type="'+(type||'text')+'" value="'+esc(value||'')+'" placeholder="'+esc(label)+'" style="flex:1;min-width:110px;font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;">';
+  }
+  return control;
+}
+function renderProofEditor(section, task, rec, locked){
+  const kind=proofKindOf(task);
+  const p=task.proof||{};
+  rec=rec||{};
+  const saved=proofFieldsOk(task, rec);
+  if(saved||locked){
+    const text=proofSummaryText(task, rec);
+    if(kind==='stoplight') return renderStoplightProof(section, task, rec, true);
+    return text?'<div class="proof-saved" data-proof-saved="1">'+esc(text)+'</div>':'';
+  }
+  if(kind==='stoplight') return renderStoplightProof(section, task, rec, false);
+  if(kind==='note'||kind==='lines'||kind==='choice') return renderNoteProof(section, task, rec);
+  if(kind==='scorecard') return renderScorecardProof(section, task);
+  if(kind==='invites') return renderInviteProof(section, task);
+  if(kind==='bookings') return renderBookingProof(section, task);
+  if(kind==='rows') return renderRowsProof(section, task);
+  if(kind==='photoOrNone'||kind==='photoNote') return renderNoteProof(section, task, rec);
+  return '';
+}
+function renderStoplightProof(section, task, rec){
+  const min=(task.proof&&task.proof.min)||task.min||2;
+  const notes=String((rec&&rec.notes)||'').trim();
+  const named=notes?notes.split(',').map(s=>s.trim()).filter(s=>/\([^)]+·[^)]+\)/.test(s)):[];
+  const n=rec&&rec.auto?named.length:(rec&&rec.count)||0;
+  let h='<div class="proof-box" data-stoplight-proof="1">';
+  h+='<div style="font-size:12px;color:#1e40af;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 10px;">Log this on the Students page: pick a method and your initials for each student. '+min+' named log'+(min===1?'':'s')+' complete'+(min===1?'s':'')+' this task. The old number box is retired.</div>';
+  if(notes) h+='<div class="proof-saved" data-proof-saved="1" style="margin-left:0">'+esc(notes)+'</div>';
+  h+='<div style="font-size:12px;font-weight:800;color:'+(named.length>=min?'#15803d':'#b45309')+';">'+named.length+' of '+min+' named</div>';
+  h+='</div>';
+  return h;
+}
+function renderNoteProof(section, task, rec){
+  const p=task.proof||{};
+  const kind=proofKindOf(task);
+  const multi=kind==='lines'||(p.min&&p.min>1);
+  const ph=p.placeholder||(multi?'One name per line':'Add a note');
+  let h='<div class="proof-box" data-proof-form="note">';
+  if(multi){
+    h+='<textarea id="notes_'+section+'_'+task.id+'" placeholder="'+esc(ph)+'" style="width:100%;box-sizing:border-box;min-height:64px;font-size:12px;padding:8px 10px;border:1px solid var(--gray-200);border-radius:6px;font-family:inherit;"></textarea>';
+  }else{
+    h+='<input id="notes_'+section+'_'+task.id+'" type="text" placeholder="'+esc(ph)+'" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+  }
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+  const save=kind==='choice'?'proofSaveStructured':'completeTaskWithNotes';
+  h+='<button type="button" onclick="'+save+'(\''+section+'\',\''+task.id+'\')" style="padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save proof</button>';
+  if(p.none){
+    if(p.noneNeedsNote){
+      h+='<input id="pf_'+section+'_'+task.id+'_none" type="text" placeholder="One-line note" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+    }
+    h+='<button type="button" data-none-option="1" onclick="proofUseNone(\''+section+'\',\''+task.id+'\')" style="padding:6px 12px;background:#fff;color:#1a1a2e;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">'+esc(p.none)+'</button>';
+  }
+  h+='</div></div>';
+  return h;
+}
+function renderScorecardProof(section, task){
+  const fields=(task.proof&&task.proof.fields&&task.proof.fields.length)?task.proof.fields:[{key:'trials',label:'Trials today'},{key:'enrollments',label:'Enrollments today'}];
+  let h='<div class="proof-box" data-proof-form="scorecard">';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  fields.forEach(f=>{
+    h+='<label style="font-size:11px;font-weight:700;color:#64748b;">'+esc(f.label||f.key)+'<br><input id="pf_'+section+'_'+task.id+'_'+f.key+'" type="number" min="0" value="0" style="margin-top:4px;width:110px;font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;"></label>';
+  });
+  h+='</div>';
+  if(!task.proof||task.proof.noteOptional!==false){
+    const ph=(task.proof&&task.proof.notePlaceholder)||'Note if something is outstanding (optional)';
+    if(task.proof&&task.proof.noteOptional!==false&&(!task.proof.fields||task.id==='closing')){
+      h+='<input id="notes_'+section+'_'+task.id+'" type="text" placeholder="'+esc(ph)+'" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+    }
+  }
+  h+='<button type="button" onclick="proofSaveStructured(\''+section+'\',\''+task.id+'\')" style="align-self:flex-start;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save proof</button>';
+  h+='<span id="pfstat_'+section+'_'+task.id+'" style="font-size:11px;color:#b45309;"></span></div>';
+  return h;
+}
+function renderInviteProof(section, task){
+  const n=proofSlotCount(task.id+'__inv', 1, 1);
+  let h='<div class="proof-box" data-proof-form="invites">';
+  h+='<div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;">Families invited</div>';
+  for(let i=0;i<n;i++){
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_child','Child name','text','');
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_family','Parent or family','text','');
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_method','Method','select','',PROOF_INVITE_METHODS);
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_month','Birthday month','select','',PROOF_MONTHS);
+    h+='</div>';
+  }
+  h+='<button type="button" onclick="proofAddRow(\''+task.id+'__inv\', '+n+')" style="align-self:flex-start;padding:4px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">+ Another family</button>';
+  h+='<div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;margin-top:4px;">Party booked this week (optional)</div>';
+  const b=proofSlotCount(task.id+'__book', 1, 1);
+  for(let i=0;i<b;i++){
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_child','Child name','text','');
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_family','Family','text','');
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_date','Party date','date','');
+    h+='</div>';
+  }
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+  h+='<input id="pf_'+section+'_'+task.id+'_none" type="text" placeholder="One-line note if no eligible birthdays" style="flex:1;min-width:180px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+  h+='<button type="button" data-none-option="1" onclick="proofUseNone(\''+section+'\',\''+task.id+'\')" style="padding:6px 12px;background:#fff;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">No eligible birthdays this week</button>';
+  h+='</div>';
+  h+='<button type="button" onclick="proofSaveStructured(\''+section+'\',\''+task.id+'\')" style="align-self:flex-start;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save proof</button>';
+  h+='<span id="pfstat_'+section+'_'+task.id+'" style="font-size:11px;color:#b45309;"></span></div>';
+  return h;
+}
+function renderBookingProof(section, task){
+  const min=(task.proof&&task.proof.min)||2;
+  const n=proofSlotCount(task.id+'__book', min, min);
+  let h='<div class="proof-box" data-proof-form="bookings">';
+  h+='<div style="font-size:12px;color:#64748b;">'+min+' parties this cycle. Child, family, and party date for each. A booking logged on Invite birthday families counts here too.</div>';
+  for(let i=0;i<n;i++){
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_child','Child name','text','');
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_family','Family or guardian','text','');
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_date','Party date','date','');
+    h+='</div>';
+  }
+  h+='<button type="button" onclick="proofAddRow(\''+task.id+'__book\', '+n+')" style="align-self:flex-start;padding:4px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">+ Another party</button>';
+  h+='<button type="button" onclick="proofSaveStructured(\''+section+'\',\''+task.id+'\')" style="align-self:flex-start;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save proof</button>';
+  h+='<span id="pfstat_'+section+'_'+task.id+'" style="font-size:11px;color:#b45309;"></span></div>';
+  return h;
+}
+function renderRowsProof(section, task){
+  const p=task.proof||{};
+  const fields=p.fields||[];
+  const min=p.min||1;
+  const n=proofSlotCount(task.id, min, min);
+  let h='<div class="proof-box" data-proof-form="rows">';
+  for(let i=0;i<n;i++){
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    fields.forEach(f=>{ h+=proofFieldInput('pf_'+section+'_'+task.id+'_'+i+'_'+f.key, f.label, f.type||'text', ''); });
+    h+='</div>';
+  }
+  h+='<button type="button" onclick="proofAddRow(\''+task.id+'\', '+n+')" style="align-self:flex-start;padding:4px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">+ Another</button>';
+  if(p.none){
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+    if(p.noneNeedsNote) h+='<input id="pf_'+section+'_'+task.id+'_none" type="text" placeholder="One-line note" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+    h+='<button type="button" data-none-option="1" onclick="proofUseNone(\''+section+'\',\''+task.id+'\')" style="padding:6px 12px;background:#fff;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">'+esc(p.none)+'</button></div>';
+  }
+  h+='<button type="button" onclick="proofSaveStructured(\''+section+'\',\''+task.id+'\')" style="align-self:flex-start;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save proof</button>';
+  h+='<span id="pfstat_'+section+'_'+task.id+'" style="font-size:11px;color:#b45309;"></span></div>';
+  return h;
+}
+function proofUseNone(section, taskId){
+  const task=resolveTask(section, taskId);
+  const phrase=proofNonePhrase(task);
+  if(!phrase) return;
+  if(task.proof&&task.proof.noneNeedsNote){
+    const el=document.getElementById('pf_'+section+'_'+taskId+'_none');
+    const note=el?el.value.trim():'';
+    if(!note){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
+    const payload={ts:Date.now(), proofV:1, none:true, noneNote:note, notes:phrase+' — '+note};
+    attachBurst(section, taskId, payload);
+    writeTask(section, taskId, payload);
+    render();
+    return;
+  }
+  if(proofKindOf(task)==='photoOrNone'){
+    const payload={ts:Date.now(), proofV:1, none:true, notes:phrase, photos:(taskDoneRec(section,taskId).photos)||[]};
+    attachBurst(section, taskId, payload);
+    writeTask(section, taskId, payload);
+    render();
+    return;
+  }
+  completeTaskWithNotes(section, taskId, phrase);
+  render();
+}
+function mirrorPartyBookings(bookings){
+  const good=(bookings||[]).filter(r=>r&&String(r.child||'').trim()&&String(r.family||'').trim()&&String(r.date||'').trim());
+  if(!good.length) return;
+  const id=isFrontDesk(state.tasksLoc)?'fd_cc_parties':'cc_bday';
+  const info=taskPathFor('cycle_checklist');
+  const cur=((((state.tasksData[state.tasksLoc]||{}).cycle_checklist||{})[info.sKey]||{})[id])||{};
+  const have=Array.isArray(cur.bookings)?cur.bookings.slice():[];
+  good.forEach(b=>{
+    const key=(b.child+'|'+b.date).toLowerCase();
+    if(!have.some(h=>((h.child||'')+'|'+(h.date||'')).toLowerCase()===key)) have.push({child:b.child, family:b.family, date:b.date});
+  });
+  const payload=Object.assign({}, cur, {ts:Date.now(), proofV:1, bookings:have});
+  writeTask('cycle_checklist', id, payload);
 }
 function openTaskPlaybook(pbId){
   state.tab='development';state.devTab='playbooks';state.pbView='playbooks';
@@ -10133,11 +10748,7 @@ function openTaskPlaybook(pbId){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function undoTask(section,taskId){
-  const dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
-  const cycleKey=getCycleChecklistKey();
-  const sPath=section==='cycle_checklist'?'cycle_checklist':section==='cycle'?'cycle':section==='weekly'?'weekly':section==='monthly'?'monthly':'daily';
-  const sKey=section==='cycle_checklist'||section==='cycle'?cycleKey:section==='monthly'?getTaskMonthKey():section==='weekly'?weekKey:dateKey;
-  fbSet(empPath(state.tasksLoc)+'/'+sPath+'/'+sKey+'/'+taskId,null);
+  writeTask(section, taskId, null);
 }
 function cancelModal(){state.modalTask=null;render();}
 function markDidNotWork(){state.modalTask={section:'_dnw',taskId:state.tasksDate};render();}
@@ -10225,9 +10836,9 @@ function loadHistoryDate(empId,dateKey){
     fbRef(empPath(empId)+'/did_not_work/'+dateKey).once('value')
   ]).then(([dailySnap,dnwSnap])=>{
     const dayOff=!!dnwSnap.val();
-    let done=0;
-    if(!dayOff){const dd=dailySnap.val()||{};tasks.forEach(t=>{if(taskDone(dd,t.id))done++;});}
-    state.historyData[key]={done,total,dayOff};
+    const dd=dailySnap.val()||{};
+    const scored=dayOff?{done:0,total,needsReview:false,items:[]}:scoreTaskList(tasks, dd);
+    state.historyData[key]={done:scored.done,total,dayOff,needsReview:!!scored.needsReview,items:scored.items};
     render();
   }).catch(()=>{state.historyData[key]=null;render();});
 }
@@ -10248,8 +10859,9 @@ function loadHistoryWeekly(empId,weekKey){
   state.historyWeekly[key]='loading';
   const rec=weeklyTasksFor(empId, weekKey); const total=rec.length;
   fbRef(empPath(empId)+'/weekly/'+weekKey).once('value').then(snap=>{
-    const dd=snap.val()||{}; let done=0; rec.forEach(t=>{if(dd[t.id])done++;});
-    state.historyWeekly[key]={done,total};
+    const dd=snap.val()||{};
+    const scored=scoreTaskList(rec, dd);
+    state.historyWeekly[key]={done:scored.done,total,needsReview:!!scored.needsReview,items:scored.items};
     render();
   }).catch(()=>{state.historyWeekly[key]=null;render();});
 }
@@ -10258,7 +10870,7 @@ function weeklyRequiredStatus(empId,weekKey){
   const locData=state.tasksData[empId]||{};
   const dd=(locData.weekly||{})[weekKey]||{};
   const rec=weeklyTasksFor(empId, weekKey);
-  const missing=rec.filter(t=>!dd[t.id]);
+  const missing=rec.filter(t=>!taskBonusComplete(t, taskRecord(dd, t.id)));
   return {done:rec.length-missing.length,total:rec.length,missing};
 }
 function loadHistoryWeekData(weekOff){
@@ -10342,7 +10954,8 @@ function renderHistoryWeekGrid(){
         const cls=hPctClass(info);
         const lbl=hPctLabel(info);
         const clickable=cls!=='loading';
-        html+='<td><button class="h-cell-btn '+cls+'" '+(clickable?'onclick="jumpToHistory(\''+emp.id+'\',\''+dk+'\')"':'')+' title="'+esc(emp.name)+' • '+dk+'">'+lbl+'</button></td>';
+        const review=info&&info!=='loading'&&info.needsReview;
+        html+='<td><button class="h-cell-btn '+cls+'" '+(clickable?'onclick="openHistoryProof(\''+emp.id+'\',\''+dk+'\')"':'')+' title="'+esc(emp.name)+' • '+dk+(review?' • needs review':'')+'">'+lbl+(review?'<div style="font-size:9px;color:#b45309;font-weight:800;line-height:1.1;">review</div>':'')+'</button></td>';
       }
     });
     // Sign-off
@@ -10359,6 +10972,51 @@ function renderHistoryWeekGrid(){
   html+='<div class="h-legend">';
   [{bg:'#16a34a',l:'100%'},{bg:'#4ade80',l:'75–99%'},{bg:'#fde047',l:'50–74%'},{bg:'#f87171',l:'1–49%'},{bg:'var(--gray-200)',l:'0%'},{bg:'#93c5fd',l:'Day Off'}]
     .forEach(x=>html+='<div class="h-legend-item"><div class="h-legend-sq" style="background:'+x.bg+'"></div>'+x.l+'</div>');
+  html+='</div></div>';
+  html+=renderHistoryProofPanel();
+  return html;
+}
+function openHistoryProof(empId, dateKey){
+  state.historyFocus={empId, dateKey};
+  render();
+}
+function renderHistoryProofPanel(){
+  const focus=state.historyFocus;
+  if(!focus) return '';
+  const emp=getEmpById(focus.empId)||{name:focus.empId};
+  const info=state.historyData[focus.empId+'|'+focus.dateKey];
+  let html='<div data-manager-proof="1" style="margin-top:14px;background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);">';
+  html+='<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">';
+  html+='<div style="font-weight:800;font-size:14px;">Proof — '+esc(emp.name)+' · '+esc(focus.dateKey)+'</div>';
+  html+='<div style="display:flex;gap:8px;"><button onclick="jumpToHistory(\''+focus.empId+'\',\''+focus.dateKey+'\')" style="padding:6px 12px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;font-size:12px;font-weight:700;cursor:pointer;">Open this day</button>';
+  html+='<button onclick="state.historyFocus=null;render()" style="padding:6px 12px;border:none;border-radius:8px;background:var(--gray-100);font-size:12px;font-weight:700;cursor:pointer;">Close</button></div></div>';
+  if(!info||info==='loading'){
+    html+='<div style="margin-top:10px;font-size:13px;color:#64748b;">Loading this day…</div></div>';
+    return html;
+  }
+  if(info.needsReview) html+='<div data-day-needs-review="1" style="margin-top:10px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;">Needs review — 4 or more non-photo tasks were checked within 60 seconds. Those items do not count toward the bonus until a manager confirms them.</div>';
+  html+='<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">';
+  (info.items||[]).forEach(item=>{
+    const rec=item.rec||{};
+    const badges=proofBadges(rec);
+    const summary=proofSummaryText(resolveTask('daily', item.id, focus.empId), rec);
+    const photos=(rec.photos)||[];
+    html+='<div data-proof-row="'+esc(item.id)+'" style="border:1px solid var(--gray-100);border-radius:8px;padding:8px 10px;'+(rec.proofV&&rec.burst&&!rec.burstOk?'background:#fffbeb;':'')+'">';
+    html+='<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;"><div style="font-size:13px;font-weight:700;">'+(item.verified?'✓ ':'○ ')+esc((item.text||item.id).split(':')[0])+'</div>';
+    if(rec.proofV&&rec.burst&&!rec.burstOk&&dashCanReviewProof()){
+      html+='<button onclick="confirmBurstAt(\''+focus.empId+'\',\'daily\',\''+focus.dateKey+'\',\''+item.id+'\')" style="padding:4px 10px;background:#b45309;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;">Confirm</button>';
+    }
+    html+='</div>';
+    if(badges) html+='<div class="proof-meta" style="margin:4px 0 0;">'+esc(badges)+'</div>';
+    if(summary) html+='<div style="margin-top:4px;font-size:12px;color:#334155;white-space:pre-wrap;">'+esc(summary)+'</div>';
+    if(photos.length){
+      html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">';
+      photos.forEach(url=>{ html+='<a href="'+esc(url)+'" target="_blank" rel="noopener"><img src="'+esc(url)+'" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--gray-200);"></a>'; });
+      html+='</div>';
+    }
+    if(!item.verified&&!summary&&!photos.length) html+='<div style="margin-top:4px;font-size:12px;color:#94a3b8;">No proof on this task.</div>';
+    html+='</div>';
+  });
   html+='</div></div>';
   return html;
 }
@@ -10530,7 +11188,7 @@ function renderTasksPage(){
       }
     }
     html+='</div>';
-    html+='<div style="margin-top:10px;padding:8px 12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500);">Bonus (0–5%) is determined by leadership review of task completion, hours, monthly revenue, and student metrics.</div>';
+    html+='<div style="margin-top:10px;padding:8px 12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500);">The bonus (1–5%, and up to 6% for Bryan and Miranda) counts a task only when its proof is filled and it is not still flagged Needs review. Hours, revenue, and student metrics are still part of the leadership review. Older checkmarks from before this proof step still count.</div>';
     html+='</div>';
   } else if(!isFrontDesk(loc)){
     html+='<div style="margin-top:4px;margin-bottom:4px;padding:12px 16px;background:var(--gray-50);border-radius:12px;border:1.5px dashed var(--gray-200);font-size:13px;color:var(--gray-500);font-weight:600;">⏸ Part-time</div>';
@@ -10568,14 +11226,15 @@ function renderTasksPage(){
   html+=dnwBar;
   // ── Today progress banner ──
   if(!dayOff){
-    const _ids=[...dailyTasks.map(t=>t.id),...Object.keys(customDaily||{})];
-    const _tot=_ids.length, _done=_ids.filter(id=>dailyData[id]).length;
+    const _taskRows=dailyTasks.concat(Object.keys(customDaily||{}).map(id=>({id, text:(customDaily[id]||{}).text})));
+    const _tot=_taskRows.length, _done=_taskRows.filter(t=>taskBonusComplete(t, dailyData[t.id])).length;
+    const _review=_taskRows.filter(t=>{ const r=dailyData[t.id]; return r&&r.proofV&&r.burst&&!r.burstOk; }).length;
     const _pct=_tot?Math.round(_done/_tot*100):0;
     const _all=_tot>0&&_done>=_tot;
     const _msg=_all?'🎉 All done for today — awesome work!':_pct>=50?'🔥 Over halfway — keep going!':_done>0?'💪 Nice start — keep it rolling.':'👊 Let’s knock these out.';
     const _bar=_all?'#ffffff':_pct>=50?'#f59e0b':'#4169E1';
     html+='<div style="background:'+(_all?'linear-gradient(135deg,#16a34a,#15803d)':'#fff')+';color:'+(_all?'#fff':'#1a1a2e')+';border:1px solid '+(_all?'transparent':'var(--gray-200)')+';border-radius:14px;padding:14px 18px;margin-bottom:12px;box-shadow:var(--shadow);">';
-    html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;"><div style="font-size:14px;font-weight:800;">'+_msg+'</div><div style="font-size:13px;font-weight:800;'+(_all?'':'color:var(--gray-500);')+'">'+_done+' / '+_tot+' today</div></div>';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;"><div style="font-size:14px;font-weight:800;">'+_msg+'</div><div style="font-size:13px;font-weight:800;'+(_all?'':'color:var(--gray-500);')+'">'+_done+' / '+_tot+' today'+(_review?' · '+_review+' need review':'')+'</div></div>';
     html+='<div style="height:10px;border-radius:999px;background:'+(_all?'rgba(255,255,255,.35)':'var(--gray-100)')+';overflow:hidden;"><div style="height:100%;width:'+_pct+'%;background:'+_bar+';transition:width .3s;"></div></div>';
     html+='</div>';
   }
@@ -10628,21 +11287,6 @@ function renderTasksPage(){
   }
   if(state.modalTask)html+=renderInitialsModal();
   return html;
-}
-function taskSheetDone(section, task, rec){
-  if(!rec) return false;
-  if(task.photo) return ((rec.photos)||[]).length>0;
-  if(task.posts){
-    let n=0;
-    const posts=rec.posts||{};
-    for(let i=1;i<=(task.posts||0);i++){ if(String(posts[i]||'').trim()) n++; }
-    if(task.contentPillars){
-      const ups=mergedContentUploads(state.tasksLoc, getTaskWeekKey(state.tasksDate), rec).filter(r=>r._thisWeek);
-      n=Math.max(n, ups.length);
-    }
-    return n>=task.posts;
-  }
-  return true;
 }
 function renderTaskSection(section,title,tasks,completionData,customTasksObj,locked){
   const key=section,collapsed=state.collapsedSections[key];
@@ -10715,7 +11359,7 @@ function addCustomTask(section){
 }
 function renderCycleSection(section,title,tasks,completionData){
   const key='cycle',collapsed=state.collapsedSections[key];
-  const completed=tasks.filter(t=>completionData[t.id]).length,total=tasks.length;
+  const completed=tasks.filter(t=>taskBonusComplete(taskForProof(section, t), taskRecord(completionData, t.id))).length,total=tasks.length;
   const pillCls=completed===total&&total>0?'complete':completed>0?'partial':'empty';
   let html='<div class="task-section"><div class="task-section-header" onclick="toggleSection(\''+key+'\')"><h3><span class="chevron '+(collapsed?'':'open')+'">&#9654;</span>'+title+'</h3><span class="progress-pill '+pillCls+'">'+completed+'/'+total+'</span></div><div class="task-list '+(collapsed?'collapsed':'')+'">';
   let lastCat='';
@@ -10790,7 +11434,7 @@ function renderCycleChecklistSection(empId,locData){
   const tasks=getCycleChecklist(empId)||[];
   const cycleKey=getCycleChecklistKey();
   const doneData=(locData.cycle_checklist||{})[cycleKey]||{};
-  const completed=tasks.filter(t=>doneData[t.id]).length;
+  const completed=tasks.filter(t=>taskBonusComplete(t, taskRecord(doneData, t.id))).length;
   const total=tasks.length;
   const pillCls=completed===total&&total>0?'complete':completed>0?'partial':'empty';
   const key='cycle_checklist';
@@ -11146,6 +11790,7 @@ function contentPatchTask(section, taskId, csId, meta, slot, postText){
   cur.uploads = uploads;
   cur.posts = posts;
   cur.ts = Date.now();
+  cur.proofV = 1;
   state.tasksData[emp][info.sPath][info.sKey][taskId] = cur;
 }
 // Capture Content uploader: photos go to Storage taskPhotos/content/, one record per file in ceo/contentSubmissions (status 'new') for the marketing bot.
@@ -11225,34 +11870,40 @@ function renderContentPillarsBlock(active){
   return h + '</div>';
 }
 function renderTaskItem(section,task,doneData,isCustom,locked){
+  task=taskForProof(section, task);
+  const proofKind=proofKindOf(task);
+  const useProof=!!(task.proof||task.autoOnly);
   const hasNotes=!!task.hasNotes;
-  const isCount=!!task.count;
-  const isPhoto=!!task.photo;
+  const isCount=!!task.count&&!task.autoOnly&&proofKind!=='stoplight';
+  const isPhoto=!!task.photo||proofKind==='photo'||proofKind==='photoNote'||proofKind==='photoOrNone';
   const isPosts=!!task.posts;
   const photos=(doneData&&doneData.photos)||[];
   const postVals=(doneData&&doneData.posts)||{};
   let postsFilled=0; if(isPosts){ for(let i=1;i<=task.posts;i++){ if(String(postVals[i]||'').trim()) postsFilled++; } }
   const _uploadCount = (isPosts && task.contentPillars) ? mergedContentUploads(state.tasksLoc, getTaskWeekKey(state.tasksDate), doneData||{}).filter(r => r._thisWeek).length : 0;
   if(isPosts && task.contentPillars) postsFilled = Math.max(postsFilled, _uploadCount);
-  let isDone;
-  if(isPhoto) isDone=photos.length>0;
-  else if(isPosts) isDone=postsFilled>=task.posts;
-  else isDone=!!doneData;
+  const needsReview=!!(doneData&&doneData.proofV&&doneData.burst&&!doneData.burstOk);
+  const isDone=taskSheetDone(section, task, doneData)&&!needsReview;
   const pb=taskPlaybook(task);
   const hasPlaybook=!!pb;
-  let cls='task-item'+(isDone?' done':'')+(locked?' locked':'');
-  const blockStyle=(hasNotes||isCount||isPhoto||isPosts||task.contentPillars||(task.subs&&task.subs.length))?'flex-direction:column;align-items:stretch;gap:8px':'';
-  let html='<div class="'+cls+'" data-task-id="'+task.id+'"'+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
+  let cls='task-item'+(isDone?' done':'')+(needsReview?' needs-review':'')+(locked?' locked':'');
+  const showProofChrome=!!(needsReview||useProof||(doneData&&doneData.proofV));
+  const blockStyle=(hasNotes||isCount||isPhoto||isPosts||showProofChrome||task.contentPillars||(task.subs&&task.subs.length))?'flex-direction:column;align-items:stretch;gap:8px':'';
+  let html='<div class="'+cls+'" data-task-id="'+task.id+'" data-proof-kind="'+esc(proofKind)+'"'+(needsReview?' data-needs-review="1"':'')+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
   // Top row: drag handle + checkbox + text + extras
   html+='<div style="display:flex;align-items:flex-start;gap:10px">';
   if(!locked&&!isCustom){html+='<span class="drag-handle" title="Drag to reorder">⠿</span>';}
   if(isDone){
     html+='<div class="task-check checked"'+(locked?'':' onclick="undoTask(\''+section+'\',\''+task.id+'\')" title="Click to undo"')+'>✓</div>';
+  }else if(needsReview){
+    html+='<div class="task-check" style="border-color:#d97706;color:#b45309;font-size:13px;" title="Needs review">!</div>';
   }else{
     let completeFn;
-    if(isPhoto) completeFn='document.getElementById(\'ph_'+section+'_'+task.id+'\').click()';
+    if(task.autoOnly||proofKind==='stoplight') completeFn='';
+    else if(isPhoto&&proofKind!=='photoOrNone'&&proofKind!=='photoNote') completeFn='document.getElementById(\'ph_'+section+'_'+task.id+'\').click()';
     else if(isPosts) completeFn='';
     else if(isCount) completeFn='completeTaskCount(\''+section+'\',\''+task.id+'\')';
+    else if(useProof) completeFn='';
     else if(hasNotes) completeFn='completeTaskWithNotes(\''+section+'\',\''+task.id+'\')';
     else completeFn='completeTask(\''+section+'\',\''+task.id+'\')';
     const attr=(locked||!completeFn)?'':' onclick="'+completeFn+'" title="Click to complete"';
@@ -11281,31 +11932,40 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     const _plabel = task.contentPillars ? (postsFilled+'/'+task.posts+' uploaded') : (postsFilled+'/'+task.posts+' described');
     html+='<span title="'+(task.contentPillars?'Photos uploaded this week':'Posts described')+'" style="flex-shrink:0;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+(ok?'#dcfce7':'#fef3c7')+';color:'+(ok?'#15803d':'#b45309')+';">'+_plabel+'</span>';
   }
-  if(isPhoto){
+  if(isPhoto&&proofKind!=='photoOrNone'){
     const ok=photos.length>0;
     html+='<span title="Photos uploaded" style="flex-shrink:0;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+(ok?'#dcfce7':'#fef3c7')+';color:'+(ok?'#15803d':'#b45309')+';">'+(ok?(photos.length+' 📷'):'needs photo')+'</span>';
+  }
+  if(needsReview){
+    html+='<span data-needs-review-badge="1" style="flex-shrink:0;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;background:#fef3c7;color:#b45309;">Needs review</span>';
   }
   if(hasPlaybook&&!locked){
     html+='<button onclick="openTaskPlaybook(\''+pb+'\')" title="How to do this" style="background:var(--blue-light);border:none;border-radius:6px;cursor:pointer;color:var(--blue);font-size:10px;font-weight:700;padding:3px 8px;white-space:nowrap;flex-shrink:0">📖 How-to</button>';
   }
   if(isCustom&&!locked){html+='<button onclick="deleteCustomTask(\''+section+'\',\''+task.id+'\')" title="Remove task" style="background:none;border:none;cursor:pointer;color:var(--gray-300);font-size:14px;padding:0 4px;line-height:1;flex-shrink:0;" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--gray-300)\'">✕</button>';}
   html+='</div>';
-  // Count entry field (not yet logged)
-  if(isCount&&!isDone&&!locked){
+  const _badges=proofBadges(doneData);
+  if(_badges) html+='<div class="proof-meta" data-proof-meta="1">'+esc(_badges)+'</div>';
+  if(needsReview&&dashCanReviewProof()&&!locked){
+    html+='<div class="proof-box"><button type="button" onclick="confirmBurstAt(\''+state.tasksLoc+'\',\''+section+'\',\''+taskPathFor(section).sKey+'\',\''+task.id+'\')" style="align-self:flex-start;padding:6px 12px;background:#b45309;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">Confirm — count this toward the bonus</button></div>';
+  }
+  // Count entry field — not used for Stoplight. That task completes only from the Students page.
+  if(isCount&&!isDone&&!needsReview&&!locked&&!useProof){
     const min=task.min||0;
     html+='<div style="margin-left:34px;display:flex;align-items:center;gap:8px;">';
-    html+='<input id="count_'+section+'_'+task.id+'" type="number" min="0" inputmode="numeric" placeholder="How many today?'+(min?' (min '+min+')':'')+'" style="width:170px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" onkeydown="if(event.key===\'Enter\')completeTaskCount(\''+section+'\',\''+task.id+'\')" />';
+    html+='<input id="count_'+section+'_'+task.id+'" type="number" min="'+(min||0)+'" inputmode="numeric" placeholder="How many today?'+(min?' (min '+min+')':'')+'" style="width:170px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" onkeydown="if(event.key===\'Enter\')completeTaskCount(\''+section+'\',\''+task.id+'\')" />';
     html+='<button onclick="completeTaskCount(\''+section+'\',\''+task.id+'\')" style="padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Log</button>';
     html+='</div>';
   }
-  // Notes field / saved notes
-  if(hasNotes){
-    if(isDone&&doneData.notes){
-      html+='<div style="margin-left:34px;font-size:12px;color:var(--gray-500);font-style:italic;padding:6px 10px;background:var(--gray-50);border-radius:6px;border-left:2px solid var(--gray-300)">'+esc(doneData.notes)+'</div>';
-    } else if(!isDone&&!locked){
+  // Notes field / saved notes. Proof-form tasks render their own fields.
+  if(hasNotes&&!useProof){
+    if((isDone||needsReview)&&doneData.notes){
+      html+='<div class="proof-saved">'+esc(doneData.notes)+'</div>';
+    } else if(!isDone&&!needsReview&&!locked){
       html+='<div style="margin-left:34px"><input id="notes_'+section+'_'+task.id+'" type="text" placeholder="Enter student names..." style="width:100%;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" onkeydown="if(event.key===\'Enter\')completeTaskWithNotes(\''+section+'\',\''+task.id+'\')" /></div>';
     }
   }
+  if(useProof) html+=renderProofEditor(section, task, doneData, locked);
   if(_cpActive){
     if(!locked) html+=renderContentUploadBox(section,task.id,_cpActive);
     html+=renderStaffContentFeed(section,task.id);
@@ -14662,19 +15322,37 @@ function feedbackSyncOutreachTask(location, changedKey, changed) {
     const t = tracking[k] || {}, dts = t.dates || {};
     let done = !!t.outreach, method = t.outreachMethod, by = t.outreachBy, dkey = dts.outreach;
     if (k === changedKey && changed) { done = changed.done; method = changed.method; by = changed.by; dkey = changed.date; }
-    if (done && dkey === today) {
+    if (done && dkey === today && method && by) {
       const m = (OUTREACH_METHODS.find(x => x.id === method) || {}).label || '';
-      const tag = [m, by].filter(Boolean).join('·');
-      entries.push((s.name || 'Student') + (tag ? ' (' + tag + ')' : ''));
+      if (m) entries.push((s.name || 'Student') + ' (' + m + '·' + by + ')');
     }
   });
   const base = 'tasks/emp/' + empId + '/daily/' + today + '/stoplight';   // fbSet prefixes ceo/
   if (entries.length) {
-    fbSet(base, { ts: Date.now(), count: entries.length, notes: entries.join(', '), auto: true });
+    fbSet(base, { ts: Date.now(), proofV: 1, count: entries.length, notes: entries.join(', '), auto: true });
   } else {
     const existing = ((((state.tasksData || {})[empId] || {}).daily || {})[today] || {}).stoplight;
     if (!existing || existing.auto) fbSet(base, null);   // only clear an auto-generated note, never a manual one
   }
+  syncCycleOutreachTask(empId, location, changedKey, changed);
+}
+function syncCycleOutreachTask(empId, location, changedKey, changed){
+  const cycle = getCurrentCycleInfo();
+  if (!cycle || !cycle.startDate || !empId) return;
+  const start = cycle.startDate;
+  const roster = state.feedback.roster || {}, tracking = state.feedback.tracking || {};
+  const entries = [];
+  Object.keys(roster).forEach(k => {
+    const s = roster[k]; if (!s || s.location !== location || s.active === false) return;
+    const t = tracking[k] || {}, dts = t.dates || {};
+    let done = !!t.outreach, method = t.outreachMethod, by = t.outreachBy, dkey = dts.outreach;
+    if (k === changedKey && changed) { done = changed.done; method = changed.method; by = changed.by; dkey = changed.date || dkey; }
+    const m = (OUTREACH_METHODS.find(x => x.id === method) || {}).label || '';
+    if (done && dkey && dkey >= start && m && by) entries.push((s.name || 'Student') + ' (' + m + '·' + by + ')');
+  });
+  const cycleKey = getCycleChecklistKey();
+  const path = 'tasks/emp/' + empId + '/cycle_checklist/' + cycleKey + '/cc_w1_outreach';
+  if (entries.length) fbSet(path, { ts: Date.now(), proofV: 1, count: entries.length, notes: entries.join(', '), auto: true });
 }
 
 function feedbackSetOutreachDone(studentKey) {
