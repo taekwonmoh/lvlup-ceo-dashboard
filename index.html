@@ -103,6 +103,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 /* Scheduler: 7-day grid on wide screens, a single-day view on phones (no sideways scroll) */
 .sc-mobile { display: none; }
 @media (max-width: 700px) { .sc-wide { display: none; } .sc-mobile { display: block; } }
+.tc-off { display:block; width:100%; box-sizing:border-box; margin:0 0 3px; padding:7px 4px; border-radius:6px; border:1px solid #f3b4bc; color:#9f1239; background:repeating-linear-gradient(-45deg,#fde8ea,#fde8ea 5px,#fff 5px,#fff 10px); font:inherit; font-size:10px; font-weight:800; line-height:1.25; cursor:pointer; text-align:center; }
+.tc-off .k { display:block; font-size:9px; letter-spacing:.04em; text-transform:uppercase; }
+.tc-off.pending { border-color:#fcd34d; color:#92400e; background:#fffbeb; font-weight:700; padding:4px; }
+.tc-off-flag { font-size:9px; font-weight:800; color:#be123c; background:#fff1f2; border-radius:5px; padding:2px 4px; margin-bottom:3px; line-height:1.3; }
 
 /* Rocks */
 .rock-item { padding: 14px 20px; border-bottom: 1px solid var(--gray-100); display: flex; gap: 12px; align-items: flex-start; }
@@ -6396,6 +6400,7 @@ function renderAccountabilityPage(){
   h += '</div>';
   h += renderTcMapModal();
   h += renderTcShiftModal();
+  h += renderTcOffModal();
   h += renderTcTimeoffModal();
   h += renderTcPublishModal();
   h += renderTcCardModal();
@@ -7063,7 +7068,10 @@ function renderTcStaffModal(){
     body += '<div style="display:flex;gap:12px;padding:10px 0;border-top:1px solid #f1f3f9;">';
     body += '<div style="flex:none;width:86px;"><div style="font-weight:800;font-size:13px;color:#1a1a2e;">' + dow[d.getDay()] + '</div><div style="font-size:11px;color:#aab;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</div></div>';
     body += '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;">';
-    if (!shifts.length) body += '<div style="font-size:12px;color:#c3c9d6;">Off — not scheduled</div>';
+    const offDay = tcDayOff(id, dk);
+    if (!shifts.length && !(offDay && offDay.kind === 'approved')) body += '<div style="font-size:12px;color:#c3c9d6;">Off — not scheduled</div>';
+    if (offDay && offDay.kind === 'approved' && shifts.length) body += '<div class="tc-off-flag" data-shift-conflict="1">Shift conflicts with time off</div>';
+    if (offDay) body += tcOffBlock(id, dk, offDay.kind === 'approved' ? offDay : (offDay.kind === 'pending' ? offDay : null));
     shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; totalMin += tcShiftMins(sh);
       body += '<button onclick="tcStaffEditShift(\'' + id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="Tap to edit shift" style="text-align:left;border:1px solid #e9ecf5;border-left:4px solid ' + c + ';background:#fff;border-radius:9px;padding:8px 11px;cursor:pointer;display:flex;flex-direction:column;gap:1px;">';
       body += '<span style="font-weight:700;font-size:13px;color:#1a1a2e;">' + tcFmtHM(sh.start) + ' – ' + tcFmtHM(sh.end) + '</span>';
@@ -7088,6 +7096,69 @@ function renderTcStaffModal(){
   h += '<div style="padding:4px 20px 12px;overflow-y:auto;">' + body + '</div>';
   h += '<div style="padding:12px 20px;border-top:1px solid #eef0f6;"><button onclick="tcStaffClose()" style="width:100%;padding:11px;background:#1a1a2e;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Done</button></div>';
   h += '</div></div>';
+  return h;
+}
+function tcTimeoffCovering(empId, dk){
+  return tcTimeoffAll().filter(t => {
+    if (!t || t.empId !== empId || !t.start) return false;
+    const end = t.end || t.start;
+    return dk >= t.start && dk <= end;
+  });
+}
+function tcDayOff(empId, dk){
+  const hits = tcTimeoffCovering(empId, dk);
+  const approved = hits.filter(t => tcTimeoffStatus(t) === 'approved');
+  if (approved.length) return { kind: 'approved', items: approved };
+  const pending = hits.filter(t => tcTimeoffStatus(t) === 'pending');
+  if (pending.length) return { kind: 'pending', items: pending };
+  return null;
+}
+function tcOffKindLabel(items){
+  const pto = (items || []).some(t => t.type === 'pto');
+  const unpaid = (items || []).some(t => t.type !== 'pto');
+  if (pto && unpaid) return 'Time off';
+  return pto ? 'PTO' : 'Unpaid';
+}
+function tcOffBlock(empId, dk, info){
+  if (!info) return '';
+  const approved = info.kind === 'approved';
+  const sub = approved ? tcOffKindLabel(info.items) : 'Not approved yet';
+  const title = approved ? ('Time off · ' + sub) : 'Pending time off';
+  return '<button type="button" class="tc-off' + (approved ? '' : ' pending') + '" data-timeoff-block="' + info.kind + '" data-timeoff-day="' + dk + '" onclick="event.stopPropagation();tcOffOpen(\'' + empId + '\',\'' + dk + '\')" title="' + esc(title) + '"><span class="k">' + (approved ? 'Time off' : 'Pending') + '</span>' + esc(sub) + '</button>';
+}
+function tcOffOpen(staffId, dk){ state.tcOffView = { staffId: staffId, dateKey: dk }; render(); }
+function tcOffClose(){ state.tcOffView = null; render(); }
+function tcOffAddAnyway(){
+  const v = state.tcOffView; if (!v) return;
+  const locHint = state.schedLoc && state.schedLoc !== 'all' ? state.schedLoc : (((tcData().staff || {})[v.staffId] || {}).loc || '');
+  if (location.hash === '#clock' || !tcCanAddShift(v.staffId, locHint)) { state.tcOffView = null; if (location.hash !== '#clock') tcScopeBlock(); else render(); return; }
+  const staffId = v.staffId, dk = v.dateKey, loc = state.schedLoc && state.schedLoc !== 'all' ? state.schedLoc : '';
+  state.tcOffView = null;
+  tcShiftOpen(staffId, dk, '', loc);
+}
+function renderTcOffModal(){
+  const v = state.tcOffView; if (!v) return '';
+  const st = (tcData().staff || {})[v.staffId] || {};
+  const info = tcDayOff(v.staffId, v.dateKey);
+  const dLabel = new Date(v.dateKey + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const canAdd = location.hash !== '#clock' && info && info.kind === 'approved' && tcCanAddShift(v.staffId, state.schedLoc && state.schedLoc !== 'all' ? state.schedLoc : (st.loc || ''));
+  let body = '';
+  (info ? info.items : []).forEach(t => {
+    const end = t.end || t.start;
+    body += '<div style="border:1px solid #f3e4e6;border-radius:10px;padding:10px 12px;margin-bottom:8px;">';
+    body += '<div style="font-size:13px;font-weight:800;color:#1a1a2e;">' + esc(tcOffKindLabel([t])) + (info.kind === 'pending' ? ' · pending' : '') + '</div>';
+    body += '<div style="font-size:12px;color:#64748b;margin-top:2px;">' + esc(t.start) + (end !== t.start ? ' → ' + esc(end) : '') + (t.note ? ' · ' + esc(t.note) : '') + '</div>';
+    body += '</div>';
+  });
+  if (!body) body = '<div style="font-size:13px;color:#888;">No time off on this day.</div>';
+  let h = '<div onclick="if(event.target===this)tcOffClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:430;padding:16px;">';
+  h += '<div data-timeoff-detail="1" style="background:#fff;border-radius:14px;max-width:380px;width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">';
+  h += '<div style="padding:16px 18px;border-bottom:1px solid #eef0f6;"><div style="font-size:16px;font-weight:800;color:#1a1a2e;">' + (info && info.kind === 'pending' ? 'Pending time off' : 'Time off') + '</div><div style="font-size:12px;color:#888;margin-top:2px;">' + esc(tcStaffLabel(st, v.staffId) || '') + ' · ' + esc(dLabel) + '</div></div>';
+  h += '<div style="padding:14px 18px;">' + body + '</div>';
+  h += '<div style="display:flex;gap:8px;padding:14px 18px;border-top:1px solid #eef0f6;">';
+  if (canAdd) h += '<button type="button" data-timeoff-add="1" onclick="tcOffAddAnyway()" style="flex:1;padding:11px;background:#fff;color:#1a1a2e;border:1px solid #e3e6ef;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;">Add a shift anyway</button>';
+  h += '<button type="button" onclick="tcOffClose()" style="flex:1;padding:11px;background:#1a1a2e;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;">Close</button>';
+  h += '</div></div></div>';
   return h;
 }
 function renderTcSchedule(){
@@ -7143,10 +7214,12 @@ function renderTcSchedule(){
       + '<div style="font-size:10.5px;font-weight:600;color:#8894b0;margin-top:2px;display:flex;align-items:center;gap:5px;"><span title="Scheduled this week, all locations">' + tcFmtHrs(wkMin) + '</span>' + (rowChanged ? '<span title="This person has unpublished changes" style="display:inline-flex;align-items:center;gap:3px;color:#b45309;font-weight:800;"><span style="width:6px;height:6px;border-radius:50%;background:#f59e0b;"></span>edited</span>' : '') + '</div>'
       + '</td>';
     days.forEach(d => {
-      const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
+      const dk = tcDateKey(d); const shifts = shiftsOf(s, dk); const off = tcDayOff(s.id, dk); const blocked = off && off.kind === 'approved';
       h += '<td class="tc-cell" data-staff="' + s.id + '" data-dk="' + dk + '" ondragover="tcDragOver(event)" ondragleave="tcDragLeave(event)" ondrop="tcDrop(event,\'' + s.id + '\',\'' + dk + '\')" style="text-align:center;vertical-align:top;padding:4px;background:' + (holMap[dk] ? '#fff7ed' : zebra) + ';' + rowSep + '">';
-      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; const canEd = tcCanEditShift(sh.loc, s.id); const unpub = pubRec && !postedSet.has(tcShiftSig(dk, sh)); const handlers = canEd ? ' draggable="true" ontouchstart="tcTouchStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragstart="tcDragStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragend="tcDragEnd(event)" onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="' + (unpub ? 'Unpublished — tap to edit · drag to move' : 'Tap to edit · drag to move') + '"' : ' title="View only — outside your scheduling locations"'; h += '<div class="tc-shift"' + handlers + ' style="background:' + c + ';color:#fff;border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:11px;line-height:1.25;' + (unpub ? 'outline:2px solid #f59e0b;outline-offset:1px;' : '') + (canEd ? 'cursor:grab;touch-action:none;' : 'cursor:default;opacity:.62;') + '">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
-      if (tcCanAddShift(s.id, filter !== 'all' ? filter : s.loc)) h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'\',\'' + (filter !== 'all' ? filter : '') + '\')" title="Add shift" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
+      if (blocked && shifts.length) h += '<div class="tc-off-flag" data-shift-conflict="1">Shift conflicts with time off</div>';
+      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; const canEd = tcCanEditShift(sh.loc, s.id); const unpub = pubRec && !postedSet.has(tcShiftSig(dk, sh)); const handlers = canEd ? ' draggable="true" ontouchstart="tcTouchStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragstart="tcDragStart(event,\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" ondragend="tcDragEnd(event)" onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'' + sh.sid + '\')" title="' + (unpub ? 'Unpublished — tap to edit · drag to move' : 'Tap to edit · drag to move') + '"' : ' title="View only — outside your scheduling locations"'; h += '<div class="tc-shift"' + (blocked ? ' data-shift-conflict="1"' : '') + handlers + ' style="background:' + c + ';color:#fff;border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:11px;line-height:1.25;' + (blocked ? 'outline:2px solid #e11d48;outline-offset:1px;' : '') + (unpub ? 'outline:2px solid #f59e0b;outline-offset:1px;' : '') + (canEd ? 'cursor:grab;touch-action:none;' : 'cursor:default;opacity:.62;') + '">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.92;font-size:9.5px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
+      if (off) h += tcOffBlock(s.id, dk, off);
+      if (!blocked && tcCanAddShift(s.id, filter !== 'all' ? filter : s.loc)) h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dk + '\',\'\',\'' + (filter !== 'all' ? filter : '') + '\')" title="Add shift" style="background:none;border:1px dashed #cbd3e6;border-radius:6px;color:#8894b0;cursor:pointer;font-size:14px;width:100%;padding:1px 0;">+</button>';
       h += '</td>';
     });
     h += '</tr>';
@@ -7189,7 +7262,7 @@ function renderTcDayView(ctx){
     + (hnSel ? '<span style="font-size:11px;font-weight:800;color:#9a3412;background:#ffedd5;border-radius:6px;padding:2px 8px;">🎉 ' + esc(hnSel) + '</span>' : '')
     + '</div>';
   // Rows for this day: everyone in All view; in a filtered view, those with a shift here plus anyone schedulable at this school
-  const dayRows = filter === 'all' ? staff : staff.filter(s => shiftsOf(s, dkSel).length || tcSchedulableAt(s, filter));
+  const dayRows = filter === 'all' ? staff : staff.filter(s => shiftsOf(s, dkSel).length || tcSchedulableAt(s, filter) || (tcDayOff(s.id, dkSel) && tcDayOff(s.id, dkSel).kind === 'approved'));
   const withShifts = dayRows.filter(s => shiftsOf(s, dkSel).length);
   const without = dayRows.filter(s => !shiftsOf(s, dkSel).length);
   const addLoc = filter !== 'all' ? filter : '';
@@ -7214,16 +7287,31 @@ function renderTcDayView(ctx){
         + '<span style="font-size:11px;text-align:right;line-height:1.25;opacity:.92;">' + (loc.short ? esc(loc.short) : '') + (sh.role ? '<br>' + esc(sh.role) : '') + '</span>'
         + '</div>';
     });
-    if (tcCanAddShift(s.id, addLoc || s.loc)) h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dkSel + '\',\'\',\'' + addLoc + '\')" style="background:none;border:1px dashed #cbd3e6;border-radius:9px;color:#6b7694;cursor:pointer;font-size:13px;font-weight:700;width:100%;padding:8px 0;">＋ Add another shift</button>';
+    const offDay = tcDayOff(s.id, dkSel);
+    if (offDay && offDay.kind === 'approved' && shifts.length) h += '<div class="tc-off-flag" data-shift-conflict="1">Shift conflicts with time off</div>';
+    if (offDay) h += tcOffBlock(s.id, dkSel, offDay);
+    if (!(offDay && offDay.kind === 'approved') && tcCanAddShift(s.id, addLoc || s.loc)) h += '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dkSel + '\',\'\',\'' + addLoc + '\')" style="background:none;border:1px dashed #cbd3e6;border-radius:9px;color:#6b7694;cursor:pointer;font-size:13px;font-weight:700;width:100%;padding:8px 0;">＋ Add another shift</button>';
     h += '</div></div>';
   });
   // Not scheduled — compact add rows
-  const addable = without.filter(s => tcCanAddShift(s.id, addLoc || s.loc));
+  const blockedOff = without.filter(s => { const o = tcDayOff(s.id, dkSel); return o && o.kind === 'approved'; });
+  if (blockedOff.length) {
+    h += '<div style="padding:12px 18px 4px;font-size:11px;font-weight:800;letter-spacing:.02em;color:#9f1239;text-transform:uppercase;border-top:1px solid #eef0f6;">Time off</div>';
+    blockedOff.forEach(s => {
+      h += '<div style="padding:9px 18px;border-top:1px solid #f4f6fb;">'
+        + '<div style="font-size:13.5px;font-weight:700;color:#334;margin-bottom:6px;">' + esc(tcStaffLabel(s)) + '</div>'
+        + tcOffBlock(s.id, dkSel, tcDayOff(s.id, dkSel))
+        + '</div>';
+    });
+  }
+  const addable = without.filter(s => blockedOff.indexOf(s) < 0 && tcCanAddShift(s.id, addLoc || s.loc));
   if (addable.length) {
     h += '<div style="padding:12px 18px 4px;font-size:11px;font-weight:800;letter-spacing:.02em;color:#9aa3b5;text-transform:uppercase;border-top:1px solid #eef0f6;">Not scheduled this day — tap ＋ to add</div>';
     addable.forEach(s => {
+      const pend = tcDayOff(s.id, dkSel);
       h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 18px;border-top:1px solid #f4f6fb;">'
         + '<span onclick="tcStaffFocus(\'' + s.id + '\')" style="font-size:13.5px;font-weight:700;color:#334;cursor:pointer;">' + esc(tcStaffLabel(s)) + ' <span style="font-size:11px;font-weight:600;color:#aaa;">· ' + esc((LOCATIONS.find(l => l.id === s.loc) || {}).short || s.loc || '') + '</span></span>'
+        + (pend && pend.kind === 'pending' ? '<span style="flex:1;min-width:0;">' + tcOffBlock(s.id, dkSel, pend) + '</span>' : '')
         + '<button onclick="tcShiftOpen(\'' + s.id + '\',\'' + dkSel + '\',\'\',\'' + addLoc + '\')" title="Add a shift" style="flex:0 0 auto;width:34px;height:34px;border-radius:9px;border:1px dashed #cbd3e6;background:#f7f9ff;color:#4169E1;font-size:18px;font-weight:700;cursor:pointer;line-height:1;">＋</button>'
         + '</div>';
     });
@@ -7238,8 +7326,13 @@ function renderTcMySchedule(id){
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   // Staff only see the POSTED schedule — never a manager's unpublished draft.
   const items = [];
-  for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const dk = tcDateKey(d); tcPostedShifts(id, dk).forEach(sh => items.push({ d, sh })); }
-  items.sort((a, b) => (a.d - b.d) || (a.sh.start || '').localeCompare(b.sh.start || ''));
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today); d.setDate(today.getDate() + i); const dk = tcDateKey(d);
+    tcPostedShifts(id, dk).forEach(sh => items.push({ d, sh }));
+    const off = tcDayOff(id, dk);
+    if (off && off.kind === 'approved') items.push({ d, offLabel: tcOffKindLabel(off.items) });
+  }
+  items.sort((a, b) => (a.d - b.d) || ((a.sh && a.sh.start) || '').localeCompare((b.sh && b.sh.start) || ''));
   const hols = []; for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const hn = tcHolidayName(d); if (hn) hols.push({ d, hn }); }
   // Flag if the week(s) covered haven't been posted yet (so "no shifts" isn't mistaken for "day off").
   const unposted = []; const wkKeys = new Set(); for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(today.getDate() + i); wkKeys.add(tcWeekKeyFor(d)); } wkKeys.forEach(wk => { if (!tcPublishedRec(wk)) unposted.push(wk); });
@@ -7248,7 +7341,10 @@ function renderTcMySchedule(id){
   if (hols.length) { h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">'; hols.forEach(x => { h += '<span style="display:inline-flex;align-items:center;gap:5px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:3px 9px;font-size:12px;color:#9a3412;font-weight:600;">🎉 ' + esc(x.hn) + ' · ' + dow[x.d.getDay()] + ' ' + (x.d.getMonth() + 1) + '/' + x.d.getDate() + '</span>'; }); h += '</div>'; }
   if (!items.length) h += '<div style="color:#aaa;font-size:13px;">' + (unposted.length ? 'Your schedule for this stretch hasn’t been posted yet — check back soon.' : 'No shifts scheduled.') + '</div>';
   else if (unposted.length) h += '<div style="color:#b45309;font-size:11.5px;margin-bottom:6px;">Part of this range isn’t posted yet — more shifts may be added.</div>';
-  items.forEach(it => { const loc = LOCATIONS.find(l => l.id === it.sh.loc) || {}; h += '<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;font-size:13px;"><span style="font-weight:700;min-width:70px;">' + dow[it.d.getDay()] + ' ' + (it.d.getMonth() + 1) + '/' + it.d.getDate() + '</span><span>' + tcFmtHM(it.sh.start) + '–' + tcFmtHM(it.sh.end) + (it.sh.role ? ' <span style="color:#aaa;">' + esc(it.sh.role) + '</span>' : '') + '</span><span style="color:#888;">' + esc(loc.short || loc.name || '') + '</span></div>'; });
+  items.forEach(it => {
+    if (it.offLabel) { h += '<div data-my-timeoff="1" style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;font-size:13px;"><span style="font-weight:700;min-width:70px;">' + dow[it.d.getDay()] + ' ' + (it.d.getMonth() + 1) + '/' + it.d.getDate() + '</span><span style="color:#9f1239;font-weight:800;">Time off · ' + esc(it.offLabel) + '</span></div>'; return; }
+    const loc = LOCATIONS.find(l => l.id === it.sh.loc) || {}; h += '<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f9;font-size:13px;"><span style="font-weight:700;min-width:70px;">' + dow[it.d.getDay()] + ' ' + (it.d.getMonth() + 1) + '/' + it.d.getDate() + '</span><span>' + tcFmtHM(it.sh.start) + '–' + tcFmtHM(it.sh.end) + (it.sh.role ? ' <span style="color:#aaa;">' + esc(it.sh.role) + '</span>' : '') + '</span><span style="color:#888;">' + esc(loc.short || loc.name || '') + '</span></div>';
+  });
   h += '</div>';
   return h;
 }
@@ -7551,10 +7647,12 @@ function renderTcTeamSchedule(){
     const wkMin = tcWeekMinsPosted(s.id, days);
     h += '<tr style="border-top:1px solid #f1f3f9;"><td style="text-align:left;padding:4px;position:sticky;left:0;background:#fff;white-space:nowrap;vertical-align:top;"><div style="font-weight:700;">' + esc(tcStaffLabel(s)) + '</div><div style="font-size:9.5px;font-weight:600;color:#9aa3b5;" title="Scheduled this week, all locations">' + tcFmtHrs(wkMin) + '</div></td>';
     days.forEach(d => {
-      const dk = tcDateKey(d); const shifts = shiftsOf(s, dk);
-      h += '<td style="text-align:center;padding:3px;vertical-align:top;' + (holMap[dk] ? 'background:#fff7ed;' : '') + '">';
-      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div style="background:' + c + ';color:#fff;border-radius:5px;padding:2px 3px;margin-bottom:2px;line-height:1.2;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.9;font-size:9px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
-      if (!shifts.length) h += '<span style="color:#e0e0e0;">·</span>';
+      const dk = tcDateKey(d); const shifts = shiftsOf(s, dk); const off = tcDayOff(s.id, dk); const blocked = off && off.kind === 'approved';
+      h += '<td data-staff="' + s.id + '" data-dk="' + dk + '" style="text-align:center;padding:3px;vertical-align:top;' + (holMap[dk] ? 'background:#fff7ed;' : '') + '">';
+      if (blocked && shifts.length) h += '<div class="tc-off-flag" data-shift-conflict="1">Shift conflicts with time off</div>';
+      shifts.forEach(sh => { const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155'; h += '<div' + (blocked ? ' data-shift-conflict="1"' : '') + ' style="background:' + c + ';color:#fff;border-radius:5px;padding:2px 3px;margin-bottom:2px;line-height:1.2;' + (blocked ? 'outline:2px solid #e11d48;outline-offset:1px;' : '') + '">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + (loc.short ? '<br><span style="opacity:.85;font-size:10px;">' + esc(loc.short) + '</span>' : '') + (sh.role ? '<br><span style="opacity:.9;font-size:9px;font-weight:600;">' + esc(sh.role) + '</span>' : '') + '</div>'; });
+      if (blocked) h += tcOffBlock(s.id, dk, off);
+      else if (!shifts.length) h += '<span style="color:#e0e0e0;">·</span>';
       h += '</td>';
     });
     h += '</tr>';
@@ -7595,20 +7693,23 @@ function renderTcTeamDayView(ctx){
     + '<span style="font-size:13px;color:#8894b0;font-weight:600;">' + (dSel.getMonth() + 1) + '/' + dSel.getDate() + '</span>'
     + (hnSel ? '<span style="font-size:11px;font-weight:800;color:#9a3412;background:#ffedd5;border-radius:6px;padding:2px 8px;">🎉 ' + esc(hnSel) + '</span>' : '')
     + '</div>';
-  const dayRows = staff.filter(s => shiftsOf(s, dkSel).length || tcPostedAlways(s, filter));
+  const dayRows = staff.filter(s => shiftsOf(s, dkSel).length || tcPostedAlways(s, filter) || (tcDayOff(s.id, dkSel) && tcDayOff(s.id, dkSel).kind === 'approved'));
   if (!dayRows.length) { h += '<div style="padding:20px 6px;text-align:center;color:#aaa;font-size:13px;">No shifts scheduled this day.</div></div>'; return h; }
   dayRows.forEach(s => {
     const shifts = shiftsOf(s, dkSel);
     h += '<div style="padding:10px 2px;border-top:1px solid #eef0f6;">';
     h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:7px;">' + esc(tcStaffLabel(s)) + '</div>';
     h += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    const offDay = tcDayOff(s.id, dkSel);
+    if (offDay && offDay.kind === 'approved' && shifts.length) h += '<div class="tc-off-flag" data-shift-conflict="1">Shift conflicts with time off</div>';
     shifts.forEach(sh => {
       const loc = LOCATIONS.find(l => l.id === sh.loc) || {}; const c = loc.color || '#334155';
-      h += '<div style="background:' + c + ';color:#fff;border-radius:9px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;">'
+      h += '<div' + (offDay && offDay.kind === 'approved' ? ' data-shift-conflict="1"' : '') + ' style="background:' + c + ';color:#fff;border-radius:9px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;' + (offDay && offDay.kind === 'approved' ? 'outline:2px solid #e11d48;outline-offset:1px;' : '') + '">'
         + '<span style="font-size:14px;font-weight:800;">' + tcFmtHM(sh.start) + '–' + tcFmtHM(sh.end) + '</span>'
         + '<span style="font-size:11px;text-align:right;line-height:1.25;opacity:.92;">' + (loc.short ? esc(loc.short) : '') + (sh.role ? '<br>' + esc(sh.role) : '') + '</span>'
         + '</div>';
     });
+    if (offDay && offDay.kind === 'approved') h += tcOffBlock(s.id, dkSel, offDay);
     h += '</div></div>';
   });
   h += '</div>';
@@ -7721,6 +7822,7 @@ function renderClockKiosk(){
   h += '</div></div>';
   h += renderIncidentModal();
   h += renderTcTimeoffModal();
+  h += renderTcOffModal();
   return h;
 }
 
@@ -10495,6 +10597,7 @@ state.tcShowApproved = false;        // Schedule time-off list: approved rows st
 state.tcSetup        = false;        // show/hide admin setup panel
 state.tcMapLoc       = null;         // geofence map picker: location id whose map modal is open
 state.tcShiftEdit    = null;         // schedule shift add/edit modal state
+state.tcOffView      = null;         // time-off detail for a blocked schedule day
 state.tcCardEdit     = null;         // time-card editor modal state
 state.tcGuide        = false;        // manager tutorial popup
 state.tcStaffView    = null;         // single-staff week view
