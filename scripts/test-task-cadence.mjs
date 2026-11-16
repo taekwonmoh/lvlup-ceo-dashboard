@@ -544,6 +544,97 @@ check(proofView.indexOf('Bonnie Templeton') >= 0, 'manager proof shows the named
 state.tasksTab = 'sheets';
 state.historyFocus = null;
 
+const taskBackfillGate = grab('taskBackfillGate');
+const taskClockDecision = grab('taskClockDecision');
+const photoReuseHit = grab('photoReuseHit');
+const applyJoeyFloorLinks = grab('applyJoeyFloorLinks');
+const maybeAutoCompleteTasks = grab('maybeAutoCompleteTasks');
+const clockGateOn = grab('clockGateOn');
+
+state.tasksLoc = 'joeyZ';
+state.tasksDate = '2026-11-15';
+state._proofNow = '2026-11-16T16:00:00Z'; // 10:00 AM Central
+check(taskBackfillGate('daily', new Date(state._proofNow)).allow === true, 'yesterday is still open at 10:00 AM Central');
+check(taskBackfillGate('daily', new Date(state._proofNow)).nextDay === true, 'a next-morning save is flagged');
+state._proofNow = '2026-11-16T18:00:00Z'; // 12:00 PM Central
+const late = taskBackfillGate('daily', new Date(state._proofNow));
+check(late.allow === false && late.late === true, 'after 11:00 AM Central a non-admin cannot backfill yesterday');
+dashAuth.isAdmin = true;
+check(taskBackfillGate('daily', new Date(state._proofNow)).allow === true, 'an admin can backfill after 11:00 AM');
+dashAuth.isAdmin = false;
+state.tasksDate = '2026-11-14';
+check(taskBackfillGate('daily', new Date('2026-11-16T16:00:00Z')).allow === false, 'two days back is admin-only');
+state.tasksDate = '2026-11-16';
+state._proofNow = null;
+check(taskBackfillGate('weekly', new Date('2026-11-16T18:00:00Z')).allow === true, 'weekly tasks are not on the backfill clock');
+
+check(clockGateOn('joeyZ') === false, 'the clock-in gate defaults off');
+state.tasksDate = '2026-11-16';
+check(taskClockDecision('daily', { id: 'rosters' }, new Date('2026-11-16T20:00:00Z')).allow === true, 'with the gate off, a task does not need a punch');
+state.clockGate = { deforest: true };
+check(clockGateOn('joeyZ') === true, 'DeForest can turn the gate on');
+const beforePunch = taskClockDecision('daily', { id: 'rosters' }, new Date('2026-11-16T20:00:00Z'));
+check(beforePunch.allow === false, 'gate on and no punch blocks the task');
+state.timeclock = { entries: { joeyZ: { '2026-11-16': { e1: { inAt: Date.parse('2026-11-16T15:00:00Z'), outAt: Date.parse('2026-11-16T23:00:00Z') } } } } };
+check(taskClockDecision('daily', { id: 'rosters' }, new Date('2026-11-16T18:00:00Z')).allow === true, 'a task during the punch is allowed');
+check(taskClockDecision('daily', { id: 'rosters' }, new Date('2026-11-16T23:10:00Z')).allow === false, 'a normal task in the 15-minute grace is blocked');
+check(taskClockDecision('daily', { id: 'closing', photo: false }, new Date('2026-11-16T23:10:00Z')).allow === true, 'closing is allowed for 15 minutes after clock-out');
+check(taskClockDecision('daily', { id: 'ph_floor', photo: true }, new Date('2026-11-16T23:10:00Z')).allow === true, 'a photo is allowed for 15 minutes after clock-out');
+check(taskClockDecision('daily', { id: 'closing' }, new Date('2026-11-16T23:20:00Z')).allow === false, 'the grace ends at 15 minutes');
+state.clockGate = {};
+state.timeclock = {};
+
+check(photoReuseHit('ph_floor', 'abc', { ph_floor: { abc: { period: '2026-11-09' } } }, '2026-11-16') === true, 'a photo hash from an earlier day is reused');
+check(photoReuseHit('ph_floor', 'abc', { ph_floor: { abc: { period: '2026-11-16' } } }, '2026-11-16') === false, 'the same photo saved again today is not reused');
+check(taskBonusComplete({ id: 'ph_floor', priorPhoto: true, photo: true }, { proofV: 1, photos: ['u'], reusedPhoto: true }) === false, 'a reused photo does not count until a manager confirms');
+check(taskBonusComplete({ id: 'ph_floor', priorPhoto: true, photo: true }, { ts: 1, photos: ['u'] }) === true, 'an older floor photo without a hash still counts');
+
+state.tasksLoc = 'joeyZ';
+state.tasksDate = '2026-11-16';
+state.tasksData.joeyZ = { daily: { '2026-11-16': { ph_floor: { ts: 1, proofV: 1, photos: ['https://example.test/floor.jpg'] } } } };
+setEl('phflag_j_spray', '');
+setEl('phflag_j_wetmop', '');
+sandbox.document.__els.phflag_j_spray.checked = true;
+sandbox.document.__els.phflag_j_wetmop.checked = true;
+const beforeMop = sandbox.__writes.length;
+applyJoeyFloorLinks();
+const mopDay = state.tasksData.joeyZ.daily['2026-11-16'];
+check(mopDay.j_spray && mopDay.j_spray.via === 'ph_floor' && mopDay.j_wetmop && mopDay.j_wetmop.via === 'ph_floor', 'Joey’s mop rows complete from the floor photo');
+check(sandbox.__writes.length > beforeMop, 'mop links write through the local stub');
+const beforeSpray = sandbox.__writes.length;
+completeTask('daily', 'j_spray');
+check(sandbox.__writes.length === beforeSpray, 'spray-mop cannot be checked without the floor photo');
+const joeySheet = sheet('joeyZ', '2026-11-16');
+check(joeySheet.indexOf('data-floor-mop="1"') >= 0, 'Joey’s floor photo asks which mop it covers');
+check(joeySheet.indexOf('data-linked-task="1"') >= 0, 'the mop rows point at the floor photo');
+check(has(dailyTasksForDate('joeyZ', '2026-11-14'), 'j_wetmop') === false, 'wet-mop is still Monday only');
+check(!has(dailyTasksForDate('joeyZ', '2026-11-14'), 'j_spray'), 'spray-mop stays off Saturday');
+
+state.tasksLoc = 'ash';
+state.tasksDate = '2026-11-16';
+state.inventory = { inv1: { name: 'Paper towels', location: 'eastmad', createdAt: Date.parse('2026-11-16T18:00:00Z') } };
+state.invLoaded = true;
+state.tcLoaded = true;
+state.timeclock = {
+  staff: { ash: { loc: 'eastmad' } },
+  timeoff: { t1: { empId: 'ash', status: 'approved' } },
+  schedulePublished: { '2026-11-23': { publishedAt: Date.parse('2026-11-16T18:00:00Z'), snap: {} } },
+};
+if (!state.tasksData.ash) state.tasksData.ash = {};
+maybeAutoCompleteTasks();
+const ashWeek = (state.tasksData.ash.weekly || {})[getTaskWeekKey('2026-11-16')] || {};
+check(ashWeek.supplies && ashWeek.supplies.auto && ashWeek.supplies.notes.indexOf('Paper towels') >= 0, 'a restock logged this week completes supplies');
+check(ashWeek.pto_review && ashWeek.pto_review.auto && ashWeek.pto_review.notes === 'No pending requests', 'no pending time-off completes the review');
+check(ashWeek.post_schedule && ashWeek.post_schedule.auto, 'publishing next week completes the schedule task');
+state.inventory = {};
+state.timeclock = {};
+state.tcLoaded = false;
+state.tasksData.ash.weekly[getTaskWeekKey('2026-11-16')].supplies = { ts: 1 };
+const kept = sandbox.__writes.length;
+maybeAutoCompleteTasks();
+check(state.tasksData.ash.weekly[getTaskWeekKey('2026-11-16')].supplies.ts === 1 && !state.tasksData.ash.weekly[getTaskWeekKey('2026-11-16')].supplies.auto, 'a legacy supplies check is not replaced');
+check(sandbox.__writes.length === kept, 'auto-complete does not rewrite a legacy record');
+
 if (failed) {
   console.error(failed + ' failed, ' + passed + ' passed');
   process.exit(1);
@@ -617,6 +708,16 @@ document.querySelectorAll('[data-sheet]').forEach(root => {
     'DeForest (Joey) — Monday, November 16, 2026 — needs review',
     sheet('joeyZ', '2026-11-16')
   ));
+  dashAuth.isAdmin = true;
+  state.tasksTab = 'sheets';
+  state.clockGate = {};
+  state.tasksData.joeyZ = { daily: { '2026-11-16': {} } };
+  fs.writeFileSync(path.join(previewDir, 'joey-floor.html'), page(
+    'DeForest (Joey) — floor photo covers the mop, clock-in gate off',
+    sheet('joeyZ', '2026-11-16'),
+    true
+  ));
+  dashAuth.isAdmin = false;
 
   state.tasksTab = 'history';
   state.historyFocus = { empId: 'joeyZ', dateKey: '2026-11-16' };

@@ -1321,11 +1321,11 @@ const JOEY_DAILY = [
   Object.assign({}, TASK_OPEN_PHOTO, {text:'Open the school: One wide photo of the instructor station, clean and ready.'}),
   TASK_STOPLIGHT,
   TASK_ROSTERS,
-  {id:'j_wetmop', cat:'Pre-Class Admin', days:[1], text:'Wet-mop the floor (Monday): Wet mop the training floors before classes.'},
+  {id:'j_wetmop', cat:'Pre-Class Admin', days:[1], proof:{kind:'linked', via:'ph_floor'}, text:'Wet-mop the floor (Monday): Covered by the Monday training-floor photo when that photo is marked wet-mopped. No second photo.'},
   {id:'j_greenmachine', cat:'Pre-Class Admin', days:[4], photo:true, priorPhoto:true, icon:'📸', text:'Run the green machine on the training floors, then snap a photo.'},
   bathroomPhoto([1]),
   TASK_PH_FLOOR,
-  {id:'j_spray', cat:'Closing', text:'Spray-mop the floor: Spray mop the training floors.'},
+  {id:'j_spray', cat:'Closing', proof:{kind:'linked', via:'ph_floor'}, text:'Spray-mop the floor: Covered by the training-floor photo when that photo is marked spray-mopped. It stays off Saturday.'},
   TASK_CLOSING,
 ];
 const TARIK_DAILY = [
@@ -1498,6 +1498,7 @@ function proofFieldsOk(task, rec){
     const rows=Array.isArray(rec.bookings)?rec.bookings:[];
     return rows.filter(r=>r&&String(r.child||'').trim()&&String(r.family||'').trim()&&String(r.date||'').trim()).length>=min;
   }
+  if(kind==='linked') return !!(((rec.photos)||[]).length||rec.via);
   if(kind==='rows'){
     if(rec.none&&(!p.noneNeedsNote||String(rec.noneNote||notes||'').trim())) return true;
     const min=p.min||1;
@@ -1528,6 +1529,7 @@ function taskBonusComplete(task, rec){
   if(!rec||typeof rec!=='object') return false;
   if(!rec.proofV) return true;
   if(rec.burst&&!rec.burstOk) return false;
+  if(rec.reusedPhoto&&!rec.reusedOk) return false;
   if(task&&task.posts) return taskPostsFilled(task, rec)>=task.posts;
   if(task&&task.proof) return proofFieldsOk(task, rec);
   if(task&&task.priorPhoto) return ((rec.photos)||[]).length>0;
@@ -1551,7 +1553,7 @@ function scoreTaskList(tasks, dd){
     if(verified) done++;
     items.push({id:t.id, text:t.text, verified, rec:rec||null});
   });
-  const needsReview=items.some(i=>i.rec&&i.rec.proofV&&i.rec.burst&&!i.rec.burstOk);
+  const needsReview=items.some(i=>i.rec&&i.rec.proofV&&((i.rec.burst&&!i.rec.burstOk)||(i.rec.reusedPhoto&&!i.rec.reusedOk)));
   return {done, total:(tasks||[]).length, needsReview, items};
 }
 function taskBurstIds(entries){
@@ -1633,6 +1635,195 @@ function writeTask(section, taskId, payload){
   else state.tasksData[emp][info.sPath][info.sKey][taskId]=payload;
   fbSet(info.base+taskId, payload);
 }
+function taskNow(){ return state._proofNow ? new Date(state._proofNow) : new Date(); }
+function ctDateKey(now){
+  try { return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(now); }
+  catch(e){ return (now||new Date()).toISOString().slice(0,10); }
+}
+function ctHour(now){
+  try {
+    const h=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',hour:'2-digit',hourCycle:'h23'}).format(now);
+    return parseInt(h,10)||0;
+  } catch(e){ return (now||new Date()).getHours(); }
+}
+function prevDateKey(dateKey){
+  const d=new Date(String(dateKey)+'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate()-1);
+  return d.toISOString().slice(0,10);
+}
+// Yesterday's daily tasks stay open until 11:00 AM Central. After that only an admin
+// can add them, and the save is flagged. Today and weekly/cycle tasks are not gated.
+function taskBackfillGate(section, now){
+  if(section!=='daily') return {allow:true, nextDay:false, late:false};
+  const info=taskPathFor(section);
+  const sKey=info.sKey;
+  now=now||taskNow();
+  const today=ctDateKey(now);
+  if(!sKey||sKey>=today) return {allow:true, nextDay:false, late:false};
+  const yesterday=prevDateKey(today);
+  const admin=!!(dashAuth&&dashAuth.isAdmin);
+  if(sKey===yesterday&&ctHour(now)<11) return {allow:true, nextDay:true, late:false};
+  if(admin) return {allow:true, nextDay:true, late:true};
+  return {allow:false, nextDay:true, late:true};
+}
+function clockGateOn(empId){
+  const loc=(getEmpById(empId||state.tasksLoc)||{}).loc;
+  return !!((state.clockGate||{})[loc]);
+}
+function taskPunches(empId, dateKey){
+  const days=((state.timeclock||{}).entries||{})[empId]||{};
+  return Object.values(days[dateKey]||{}).filter(e=>e&&e.inAt);
+}
+function taskIsClosingOrPhoto(task){
+  if(!task) return false;
+  if(task.id==='closing') return true;
+  const kind=proofKindOf(task);
+  return !!(task.photo||task.priorPhoto||kind==='photo'||kind==='photoNote'||kind==='photoOrNone');
+}
+// Off unless tasks/clockGate/{locId} is true. A school still on HomeBase stays off.
+function taskClockDecision(section, task, now){
+  if(section!=='daily') return {allow:true};
+  if(!clockGateOn(state.tasksLoc)) return {allow:true};
+  const dateKey=taskPathFor('daily').sKey;
+  const punches=taskPunches(state.tasksLoc, dateKey);
+  now=now||taskNow();
+  if(!punches.length) return {allow:false, reason:'Clock in at this school before checking daily tasks.'};
+  const firstIn=Math.min.apply(null, punches.map(p=>p.inAt));
+  const open=punches.some(p=>!p.outAt);
+  const outs=punches.map(p=>p.outAt).filter(Boolean);
+  const lastOut=outs.length?Math.max.apply(null, outs):0;
+  const t=now.getTime();
+  if(t<firstIn) return {allow:false, reason:'That check is before clock-in.'};
+  if(open||t<=lastOut) return {allow:true};
+  const grace=lastOut+15*60*1000;
+  if(t<=grace&&taskIsClosingOrPhoto(task)) return {allow:true, grace:true};
+  if(t<=grace) return {allow:false, reason:'After clock-out, only closing and photos can be finished, and only for 15 minutes.'};
+  return {allow:false, reason:'The 15-minute grace after clock-out has passed.'};
+}
+function guardTaskWrite(section, task, payload){
+  const back=taskBackfillGate(section, taskNow());
+  if(!back.allow){
+    if(typeof alert==='function') alert('Yesterday’s tasks can be filled in until 11:00 AM Central. After that, an admin has to add them.');
+    return null;
+  }
+  if(back.nextDay) payload.nextDay=true;
+  if(back.late) payload.lateBackfill=true;
+  const clock=taskClockDecision(section, task, taskNow());
+  if(!clock.allow){
+    if(dashAuth&&dashAuth.isAdmin) payload.noClock=true;
+    else {
+      if(typeof alert==='function') alert(clock.reason||'Clock in before checking this task.');
+      return null;
+    }
+  }
+  return payload;
+}
+function commitTask(section, taskId, payload, opts){
+  const task=resolveTask(section, taskId);
+  const gated=guardTaskWrite(section, task, payload);
+  if(!gated) return false;
+  if(!opts||!opts.skipBurst) attachBurst(section, taskId, gated);
+  writeTask(section, taskId, gated);
+  return true;
+}
+function setClockGate(loc, on){
+  if(!(dashAuth&&dashAuth.isAdmin)) return;
+  fbSet('tasks/clockGate/'+loc, on?true:null);
+  if(!state.clockGate) state.clockGate={};
+  if(on) state.clockGate[loc]=true; else delete state.clockGate[loc];
+  render();
+}
+function photoReuseHit(taskId, hash, index, periodKey){
+  if(!hash||!index) return false;
+  const prev=index[taskId]&&index[taskId][hash];
+  if(!prev||!prev.period) return false;
+  return String(prev.period)!==String(periodKey);
+}
+function joeyMopDue(dateKey){
+  const tasks=dailyTasksForDate('joeyZ', dateKey||state.tasksDate);
+  return {spray:tasks.some(t=>t.id==='j_spray'), wet:tasks.some(t=>t.id==='j_wetmop')};
+}
+function applyJoeyFloorLinks(){
+  if(state.tasksLoc!=='joeyZ') return;
+  const due=joeyMopDue(state.tasksDate);
+  const floor=taskDoneRec('daily','ph_floor');
+  if(!floor||!((floor.photos)||[]).length) return;
+  const sprayEl=document.getElementById('phflag_j_spray');
+  const wetEl=document.getElementById('phflag_j_wetmop');
+  const spray=sprayEl?!!sprayEl.checked:!!floor.sprayMop;
+  const wet=wetEl?!!wetEl.checked:!!floor.wetMop;
+  const next=Object.assign({}, floor, {sprayMop:!!spray, wetMop:!!wet});
+  writeTask('daily','ph_floor', next);
+  function link(id, on, dueOn, note){
+    if(!dueOn) return;
+    const cur=taskDoneRec('daily', id);
+    if(!on){ if(cur&&cur.via==='ph_floor') writeTask('daily', id, null); return; }
+    if(cur&&cur.proofV&&!cur.via) return;
+    writeTask('daily', id, {ts:Date.now(), proofV:1, via:'ph_floor', photos:(floor.photos||[]).slice(), notes:note});
+  }
+  link('j_spray', spray, due.spray, 'Spray-mopped');
+  link('j_wetmop', wet, due.wet, 'Wet-mopped');
+}
+function weekCoversMs(weekKey, ms){
+  const mon=taskWeekMonday(weekKey);
+  if(!mon||!ms) return false;
+  const start=new Date(mon); start.setHours(0,0,0,0);
+  const end=new Date(start); end.setDate(end.getDate()+7);
+  return ms>=start.getTime()&&ms<end.getTime();
+}
+function nextWeekMondayKey(weekKey){
+  const mon=taskWeekMonday(weekKey);
+  if(!mon) return '';
+  const n=new Date(mon); n.setDate(mon.getDate()+7);
+  return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+}
+function inventoryLoggedThisWeek(empId, weekKey){
+  const loc=(getEmpById(empId)||{}).loc;
+  if(!loc) return [];
+  return Object.entries(state.inventory||{}).map(([id,v])=>Object.assign({id}, v||{})).filter(it=>{
+    if(it.location!==loc) return false;
+    const when=it.createdAt||it.statusAt||0;
+    return weekCoversMs(weekKey, when)&&String(it.name||'').trim();
+  });
+}
+function pendingTimeoffFor(empId){
+  const loc=(getEmpById(empId)||{}).loc;
+  const staff=(state.timeclock||{}).staff||{};
+  return Object.entries((state.timeclock||{}).timeoff||{}).map(([id,v])=>Object.assign({id}, v||{})).filter(t=>{
+    const status=String(t.status||'pending').toLowerCase();
+    if(status!=='pending') return false;
+    const who=staff[t.empId]||{};
+    if(who.loc&&loc&&who.loc!==loc) return false;
+    return true;
+  });
+}
+function autoWriteWeekly(taskId, payload){
+  const task=findTaskDef('weekly', taskId);
+  if(!task) return;
+  const info=taskPathFor('weekly');
+  const cur=((((state.tasksData[state.tasksLoc]||{}).weekly||{})[info.sKey]||{})[taskId])||null;
+  if(cur&&!cur.auto) return;
+  if(cur&&cur.auto&&cur.notes===payload.notes&&cur.proofV) return;
+  const locData=state.tasksData[state.tasksLoc]||{};
+  if((locData.weekly_signoff||{})[info.sKey]||isWeekLocked(info.sKey)) return;
+  writeTask('weekly', taskId, Object.assign({ts:Date.now(), proofV:1, auto:true}, payload));
+}
+function maybeAutoCompleteTasks(){
+  const emp=state.tasksLoc;
+  if(!emp) return;
+  const weekKey=getTaskWeekKey(state.tasksDate);
+  const items=inventoryLoggedThisWeek(emp, weekKey);
+  if(items.length){
+    const notes=items.map(i=>i.name).join(', ');
+    ['supplies','m_party_supplies','fdw_lowstock'].forEach(id=>autoWriteWeekly(id, {notes:notes, choice:'inventory'}));
+  }
+  if(!state.tcLoaded) return;
+  const nextKey=nextWeekMondayKey(weekKey);
+  const published=((state.timeclock||{}).schedulePublished||{})[nextKey];
+  if(published&&published.publishedAt) autoWriteWeekly('post_schedule', {notes:'Next week is published', none:true});
+  const pending=pendingTimeoffFor(emp);
+  if(!pending.length) autoWriteWeekly('pto_review', {notes:'No pending requests', none:true});
+}
 function proofSummaryText(task, rec){
   if(!rec) return '';
   const parts=[];
@@ -1657,7 +1848,7 @@ function proofBadges(rec){
   if(rec.auto) bits.push('Auto from Students');
   if(rec.burst&&!rec.burstOk) bits.push('Needs review');
   else if(rec.burst&&rec.burstOk) bits.push('Review confirmed'+(rec.burstOkBy?(' by '+rec.burstOkBy):''));
-  if(rec.nextDay) bits.push('Next-day backfill');
+  if(rec.nextDay) bits.push(rec.lateBackfill?'Backfill after 11 AM':'Next-day backfill');
   if(rec.afterHours) bits.push('After hours');
   if(rec.noClock) bits.push('No clock-in');
   if(rec.reusedPhoto) bits.push('Reused photo');
@@ -1680,7 +1871,7 @@ function confirmBurstAt(empId, section, sKey, taskId){
     if(live) rec=live;
   }
   if(!rec) return;
-  const next=Object.assign({}, rec, {burstOk:true, burstOkAt:Date.now(), burstOkBy:(dashAuth&&(dashAuth.name||(dashAuth.user&&dashAuth.user.email)))||'manager'});
+  const next=Object.assign({}, rec, {burstOk:rec.burst?true:rec.burstOk, burstOkAt:Date.now(), burstOkBy:(dashAuth&&(dashAuth.name||(dashAuth.user&&dashAuth.user.email)))||'manager', reusedOk:rec.reusedPhoto?true:rec.reusedOk});
   fbSet(empPath(empId)+'/'+sPath+'/'+sKey+'/'+taskId, next);
   if(state.tasksLoc===empId){
     const info=taskPathFor(section);
@@ -1697,7 +1888,7 @@ function confirmBurstAt(empId, section, sKey, taskId){
       item.verified=taskBonusComplete(resolveTask(section, taskId, empId), next);
     });
     pack.done=pack.items.filter(i=>i.verified).length;
-    pack.needsReview=pack.items.some(i=>i.rec&&i.rec.proofV&&i.rec.burst&&!i.rec.burstOk);
+    pack.needsReview=pack.items.some(i=>i.rec&&i.rec.proofV&&((i.rec.burst&&!i.rec.burstOk)||(i.rec.reusedPhoto&&!i.rec.reusedOk)));
   }
   render();
 }
@@ -2495,8 +2686,13 @@ function listenAll() {
 
   // Inventory — Items to Order (owned by Cat)
   const invRef = fbRef('inventory');
-  invRef.on('value', snap => { state.inventory = snap.val() || {}; render(); });
+  invRef.on('value', snap => { state.inventory = snap.val() || {}; state.invLoaded = true; render(); });
   activeListeners.push({ ref: invRef, event: 'value' });
+
+  // Per-school clock-in gate for daily tasks. Missing or false stays off.
+  const gateRef = fbRef('tasks/clockGate');
+  gateRef.on('value', snap => { state.clockGate = snap.val() || {}; render(); });
+  activeListeners.push({ ref: gateRef, event: 'value' });
 
   // Incident reports (injuries / medical / safety) — Members section
   const incRef = fbRef('incidents');
@@ -10149,6 +10345,7 @@ state.gateUser       = null;          // gate: unlocked staff id
 state.gateMode       = null;          // gate screen: 'login' | 'register'
 state.gateMsg        = null;          // gate screen error message
 state.inventory      = {};           // Items to Order (Firebase-synced)
+state.clockGate      = {};           // locId → true turns on the daily clock-in gate. Default off.
 state.firstFive      = {};           // First 5 completions (Firebase-synced)
 state.reviews        = {};           // review tracker, all ratings (Firebase-synced)
 state.invFilter      = 'all';        // inventory status filter
@@ -10385,10 +10582,9 @@ function listenGoals(){
 function completeTask(section,taskId){
   const task=resolveTask(section, taskId);
   const kind=proofKindOf(task);
-  if(task.autoOnly||kind==='stoplight') return;
+  if(task.autoOnly||kind==='stoplight'||kind==='linked') return;
   if(kind!=='check') return;
-  const payload=attachBurst(section, taskId, {ts:Date.now(), proofV:1});
-  writeTask(section, taskId, payload);
+  commitTask(section, taskId, {ts:Date.now(), proofV:1});
 }
 // Resolve the Firebase path + current completion record for a task in a section
 function taskPathFor(section){
@@ -10410,11 +10606,30 @@ async function taskPhotoUpload(section,taskId,input){
     const ref=storage.ref('taskPhotos/'+state.tasksLoc+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.jpg');
     if(blob!==file){ await ref.put(blob,{contentType:'image/jpeg'}); } else { await ref.put(blob); }
     const url=await ref.getDownloadURL();
-    const prev=taskDoneRec(section,taskId)||{};
+    const prev=Object.assign({}, taskDoneRec(section,taskId)||{});
+    delete prev.burst; delete prev.burstOk;
     const photos=(prev.photos||[]).concat(url);
-    const payload=Object.assign({}, prev, {ts:Date.now(), proofV:1, photos});
-    delete payload.burst;
-    writeTask(section, taskId, payload);
+    const payload=Object.assign(prev, {ts:Date.now(), proofV:1, photos});
+    let hash='';
+    try {
+      if(crypto&&crypto.subtle&&blob.arrayBuffer){
+        const dig=await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+        hash=[...new Uint8Array(dig)].map(b=>b.toString(16).padStart(2,'0')).join('');
+      }
+    } catch(err) { hash=''; }
+    const period=taskPathFor(section).sKey;
+    if(hash){
+      payload.photoHashes=(payload.photoHashes||[]).concat(hash);
+      let prevHash=null;
+      try {
+        const snap=await fbRef('tasks/photoHashes/'+taskId+'/'+hash).once('value');
+        prevHash=snap&&snap.val?snap.val():null;
+      } catch(err) { prevHash=null; }
+      if(photoReuseHit(taskId, hash, prevHash?{[taskId]:{[hash]:prevHash}}:{}, period)) payload.reusedPhoto=true;
+    }
+    if(!commitTask(section, taskId, payload, {skipBurst:true})) return;
+    if(hash) fbSet('tasks/photoHashes/'+taskId+'/'+hash, {empId:state.tasksLoc, period, at:Date.now(), taskId});
+    if(taskId==='ph_floor') applyJoeyFloorLinks();
     // Index into the recent-photos feed (cross-school gallery)
     const list=section==='weekly'?getWeeklyRec(state.tasksLoc):getDailyTasks(state.tasksLoc);
     const t=(list||[]).find(x=>x.id===taskId); const label=((t&&t.text)||taskId).split(':')[0].trim();
@@ -10449,8 +10664,7 @@ function completeTaskWithNotes(section,taskId,forced){
   const payload=Object.assign(prev, {ts:Date.now(), proofV:1, notes});
   if(proofNoneMatch(task, notes)) payload.none=true;
   else delete payload.none;
-  attachBurst(section, taskId, payload);
-  writeTask(section, taskId, payload);
+  commitTask(section, taskId, payload);
 }
 function completeTaskCount(section,taskId){
   const task=resolveTask(section, taskId);
@@ -10459,8 +10673,7 @@ function completeTaskCount(section,taskId){
   const n=el?parseInt(el.value,10):NaN;
   const min=(task.min||(task.proof&&task.proof.min)||1);
   if(!Number.isFinite(n)||n<min){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
-  const payload=attachBurst(section, taskId, {ts:Date.now(), proofV:1, count:n});
-  writeTask(section, taskId, payload);
+  commitTask(section, taskId, {ts:Date.now(), proofV:1, count:n});
 }
 function proofSaveStructured(section, taskId){
   const task=resolveTask(section, taskId);
@@ -10512,8 +10725,7 @@ function proofSaveStructured(section, taskId){
     if(warn) warn.textContent='Add the required proof before this can be completed.';
     return;
   }
-  attachBurst(section, taskId, payload);
-  writeTask(section, taskId, payload);
+  if(!commitTask(section, taskId, payload)) return;
   if(kind==='invites'||kind==='bookings') mirrorPartyBookings(payload.bookings||[]);
   render();
 }
@@ -10568,6 +10780,10 @@ function renderProofEditor(section, task, rec, locked){
   const kind=proofKindOf(task);
   const p=task.proof||{};
   rec=rec||{};
+  if(kind==='linked'){
+    const text=proofSummaryText(task, rec);
+    return '<div class="proof-box" data-linked-task="1" style="font-size:12px;color:#475569;">Marked from the training-floor photo. Check wet-mopped or spray-mopped on that photo.'+(text?'<div style="margin-top:4px;font-weight:700;">'+esc(text)+'</div>':'')+'</div>';
+  }
   const saved=proofFieldsOk(task, rec);
   if(saved||locked){
     const text=proofSummaryText(task, rec);
@@ -10713,15 +10929,13 @@ function proofUseNone(section, taskId){
     const note=el?el.value.trim():'';
     if(!note){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
     const payload={ts:Date.now(), proofV:1, none:true, noneNote:note, notes:phrase+' — '+note};
-    attachBurst(section, taskId, payload);
-    writeTask(section, taskId, payload);
+    if(!commitTask(section, taskId, payload)) return;
     render();
     return;
   }
   if(proofKindOf(task)==='photoOrNone'){
     const payload={ts:Date.now(), proofV:1, none:true, notes:phrase, photos:(taskDoneRec(section,taskId).photos)||[]};
-    attachBurst(section, taskId, payload);
-    writeTask(section, taskId, payload);
+    if(!commitTask(section, taskId, payload)) return;
     render();
     return;
   }
@@ -11003,7 +11217,7 @@ function renderHistoryProofPanel(){
     const photos=(rec.photos)||[];
     html+='<div data-proof-row="'+esc(item.id)+'" style="border:1px solid var(--gray-100);border-radius:8px;padding:8px 10px;'+(rec.proofV&&rec.burst&&!rec.burstOk?'background:#fffbeb;':'')+'">';
     html+='<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;"><div style="font-size:13px;font-weight:700;">'+(item.verified?'✓ ':'○ ')+esc((item.text||item.id).split(':')[0])+'</div>';
-    if(rec.proofV&&rec.burst&&!rec.burstOk&&dashCanReviewProof()){
+    if(rec.proofV&&((rec.burst&&!rec.burstOk)||(rec.reusedPhoto&&!rec.reusedOk))&&dashCanReviewProof()){
       html+='<button onclick="confirmBurstAt(\''+focus.empId+'\',\'daily\',\''+focus.dateKey+'\',\''+item.id+'\')" style="padding:4px 10px;background:#b45309;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;">Confirm</button>';
     }
     html+='</div>';
@@ -11105,6 +11319,7 @@ function renderHistoryMonthHeatmap(){
 function renderTasksPage(){
   if (state.tasksLoc === 'jam') state.tasksLoc = (TASK_EMPLOYEES[0] || {}).id || 'mirandaS';
   const loc=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
+  if(state.tasksTab!=='history') maybeAutoCompleteTasks();
   const locData=state.tasksData[loc]||{};
   const dailyData=(locData.daily||{})[dateKey]||{};
   const weeklyData=(locData.weekly||{})[weekKey]||{};
@@ -11194,6 +11409,13 @@ function renderTasksPage(){
     html+='<div style="margin-top:4px;margin-bottom:4px;padding:12px 16px;background:var(--gray-50);border-radius:12px;border:1.5px dashed var(--gray-200);font-size:13px;color:var(--gray-500);font-weight:600;">⏸ Part-time</div>';
   }
 
+  if(dashAuth&&dashAuth.isAdmin){
+    const gateLoc=(getEmpById(loc)||{}).loc||'';
+    const gateOn=!!((state.clockGate||{})[gateLoc]);
+    html+='<div data-clock-gate="1" data-clock-gate-on="'+(gateOn?'1':'0')+'" style="margin:0 0 10px;padding:10px 14px;border-radius:10px;background:'+(gateOn?'#fffbeb':'#f8fafc')+';border:1px solid '+(gateOn?'#fde68a':'#e2e8f0')+';display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">';
+    html+='<div style="font-size:12px;color:#334155;"><b>Clock-in gate · '+esc(gateLoc)+':</b> '+(gateOn?'On. Daily tasks need a punch, with 15 minutes after clock-out for closing and photos.':'Off. Daily tasks are not tied to the clock. Leave this off until this school uses the kiosk only.')+'</div>';
+    html+='<button type="button" onclick="setClockGate(\''+gateLoc+'\','+(gateOn?'false':'true')+')" style="padding:6px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;font-size:12px;font-weight:800;cursor:pointer;">'+(gateOn?'Turn off':'Turn on')+'</button></div>';
+  }
   html+='<div class="date-nav">';
   html+='<button onclick="changeTasksDate(-1)">&larr; Yesterday</button>';
   html+='<span class="date-label">'+navLabel+'</span>';
@@ -11882,7 +12104,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   let postsFilled=0; if(isPosts){ for(let i=1;i<=task.posts;i++){ if(String(postVals[i]||'').trim()) postsFilled++; } }
   const _uploadCount = (isPosts && task.contentPillars) ? mergedContentUploads(state.tasksLoc, getTaskWeekKey(state.tasksDate), doneData||{}).filter(r => r._thisWeek).length : 0;
   if(isPosts && task.contentPillars) postsFilled = Math.max(postsFilled, _uploadCount);
-  const needsReview=!!(doneData&&doneData.proofV&&doneData.burst&&!doneData.burstOk);
+  const needsReview=!!(doneData&&doneData.proofV&&((doneData.burst&&!doneData.burstOk)||(doneData.reusedPhoto&&!doneData.reusedOk)));
   const isDone=taskSheetDone(section, task, doneData)&&!needsReview;
   const pb=taskPlaybook(task);
   const hasPlaybook=!!pb;
@@ -11999,6 +12221,18 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     }
     html+='<span id="phstat_'+section+'_'+task.id+'" style="font-size:11px;color:#888;"></span>';
     html+='</div>';
+    if(task.id==='ph_floor'&&state.tasksLoc==='joeyZ'&&!locked){
+      const due=joeyMopDue(state.tasksDate);
+      const rec=doneData||{};
+      if(due.wet||due.spray){
+        html+='<div class="proof-box" data-floor-mop="1">';
+        html+='<div style="font-size:12px;color:#475569;">This photo covers the mop. Check what this picture shows, then save. Spray-mop and wet-mop cannot be ticked on their own.</div>';
+        if(due.wet) html+='<label style="font-size:13px;font-weight:700;"><input type="checkbox" id="phflag_j_wetmop"'+(rec.wetMop?' checked':'')+'> Wet-mopped</label>';
+        if(due.spray) html+='<label style="font-size:13px;font-weight:700;"><input type="checkbox" id="phflag_j_spray"'+(rec.sprayMop?' checked':'')+'> Spray-mopped</label>';
+        html+='<button type="button" onclick="applyJoeyFloorLinks()" style="align-self:flex-start;padding:6px 12px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">Save mop on this photo</button>';
+        html+='</div>';
+      }
+    }
   }
   if(task.subs&&task.subs.length){ html+='<ul style="margin:0 0 0 34px;padding-left:18px;color:var(--gray-500);font-size:12px;line-height:1.75;">'+task.subs.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>'; }
   html+='</div>';return html;
