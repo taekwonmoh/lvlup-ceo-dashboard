@@ -158,6 +158,8 @@ const renderTcTeamSchedule = grab('renderTcTeamSchedule');
 const renderTcTimeoffModal = grab('renderTcTimeoffModal');
 const renderTcTimeoff = grab('renderTcTimeoff');
 const renderTcShiftModal = grab('renderTcShiftModal');
+const tcShiftOpen = grab('tcShiftOpen');
+const tcShiftSave = grab('tcShiftSave');
 const tcStaffLabel = grab('tcStaffLabel');
 const tcSchedStaff = grab('tcSchedStaff');
 const tcClockStaff = grab('tcClockStaff');
@@ -345,6 +347,80 @@ state.timeclock.timeoff = { to_ab: { empId: 'tc_muq58dnhkazw', start: tuesday, e
 const history = renderTcTimeoff();
 check(history.indexOf('Abigail Hoefling') >= 0 && history.indexOf('kept') >= 0, 'an existing time-off request still names Abigail');
 check(sandbox.__writes.length === 0, 'hiding people and labeling names does not write');
+
+state.timeclock.staff.tc_ash.ptoDays = 15;
+state.timeclock.pto = {};
+sandbox.__writes.length = 0;
+tcShiftOpen('tc_ash', '2026-11-16', '', 'eastmad');
+const addShift = renderTcShiftModal();
+check(addShift.indexOf('data-shift-mode="shift"') >= 0, 'add box opens on Shift');
+check(addShift.indexOf('data-shift-tab="timeoff"') >= 0, 'a scheduler can switch the add box to Time off');
+check(addShift.indexOf('Ash Mouille') >= 0, 'add box names Ash Mouille');
+check(addShift.indexOf('>Location<') >= 0 || addShift.indexOf('>Location') >= 0, 'shift mode still asks for a location');
+state.tcShiftEdit.mode = 'timeoff';
+const addOff = renderTcShiftModal();
+check(addOff.indexOf('data-shift-mode="timeoff"') >= 0, 'time-off mode is marked on the modal');
+check(addOff.indexOf('Add time off') >= 0, 'the title switches to Add time off');
+check(addOff.indexOf('value="2026-11-16"') >= 0, 'time off defaults to the clicked day');
+check(addOff.indexOf('Paid (PTO)') >= 0 && addOff.indexOf('Unpaid') >= 0, 'a full-timer can choose paid or unpaid');
+check(addOff.indexOf('1 week') >= 0, 'the range can cover more than one day');
+check(addOff.indexOf('>Location<') < 0, 'time-off mode does not ask for a shift location');
+check(sandbox.__writes.length === 0, 'opening the modal does not write');
+tcShiftSave();
+const offWrite = sandbox.__writes.filter(w => String(w.path).indexOf('timeclock/timeoff/') === 0);
+const ptoWrite = sandbox.__writes.filter(w => String(w.path).indexOf('timeclock/pto/tc_ash/') === 0);
+check(offWrite.length === 1, 'saving time off writes one time-off record');
+check(offWrite[0] && offWrite[0].val.status === 'approved' && offWrite[0].val.reqVia === 'schedule', 'a manager entry is stored approved');
+check(offWrite[0] && offWrite[0].val.type === 'pto' && offWrite[0].val.days === 1 && offWrite[0].val.start === '2026-11-16' && offWrite[0].val.end === '2026-11-16', 'paid time off uses the clicked day');
+check(offWrite[0] && offWrite[0].val.empId === 'tc_ash' && offWrite[0].val.ptoLogged, 'the request points at its PTO row');
+check(ptoWrite.length === 1 && ptoWrite[0].val.days === 1 && ptoWrite[0].val.date === '2026-11-16' && ptoWrite[0].val.note === 'Approved time off', 'PTO is logged the same way Approve logs it');
+check(ptoWrite[0] && offWrite[0] && ptoWrite[0].val.fromRequest === offWrite[0].path.split('/').pop() && ptoWrite[0].path.endsWith('/' + offWrite[0].val.ptoLogged), 'the PTO row names the time-off record');
+check(state.tcShowApproved === true, 'the time-off card opens the approved list');
+
+sandbox.__writes.length = 0;
+state.tcShiftEdit = { staffId: 'tc_ash', dateKey: '2026-11-16', sid: '', mode: 'timeoff', offStart: '2026-11-16', offEnd: '2026-11-18', offType: 'unpaid', offNote: 'family trip', start: '16:00', end: '19:00', loc: 'eastmad', role: '' };
+tcShiftSave();
+const unpaid = sandbox.__writes.filter(w => String(w.path).indexOf('timeclock/timeoff/') === 0);
+const unpaidPto = sandbox.__writes.filter(w => String(w.path).indexOf('timeclock/pto/') === 0);
+check(unpaid.length === 1 && unpaid[0].val.type === 'unpaid' && unpaid[0].val.days === 3 && unpaid[0].val.note === 'family trip' && unpaid[0].val.status === 'approved', 'a longer unpaid range is one approved request');
+check(unpaidPto.length === 0, 'unpaid time off does not touch the PTO balance');
+
+sandbox.__writes.length = 0;
+state.tcShiftEdit = { staffId: 'tc_andy', dateKey: '2026-11-16', sid: '', mode: 'timeoff', offStart: '2026-11-16', offEnd: '2026-11-16', offType: 'pto', offNote: '', start: '16:00', end: '19:00', loc: 'eastmad', role: '' };
+tcShiftSave();
+const hourly = sandbox.__writes.find(w => String(w.path).indexOf('timeclock/timeoff/') === 0);
+check(hourly && hourly.val.type === 'unpaid' && !hourly.val.ptoLogged, 'hourly staff stay unpaid even if Paid was selected');
+
+state.tcShiftEdit = { staffId: 'tc_ash', dateKey: '2026-11-16', sid: 's_existing', mode: 'timeoff', offStart: '2026-11-16', offEnd: '2026-11-16', offType: 'pto', offNote: '', start: '16:00', end: '19:00', loc: 'eastmad', role: 'Lead' };
+const editModal = renderTcShiftModal();
+check(editModal.indexOf('Edit shift') >= 0 && editModal.indexOf('data-shift-tab="timeoff"') < 0, 'editing a shift does not offer the time-off switch');
+
+dashAuth.isAdmin = false;
+dashAuth.dashRole = 'frontdesk';
+state.tcShiftEdit = { staffId: 'tc_ash', dateKey: '2026-11-16', sid: '', mode: 'shift', offStart: '2026-11-16', offEnd: '2026-11-16', offType: 'pto', offNote: '', start: '16:00', end: '19:00', loc: 'eastmad', role: '' };
+const deskModal = renderTcShiftModal();
+check(deskModal.indexOf('data-shift-tab="timeoff"') < 0, 'front desk does not see the time-off switch');
+sandbox.__writes.length = 0;
+state.tcShiftEdit.mode = 'timeoff';
+tcShiftSave();
+check(sandbox.__writes.length === 0, 'front desk cannot file time off from the shift box');
+dashAuth.isAdmin = true;
+dashAuth.dashRole = 'admin';
+state.tcShiftEdit = null;
+
+if (process.argv.includes('--modal')) {
+  dashAuth.isAdmin = true;
+  dashAuth.dashRole = 'admin';
+  state.timeclock.staff.tc_ash.ptoDays = 15;
+  state.timeclock.pto = { tc_ash: {} };
+  state.tcShiftEdit = { staffId: 'tc_ash', dateKey: '2026-11-16', sid: '', mode: 'timeoff', offStart: '2026-11-16', offEnd: '2026-11-16', offType: 'pto', offNote: '', start: '16:00', end: '19:00', loc: 'eastmad', role: '' };
+  const modal = renderTcShiftModal();
+  const out = process.argv[process.argv.indexOf('--modal') + 1] || '/tmp/add-timeoff-modal.html';
+  fs.writeFileSync(out, `<!doctype html><html><head><meta charset="utf-8"><title>Add time off</title>
+<style>body{margin:0;background:#e8edf5;font-family:system-ui,Segoe UI,sans-serif;}</style>
+</head><body>${modal}</body></html>`);
+  console.log('wrote ' + out);
+}
 
 if (process.argv.includes('--html')) {
   const locArg = process.argv.includes('--loc') ? process.argv[process.argv.indexOf('--loc') + 1] : 'goninjaW';

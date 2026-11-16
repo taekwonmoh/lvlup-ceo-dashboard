@@ -6884,13 +6884,51 @@ function tcShiftOpen(staffId, dateKey, sid, defaultLoc){
   let loc0 = sh.loc || defaultLoc || st.loc || 'waunakee';
   const sc = tcSchedScope();                                   // keep a scoped user's default on a location they can actually save
   if (sc && !sc.locs.has(loc0) && !(sc.selfId && staffId === sc.selfId) && sc.locs.size) loc0 = [...sc.locs][0];
-  state.tcShiftEdit = { staffId, dateKey, sid: sid || '', start: tcPadTime(sh.start) || '16:00', end: tcPadTime(sh.end) || '19:00', loc: loc0, role: sh.role || '' };
+  const fullTime = !!st.fullTime;
+  state.tcShiftEdit = { staffId, dateKey, sid: sid || '', start: tcPadTime(sh.start) || '16:00', end: tcPadTime(sh.end) || '19:00', loc: loc0, role: sh.role || '', mode: 'shift', offStart: dateKey, offEnd: dateKey, offType: fullTime ? 'pto' : 'unpaid', offNote: '' };
   render();
 }
-function tcShiftField(f, v){ if (state.tcShiftEdit) state.tcShiftEdit[f] = v; }
+function tcShiftField(f, v){
+  const e = state.tcShiftEdit; if (!e) return;
+  e[f] = v;
+  if (f === 'offStart' && (!e.offEnd || e.offEnd < v)) e.offEnd = v;
+  if (f === 'mode' || f === 'offStart' || f === 'offEnd' || f === 'offType') render();
+}
+function tcShiftOffQuick(n){
+  const e = state.tcShiftEdit; if (!e) return;
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(e.offStart) ? e.offStart : (e.dateKey || tcDateKey());
+  const d = new Date(base + 'T00:00:00'); d.setDate(d.getDate() + (n - 1));
+  e.offStart = base; e.offEnd = tcDateKey(d); render();
+}
 function tcShiftClose(){ state.tcShiftEdit = null; render(); }
+// Same PTO row the Approve button writes. Callers still set ptoLogged on the request.
+function tcApprovedPtoWrite(empId, requestId, start, end, days){
+  const eid = 'p_' + Date.now().toString(36);
+  fbSet('timeclock/pto/' + empId + '/' + eid, { date: start, days: days || 1, note: 'Approved time off' + (end && end !== start ? ' (' + start + '→' + end + ')' : ''), enteredAt: Date.now(), fromRequest: requestId });
+  return eid;
+}
+function tcShiftCanOfferTimeoff(){ return location.hash !== '#clock' && dashCan('shiftEdit'); }
+function tcShiftSaveTimeoff(){
+  const e = state.tcShiftEdit; if (!e) return;
+  if (!tcShiftCanOfferTimeoff()) { state.tcShiftEdit = null; render(); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(e.offStart) || !/^\d{4}-\d{2}-\d{2}$/.test(e.offEnd)) { alert('Pick a start and end date.'); return; }
+  if (e.offEnd < e.offStart) { alert('The end date can’t be before the start date.'); return; }
+  const st = (tcData().staff || {})[e.staffId] || {};
+  const type = (st.fullTime && e.offType === 'pto') ? 'pto' : 'unpaid';
+  const days = tcDaysInclusive(e.offStart, e.offEnd);
+  const id = 'to_' + Date.now().toString(36);
+  const now = Date.now();
+  const rec = { empId: e.staffId, start: e.offStart, end: e.offEnd, days, type, note: (e.offNote || '').trim() || null, status: 'approved', reqAt: now, decidedAt: now, reqVia: 'schedule' };
+  if (type === 'pto') rec.ptoLogged = tcApprovedPtoWrite(e.staffId, id, e.offStart, e.offEnd, days);
+  fbSet('timeclock/timeoff/' + id, rec);
+  state.tcShiftEdit = null;
+  state.tcShowApproved = true;
+  state.tcMsg = { type: 'ok', text: 'Time off saved (' + tcFmtDays(days) + ' day' + (days > 1 ? 's' : '') + ', ' + (type === 'pto' ? 'PTO' : 'unpaid') + ') — already approved.' };
+  render();
+}
 function tcShiftSave(){
   const e = state.tcShiftEdit; if (!e) return;
+  if (e.mode === 'timeoff' && !e.sid) { tcShiftSaveTimeoff(); return; }
   if (!tcCanEditShift(e.loc, e.staffId)) { state.tcShiftEdit = null; tcScopeBlock(); return; }
   if (!/^\d{1,2}:\d{2}$/.test(e.start) || !/^\d{1,2}:\d{2}$/.test(e.end)) { alert('Enter a valid start and end time.'); return; }
   const sid = e.sid || ('s_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5));
@@ -6908,21 +6946,48 @@ function tcShiftDuplicate(){
 }
 function renderTcShiftModal(){
   const e = state.tcShiftEdit; if (!e) return '';
-  const st = (tcData().staff || {})[e.staffId] || {};
+  const st = Object.assign({ id: e.staffId }, (tcData().staff || {})[e.staffId] || {});
   const dLabel = new Date(e.dateKey + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
   const _sc = tcSchedScope(); const _allowed = _sc ? LOCATIONS.filter(l => _sc.locs.has(l.id) || l.id === e.loc) : LOCATIONS;
   const locOpts = _allowed.map(l => '<option value="' + l.id + '"' + (e.loc === l.id ? ' selected' : '') + '>' + esc(l.name) + '</option>').join('');
   const fld = 'width:100%;box-sizing:border-box;border:1px solid #e3e6ef;border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit;margin-top:4px;';
+  const offerOff = !e.sid && tcShiftCanOfferTimeoff();
+  const offMode = offerOff && e.mode === 'timeoff';
+  const title = e.sid ? 'Edit shift' : (offMode ? 'Add time off' : 'Add shift');
   let h = '<div onclick="if(event.target===this)tcShiftClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:400;padding:16px;">';
-  h += '<div style="background:#fff;border-radius:14px;max-width:360px;width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">';
-  h += '<div style="padding:16px 18px;border-bottom:1px solid #eef0f6;"><div style="font-size:16px;font-weight:800;color:#1a1a2e;">' + (e.sid ? 'Edit shift' : 'Add shift') + '</div><div style="font-size:12px;color:#888;margin-top:2px;">' + esc(tcStaffLabel(st, e.staffId) || '') + ' · ' + esc(dLabel) + '</div></div>';
+  h += '<div data-shift-modal="1" data-shift-mode="' + (offMode ? 'timeoff' : 'shift') + '" style="background:#fff;border-radius:14px;max-width:400px;width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);">';
+  h += '<div style="padding:16px 18px;border-bottom:1px solid #eef0f6;"><div style="font-size:16px;font-weight:800;color:#1a1a2e;">' + title + '</div><div style="font-size:12px;color:#888;margin-top:2px;">' + esc(tcStaffLabel(st, e.staffId) || '') + ' · ' + esc(dLabel) + '</div></div>';
   h += '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;">';
-  h += '<div style="display:flex;gap:10px;"><label style="flex:1;font-size:12px;font-weight:700;color:#555;">Start<input type="time" value="' + esc(e.start) + '" onchange="tcShiftField(\'start\',this.value)" style="' + fld + '"></label><label style="flex:1;font-size:12px;font-weight:700;color:#555;">End<input type="time" value="' + esc(e.end) + '" onchange="tcShiftField(\'end\',this.value)" style="' + fld + '"></label></div>';
-  h += '<label style="font-size:12px;font-weight:700;color:#555;">Location<select onchange="tcShiftField(\'loc\',this.value)" style="' + fld + '">' + locOpts + '</select></label>';
-  h += '<label style="font-size:12px;font-weight:700;color:#555;">Role / title <span style="font-weight:400;color:#aaa;">(optional)</span><input type="text" value="' + esc(e.role) + '" placeholder="e.g. Lead Instructor" onchange="tcShiftField(\'role\',this.value)" style="' + fld + '"></label>';
+  if (offerOff) {
+    const tab = (id, label) => { const on = (offMode ? 'timeoff' : 'shift') === id; return '<button type="button" data-shift-tab="' + id + '" onclick="tcShiftField(\'mode\',\'' + id + '\')" style="flex:1;border:none;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:800;cursor:pointer;background:' + (on ? '#fff' : 'transparent') + ';color:' + (on ? '#1a1a2e' : '#64748b') + ';box-shadow:' + (on ? '0 1px 2px rgba(0,0,0,.08)' : 'none') + ';">' + label + '</button>'; };
+    h += '<div style="display:flex;gap:3px;background:#f1f3f9;border-radius:10px;padding:3px;">' + tab('shift', 'Shift') + tab('timeoff', 'Time off') + '</div>';
+  }
+  if (!offMode) {
+    h += '<div style="display:flex;gap:10px;"><label style="flex:1;font-size:12px;font-weight:700;color:#555;">Start<input type="time" value="' + esc(e.start) + '" onchange="tcShiftField(\'start\',this.value)" style="' + fld + '"></label><label style="flex:1;font-size:12px;font-weight:700;color:#555;">End<input type="time" value="' + esc(e.end) + '" onchange="tcShiftField(\'end\',this.value)" style="' + fld + '"></label></div>';
+    h += '<label style="font-size:12px;font-weight:700;color:#555;">Location<select onchange="tcShiftField(\'loc\',this.value)" style="' + fld + '">' + locOpts + '</select></label>';
+    h += '<label style="font-size:12px;font-weight:700;color:#555;">Role / title <span style="font-weight:400;color:#aaa;">(optional)</span><input type="text" value="' + esc(e.role) + '" placeholder="e.g. Lead Instructor" onchange="tcShiftField(\'role\',this.value)" style="' + fld + '"></label>';
+  } else {
+    const offStart = e.offStart || e.dateKey;
+    const offEnd = e.offEnd || offStart;
+    const days = (offEnd >= offStart) ? tcDaysInclusive(offStart, offEnd) : 0;
+    const qc = (n, lbl) => '<button type="button" onclick="tcShiftOffQuick(' + n + ')" style="flex:1;padding:6px 4px;border-radius:999px;border:1px solid ' + (days === n ? '#0891b2' : '#e3e6ef') + ';background:' + (days === n ? '#ecfeff' : '#fff') + ';color:' + (days === n ? '#0e7490' : '#64748b') + ';font-size:11.5px;font-weight:700;cursor:pointer;">' + lbl + '</button>';
+    h += '<div style="font-size:12px;color:#64748b;line-height:1.45;">All-day, same as a time-off request. One day is the day you clicked. Extend the end date for a longer stretch.</div>';
+    h += '<div style="display:flex;gap:10px;"><label style="flex:1;font-size:12px;font-weight:700;color:#555;">From<input type="date" value="' + esc(offStart) + '" onchange="tcShiftField(\'offStart\',this.value)" style="' + fld + '"></label><label style="flex:1;font-size:12px;font-weight:700;color:#555;">To<input type="date" value="' + esc(offEnd) + '" min="' + esc(offStart) + '" onchange="tcShiftField(\'offEnd\',this.value)" style="' + fld + '"></label></div>';
+    h += '<div style="display:flex;gap:6px;">' + qc(1, '1 day') + qc(2, '2 days') + qc(3, '3 days') + qc(7, '1 week') + '</div>';
+    if (days) h += '<div style="font-size:12px;font-weight:800;color:#0e7490;">' + tcFmtDays(days) + ' day' + (days > 1 ? 's' : '') + '</div>';
+    if (st.fullTime) {
+      const per = tcPtoPeriod(st); const rem = per.allot - tcPtoUsedInPeriod(e.staffId, per.start, per.end);
+      const seg = (val, label) => { const on = (e.offType || 'pto') === val; return '<button type="button" data-off-type="' + val + '" onclick="tcShiftField(\'offType\',\'' + val + '\')" style="flex:1;padding:10px 8px;border-radius:10px;border:1.5px solid ' + (on ? '#0891b2' : '#e3e6ef') + ';background:' + (on ? '#ecfeff' : '#fff') + ';color:' + (on ? '#0e7490' : '#334') + ';font-size:13px;font-weight:800;cursor:pointer;">' + label + '</button>'; };
+      h += '<div style="display:flex;gap:8px;">' + seg('pto', 'Paid (PTO)') + seg('unpaid', 'Unpaid') + '</div>';
+      if ((e.offType || 'pto') === 'pto') { const rc = rem <= 0 ? '#dc2626' : rem <= 2 ? '#d97706' : '#16a34a'; h += '<div style="font-size:12px;color:#475569;">PTO balance: <b style="color:' + rc + ';">' + tcFmtDays(rem) + '</b> of ' + tcFmtDays(per.allot) + ' days left' + (days && days > rem ? ' <span style="color:#b45309;font-weight:700;">· ' + tcFmtDays(days - rem) + ' over the balance</span>' : '') + '</div>'; }
+    } else {
+      h += '<div style="font-size:12px;color:#475569;background:#f7f9ff;border:1px solid #e3e9f5;border-radius:10px;padding:10px 12px;">Unpaid time off. Hourly staff don’t accrue PTO.</div>';
+    }
+    h += '<label style="font-size:12px;font-weight:700;color:#555;">Reason <span style="font-weight:400;color:#aaa;">(optional)</span><input type="text" value="' + esc(e.offNote || '') + '" placeholder="e.g. family trip" onchange="tcShiftField(\'offNote\',this.value)" style="' + fld + '"></label>';
+  }
   h += '</div>';
   h += '<div style="display:flex;gap:10px;padding:14px 18px;border-top:1px solid #eef0f6;">';
-  h += '<button onclick="tcShiftSave()" style="flex:1;padding:11px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Save</button>';
+  h += '<button onclick="tcShiftSave()" style="flex:1;padding:11px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">' + (offMode ? 'Save time off' : 'Save') + '</button>';
   if (e.sid) h += '<button onclick="tcShiftDuplicate()" title="Add a copy of this shift on the same day" style="padding:11px 14px;background:#fff;color:#4169E1;border:1px solid #b9c6f5;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Duplicate</button>';
   if (e.sid) h += '<button onclick="tcShiftDelete()" style="padding:11px 14px;background:#fff;color:#dc2626;border:1px solid #fca5a5;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Delete</button>';
   h += '<button onclick="tcShiftClose()" style="padding:11px 14px;background:#f1f3f9;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>';
@@ -6951,7 +7016,7 @@ function renderTcGuideModal(){
   h += '<p style="font-size:13px;color:#667;margin:12px 0 2px;">The three things leads do day to day. Everything lives on this <b>Schedule</b> page.</p>';
   h += sec('1', 'Build the schedule', 'Here on the Master Schedule', [
     'Use the ' + bt('‹ ›') + ' arrows to pick the week.',
-    'In a person’s day box tap ' + bt('+') + ' → set <b>Start</b>, <b>End</b>, <b>Location</b>, optional <b>Role</b> → ' + bt('Save', 1) + '.',
+    'In a person’s day box tap ' + bt('+') + ' → set <b>Start</b>, <b>End</b>, <b>Location</b>, optional <b>Role</b> → ' + bt('Save', 1) + '. Switch that box to <b>Time off</b> to record approved all-day time off instead.',
     'Repeat a week fast with ' + bt('⧉ Copy last week') + ', then tweak what changed.',
     '<b>Drag</b> a shift to another day or person to move it — works on a phone too.',
     'Tap a shift to edit. ' + bt('Duplicate') + ' copies it to the same day; ' + bt('Delete') + ' removes it.',
@@ -7301,8 +7366,7 @@ function tcTimeoffDecision(id, status){
   fbSet(base + 'status', status); fbSet(base + 'decidedAt', Date.now());
   // Approved PTO auto-deducts from the full-timer's PTO balance (once — guarded against re-approve).
   if (status === 'approved' && t.type === 'pto' && !t.ptoLogged) {
-    const eid = 'p_' + Date.now().toString(36);
-    fbSet('timeclock/pto/' + t.empId + '/' + eid, { date: t.start, days: t.days || 1, note: 'Approved time off' + (t.end && t.end !== t.start ? ' (' + t.start + '→' + t.end + ')' : ''), enteredAt: Date.now(), fromRequest: id });
+    const eid = tcApprovedPtoWrite(t.empId, id, t.start, t.end, t.days);
     fbSet(base + 'ptoLogged', eid);
   }
   // Un-approving (deny/cancel) a previously-logged PTO request restores the balance.
