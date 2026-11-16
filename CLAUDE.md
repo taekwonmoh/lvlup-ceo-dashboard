@@ -23,7 +23,11 @@ This app shares one Firebase project (`lvlup-members-app`) with the **lvlupma.co
 
 **Canonical location IDs** (both apps must agree): `waunakee, eastmad, verona, deforest, goninjaW, goninjaV`. Go Ninja = `goninjaW`/`goninjaV` (`GONINJA_LOC_IDS`). **Never `eastmadison`** — the dashboard uses `eastmad`; the website maps `eastmadison`/`east madison` → `eastmad` on the way in.
 
-**Staff schema** `ceo/timeclock/staff/{id}` = `{ name, loc, fullTime?, hireDate?, ptoAnchor?, ptoDays?, ptoFirstYearDays?, scheduleOnly? }`. Rosters are grouped **by brand only** (LVLUP vs Go Ninja), never by individual location. This is the clock roster, not the login record. Logins live at root `staff/{emailKey}` (see below).
+**Staff schema** `ceo/timeclock/staff/{id}` = `{ name, loc, fullTime?, hireDate?, ptoAnchor?, ptoDays?, ptoFirstYearDays?, scheduleOnly?, schedAll?, schedLocs? }`. Rosters are grouped **by brand only** (LVLUP vs Go Ninja), never by individual location. This is the clock roster, not the login record. Logins live at root `staff/{emailKey}` (see below).
+
+`loc` is the home school. A Master Schedule location chip lists someone who has a shift there that week, anyone with `schedAll` on a LVLUP chip, anyone whose `schedLocs` includes that school, and Tarik Murrell on East Madison. Setup has no control for `schedAll` or `schedLocs`. Tarik (`tc_tarik`, home `waunakee`, also matched by `tmurrell.lvlupma@gmail.com` or a name containing Murrell) is assignable on `eastmad` from `tcSchedulableAt` even before he has a shift there. His home school, `tarikM` checklist, bathroom-photo days, and bonus seat stay the Waunakee lead list. East Madison daily tasks stay on Ash (`ash`). The posted team schedule still shows only people with a posted shift that week.
+
+Scheduler labels (`tcStaffLabel`) are display only. A stored `name` that is already first + last is shown as stored. A single-word name gets a surname only when that surname is already written in `index.html`: Bryan Goad, Joey Zaworski, Miranda Smith. The clock record is not rewritten.
 
 ## Dashboard access tiers (`staff/{emailKey}`)
 
