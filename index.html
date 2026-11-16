@@ -5815,7 +5815,7 @@ function tcStaffList(){ const s = tcData().staff || {}; return Object.entries(s)
 const TC_NO_SCHEDULE = new Set(['tc_jam', 'tc_grokbot']);
 // Whole-name labels. Display only — the stored clock name is not rewritten.
 // Ms K (msk.lvlupma@gmail.com) is the Sue seat. Abigail (ahoefling7) is a
-// different clock record that also opens the sueK checklist, so she is not renamed.
+// different clock record; her schedule name is Abigail Hoefling.
 const TC_DISPLAY_FULL = {
   tc_muloo5prks0u: 'Sue Kondratowicz',
   'msk.lvlupma@gmail.com': 'Sue Kondratowicz',
@@ -5830,6 +5830,7 @@ const TC_DISPLAY_LAST = {
   tc_mumrsmkzjt7z: 'Trevino', 'ctrevino.lvlupma@gmail.com': 'Trevino',
   tc_erika: 'Weiss', 'applezgirl69@gmail.com': 'Weiss',
   tc_mario: 'Sanchez', 'mariosanchez566@gmail.com': 'Sanchez',
+  tc_muq58dnhkazw: 'Hoefling', 'ahoefling7@gmail.com': 'Hoefling',
 };
 function tcStaffLabel(s, id){
   s = s || {};
@@ -5852,7 +5853,6 @@ function tcSchedHidden(s){
   if (!s) return false;
   const email = String(s.email || '').trim().toLowerCase();
   const name = String(s.name || '').trim().toLowerCase();
-  if (s.id === 'tc_muq58dnhkazw' || email === 'ahoefling7@gmail.com') return true;   // Abigail
   // Location-less Meredith. Same Slack identity as Meredith Fitz, no school.
   if (s.id === 'tc_mvvjbiq88fhd') return true;
   if (name === 'meredith' && !s.loc && !email) return true;
@@ -5872,12 +5872,22 @@ function tcIsTarik(s){
   const name = String(s.name || '').toLowerCase();
   return s.id === 'tc_tarik' || email === 'tmurrell.lvlupma@gmail.com' || name.includes('murrell');
 }
+function tcIsAbigail(s){
+  s = s || {};
+  const email = String(s.email || '').trim().toLowerCase();
+  return s.id === 'tc_muq58dnhkazw' || email === 'ahoefling7@gmail.com';
+}
 function tcSchedulableAt(s, locId){
   if (!s || !locId || locId === 'all') return true;
   if (s.schedAll && LVLUP_LOC_IDS.includes(locId)) return true;
   if (Array.isArray(s.schedLocs) && s.schedLocs.indexOf(locId) >= 0) return true;
-  return locId === 'eastmad' && tcIsTarik(s);
+  if (locId === 'eastmad' && tcIsTarik(s)) return true;
+  // Abigail is assignable at Go Ninja Waunakee before she has a shift there.
+  // LVLUP chips still show her only in a week she already has a shift.
+  return locId === 'goninjaW' && tcIsAbigail(s);
 }
+// Posted board: same Go Ninja Waunakee exception. Tarik still waits for a posted East Madison shift.
+function tcPostedAlways(s, locId){ return locId === 'goninjaW' && tcIsAbigail(s); }
 function tcCfg(loc){ return (tcData().config || {})[loc] || null; }
 function tcEmpEntries(id){ return (tcData().entries || {})[id] || {}; }
 async function tcHash(pin){ const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lvlup:' + pin)); return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); }
@@ -7458,8 +7468,9 @@ function renderTcTeamSchedule(){
   const weekKey = tcDateKey(days[0]);
   const pubRec = tcPublishedRec(weekKey);
   const shiftsOf = (s, dk) => tcPostedShifts(s.id, dk).filter(sh => filter === 'all' || sh.loc === filter).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-  // When a location is selected, only show staff who actually work there this week.
-  const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length));
+  // A location chip shows people with a posted shift there. Abigail also stays
+  // on Go Ninja Waunakee before she has one. LVLUP chips do not do that for her.
+  const rows = filter === 'all' ? staff : staff.filter(s => days.some(d => shiftsOf(s, tcDateKey(d)).length) || tcPostedAlways(s, filter));
   let h = '<div style="background:#fff;border-radius:16px;margin-top:14px;padding:16px;">';
   const postedNote = pubRec ? '<span style="font-size:10.5px;color:#16a34a;font-weight:700;">✓ posted' + (pubRec.publishedAt ? ' ' + timeAgo(pubRec.publishedAt) : '') + '</span>' : '<span style="font-size:10.5px;color:#b45309;font-weight:700;">not posted yet</span>';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div style="font-size:14px;font-weight:800;color:#1a1a2e;">📆 Team schedule</div>' + postedNote + '</div><span style="display:flex;align-items:center;gap:2px;"><button onclick="tcWeek(-1)" style="' + nav + '">‹</button><b style="font-size:12px;min-width:96px;text-align:center;">' + wkLabel + '</b><button onclick="tcWeek(1)" style="' + nav + '">›</button></span></div>';
@@ -7520,7 +7531,7 @@ function renderTcTeamDayView(ctx){
     + '<span style="font-size:13px;color:#8894b0;font-weight:600;">' + (dSel.getMonth() + 1) + '/' + dSel.getDate() + '</span>'
     + (hnSel ? '<span style="font-size:11px;font-weight:800;color:#9a3412;background:#ffedd5;border-radius:6px;padding:2px 8px;">🎉 ' + esc(hnSel) + '</span>' : '')
     + '</div>';
-  const dayRows = staff.filter(s => shiftsOf(s, dkSel).length);
+  const dayRows = staff.filter(s => shiftsOf(s, dkSel).length || tcPostedAlways(s, filter));
   if (!dayRows.length) { h += '<div style="padding:20px 6px;text-align:center;color:#aaa;font-size:13px;">No shifts scheduled this day.</div></div>'; return h; }
   dayRows.forEach(s => {
     const shifts = shiftsOf(s, dkSel);
