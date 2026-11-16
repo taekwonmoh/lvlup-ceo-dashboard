@@ -343,6 +343,207 @@ check(histWeek && histWeek.total === weeklyTasksFor('ash', WEEK_KEY).length, 'we
 check(!weeklyTasksFor('ash', WEEK_KEY).some(t => t.id === 'ph_bathroom'), 'weekly history source excludes bathroom');
 check(sandbox.__writes.length === 0, 'cadence test did not write');
 
+// ── Proof of work. Legacy records (no proofV) keep the old score. ──
+const taskBonusComplete = grab('taskBonusComplete');
+const taskRecord = grab('taskRecord');
+const proofFieldsOk = grab('proofFieldsOk');
+const taskBurstIds = grab('taskBurstIds');
+const completeTask = grab('completeTask');
+const completeTaskWithNotes = grab('completeTaskWithNotes');
+const completeTaskCount = grab('completeTaskCount');
+const proofSaveStructured = grab('proofSaveStructured');
+const FD_QUESTIONS_SCORED_BEFORE = grab('FD_QUESTIONS_SCORED_BEFORE');
+
+vm.runInContext(`
+  const __els = {};
+  function __blankEl(){
+    const el = { style:{}, innerHTML:'', textContent:'', value:'', className:'', id:'' };
+    el.focus = function(){};
+    el.addEventListener = function(){};
+    el.appendChild = function(){};
+    el.setAttribute = function(){};
+    el.querySelectorAll = function(){ return []; };
+    el.classList = { add(){}, remove(){}, toggle(){} };
+    return el;
+  }
+  document.getElementById = function(id){ return __els[id] || __blankEl(); };
+  document.__els = __els;
+  document.__blankEl = __blankEl;
+`, sandbox);
+function setEl(id, value) {
+  vm.runInContext(
+    'document.__els[' + JSON.stringify(id) + '] = { value: ' + JSON.stringify(value) + ', style: {}, focus() {} };',
+    sandbox
+  );
+}
+function clearEls() {
+  vm.runInContext('document.__els = {}; document.getElementById = function(id){ return document.__els[id] || document.__blankEl(); };', sandbox);
+}
+
+function scoreBoth(empId, dateKey, dd) {
+  const tasks = dailyTasksForDate(empId, dateKey);
+  let oldDone = 0, newDone = 0;
+  tasks.forEach(t => {
+    if (taskDone(dd, t.id)) oldDone++;
+    if (taskBonusComplete(t, taskRecord(dd, t.id))) newDone++;
+  });
+  return { oldDone, newDone, total: tasks.length };
+}
+
+['bryanG', 'ash', 'joeyZ', 'tarikM', 'mirandaS', 'sueK', 'andyR', 'marioS', 'erikaD'].forEach(emp => {
+  WEEK.forEach(day => {
+    const tasks = dailyTasksForDate(emp, day);
+    const dd = {};
+    tasks.forEach(t => { dd[t.id] = { ts: 1 }; });
+    const s = scoreBoth(emp, day, dd);
+    check(s.oldDone === s.total && s.newDone === s.oldDone, emp + ' ' + day + ' legacy checkmarks still score the same');
+  });
+});
+
+const joeyMon = '2026-10-05';
+const joeyOld = {};
+dailyTasksForDate('joeyZ', joeyMon).forEach(t => { joeyOld[t.id] = { ts: 1 }; });
+delete joeyOld.closing;
+joeyOld.eos = { ts: 1 };
+const joeyAlias = scoreBoth('joeyZ', joeyMon, joeyOld);
+check(taskDone(joeyOld, 'closing') && joeyAlias.oldDone === joeyAlias.newDone && joeyAlias.newDone === joeyAlias.total, 'eos alias still completes closing and the day still scores the same');
+
+const rosters = dailyTasksForDate('ash', '2026-11-16').find(t => t.id === 'rosters');
+check(taskBonusComplete(rosters, { ts: 1 }), 'a pre-proof roster check still counts');
+check(!taskBonusComplete(rosters, { ts: 2, proofV: 1, notes: '   ' }), 'a new roster check with a blank note does not count');
+check(taskBonusComplete(rosters, { ts: 3, proofV: 1, notes: 'Tigers 7, Kids 11. No new / no trials' }), 'roster notes count');
+
+const stoplight = dailyTasksForDate('ash', '2026-11-16').find(t => t.id === 'stoplight');
+check(taskBonusComplete(stoplight, { ts: 1, count: 2 }), 'an old stoplight count of 2 still counts');
+check(!taskBonusComplete(stoplight, { ts: 2, proofV: 1, count: 2, notes: '2' }), 'a new manual count does not complete stoplight');
+check(taskBonusComplete(stoplight, { ts: 3, proofV: 1, auto: true, count: 2, notes: 'Bonnie Templeton (Postcard·ASH), Maria Kanteh (Postcard·ASH)' }), 'two named Students-page logs complete stoplight');
+check(!proofFieldsOk(stoplight, { proofV: 1, auto: true, count: 1, notes: 'Bonnie Templeton (Postcard·ASH)' }), 'one named log is not enough');
+
+check(FD_QUESTIONS_SCORED_BEFORE === '2026-11-16', 'front desk question task drops on Nov 16');
+check(has(dailyTasksForDate('sueK', '2026-11-10'), 'fd_questions'), 'Nov 10 still scores the old front-desk question task');
+check(!has(dailyTasksForDate('sueK', '2026-11-17'), 'fd_questions'), 'Nov 17 does not score fd_questions');
+const oldSue = ['fd_messages', 'fd_followups', 'fd_notify_msk', 'fd_questions', 'fd_retail', 'fd_gear', 'fd_lobby', 'ph_bathroom', 'fd_next_shift'];
+check(JSON.stringify(ids(dailyTasksForDate('sueK', '2026-11-10'))) === JSON.stringify(oldSue), 'Nov 10 front-desk ids match the pre-proof list');
+const sueDd = {};
+oldSue.forEach(id => { sueDd[id] = { ts: 1 }; });
+check(oldSue.every(id => taskDone(sueDd, id)), 'stored fd_questions records still read as done');
+
+check(JSON.stringify(taskBurstIds([
+  { id: 'a', ts: 0 }, { id: 'b', ts: 1000 }, { id: 'c', ts: 2000 }, { id: 'p', ts: 3000, photo: true }
+])) === '[]', 'three checks plus a photo do not burst');
+const burst4 = taskBurstIds([
+  { id: 'a', ts: 0 }, { id: 'b', ts: 1000 }, { id: 'c', ts: 2000 }, { id: 'd', ts: 3000 }, { id: 'p', ts: 2500, photo: true }
+]);
+check(burst4.length === 4 && burst4.indexOf('p') < 0, 'four non-photo checks inside 60 seconds are flagged and the photo is not');
+check(taskBurstIds([
+  { id: 'a', ts: 0 }, { id: 'b', ts: 1000 }, { id: 'c', ts: 2000 }, { id: 'd', ts: 60001 }
+]).length === 0, 'a check just outside 60 seconds does not join the burst');
+
+const burstTask = { id: 'j_spray', text: 'Spray' };
+check(!taskBonusComplete(burstTask, { ts: 1, proofV: 1, burst: true }), 'an unconfirmed burst does not count toward the bonus');
+check(taskBonusComplete(burstTask, { ts: 1, proofV: 1, burst: true, burstOk: true }), 'a manager confirm puts the task back in the bonus');
+check(taskBonusComplete(burstTask, { ts: 1, burst: true }), 'a legacy record is not retroactively removed by a burst flag');
+
+state.tasksLoc = 'joeyZ';
+state.tasksDate = '2026-11-16';
+state.tasksData.joeyZ = { daily: { '2026-11-16': {} } };
+sandbox.__writes.length = 0;
+['c1', 'c2', 'c3', 'c4'].forEach(id => completeTask('daily', id));
+const burstWrites = sandbox.__writes.filter(w => String(w.path).indexOf('/daily/2026-11-16/') >= 0);
+check(burstWrites.length >= 4, 'burst test wrote only through the local stub');
+check(sandbox.__writes.every(w => String(w.path).indexOf('tasks/emp/') === 0 || String(w.path).indexOf('tasks/emp/') > 0), 'burst writes stay on task paths');
+const live = state.tasksData.joeyZ.daily['2026-11-16'];
+check(['c1', 'c2', 'c3', 'c4'].every(id => live[id] && live[id].burst && !taskBonusComplete({ id }, live[id])), 'four rapid checks are marked needs-review in memory');
+live.c1.burstOk = true;
+check(taskBonusComplete({ id: 'c1' }, live.c1), 'confirming one burst item counts that item');
+
+clearEls();
+const beforeBlank = sandbox.__writes.length;
+setEl('notes_weekly_ad_invites', '   ');
+completeTaskWithNotes('weekly', 'ad_invites');
+check(sandbox.__writes.length === beforeBlank, 'blank AD invite names do not save');
+setEl('notes_weekly_ad_invites', 'Sam');
+completeTaskWithNotes('weekly', 'ad_invites');
+check(sandbox.__writes.length === beforeBlank, 'one name does not satisfy the two-name invite');
+setEl('notes_weekly_ad_invites', 'Sam\nRiley');
+completeTaskWithNotes('weekly', 'ad_invites');
+const inviteWrite = sandbox.__writes[sandbox.__writes.length - 1];
+check(inviteWrite && inviteWrite.val && inviteWrite.val.proofV === 1 && inviteWrite.val.notes.indexOf('Riley') >= 0, 'two names save as proof');
+
+const beforeCount = sandbox.__writes.length;
+setEl('count_daily_stoplight', '2');
+completeTaskCount('daily', 'stoplight');
+check(sandbox.__writes.length === beforeCount, 'the stoplight number box cannot complete the task');
+
+state.tasksLoc = 'sueK';
+state.tasksDate = '2026-11-17';
+if (!state.tasksData.sueK) state.tasksData.sueK = {};
+setEl('notes_daily_fd_messages', '');
+const beforeNone = sandbox.__writes.length;
+grab('proofUseNone')('daily', 'fd_messages');
+const noneWrite = sandbox.__writes[sandbox.__writes.length - 1];
+check(sandbox.__writes.length > beforeNone && noneWrite.val && noneWrite.val.none && noneWrite.val.notes === 'None today', 'None today completes the inbox task');
+
+state.tasksLoc = 'ash';
+state.tasksDate = '2026-11-16';
+if (!state.tasksData.ash) state.tasksData.ash = {};
+function bookEl(i, key, value) { setEl('pf_cycle_checklist_cc_bday_book_' + i + '_' + key, value); }
+bookEl(0, 'child', 'Ava'); bookEl(0, 'family', 'Nguyen'); bookEl(0, 'date', '2026-12-05');
+bookEl(1, 'child', ''); bookEl(1, 'family', ''); bookEl(1, 'date', '');
+const beforeParty = sandbox.__writes.length;
+proofSaveStructured('cycle_checklist', 'cc_bday');
+check(sandbox.__writes.length === beforeParty, 'one party does not complete the two-party cycle task');
+bookEl(1, 'child', 'Leo'); bookEl(1, 'family', 'Patel'); bookEl(1, 'date', '2026-12-12');
+proofSaveStructured('cycle_checklist', 'cc_bday');
+const partyWrite = sandbox.__writes[sandbox.__writes.length - 1];
+check(partyWrite && partyWrite.val && partyWrite.val.bookings && partyWrite.val.bookings.length === 2, 'two named parties with dates complete Book a party');
+
+const monProof = sheet('ash', '2026-11-16');
+check(monProof.indexOf('How many today') < 0, 'the stoplight sheet has no manual count box');
+check(monProof.indexOf('Students page') >= 0, 'stoplight tells staff to use the Students page');
+check(monProof.indexOf('data-proof-form="note"') >= 0, 'roster proof field is on the sheet');
+check(monProof.indexOf('Invite birthday families') >= 0, 'weekly birthday task was renamed');
+check(monProof.indexOf('data-proof-form="invites"') >= 0, 'birthday invite fields are on the sheet');
+check(monProof.indexOf('Book a party') >= 0 && monProof.indexOf('Ava') >= 0, 'a saved party booking shows the child name');
+const bryanProof = sheet('bryanG', '2026-11-16');
+check(bryanProof.indexOf('data-proof-form="bookings"') >= 0, 'cycle party booking fields are on the sheet');
+check(monProof.indexOf('data-task-id="ph_bathroom"') >= 0, 'Monday bathroom photo is still on the lead sheet');
+check(monProof.indexOf('data-task-id="ph_floor"') >= 0, 'training floor photo is still daily');
+
+const deskNew = sheet('sueK', '2026-11-17');
+check(deskNew.indexOf('data-task-id="fd_questions"') < 0, 'front desk sheet no longer lists the question checkbox');
+check(deskNew.indexOf('None today') >= 0, 'front desk message task offers None today');
+check(deskNew.indexOf('data-task-id="ph_bathroom"') >= 0, 'Tuesday front desk still has the bathroom photo');
+check(deskNew.indexOf('Check and refresh customer bathrooms') >= 0, 'lobby tidying still mentions bathrooms');
+check(deskNew.indexOf('data-task-id="fd_lobby"') >= 0, 'lobby reset is still a task');
+
+state.tasksLoc = 'joeyZ';
+state.tasksDate = '2026-11-16';
+state.tasksData.joeyZ.daily['2026-11-16'].j_spray = { ts: Date.now(), proofV: 1, burst: true, notes: '' };
+const reviewSheet = sheet('joeyZ', '2026-11-16');
+check(reviewSheet.indexOf('data-needs-review="1"') >= 0, 'a burst task renders the needs-review state');
+check(reviewSheet.indexOf('Needs review') >= 0, 'needs-review is labeled on the task');
+
+state.tasksTab = 'history';
+state.historyFocus = { empId: 'joeyZ', dateKey: '2026-11-16' };
+state.historyData['joeyZ|2026-11-16'] = {
+  done: 1,
+  total: 2,
+  dayOff: false,
+  needsReview: true,
+  items: [
+    { id: 'stoplight', text: 'Reach 2 students on the stoplight', verified: true, rec: { ts: 1, proofV: 1, auto: true, count: 2, notes: 'Bonnie Templeton (Postcard·ASH), Maria Kanteh (Postcard·ASH)' } },
+    { id: 'j_spray', text: 'Spray-mop the floor', verified: false, rec: { ts: 2, proofV: 1, burst: true } },
+  ],
+};
+const proofView = renderTasksPage();
+check(proofView.indexOf('data-manager-proof="1"') >= 0, 'history shows the manager proof panel');
+check(proofView.indexOf('Auto from Students') >= 0, 'manager proof shows the Students-page source');
+check(proofView.indexOf('data-day-needs-review="1"') >= 0, 'manager proof shows the needs-review day');
+check(proofView.indexOf('Bonnie Templeton') >= 0, 'manager proof shows the named outreach');
+state.tasksTab = 'sheets';
+state.historyFocus = null;
+
 if (failed) {
   console.error(failed + ' failed, ' + passed + ' passed');
   process.exit(1);
@@ -356,7 +557,7 @@ if (previewDir) {
   const styleRe = /<style>([\s\S]*?)<\/style>/g;
   let styleMatch;
   while ((styleMatch = styleRe.exec(html))) styles.push(styleMatch[1]);
-  const page = (title, body) => `<!doctype html>
+  const page = (title, body, keepAll) => `<!doctype html>
 <html><head><meta charset="utf-8"><title>${title}</title>
 <style>${styles.join('\n')}
 body{background:#f4f6fb;margin:0}
@@ -367,7 +568,7 @@ body{background:#f4f6fb;margin:0}
 <div class="preview-banner">${title}. Local render of the task sheet with mock data. Not connected to Firebase.</div>
 <div data-sheet="1">${body}</div>
 </div>
-<script>
+${keepAll ? '' : `<script>
 document.querySelectorAll('[data-sheet]').forEach(root => {
   root.querySelectorAll('.bonus-tracker').forEach(el => el.remove());
   root.querySelectorAll('.task-section').forEach(sec => {
@@ -375,7 +576,7 @@ document.querySelectorAll('[data-sheet]').forEach(root => {
     if (label.indexOf('Daily') < 0 && label.indexOf('Weekly') < 0) sec.remove();
   });
 });
-</script>
+</script>`}
 </body></html>`;
   state.tasksData.ash = {};
   state.tasksData.sueK = {};
@@ -391,5 +592,56 @@ document.querySelectorAll('[data-sheet]').forEach(root => {
     'Waunakee (Front Desk) — Tuesday, November 10, 2026',
     sheet('sueK', '2026-11-10')
   ));
+
+  state.tasksData.bryanG = {};
+  fs.writeFileSync(path.join(previewDir, 'proof-fields.html'), page(
+    'Verona (Bryan) — Monday, November 16, 2026 — proof fields',
+    sheet('bryanG', '2026-11-16'),
+    true
+  ));
+  state.tasksData.sueK = {};
+  fs.writeFileSync(path.join(previewDir, 'proof-frontdesk.html'), page(
+    'Waunakee front desk — Tuesday, November 17, 2026 — None today',
+    sheet('sueK', '2026-11-17')
+  ));
+
+  state.tasksLoc = 'joeyZ';
+  state.tasksDate = '2026-11-16';
+  state.tasksData.joeyZ = { daily: { '2026-11-16': {
+    rosters: { ts: Date.now(), proofV: 1, burst: true, notes: 'Tigers 8, Kids 12. No new / no trials' },
+    j_wetmop: { ts: Date.now(), proofV: 1, burst: true },
+    j_spray: { ts: Date.now(), proofV: 1, burst: true },
+    closing: { ts: Date.now(), proofV: 1, burst: true, trials: 1, enrollments: 0, notes: 'Parent asked about testing.' },
+  } } };
+  fs.writeFileSync(path.join(previewDir, 'needs-review.html'), page(
+    'DeForest (Joey) — Monday, November 16, 2026 — needs review',
+    sheet('joeyZ', '2026-11-16')
+  ));
+
+  state.tasksTab = 'history';
+  state.historyFocus = { empId: 'joeyZ', dateKey: '2026-11-16' };
+  state.historyWeekOff = 0;
+  state.historyData['joeyZ|2026-11-16'] = {
+    done: 1,
+    total: 8,
+    dayOff: false,
+    needsReview: true,
+    items: [
+      { id: 'opening', text: 'Open the school', verified: true, rec: { ts: Date.now() - 3600000, proofV: 1, photos: ['data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect fill="#dbeafe" width="80" height="80"/><text x="8" y="44" font-size="12" fill="#1e3a8a">station</text></svg>')] } },
+      { id: 'stoplight', text: 'Reach 2 students on the stoplight', verified: true, rec: { ts: Date.now() - 3500000, proofV: 1, auto: true, count: 2, notes: 'Bonnie Templeton (Postcard·JZ), Maria Kanteh (Loom·JZ)' } },
+      { id: 'rosters', text: 'Check today rosters', verified: false, rec: { ts: Date.now() - 8000, proofV: 1, burst: true, notes: 'Tigers 8, Kids 12. No new / no trials' } },
+      { id: 'j_wetmop', text: 'Wet-mop the floor (Monday)', verified: false, rec: { ts: Date.now() - 5000, proofV: 1, burst: true } },
+      { id: 'j_spray', text: 'Spray-mop the floor', verified: false, rec: { ts: Date.now() - 2000, proofV: 1, burst: true } },
+      { id: 'closing', text: 'Close the school', verified: false, rec: { ts: Date.now(), proofV: 1, burst: true, trials: 1, enrollments: 0, notes: 'Parent asked about testing.' } },
+    ],
+  };
+  const historyHtml = renderTasksPage();
+  fs.writeFileSync(path.join(previewDir, 'manager-proof.html'), page(
+    'Tasks history — manager proof view (mock)',
+    historyHtml,
+    true
+  ));
+  state.tasksTab = 'sheets';
+  state.historyFocus = null;
   console.log('Wrote previews to ' + previewDir);
 }
