@@ -156,8 +156,11 @@ const dashAuth = grab('dashAuth');
 const renderTcSchedule = grab('renderTcSchedule');
 const renderTcTeamSchedule = grab('renderTcTeamSchedule');
 const renderTcTimeoffModal = grab('renderTcTimeoffModal');
+const renderTcTimeoff = grab('renderTcTimeoff');
 const renderTcShiftModal = grab('renderTcShiftModal');
 const tcStaffLabel = grab('tcStaffLabel');
+const tcSchedStaff = grab('tcSchedStaff');
+const tcClockStaff = grab('tcClockStaff');
 const tcSchedulableAt = grab('tcSchedulableAt');
 const tcDateKey = grab('tcDateKey');
 const tcSchedDays = grab('tcSchedDays');
@@ -191,6 +194,10 @@ state.timeclock = {
     tc_erika: { name: 'Erika', loc: 'deforest', email: 'applezgirl69@gmail.com' },
     tc_mario: { name: 'Mario', loc: 'verona', email: 'mariosanchez566@gmail.com' },
     tc_msk: { name: 'Ms K', loc: 'waunakee', email: 'msk.lvlupma@gmail.com' },
+    tc_cat: { name: 'Cat', loc: 'verona', email: 'ctrevino.lvlupma@gmail.com' },
+    tc_muq58dnhkazw: { name: 'Abigail', loc: 'waunakee', email: 'ahoefling7@gmail.com' },
+    tc_meredith: { name: 'Meredith Fitz', loc: 'goninjaV' },
+    tc_mvvjbiq88fhd: { name: 'Meredith', loc: null, email: '' },
     tc_mike: { name: 'Mike Moh', loc: 'waunakee', schedAll: true },
   },
   schedule: {},
@@ -206,10 +213,18 @@ check(tcStaffLabel(state.timeclock.staff.tc_bryan, 'tc_bryan') === 'Bryan Goad',
 check(tcStaffLabel(state.timeclock.staff.tc_joey, 'tc_joey') === 'Joey Zaworski', 'Joey shows as Joey Zaworski');
 check(tcStaffLabel(state.timeclock.staff.tc_miranda, 'tc_miranda') === 'Miranda Smith', 'Miranda shows as Miranda Smith');
 check(tcStaffLabel(state.timeclock.staff.tc_andy, 'tc_andy') === 'Andy Roszkowski', 'Andy keeps the stored last name');
-check(tcStaffLabel(state.timeclock.staff.tc_ash, 'tc_ash') === 'Ash', 'Ash stays first-name only');
-check(tcStaffLabel(state.timeclock.staff.tc_erika, 'tc_erika') === 'Erika', 'Erika stays first-name only');
-check(tcStaffLabel(state.timeclock.staff.tc_mario, 'tc_mario') === 'Mario', 'Mario stays first-name only');
-check(tcStaffLabel(state.timeclock.staff.tc_msk, 'tc_msk') === 'Ms K', 'Ms K is not expanded');
+check(tcStaffLabel(state.timeclock.staff.tc_ash, 'tc_ash') === 'Ash Mouille', 'Ash shows as Ash Mouille');
+check(tcStaffLabel(state.timeclock.staff.tc_erika, 'tc_erika') === 'Erika Weiss', 'Erika shows as Erika Weiss');
+check(tcStaffLabel(state.timeclock.staff.tc_mario, 'tc_mario') === 'Mario Sanchez', 'Mario shows as Mario Sanchez');
+check(tcStaffLabel(state.timeclock.staff.tc_cat, 'tc_cat') === 'Cat Trevino', 'Cat shows as Cat Trevino');
+check(tcStaffLabel(state.timeclock.staff.tc_msk, 'tc_msk') === 'Sue Kondratowicz', 'Ms K shows as Sue Kondratowicz');
+check(tcStaffLabel(state.timeclock.staff.tc_muq58dnhkazw, 'tc_muq58dnhkazw') === 'Abigail', 'Abigail is not renamed');
+const sueSeat = TASK_EMPLOYEES.find(e => e.id === 'sueK');
+check(sueSeat && sueSeat.id === 'sueK', 'sueK task id is unchanged');
+check(tcClockStaff().some(s => s.id === 'tc_muq58dnhkazw'), 'Abigail still punches the clock');
+check(!tcSchedStaff().some(s => s.id === 'tc_muq58dnhkazw'), 'Abigail is off the scheduler roster');
+check(!tcSchedStaff().some(s => s.id === 'tc_mvvjbiq88fhd'), 'the location-less Meredith is off the scheduler roster');
+check(tcSchedStaff().some(s => s.id === 'tc_meredith'), 'Meredith Fitz stays on the scheduler roster');
 check(tcSchedulableAt({ id: 'tc_tarik', name: 'Tarik Murrell', loc: 'waunakee' }, 'eastmad'), 'Tarik is schedulable at East Madison');
 check(!tcSchedulableAt({ id: 'tc_tarik', name: 'Tarik Murrell', loc: 'waunakee' }, 'verona'), 'Tarik is not auto-added to Verona');
 check(!tcSchedulableAt({ id: 'tc_bryan', name: 'Bryan', loc: 'verona' }, 'eastmad'), 'Bryan is not auto-added to East Madison');
@@ -222,7 +237,8 @@ check(JSON.stringify(state.timeclock.staff) === savedStaff, 'rendering does not 
 check(east.indexOf('Tarik Murrell') >= 0, 'East Madison grid lists Tarik Murrell');
 check(east.indexOf("tcShiftOpen('tc_tarik'") >= 0, 'East Madison grid can add a shift for Tarik');
 check(east.indexOf('Bryan Goad') < 0, 'Bryan is not on East Madison with no shift there');
-check(east.indexOf('>Ash</span>') >= 0, 'Ash still appears on East Madison via schedAll');
+check(east.indexOf('Ash Mouille') >= 0, 'Ash Mouille still appears on East Madison via schedAll');
+check(east.indexOf('Abigail') < 0, 'Abigail is not on the East Madison grid');
 check(east.indexOf('Joey Zaworski') >= 0, 'Joey Zaworski still appears on East Madison via schedAll');
 check(east.indexOf('Miranda Smith') < 0, 'Miranda is not on the East Madison chip');
 check(east.indexOf('Andy Roszkowski') < 0, 'Andy is not on East Madison until he has a shift there');
@@ -249,7 +265,16 @@ const all = renderTcSchedule();
 check(all.indexOf('Tarik Murrell') >= 0, 'All locations still lists Tarik');
 check(all.indexOf('Bryan Goad') >= 0, 'All locations shows Bryan Goad');
 check(all.indexOf('Miranda Smith') >= 0, 'All locations shows Miranda Smith');
-check(all.indexOf('Mario') >= 0 && all.indexOf('Mario Sanchez') < 0, 'Mario is not given a guessed last name');
+check(all.indexOf('Mario Sanchez') >= 0, 'All locations shows Mario Sanchez');
+check(all.indexOf('Cat Trevino') >= 0, 'All locations shows Cat Trevino');
+check(all.indexOf('Erika Weiss') >= 0, 'All locations shows Erika Weiss');
+check(all.indexOf('Sue Kondratowicz') >= 0, 'All locations shows Sue Kondratowicz');
+check(all.indexOf('Ms K') < 0, 'Ms K is not listed under that label');
+check((all.match(/data-staff="tc_msk"/g) || []).length === 7, 'Sue Kondratowicz is one schedule row');
+check(all.indexOf('Meredith Fitz') >= 0, 'Meredith Fitz is on the schedule');
+check(all.indexOf('data-staff="tc_muq58dnhkazw"') < 0, 'Abigail has no schedule row');
+check(all.indexOf('data-staff="tc_mvvjbiq88fhd"') < 0, 'the duplicate Meredith has no schedule row');
+check(all.indexOf('Abigail') < 0, 'Abigail’s name is not on the master schedule');
 
 const days = tcSchedDays();
 const monday = tcDateKey(days[0]);
@@ -265,8 +290,12 @@ state.tcTimeoffReq = { empId: '', ctx: 'dash', start: tuesday, end: tuesday, typ
 const picker = renderTcTimeoffModal();
 check(picker.indexOf('Bryan Goad') >= 0, 'time-off staff picker shows Bryan Goad');
 check(picker.indexOf('Tarik Murrell') >= 0, 'time-off staff picker shows Tarik Murrell');
-check(picker.indexOf('>Ash</option>') >= 0, 'time-off staff picker leaves Ash as Ash');
-check(picker.indexOf('>Mario</option>') >= 0 && picker.indexOf('Mario Sanchez') < 0, 'time-off picker does not invent Mario’s last name');
+check(picker.indexOf('>Ash Mouille</option>') >= 0, 'time-off staff picker shows Ash Mouille');
+check(picker.indexOf('>Mario Sanchez</option>') >= 0, 'time-off picker shows Mario Sanchez');
+check(picker.indexOf('>Sue Kondratowicz</option>') >= 0, 'time-off picker shows Sue Kondratowicz');
+check(picker.indexOf('Abigail') < 0, 'time-off picker does not list Abigail');
+check(picker.indexOf('>Meredith</option>') < 0, 'time-off picker does not list the bare Meredith duplicate');
+check(picker.indexOf('Meredith Fitz') >= 0, 'time-off picker lists Meredith Fitz');
 
 state.tcShiftEdit = { staffId: 'tc_bryan', dateKey: tuesday, sid: '', start: '16:00', end: '20:00', loc: 'eastmad', role: '' };
 const shift = renderTcShiftModal();
@@ -288,6 +317,17 @@ state.tcTeamLoc = 'all';
 const postedAll = renderTcTeamSchedule();
 check(postedAll.indexOf('Tarik Murrell') >= 0, 'posted all-locations schedule shows Tarik Murrell');
 check(postedAll.indexOf('Murrell Murrell') < 0, 'posted schedule does not double Tarik’s last name');
+state.timeclock.schedulePublished[monday].snap.tc_muq58dnhkazw = [tuesday + '|09:00|13:00|waunakee|Front Desk'];
+state.timeclock.schedulePublished[monday].snap.tc_mvvjbiq88fhd = [tuesday + '|10:00|14:00|goninjaV|Coach'];
+state.timeclock.schedulePublished[monday].snap.tc_meredith = [tuesday + '|10:00|14:00|goninjaV|Coach'];
+const postedHidden = renderTcTeamSchedule();
+check(postedHidden.indexOf('Meredith Fitz') >= 0, 'posted schedule shows Meredith Fitz');
+check(postedHidden.indexOf('Abigail') < 0, 'posted schedule hides Abigail even when a shift was posted');
+check((postedHidden.split('Meredith').length - 1) === (postedHidden.split('Meredith Fitz').length - 1), 'posted schedule does not add the duplicate Meredith');
+state.timeclock.timeoff = { to_ab: { empId: 'tc_muq58dnhkazw', start: tuesday, end: tuesday, days: 1, type: 'unpaid', note: 'kept', status: 'pending', reqAt: 1 } };
+const history = renderTcTimeoff();
+check(history.indexOf('Abigail') >= 0 && history.indexOf('kept') >= 0, 'an existing time-off request still names Abigail');
+check(sandbox.__writes.length === 0, 'hiding people and labeling names does not write');
 
 if (process.argv.includes('--html')) {
   state.schedLoc = 'eastmad';

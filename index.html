@@ -5813,30 +5813,57 @@ function tcData(){ return state.timeclock || {}; }
 function tcStaffList(){ const s = tcData().staff || {}; return Object.entries(s).map(([id, v]) => ({ id, ...(v || {}) })).sort((a, b) => (a.name || '').localeCompare(b.name || '')); }
 // Admins / bots that shouldn't appear on the schedule grids
 const TC_NO_SCHEDULE = new Set(['tc_jam', 'tc_grokbot']);
-function tcSchedStaff(){ return tcStaffList().filter(s => !TC_NO_SCHEDULE.has(s.id) && !/^(jam|grok bot)$/i.test((s.name || '').trim())); }
-// People who actually punch the clock (schedule-only staff appear on the schedule but don't clock in/out).
-function tcClockStaff(){ return tcStaffList().filter(s => !s.scheduleOnly && !TC_NO_SCHEDULE.has(s.id)); }
-// Surnames already written in this file. Display only — the clock `name` is not rewritten.
+// Whole-name labels. Display only — the stored clock name is not rewritten.
+// Ms K (msk.lvlupma@gmail.com) is the Sue seat. Abigail (ahoefling7) is a
+// different clock record that also opens the sueK checklist, so she is not renamed.
+const TC_DISPLAY_FULL = {
+  tc_muloo5prks0u: 'Sue Kondratowicz',
+  'msk.lvlupma@gmail.com': 'Sue Kondratowicz',
+};
+// Surnames supplied for a one-word clock name, or already written in this file.
 // A stored name that already has a last name (two words, last word longer than an initial) is kept.
 const TC_DISPLAY_LAST = {
-  tc_bryan: 'Goad', 'bgoad.lvlupma@gmail.com': 'Goad',           // “Bryan Goad”, Mr. Goad, hbGuessSeat goad
-  tc_joey: 'Zaworski', 'jz.lvlupma@gmail.com': 'Zaworski',       // hbGuessSeat zaworski → joeyZ
-  tc_miranda: 'Smith', 'msmith.lvlupma@gmail.com': 'Smith',      // Ms. Smith, hbGuessSeat smith → mirandaS
+  tc_bryan: 'Goad', 'bgoad.lvlupma@gmail.com': 'Goad',                 // “Bryan Goad”, Mr. Goad, hbGuessSeat goad
+  tc_joey: 'Zaworski', 'jz.lvlupma@gmail.com': 'Zaworski',             // hbGuessSeat zaworski → joeyZ
+  tc_miranda: 'Smith', 'msmith.lvlupma@gmail.com': 'Smith',            // Ms. Smith, hbGuessSeat smith → mirandaS
+  tc_ash: 'Mouille', 'amouille.lvlupma@gmail.com': 'Mouille',
+  tc_mumrsmkzjt7z: 'Trevino', 'ctrevino.lvlupma@gmail.com': 'Trevino',
+  tc_erika: 'Weiss', 'applezgirl69@gmail.com': 'Weiss',
+  tc_mario: 'Sanchez', 'mariosanchez566@gmail.com': 'Sanchez',
 };
 function tcStaffLabel(s, id){
   s = s || {};
+  const sid = id || s.id || '';
+  const email = String(s.email || '').trim().toLowerCase();
+  const full = TC_DISPLAY_FULL[sid] || TC_DISPLAY_FULL[email] || '';
+  if (full) return full;
   const raw = String(s.name || '').trim();
   if (!raw) return '';
   const parts = raw.split(/\s+/).filter(Boolean);
   const tail = parts[parts.length - 1] || '';
   if (parts.length >= 2 && tail.length > 1) return raw;
-  const sid = id || s.id || '';
-  const email = String(s.email || '').trim().toLowerCase();
   const last = TC_DISPLAY_LAST[sid] || TC_DISPLAY_LAST[email] || '';
   if (!last) return raw;
   if (raw.toLowerCase() === last.toLowerCase() || raw.toLowerCase().endsWith(' ' + last.toLowerCase())) return raw;
   return raw + ' ' + last;
 }
+// Hidden from the scheduler only. Clock punches, task history, and the stored records stay.
+function tcSchedHidden(s){
+  if (!s) return false;
+  const email = String(s.email || '').trim().toLowerCase();
+  const name = String(s.name || '').trim().toLowerCase();
+  if (s.id === 'tc_muq58dnhkazw' || email === 'ahoefling7@gmail.com') return true;   // Abigail
+  // Location-less Meredith. Same Slack identity as Meredith Fitz, no school.
+  if (s.id === 'tc_mvvjbiq88fhd') return true;
+  if (name === 'meredith' && !s.loc && !email) return true;
+  return false;
+}
+function tcSchedStaff(){
+  return tcStaffList().filter(s => !TC_NO_SCHEDULE.has(s.id) && !tcSchedHidden(s) && !/^(jam|grok bot)$/i.test((s.name || '').trim()))
+    .sort((a, b) => tcStaffLabel(a).localeCompare(tcStaffLabel(b)));
+}
+// People who actually punch the clock (schedule-only staff appear on the schedule but don't clock in/out).
+function tcClockStaff(){ return tcStaffList().filter(s => !s.scheduleOnly && !TC_NO_SCHEDULE.has(s.id)); }
 // Tarik Murrell stays based at Waunakee. He is also assignable on the East Madison
 // Master Schedule before he has a shift there. His tarikM checklist is unchanged.
 function tcIsTarik(s){
