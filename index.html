@@ -1376,7 +1376,11 @@ function lvlupWeekly(board){ return [
 const BRYAN_WEEKLY = lvlupWeekly('mirror');
 const ASH_WEEKLY   = lvlupWeekly('mirror');
 const JOEY_WEEKLY  = lvlupWeekly('mirror');
-const TARIK_WEEKLY = lvlupWeekly('whiteboard');
+// Weekly rows are one check for the week. `every` counts weeks, so this list
+// cannot mark an item daily. The wording is the daily instruction. `since`
+// keeps weeks before 2026-W47 (Mon Nov 16) on the previous list.
+const TARIK_GARBAGE = {id:'lvlup_garbage', since:'2026-W47', icon:'🗑️', text:'Take out all LVLUP garbage daily: lobby, hallway, and main training floor.'};
+const TARIK_WEEKLY = lvlupWeekly('whiteboard').flatMap(t => t.id==='mop_mats' ? [t, TARIK_GARBAGE] : [t]);
 const MIRANDA_WEEKLY = [
   {id:'m_party_reset',    photo:true, priorPhoto:true, icon:'📸', text:'Friday Event Prep: Reset the party room for weekend birthday parties, then snap a verification photo.'},
   {id:'m_party_cleanup',  photo:true, priorPhoto:true, proof:{kind:'photoOrNone', none:'No party this week'}, text:'Party Room Breakdown: Photo after the party, or No party this week.'},
@@ -1926,6 +1930,14 @@ const FRONTDESK_DAILY = [
   ]},
   // Bathroom photo is added per school in getDailyTasks (Tue–Sat, open days only). Tidying above still happens every shift.
   {id:'fd_next_shift', hasNotes:true, proof:{kind:'note', none:'All clear', placeholder:'What is left for the next shift'}, text:'Write the shift handoff: What is left for the next shift, or All clear. A blank note cannot complete this.'},
+];
+// Waunakee front desk only (sueK — Ms K's seat). Other schools stay on FRONTDESK_DAILY.
+// Days before this stay on the previous list so older completion totals do not move.
+const SUE_CLEANING_FROM = '2026-11-17';
+const SUE_DAILY_CLEANING = [
+  {id:'fd_dust_proshop', icon:'🧹', text:'Dust the pro shop'},
+  {id:'fd_lobby_floors', icon:'🧹', text:'Maintain the lobby and hallway floors'},
+  {id:'fd_lobby_windows', icon:'🧹', text:'Clean the lobby windows'},
 ];
 const FRONTDESK_WEEKLY = [
   {id:'fdw_inventory', hasNotes:true, proof:{kind:'note', none:'Par levels look fine', placeholder:'What is running low'}, text:'Count the front-desk retail: A short count of anything low, or Par levels look fine.'},
@@ -10660,6 +10672,11 @@ function getDailyTasks(empId){
   const out=base.slice();
   const lobby=out.findIndex(t=>t.id==='fd_lobby');
   if(lobby>=0) out.splice(lobby+1,0,photo); else out.push(photo);
+  if(empId==='sueK'){
+    const bath=out.findIndex(t=>t.id==='ph_bathroom');
+    const at=bath>=0?bath+1:out.length;
+    SUE_DAILY_CLEANING.forEach((t,i)=>out.splice(at+i,0,t));
+  }
   return out;
 }
 // Day-of-week filter shared by the task sheet, the home pulse count, and Tasks > History.
@@ -10679,6 +10696,10 @@ function dailyTasksForDate(empId, dateKey){
     const idx=list.findIndex(t=>t.id==='fd_notify_msk');
     if(idx>=0) list=list.slice(0,idx+1).concat([q],list.slice(idx+1));
     else list=list.concat([q]);
+  }
+  if(empId==='sueK'&&dateKey&&dateKey<SUE_CLEANING_FROM){
+    const extra=new Set(SUE_DAILY_CLEANING.map(t=>t.id));
+    list=list.filter(t=>!extra.has(t.id));
   }
   return list;
 }
@@ -10703,7 +10724,12 @@ function weeksBetweenTaskKeys(fromKey,toKey){
 }
 // Optional cadence on a weekly item: {every:N, from:'YYYY-Www'} is due on `from`
 // and every N weeks after. No `every` means every week — existing tasks are unchanged.
+// Optional `since: 'YYYY-Www'` hides the item on earlier weeks. There is no daily cadence.
 function weeklyTaskDue(task, weekKey){
+  if(task&&task.since){
+    const deltaSince=weeksBetweenTaskKeys(task.since, weekKey);
+    if(deltaSince==null||deltaSince<0) return false;
+  }
   const n=task&&task.every;
   if(!n||n<2) return true;
   const delta=weeksBetweenTaskKeys(task.from, weekKey);

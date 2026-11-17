@@ -635,6 +635,51 @@ maybeAutoCompleteTasks();
 check(state.tasksData.ash.weekly[getTaskWeekKey('2026-11-16')].supplies.ts === 1 && !state.tasksData.ash.weekly[getTaskWeekKey('2026-11-16')].supplies.auto, 'a legacy supplies check is not replaced');
 check(sandbox.__writes.length === kept, 'auto-complete does not rewrite a legacy record');
 
+const GARBAGE = 'Take out all LVLUP garbage daily: lobby, hallway, and main training floor.';
+const THIS_WEEK = getTaskWeekKey('2026-11-17');
+check(THIS_WEEK === '2026-W47', 'Nov 17 2026 is week 2026-W47');
+const tarikThis = weeklyTasksFor('tarikM', THIS_WEEK);
+const garbage = tarikThis.find(t => t.id === 'lvlup_garbage');
+const mopAt = tarikThis.findIndex(t => t.id === 'mop_mats');
+check(garbage && garbage.text === GARBAGE, 'Tarik weekly list includes the daily garbage run');
+check(garbage && !garbage.every && !garbage.days, 'the weekly list has no daily frequency to set');
+check(mopAt >= 0 && tarikThis[mopAt + 1] && tarikThis[mopAt + 1].id === 'lvlup_garbage', 'garbage sits with the other floor chores');
+check(!has(weeklyTasksFor('tarikM', WEEK_KEY), 'lvlup_garbage'), 'the week of Nov 9 does not gain the garbage task');
+['bryanG', 'ash', 'joeyZ', 'mirandaS', 'sueK'].forEach(emp => {
+  check(!has(weeklyTasksFor(emp, THIS_WEEK), 'lvlup_garbage'), emp + ' does not get Tarik’s garbage task');
+});
+const tarikSheet = sheet('tarikM', '2026-11-17');
+check(section(tarikSheet, 'Weekly Recurring').indexOf('data-task-id="lvlup_garbage"') >= 0, 'Tarik weekly sheet shows the garbage task');
+check(section(tarikSheet, 'Weekly Recurring').indexOf('Take out all LVLUP garbage daily') >= 0, 'Tarik weekly sheet uses the garbage wording');
+check(section(tarikSheet, 'Daily Checklist').indexOf('lvlup_garbage') < 0, 'garbage stays off Tarik’s daily checklist');
+check(section(sheet('tarikM', '2026-11-09'), 'Weekly Recurring').indexOf('lvlup_garbage') < 0, 'Tarik’s prior week hides the garbage task');
+
+const SUE_CLEAN = [
+  ['fd_dust_proshop', 'Dust the pro shop'],
+  ['fd_lobby_floors', 'Maintain the lobby and hallway floors'],
+  ['fd_lobby_windows', 'Clean the lobby windows'],
+];
+const sueToday = dailyTasksForDate('sueK', '2026-11-17');
+const sueIds = ids(sueToday);
+SUE_CLEAN.forEach(([id, text]) => {
+  const row = sueToday.find(t => t.id === id);
+  check(row && row.text === text, 'Waunakee front desk daily includes ' + text);
+});
+check(sueIds.indexOf('ph_bathroom') >= 0 && sueIds.indexOf('fd_dust_proshop') === sueIds.indexOf('ph_bathroom') + 1, 'cleaning tasks follow the bathroom photo');
+check(sueIds.indexOf('fd_lobby_windows') + 1 === sueIds.indexOf('fd_next_shift'), 'cleaning tasks come before the handoff');
+check(!has(dailyTasksForDate('sueK', '2026-11-10'), 'fd_dust_proshop'), 'Nov 10 Waunakee front desk list leaves the new cleaning tasks off');
+['andyR', 'marioS', 'erikaD', 'tarikM'].forEach(emp => {
+  SUE_CLEAN.forEach(([id]) => {
+    check(!has(dailyTasksForDate(emp, '2026-11-17'), id), emp + ' does not get ' + id);
+  });
+});
+const sueCleanSheet = sheet('sueK', '2026-11-17');
+const sueCleanDaily = section(sueCleanSheet, 'Daily Responsibilities');
+SUE_CLEAN.forEach(([id, text]) => {
+  check(sueCleanDaily.indexOf('data-task-id="' + id + '"') >= 0 && sueCleanDaily.indexOf(text) >= 0, 'Waunakee daily sheet shows ' + text);
+});
+check(section(sueCleanSheet, 'Weekly Responsibilities').indexOf('fd_dust_proshop') < 0, 'cleaning tasks stay off the weekly front desk list');
+
 if (failed) {
   console.error(failed + ' failed, ' + passed + ' passed');
   process.exit(1);
@@ -693,6 +738,16 @@ document.querySelectorAll('[data-sheet]').forEach(root => {
   state.tasksData.sueK = {};
   fs.writeFileSync(path.join(previewDir, 'proof-frontdesk.html'), page(
     'Waunakee front desk — Tuesday, November 17, 2026 — None today',
+    sheet('sueK', '2026-11-17')
+  ));
+  state.tasksData.tarikM = {};
+  fs.writeFileSync(path.join(previewDir, 'tarik-garbage.html'), page(
+    'Waunakee (Tarik) — Tuesday, November 17, 2026 — weekly garbage',
+    sheet('tarikM', '2026-11-17')
+  ));
+  state.tasksData.sueK = {};
+  fs.writeFileSync(path.join(previewDir, 'sue-cleaning.html'), page(
+    'Waunakee (Front Desk) — Tuesday, November 17, 2026 — daily cleaning',
     sheet('sueK', '2026-11-17')
   ));
 
