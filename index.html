@@ -898,13 +898,25 @@ const firebaseConfig = {
 };
 
 // Local labeled fixtures only. Never true on staff.lvlupma.com, and never
-// opens the production Firebase app. Query must be exactly holdCancelFixtures=1.
-function crqLocalFixtureMode() {
+// opens the production Firebase app.
+function dashLocalHost() {
   try {
     const host = String(location.hostname || '');
-    if (host !== 'localhost' && host !== '127.0.0.1') return false;
-    return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(String(location.search || ''));
+    return host === 'localhost' || host === '127.0.0.1';
   } catch (e) { return false; }
+}
+function dashLocalFixtureMode() {
+  if (!dashLocalHost()) return false;
+  const q = String(location.search || '');
+  return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(q) || /(?:\?|&)taskNoteFixtures=1(?:&|$)/.test(q);
+}
+function taskNoteFixtureMode() {
+  if (!dashLocalHost()) return false;
+  return /(?:\?|&)taskNoteFixtures=1(?:&|$)/.test(String(location.search || ''));
+}
+function crqLocalFixtureMode() {
+  if (!dashLocalHost()) return false;
+  return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(String(location.search || ''));
 }
 function crqStubRef() {
   const snap = { val() { return null; } };
@@ -923,7 +935,7 @@ function crqStubRef() {
   };
   return r;
 }
-const CRQ_FIXTURE_BOOT = crqLocalFixtureMode();
+const CRQ_FIXTURE_BOOT = dashLocalFixtureMode();
 if (!CRQ_FIXTURE_BOOT) firebase.initializeApp(firebaseConfig);
 const db = CRQ_FIXTURE_BOOT ? { ref() { return crqStubRef(); } } : firebase.database();
 const storage = CRQ_FIXTURE_BOOT ? { ref() { return { put() { return { then() { return this; }, catch() { return this; } }; } }; } } : firebase.storage();
@@ -1096,7 +1108,7 @@ function dashAuthFromStaff(u, s, key) {
   };
 }
 auth.onAuthStateChanged(async (u) => {
-  if (crqLocalFixtureMode()) return;
+  if (dashLocalFixtureMode()) return;
   if (!DASH_AUTH_REQUIRED) { dashAuth = blankDashAuth({ user: u || null, allowed: false, dashRole: 'admin' }); return; }
   if (!u || !u.email || !u.emailVerified) { dashAuth = blankDashAuth(); state.teamAccessOpen = false; render(); return; }
   const key = dashEmailKey(u.email);
@@ -1118,17 +1130,17 @@ function dashSignOut(){ auth.signOut(); }
 // Using REST API directly (SDK WebSocket connection unreliable for secondary databases)
 const EVENTS_DB_URL = 'https://va-dashboard-bf7ca-default-rtdb.firebaseio.com/ceo';
 function evtRestGet(path) {
-  if (crqLocalFixtureMode()) return Promise.resolve(null);
+  if (dashLocalFixtureMode()) return Promise.resolve(null);
   return fetch(EVENTS_DB_URL + '/' + path + '.json').then(r => r.json());
 }
 function evtRestSet(path, data) {
-  if (crqLocalFixtureMode()) return Promise.resolve(null);
+  if (dashLocalFixtureMode()) return Promise.resolve(null);
   return fetch(EVENTS_DB_URL + '/' + path + '.json', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
   }).then(r => r.json());
 }
 function evtRestDelete(path) {
-  if (crqLocalFixtureMode()) return Promise.resolve(null);
+  if (dashLocalFixtureMode()) return Promise.resolve(null);
   return fetch(EVENTS_DB_URL + '/' + path + '.json', { method: 'DELETE' });
 }
 function loadEvents() {
@@ -2617,10 +2629,10 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s || 
 function linkify(s) { return esc(s).replace(/(https?:\/\/[^\s<>"]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline">$1</a>'); }
 
 /*  -  -  Firebase Helpers  -  -  */
-function fbRef(path) { return crqLocalFixtureMode() ? crqStubRef() : db.ref(CEO + '/' + path); }
+function fbRef(path) { return dashLocalFixtureMode() ? crqStubRef() : db.ref(CEO + '/' + path); }
 
 function fbSet(path, val) {
-  if (crqLocalFixtureMode()) return;
+  if (dashLocalFixtureMode()) return;
   fbRef(path).set(val);
 }
 
@@ -4200,6 +4212,62 @@ function crqLabeledFixtures(){
     },
   };
 }
+function taskNoteBootFixtures(){
+  dashAuth = blankDashAuth({
+    ready: true,
+    allowed: true,
+    user: { email: 'amouille.lvlupma@gmail.com', emailVerified: true },
+    dashRole: 'lead',
+    empId: 'ash',
+    name: 'Ash Mouille',
+    isAdmin: false,
+    schools: ['eastmad'],
+  });
+  state.activeSection = 'tasks';
+  state.opsSection = 'tasks';
+  state.tasksTab = 'sheets';
+  state.tasksLoc = 'ash';
+  state.tasksDate = new Date().toISOString().split('T')[0];
+  state.tasksData = { ash: {} };
+  state._taskNoteFixtureMsg = 'Mock only. Type in a weekly note, then replay a live update without clicking away.';
+  render(true);
+  markTaskNoteFixtureOffline();
+}
+function markTaskNoteFixtureOffline(){
+  const conn = document.getElementById('connStatus');
+  if (!conn) return;
+  conn.className = 'conn-status offline';
+  conn.textContent = 'Mock only — not connected';
+}
+function taskNoteFixturePing(){
+  if (!taskNoteFixtureMode()) return;
+  const el = document.activeElement;
+  const id = el && el.id;
+  const before = el && 'value' in el ? String(el.value || '') : '';
+  const editing = taskInputIsEditing();
+  render();
+  const now = id && document.getElementById(id);
+  const kept = !!(editing && now && String(now.value || '') === before);
+  state._taskNoteFixtureMsg = !editing
+    ? 'No note was focused, so this replay redrew the page.'
+    : (kept ? 'Live update replayed. “' + before + '” is still in the field.' : 'The note was cleared by the replay.');
+  const bar = document.getElementById('taskNoteFixtureResult');
+  if (bar) bar.textContent = state._taskNoteFixtureMsg;
+}
+function mountTaskNoteFixtureBar(){
+  if (!taskNoteFixtureMode()) return;
+  const app = document.getElementById('app');
+  if (!app || !app.prepend) return;
+  markTaskNoteFixtureOffline();
+  const bar = document.createElement('div');
+  bar.id = 'taskNoteFixtureBar';
+  bar.setAttribute('data-task-note-fixture', '1');
+  bar.style.cssText = 'position:sticky;top:0;z-index:40;background:#fffbeb;border-bottom:1px solid #fde68a;color:#92400e;padding:10px 14px;font:600 13px/1.45 system-ui,sans-serif;';
+  bar.innerHTML = '<div>Mock task sheet for Ash Mouille. Not connected to Firebase.</div>'
+    + '<div id="taskNoteFixtureResult" style="font-weight:700;margin-top:4px;">' + esc(state._taskNoteFixtureMsg || '') + '</div>'
+    + '<button type="button" onmousedown="event.preventDefault()" onclick="taskNoteFixturePing()" style="margin-top:8px;padding:6px 12px;border:1px solid #f59e0b;background:#fff;border-radius:8px;font-weight:800;cursor:pointer;">Replay a live update</button>';
+  app.prepend(bar);
+}
 function crqBootLabeledFixtures(){
   const role = /(?:\?|&)holdCancelRole=frontdesk(?:&|$)/.test(String(location.search || '')) ? 'frontdesk' : 'lead';
   dashAuth = blankDashAuth({
@@ -4975,7 +5043,19 @@ function renderTeamAccessModal() {
   return h;
 }
 
-function render() {
+function render(force) {
+  // A Firebase listener redraws the whole page by replacing innerHTML. Note
+  // fields only live in the DOM until Save, so capture them first and skip the
+  // redraw while one is focused. A forced render (after a real save) still paints.
+  captureTaskInputDrafts();
+  if (!force && taskInputIsEditing()) {
+    state.taskRenderPending = true;
+    return;
+  }
+  state.taskRenderPending = false;
+  if (state._taskPainting) return;
+  state._taskPainting = true;
+  try {
   gdDestroyFinanceCharts();
   const app = document.getElementById('app');
   // Kiosk mode — part-timer clock page only. Keeps its own name+PIN gate and is
@@ -5021,6 +5101,11 @@ function render() {
   requestAnimationFrame(initSortable);
   if (state.tcMapLoc) requestAnimationFrame(tcInitMap);
   if (s === 'finance') requestAnimationFrame(initGymdeskFinanceCharts);
+  } finally {
+    state._taskPainting = false;
+    restoreTaskInputDrafts();
+    mountTaskNoteFixtureBar();
+  }
 }
 
 function renderHeader() {
@@ -10913,15 +10998,23 @@ function taskPostSave(section,taskId,n,value){
   const {base}=taskPathFor(section);
   fbSet(base+taskId+'/posts/'+n,(value||'').trim()||null);
   fbSet(base+taskId+'/ts',Date.now());
+  const draftId='post_'+section+'_'+taskId+'_'+n;
+  if(state.taskInputDrafts) delete state.taskInputDrafts[draftId];
 }
-function completeTaskWithNotes(section,taskId,forced){
+function completeTaskWithNotes(section,taskId,forced,opts){
+  opts=opts||{};
   const task=resolveTask(section, taskId);
   const el=document.getElementById('notes_'+section+'_'+taskId);
   const notes=(forced!=null?String(forced):((el&&el.value)||'')).trim();
-  if(!notes){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
+  const flag=function(msg){
+    taskProofStatus(section, taskId, 'error', msg);
+    if(el) el.style.borderColor='var(--red)';
+    if(el&&!opts.keepFocus) el.focus();
+  };
+  if(!notes){ if(forced==null) flag('Add a note before this can be saved.'); return; }
   const min=(task.proof&&task.proof.min)||0;
   if(min&&!proofNoneMatch(task, notes)&&proofLines(notes).length<min){
-    if(el){el.style.borderColor='var(--red)';el.focus();}
+    flag('Add the required proof before this can be completed.');
     return;
   }
   const prev=Object.assign({}, taskDoneRec(section, taskId)||{});
@@ -10929,7 +11022,14 @@ function completeTaskWithNotes(section,taskId,forced){
   const payload=Object.assign(prev, {ts:Date.now(), proofV:1, notes});
   if(proofNoneMatch(task, notes)) payload.none=true;
   else delete payload.none;
-  commitTask(section, taskId, payload);
+  if(!commitTask(section, taskId, payload)){
+    flag('Could not save this note. Try again.');
+    return;
+  }
+  clearTaskDrafts(section, taskId);
+  if(proofFieldsOk(task, payload)) taskProofStatus(section, taskId, 'saved', 'Saved');
+  else taskProofStatus(section, taskId, 'error', 'The note was saved. The rest of the proof is still required before this counts.');
+  render(true);
 }
 function completeTaskCount(section,taskId){
   const task=resolveTask(section, taskId);
@@ -10937,10 +11037,21 @@ function completeTaskCount(section,taskId){
   const el=document.getElementById('count_'+section+'_'+taskId);
   const n=el?parseInt(el.value,10):NaN;
   const min=(task.min||(task.proof&&task.proof.min)||1);
-  if(!Number.isFinite(n)||n<min){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
-  commitTask(section, taskId, {ts:Date.now(), proofV:1, count:n});
+  if(!Number.isFinite(n)||n<min){
+    taskProofStatus(section, taskId, 'error', 'Enter at least '+min+' before this can be saved.');
+    if(el){el.style.borderColor='var(--red)';el.focus();}
+    return;
+  }
+  if(!commitTask(section, taskId, {ts:Date.now(), proofV:1, count:n})){
+    taskProofStatus(section, taskId, 'error', 'Could not save this count. Try again.');
+    return;
+  }
+  clearTaskDrafts(section, taskId);
+  taskProofStatus(section, taskId, 'saved', 'Saved');
+  render(true);
 }
-function proofSaveStructured(section, taskId){
+function proofSaveStructured(section, taskId, opts){
+  opts=opts||{};
   const task=resolveTask(section, taskId);
   const kind=proofKindOf(task);
   const payload={ts:Date.now(), proofV:1};
@@ -10986,13 +11097,18 @@ function proofSaveStructured(section, taskId){
     payload.choice=notes;
   }
   if(!proofFieldsOk(task, payload)){
-    const warn=document.getElementById('pfstat_'+section+'_'+taskId);
-    if(warn) warn.textContent='Add the required proof before this can be completed.';
+    if(opts.fromBlur&&!opts.explicit) return;
+    taskProofStatus(section, taskId, 'error', 'Add the required proof before this can be completed.');
     return;
   }
-  if(!commitTask(section, taskId, payload)) return;
+  if(!commitTask(section, taskId, payload)){
+    taskProofStatus(section, taskId, 'error', 'Could not save this. Try again.');
+    return;
+  }
+  clearTaskDrafts(section, taskId);
+  taskProofStatus(section, taskId, 'saved', 'Saved');
   if(kind==='invites'||kind==='bookings') mirrorPartyBookings(payload.bookings||[]);
-  render();
+  render(true);
 }
 function proofReadInviteRows(section, taskId){
   const n=(state.proofRows&&state.proofRows[taskId+'__inv'])||1;
@@ -11032,12 +11148,201 @@ function proofSlotCount(key, min, existing){
 }
 const PROOF_INVITE_METHODS=['Email','Text','Call','In person'];
 const PROOF_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
-function proofFieldInput(id, label, type, value, options){
+// Weekly and daily note fields are plain inputs inside a page that replaces
+// its HTML on every Firebase update (clock punches, inventory, content, the
+// weekly listener). Keystrokes are copied here so a redraw can put them back,
+// and so leaving the field can save them.
+function taskFieldScope(id){
+  id=String(id||'');
+  const emp=state.tasksLoc||'';
+  if(id==='customTaskInput_weekly'||id.indexOf('notes_weekly_')===0||id.indexOf('pf_weekly_')===0||id.indexOf('count_weekly_')===0||id.indexOf('post_weekly_')===0||id.indexOf('cccap_weekly_')===0||id.indexOf('ccpillar_weekly_')===0)
+    return emp+'|w|'+getTaskWeekKey(state.tasksDate);
+  if(id==='exceptionLogInput'||id==='customTaskInput_daily'||id.indexOf('notes_daily_')===0||id.indexOf('pf_daily_')===0||id.indexOf('count_daily_')===0||id.indexOf('post_daily_')===0)
+    return emp+'|d|'+(state.tasksDate||'');
+  if(id==='customTaskInput_monthly'||id.indexOf('notes_monthly_')===0||id.indexOf('pf_monthly_')===0||id.indexOf('post_monthly_')===0)
+    return emp+'|m|'+getTaskMonthKey();
+  if(id.indexOf('notes_cycle_checklist_')===0||id.indexOf('pf_cycle_checklist_')===0||id.indexOf('count_cycle_checklist_')===0||id.indexOf('notes_cycle_')===0||id.indexOf('pf_cycle_')===0)
+    return emp+'|c|'+getCycleChecklistKey();
+  return emp+'|x|'+(state.tasksDate||'');
+}
+function taskDraftValue(id){
+  const d=state.taskInputDrafts&&state.taskInputDrafts[id];
+  if(!d||d.scope!==taskFieldScope(id)) return null;
+  return d.value;
+}
+function taskDraftMark(id, section, taskId){
+  let attrs=' data-task-draft="1" data-task-scope="'+esc(taskFieldScope(id))+'"';
+  if(section&&taskId) attrs+=' data-task-section="'+section+'" data-task-id="'+taskId+'"';
+  return attrs;
+}
+function taskDraftHooks(section, taskId){
+  let h=' oninput="rememberTaskDraft(this)"';
+  if(section&&taskId) h+=' onblur="leaveTaskField(this)" onkeydown="taskFieldKey(event,this)"';
+  else h+=' onblur="leaveTaskField(this)"';
+  return h;
+}
+function escAttr(s){ return esc(s).replace(/"/g,'&quot;'); }
+function rememberTaskDraft(el){
+  if(!el||!el.id) return;
+  if(!state.taskInputDrafts) state.taskInputDrafts={};
+  let start=null,end=null;
+  try{ start=el.selectionStart; end=el.selectionEnd; }catch(e){}
+  const scope=(el.getAttribute&&el.getAttribute('data-task-scope'))||taskFieldScope(el.id);
+  state.taskInputDrafts[el.id]={scope:scope, value:el.value==null?'':String(el.value), start:start, end:end, focused:document.activeElement===el};
+  if(state._capturingDrafts) return;
+  const section=el.getAttribute&&el.getAttribute('data-task-section');
+  const taskId=el.getAttribute&&el.getAttribute('data-task-id');
+  if(section&&taskId){
+    const st=(state.taskSaveStatus||{})[section+'|'+taskId];
+    if(st&&(st.kind==='saved'||st.kind==='error')) taskProofStatus(section, taskId, '', '');
+  }
+}
+function eachDraftNode(nodes, fn){
+  if(!nodes) return;
+  if(typeof nodes.forEach==='function'){ nodes.forEach(fn); return; }
+  for(let i=0;i<nodes.length;i++) fn(nodes[i]);
+}
+function captureTaskInputDrafts(){
+  const seen={};
+  const list=[];
+  state._capturingDrafts=true;
+  try{
+    try{
+      if(document.querySelectorAll) eachDraftNode(document.querySelectorAll('[data-task-draft]'), function(el){ list.push(el); });
+    }catch(e){}
+    const active=document.activeElement;
+    if(active&&active.getAttribute&&active.getAttribute('data-task-draft')!=null&&list.indexOf(active)<0) list.push(active);
+    list.forEach(function(el){
+      if(!el||!el.id||seen[el.id]) return;
+      seen[el.id]=1;
+      rememberTaskDraft(el);
+    });
+  }finally{
+    state._capturingDrafts=false;
+  }
+}
+function taskInputIsEditing(){
+  try{
+    const el=document.activeElement;
+    if(!el||el===document.body||el===document.documentElement) return false;
+    return !!(el.getAttribute&&el.getAttribute('data-task-draft')!=null);
+  }catch(e){ return false; }
+}
+function restoreTaskInputDrafts(){
+  const drafts=state.taskInputDrafts||{};
+  let focusId='';
+  Object.keys(drafts).forEach(function(id){
+    const d=drafts[id];
+    if(!d||d.scope!==taskFieldScope(id)) return;
+    const el=document.getElementById(id);
+    if(!el||!('value' in el)) return;
+    if(el.value!==d.value) el.value=d.value;
+    if(d.focused) focusId=id;
+  });
+  if(!focusId) return;
+  const el=document.getElementById(focusId);
+  const d=drafts[focusId];
+  if(!el||!el.focus) return;
+  try{ el.focus({preventScroll:true}); }catch(e){ try{ el.focus(); }catch(e2){} }
+  try{ if(d&&d.start!=null&&el.setSelectionRange) el.setSelectionRange(d.start, d.end==null?d.start:d.end); }catch(e){}
+}
+function clearTaskDrafts(section, taskId){
+  const drafts=state.taskInputDrafts||{};
+  const noteId='notes_'+section+'_'+taskId;
+  const pfPrefix='pf_'+section+'_'+taskId+'_';
+  const countId='count_'+section+'_'+taskId;
+  Object.keys(drafts).forEach(function(id){
+    if(id===noteId||id===countId||id.indexOf(pfPrefix)===0) delete drafts[id];
+  });
+}
+function taskProofStatus(section, taskId, kind, text){
+  if(!state.taskSaveStatus) state.taskSaveStatus={};
+  const key=section+'|'+taskId;
+  if(!text) delete state.taskSaveStatus[key];
+  else state.taskSaveStatus[key]={kind:kind||'', text:text};
+  const span=document.getElementById('pfstat_'+section+'_'+taskId);
+  if(span){
+    span.textContent=text||'';
+    if(span.setAttribute) span.setAttribute('data-proof-status', kind||'');
+    if(span.style) span.style.color=kind==='saved'?'#15803d':kind==='error'?'#b91c1c':'#64748b';
+  }
+}
+function taskProofStatusHtml(section, taskId){
+  const st=(state.taskSaveStatus||{})[section+'|'+taskId];
+  if(!st||!st.text) return '<span id="pfstat_'+section+'_'+taskId+'" data-proof-status="" style="font-size:11px;font-weight:700;color:#64748b;"></span>';
+  const color=st.kind==='saved'?'#15803d':st.kind==='error'?'#b91c1c':'#64748b';
+  return '<span id="pfstat_'+section+'_'+taskId+'" data-proof-status="'+esc(st.kind||'')+'" style="font-size:11px;font-weight:700;color:'+color+';">'+esc(st.text)+'</span>';
+}
+function taskSavedBadge(section, taskId){
+  const st=(state.taskSaveStatus||{})[section+'|'+taskId];
+  if(!st||st.kind!=='saved') return '';
+  return '<span data-proof-status="saved" style="display:inline-block;margin-right:6px;font-size:10px;font-weight:800;color:#15803d;background:#dcfce7;border-radius:999px;padding:1px 6px;">Saved</span>';
+}
+function scheduleTaskRenderFlush(){
+  clearTimeout(state._taskRenderFlush);
+  state._taskRenderFlush=setTimeout(function(){
+    if(state.taskRenderPending&&!taskInputIsEditing()) render(true);
+  }, 0);
+}
+function taskFieldKey(event, el){
+  if(!event||!el||event.key!=='Enter') return;
+  const tag=(el.tagName||'').toUpperCase();
+  if(tag==='TEXTAREA') return;
+  if(!(el.getAttribute&&el.getAttribute('data-task-id'))) return;
+  event.preventDefault();
+  saveTaskField(el, {explicit:true});
+}
+function leaveTaskField(el){
+  if(state._taskPainting) return;
+  rememberTaskDraft(el);
+  const section=el&&el.getAttribute&&el.getAttribute('data-task-section');
+  const taskId=el&&el.getAttribute&&el.getAttribute('data-task-id');
+  if(section&&taskId) saveTaskField(el, {fromBlur:true});
+  scheduleTaskRenderFlush();
+}
+function saveTaskField(el, opts){
+  opts=opts||{};
+  if(!el||!el.getAttribute) return;
+  const section=el.getAttribute('data-task-section');
+  const taskId=el.getAttribute('data-task-id');
+  if(!section||!taskId) return;
+  const task=resolveTask(section, taskId);
+  const kind=proofKindOf(task);
+  if(kind==='note'||kind==='lines'||kind==='photoNote'||kind==='photoOrNone'){
+    const box=document.getElementById('notes_'+section+'_'+taskId);
+    const notes=box?String(box.value||'').trim():'';
+    if(!notes){
+      if(opts.explicit) completeTaskWithNotes(section, taskId, null, {keepFocus:false});
+      else taskProofStatus(section, taskId, '', '');
+      return;
+    }
+    completeTaskWithNotes(section, taskId, null, {keepFocus:!!opts.fromBlur&&!opts.explicit});
+    return;
+  }
+  if(kind==='count'){
+    const box=document.getElementById('count_'+section+'_'+taskId);
+    const raw=box?String(box.value||'').trim():'';
+    if(!raw){
+      if(opts.explicit) completeTaskCount(section, taskId);
+      return;
+    }
+    completeTaskCount(section, taskId);
+    return;
+  }
+  if(kind==='choice'||kind==='rows'||kind==='invites'||kind==='bookings'||kind==='scorecard'){
+    if(kind==='scorecard'&&opts.fromBlur&&!opts.explicit) return;
+    proofSaveStructured(section, taskId, {fromBlur:!!opts.fromBlur, explicit:!!opts.explicit});
+  }
+}
+function proofFieldInput(id, label, type, value, options, section, taskId){
+  const drafted=taskDraftValue(id);
+  if(drafted!=null) value=drafted;
+  const attrs=(section&&taskId)?(taskDraftMark(id, section, taskId)+taskDraftHooks(section, taskId)):'';
   let control;
   if(type==='select'){
-    control='<select id="'+id+'" style="flex:1;min-width:110px;font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;"><option value="">'+esc(label)+'</option>'+(options||[]).map(o=>'<option value="'+esc(o)+'"'+(value===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';
+    control='<select id="'+id+'"'+attrs+' style="flex:1;min-width:110px;font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;"><option value="">'+esc(label)+'</option>'+(options||[]).map(o=>'<option value="'+esc(o)+'"'+(value===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';
   }else{
-    control='<input id="'+id+'" type="'+(type||'text')+'" value="'+esc(value||'')+'" placeholder="'+esc(label)+'" style="flex:1;min-width:110px;font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;">';
+    control='<input id="'+id+'" type="'+(type||'text')+'" value="'+escAttr(value||'')+'" placeholder="'+esc(label)+'"'+attrs+' style="flex:1;min-width:110px;font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;">';
   }
   return control;
 }
@@ -11053,7 +11358,7 @@ function renderProofEditor(section, task, rec, locked){
   if(saved||locked){
     const text=proofSummaryText(task, rec);
     if(kind==='stoplight') return renderStoplightProof(section, task, rec, true);
-    return text?'<div class="proof-saved" data-proof-saved="1">'+esc(text)+'</div>':'';
+    return text?'<div class="proof-saved" data-proof-saved="1">'+taskSavedBadge(section, task.id)+esc(text)+'</div>':'';
   }
   if(kind==='stoplight') return renderStoplightProof(section, task, rec, false);
   if(kind==='note'||kind==='lines'||kind==='choice') return renderNoteProof(section, task, rec);
@@ -11081,21 +11386,29 @@ function renderNoteProof(section, task, rec){
   const kind=proofKindOf(task);
   const multi=kind==='lines'||(p.min&&p.min>1);
   const ph=p.placeholder||(multi?'One name per line':'Add a note');
+  const noteId='notes_'+section+'_'+task.id;
+  const drafted=taskDraftValue(noteId);
+  const shown=drafted==null?String((rec&&rec.notes)||''):drafted;
+  const hooks=taskDraftMark(noteId, section, task.id)+taskDraftHooks(section, task.id);
   let h='<div class="proof-box" data-proof-form="note">';
   if(multi){
-    h+='<textarea id="notes_'+section+'_'+task.id+'" placeholder="'+esc(ph)+'" style="width:100%;box-sizing:border-box;min-height:64px;font-size:12px;padding:8px 10px;border:1px solid var(--gray-200);border-radius:6px;font-family:inherit;"></textarea>';
+    h+='<textarea id="'+noteId+'"'+hooks+' placeholder="'+esc(ph)+'" style="width:100%;box-sizing:border-box;min-height:64px;font-size:12px;padding:8px 10px;border:1px solid var(--gray-200);border-radius:6px;font-family:inherit;">'+esc(shown)+'</textarea>';
   }else{
-    h+='<input id="notes_'+section+'_'+task.id+'" type="text" placeholder="'+esc(ph)+'" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+    h+='<input id="'+noteId+'"'+hooks+' type="text" value="'+escAttr(shown)+'" placeholder="'+esc(ph)+'" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
   }
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
   const save=kind==='choice'?'proofSaveStructured':'completeTaskWithNotes';
   h+='<button type="button" onclick="'+save+'(\''+section+'\',\''+task.id+'\')" style="padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save proof</button>';
   if(p.none){
     if(p.noneNeedsNote){
-      h+='<input id="pf_'+section+'_'+task.id+'_none" type="text" placeholder="One-line note" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+      const noneId='pf_'+section+'_'+task.id+'_none';
+      const noneDraft=taskDraftValue(noneId);
+      const noneShown=noneDraft==null?'':noneDraft;
+      h+='<input id="'+noneId+'"'+taskDraftMark(noneId)+taskDraftHooks()+' type="text" value="'+escAttr(noneShown)+'" placeholder="One-line note" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
     }
     h+='<button type="button" data-none-option="1" onclick="proofUseNone(\''+section+'\',\''+task.id+'\')" style="padding:6px 12px;background:#fff;color:#1a1a2e;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">'+esc(p.none)+'</button>';
   }
+  h+=taskProofStatusHtml(section, task.id);
   h+='</div></div>';
   return h;
 }
@@ -11104,17 +11417,22 @@ function renderScorecardProof(section, task){
   let h='<div class="proof-box" data-proof-form="scorecard">';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
   fields.forEach(f=>{
-    h+='<label style="font-size:11px;font-weight:700;color:#64748b;">'+esc(f.label||f.key)+'<br><input id="pf_'+section+'_'+task.id+'_'+f.key+'" type="number" min="0" value="0" style="margin-top:4px;width:110px;font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;"></label>';
+    const fid='pf_'+section+'_'+task.id+'_'+f.key;
+    const drafted=taskDraftValue(fid);
+    const shown=drafted==null?'0':drafted;
+    h+='<label style="font-size:11px;font-weight:700;color:#64748b;">'+esc(f.label||f.key)+'<br><input id="'+fid+'"'+taskDraftMark(fid, section, task.id)+taskDraftHooks(section, task.id)+' type="number" min="0" value="'+escAttr(shown)+'" style="margin-top:4px;width:110px;font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;"></label>';
   });
   h+='</div>';
   if(!task.proof||task.proof.noteOptional!==false){
     const ph=(task.proof&&task.proof.notePlaceholder)||'Note if something is outstanding (optional)';
     if(task.proof&&task.proof.noteOptional!==false&&(!task.proof.fields||task.id==='closing')){
-      h+='<input id="notes_'+section+'_'+task.id+'" type="text" placeholder="'+esc(ph)+'" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+      const nid='notes_'+section+'_'+task.id;
+      const nd=taskDraftValue(nid);
+      h+='<input id="'+nid+'"'+taskDraftMark(nid, section, task.id)+taskDraftHooks(section, task.id)+' type="text" value="'+escAttr(nd==null?'':nd)+'" placeholder="'+esc(ph)+'" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
     }
   }
   h+='<button type="button" onclick="proofSaveStructured(\''+section+'\',\''+task.id+'\')" style="align-self:flex-start;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save proof</button>';
-  h+='<span id="pfstat_'+section+'_'+task.id+'" style="font-size:11px;color:#b45309;"></span></div>';
+  h+=taskProofStatusHtml(section, task.id)+'</div>';
   return h;
 }
 function renderInviteProof(section, task){
@@ -11123,10 +11441,10 @@ function renderInviteProof(section, task){
   h+='<div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;">Families invited</div>';
   for(let i=0;i<n;i++){
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_child','Child name','text','');
-    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_family','Parent or family','text','');
-    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_method','Method','select','',PROOF_INVITE_METHODS);
-    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_month','Birthday month','select','',PROOF_MONTHS);
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_child','Child name','text','',null,section,task.id);
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_family','Parent or family','text','',null,section,task.id);
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_method','Method','select','',PROOF_INVITE_METHODS,section,task.id);
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_inv_'+i+'_month','Birthday month','select','',PROOF_MONTHS,section,task.id);
     h+='</div>';
   }
   h+='<button type="button" onclick="proofAddRow(\''+task.id+'__inv\', '+n+')" style="align-self:flex-start;padding:4px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">+ Another family</button>';
@@ -11134,17 +11452,19 @@ function renderInviteProof(section, task){
   const b=proofSlotCount(task.id+'__book', 1, 1);
   for(let i=0;i<b;i++){
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_child','Child name','text','');
-    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_family','Family','text','');
-    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_date','Party date','date','');
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_child','Child name','text','',null,section,task.id);
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_family','Family','text','',null,section,task.id);
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_date','Party date','date','',null,section,task.id);
     h+='</div>';
   }
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
-  h+='<input id="pf_'+section+'_'+task.id+'_none" type="text" placeholder="One-line note if no eligible birthdays" style="flex:1;min-width:180px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+  const invNone='pf_'+section+'_'+task.id+'_none';
+  const invNoneDraft=taskDraftValue(invNone);
+  h+='<input id="'+invNone+'"'+taskDraftMark(invNone)+taskDraftHooks()+' type="text" value="'+escAttr(invNoneDraft==null?'':invNoneDraft)+'" placeholder="One-line note if no eligible birthdays" style="flex:1;min-width:180px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
   h+='<button type="button" data-none-option="1" onclick="proofUseNone(\''+section+'\',\''+task.id+'\')" style="padding:6px 12px;background:#fff;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">No eligible birthdays this week</button>';
   h+='</div>';
   h+='<button type="button" onclick="proofSaveStructured(\''+section+'\',\''+task.id+'\')" style="align-self:flex-start;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save proof</button>';
-  h+='<span id="pfstat_'+section+'_'+task.id+'" style="font-size:11px;color:#b45309;"></span></div>';
+  h+=taskProofStatusHtml(section, task.id)+'</div>';
   return h;
 }
 function renderBookingProof(section, task){
@@ -11154,14 +11474,14 @@ function renderBookingProof(section, task){
   h+='<div style="font-size:12px;color:#64748b;">'+min+' parties this cycle. Child, family, and party date for each. A booking logged on Invite birthday families counts here too.</div>';
   for(let i=0;i<n;i++){
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_child','Child name','text','');
-    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_family','Family or guardian','text','');
-    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_date','Party date','date','');
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_child','Child name','text','',null,section,task.id);
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_family','Family or guardian','text','',null,section,task.id);
+    h+=proofFieldInput('pf_'+section+'_'+task.id+'_book_'+i+'_date','Party date','date','',null,section,task.id);
     h+='</div>';
   }
   h+='<button type="button" onclick="proofAddRow(\''+task.id+'__book\', '+n+')" style="align-self:flex-start;padding:4px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">+ Another party</button>';
   h+='<button type="button" onclick="proofSaveStructured(\''+section+'\',\''+task.id+'\')" style="align-self:flex-start;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save proof</button>';
-  h+='<span id="pfstat_'+section+'_'+task.id+'" style="font-size:11px;color:#b45309;"></span></div>';
+  h+=taskProofStatusHtml(section, task.id)+'</div>';
   return h;
 }
 function renderRowsProof(section, task){
@@ -11172,17 +11492,21 @@ function renderRowsProof(section, task){
   let h='<div class="proof-box" data-proof-form="rows">';
   for(let i=0;i<n;i++){
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-    fields.forEach(f=>{ h+=proofFieldInput('pf_'+section+'_'+task.id+'_'+i+'_'+f.key, f.label, f.type||'text', ''); });
+    fields.forEach(f=>{ h+=proofFieldInput('pf_'+section+'_'+task.id+'_'+i+'_'+f.key, f.label, f.type||'text', '', null, section, task.id); });
     h+='</div>';
   }
   h+='<button type="button" onclick="proofAddRow(\''+task.id+'\', '+n+')" style="align-self:flex-start;padding:4px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">+ Another</button>';
   if(p.none){
     h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
-    if(p.noneNeedsNote) h+='<input id="pf_'+section+'_'+task.id+'_none" type="text" placeholder="One-line note" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+    if(p.noneNeedsNote){
+      const noneId='pf_'+section+'_'+task.id+'_none';
+      const noneDraft=taskDraftValue(noneId);
+      h+='<input id="'+noneId+'"'+taskDraftMark(noneId)+taskDraftHooks()+' type="text" value="'+escAttr(noneDraft==null?'':noneDraft)+'" placeholder="One-line note" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;">';
+    }
     h+='<button type="button" data-none-option="1" onclick="proofUseNone(\''+section+'\',\''+task.id+'\')" style="padding:6px 12px;background:#fff;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">'+esc(p.none)+'</button></div>';
   }
   h+='<button type="button" onclick="proofSaveStructured(\''+section+'\',\''+task.id+'\')" style="align-self:flex-start;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save proof</button>';
-  h+='<span id="pfstat_'+section+'_'+task.id+'" style="font-size:11px;color:#b45309;"></span></div>';
+  h+=taskProofStatusHtml(section, task.id)+'</div>';
   return h;
 }
 function proofUseNone(section, taskId){
@@ -11194,18 +11518,28 @@ function proofUseNone(section, taskId){
     const note=el?el.value.trim():'';
     if(!note){ if(el){el.style.borderColor='var(--red)';el.focus();} return; }
     const payload={ts:Date.now(), proofV:1, none:true, noneNote:note, notes:phrase+' — '+note};
-    if(!commitTask(section, taskId, payload)) return;
-    render();
+    if(!commitTask(section, taskId, payload)){
+      taskProofStatus(section, taskId, 'error', 'Could not save this. Try again.');
+      return;
+    }
+    clearTaskDrafts(section, taskId);
+    taskProofStatus(section, taskId, 'saved', 'Saved');
+    render(true);
     return;
   }
   if(proofKindOf(task)==='photoOrNone'){
     const payload={ts:Date.now(), proofV:1, none:true, notes:phrase, photos:(taskDoneRec(section,taskId).photos)||[]};
-    if(!commitTask(section, taskId, payload)) return;
-    render();
+    if(!commitTask(section, taskId, payload)){
+      taskProofStatus(section, taskId, 'error', 'Could not save this. Try again.');
+      return;
+    }
+    clearTaskDrafts(section, taskId);
+    taskProofStatus(section, taskId, 'saved', 'Saved');
+    render(true);
     return;
   }
   completeTaskWithNotes(section, taskId, phrase);
-  render();
+  render(true);
 }
 function mirrorPartyBookings(bookings){
   const good=(bookings||[]).filter(r=>r&&String(r.child||'').trim()&&String(r.family||'').trim()&&String(r.date||'').trim());
@@ -11227,6 +11561,8 @@ function openTaskPlaybook(pbId){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function undoTask(section,taskId){
+  clearTaskDrafts(section, taskId);
+  taskProofStatus(section, taskId, '', '');
   writeTask(section, taskId, null);
 }
 function cancelModal(){state.modalTask=null;render();}
@@ -11735,7 +12071,9 @@ function renderTasksPage(){
       html+='<div style="margin:4px 0 8px;padding:10px 16px;background:var(--gray-50);border-radius:10px;border:1px solid var(--gray-200);">';
       html+='<div style="font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px;">📝 Daily Exception Log</div>';
       html+='<div style="font-size:12px;color:var(--gray-400);margin-bottom:6px;">If any task above was left blank, add a one-sentence explanation before clocking out.</div>';
-      html+='<input id="exceptionLogInput" value="'+esc(exLog)+'" placeholder=\'e.g. "Skipped Loom videos today because of a 20-min parent meeting after the 6 PM class."\' maxlength="300" onchange="saveExceptionLog(this.value)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;outline:none;color:var(--gray-700);" />';
+      const exDraft=taskDraftValue('exceptionLogInput');
+      const exShown=exDraft==null?exLog:exDraft;
+      html+='<input id="exceptionLogInput"'+taskDraftMark('exceptionLogInput')+taskDraftHooks()+' value="'+escAttr(exShown)+'" placeholder=\'e.g. "Skipped Loom videos today because of a 20-min parent meeting after the 6 PM class."\' maxlength="300" onchange="saveExceptionLog(this.value)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;outline:none;color:var(--gray-700);" />';
       html+='</div>';
     }
   }
@@ -11799,7 +12137,9 @@ function renderTaskSection(section,title,tasks,completionData,customTasksObj,loc
   }
   if(!locked){
     html+='<div style="display:flex;align-items:center;gap:8px;padding:10px 20px;border-top:1px solid var(--gray-100);background:var(--gray-50)">';
-    html+='<input id="customTaskInput_'+section+'" placeholder="Add a task…" maxlength="120" onkeydown="if(event.key===\'Enter\')addCustomTask(\''+section+'\')" style="flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;outline:none" />';
+    const customId='customTaskInput_'+section;
+    const customDraft=taskDraftValue(customId);
+    html+='<input id="'+customId+'"'+taskDraftMark(customId)+taskDraftHooks()+' value="'+escAttr(customDraft==null?'':customDraft)+'" placeholder="Add a task…" maxlength="120" onkeydown="if(event.key===\'Enter\')addCustomTask(\''+section+'\')" style="flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;outline:none" />';
     html+='<button onclick="addCustomTask(\''+section+'\')" style="padding:7px 14px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">+ Add</button>';
     html+='</div>';
   }
@@ -12291,7 +12631,9 @@ function renderContentUploadBox(section,taskId,active){
   h+='<div style="font-size:13px;font-weight:700;color:#2c4bff;">📸 Tap to upload a '+brandLabel+' photo or video</div><div style="font-size:11px;color:var(--gray-500);margin-top:3px;">You can pick several at once.'+(CONTENT_VIDEO_ENABLED?' Videos up to 250 MB.':' Videos coming soon.')+' It shows on this dashboard as soon as it uploads.</div></div>';
   h+='<input type="file" multiple accept="'+acc+'" id="ccfile_'+id+'" style="display:none" onchange="contentUploadFiles(\''+section+'\',\''+taskId+'\',this.files);this.value=\'\'">';
   h+='<div style="display:flex;gap:6px;flex-wrap:wrap;"><select id="ccpillar_'+id+'" style="font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;">'+active.map(p=>'<option value="'+esc(p.name)+'">'+p.icon+' '+esc(p.name)+'</option>').join('')+'<option value="Other">Other</option></select>';
-  h+='<input id="cccap_'+id+'" type="text" placeholder="Caption (optional)" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;"></div>';
+  const capId='cccap_'+id;
+  const capDraft=taskDraftValue(capId);
+  h+='<input id="'+capId+'"'+taskDraftMark(capId)+taskDraftHooks()+' type="text" value="'+escAttr(capDraft==null?'':capDraft)+'" placeholder="Caption (optional)" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;"></div>';
   h+='<span id="ccstat_'+id+'" style="font-size:11px;color:#888;"></span></div>';
   return h;
 }
@@ -12440,8 +12782,11 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   if(isCount&&!isDone&&!needsReview&&!locked&&!useProof){
     const min=task.min||0;
     html+='<div style="margin-left:34px;display:flex;align-items:center;gap:8px;">';
-    html+='<input id="count_'+section+'_'+task.id+'" type="number" min="'+(min||0)+'" inputmode="numeric" placeholder="How many today?'+(min?' (min '+min+')':'')+'" style="width:170px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" onkeydown="if(event.key===\'Enter\')completeTaskCount(\''+section+'\',\''+task.id+'\')" />';
+    const countId='count_'+section+'_'+task.id;
+    const countDraft=taskDraftValue(countId);
+    html+='<input id="'+countId+'"'+taskDraftMark(countId, section, task.id)+taskDraftHooks(section, task.id)+' type="number" min="'+(min||0)+'" inputmode="numeric" value="'+escAttr(countDraft==null?'':countDraft)+'" placeholder="How many today?'+(min?' (min '+min+')':'')+'" style="width:170px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" />';
     html+='<button onclick="completeTaskCount(\''+section+'\',\''+task.id+'\')" style="padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Log</button>';
+    html+=taskProofStatusHtml(section, task.id);
     html+='</div>';
   }
   // Notes field / saved notes. Proof-form tasks render their own fields.
@@ -12449,7 +12794,10 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     if((isDone||needsReview)&&doneData.notes){
       html+='<div class="proof-saved">'+esc(doneData.notes)+'</div>';
     } else if(!isDone&&!needsReview&&!locked){
-      html+='<div style="margin-left:34px"><input id="notes_'+section+'_'+task.id+'" type="text" placeholder="Enter student names..." style="width:100%;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" onkeydown="if(event.key===\'Enter\')completeTaskWithNotes(\''+section+'\',\''+task.id+'\')" /></div>';
+      const legacyId='notes_'+section+'_'+task.id;
+      const legacyDraft=taskDraftValue(legacyId);
+      const legacyShown=legacyDraft==null?String((doneData&&doneData.notes)||''):legacyDraft;
+      html+='<div style="margin-left:34px"><input id="'+legacyId+'"'+taskDraftMark(legacyId, section, task.id)+taskDraftHooks(section, task.id)+' type="text" value="'+escAttr(legacyShown)+'" placeholder="Enter student names..." style="width:100%;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;color:var(--gray-700);background:#fff;" />'+taskProofStatusHtml(section, task.id)+'</div>';
     }
   }
   if(useProof) html+=renderProofEditor(section, task, doneData, locked);
@@ -12468,7 +12816,12 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
         v=(contentIsVideo(u)?'🎬 ':'📸 ')+(u.pillar?u.pillar+': ':'')+(u.caption||u.name||'upload');
       }
       if(locked){ if(v) html+='<div style="font-size:12px;color:var(--gray-600);padding:5px 10px;background:var(--gray-50);border-radius:6px;"><b>Post '+i+':</b> '+esc(v)+'</div>'; }
-      else html+='<input type="text" value="'+esc(v)+'" placeholder="Post '+i+': fills in when you upload, or describe it here" onchange="taskPostSave(\''+section+'\',\''+task.id+'\','+i+',this.value)" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;color:var(--gray-700);background:#fff;">';
+      else {
+        const postId='post_'+section+'_'+task.id+'_'+i;
+        const postDraft=taskDraftValue(postId);
+        if(postDraft!=null) v=postDraft;
+        html+='<input id="'+postId+'"'+taskDraftMark(postId)+taskDraftHooks()+' type="text" value="'+escAttr(v)+'" placeholder="Post '+i+': fills in when you upload, or describe it here" onchange="taskPostSave(\''+section+'\',\''+task.id+'\','+i+',this.value)" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 10px;border:1px solid var(--gray-200);border-radius:7px;color:var(--gray-700);background:#fff;">';
+      }
     }
     html+='</div>';
   }
@@ -15701,6 +16054,7 @@ function renderDevelopmentPage() {
 }
 
   async function init() {
+  if (taskNoteFixtureMode()) { taskNoteBootFixtures(); return; }
   if (crqLocalFixtureMode()) { crqBootLabeledFixtures(); return; }
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
   // Restore ACQ session unlock from sessionStorage
