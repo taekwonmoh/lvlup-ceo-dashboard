@@ -169,8 +169,12 @@ const tcClockStaff = grab('tcClockStaff');
 const tcSchedulableAt = grab('tcSchedulableAt');
 const tcDateKey = grab('tcDateKey');
 const tcSchedDays = grab('tcSchedDays');
+const resolveDashRole = grab('resolveDashRole');
+const resolveDashEmpId = grab('resolveDashEmpId');
 const TASK_EMPLOYEES = grab('TASK_EMPLOYEES');
 const EMP_DAILY = grab('EMP_DAILY');
+const LEAD_STAFF = grab('LEAD_STAFF');
+const renderAccountabilityPage = grab('renderAccountabilityPage');
 
 let failed = 0;
 let passed = 0;
@@ -204,6 +208,7 @@ state.timeclock = {
     tc_meredith: { name: 'Meredith Fitz', loc: 'goninjaV' },
     tc_mvvjbiq88fhd: { name: 'Meredith', loc: null, email: '' },
     tc_mike: { name: 'Mike Moh', loc: 'waunakee', schedAll: true },
+    tc_ruthe: { name: 'Ruthe', loc: 'verona', email: 'ruthe.sagartz@gmail.com', schedLocs: ['verona'] },
   },
   schedule: {},
   schedulePublished: {},
@@ -224,6 +229,18 @@ check(tcStaffLabel(state.timeclock.staff.tc_mario, 'tc_mario') === 'Mario Sanche
 check(tcStaffLabel(state.timeclock.staff.tc_cat, 'tc_cat') === 'Cat Trevino', 'Cat shows as Cat Trevino');
 check(tcStaffLabel(state.timeclock.staff.tc_msk, 'tc_msk') === 'Sue Kondratowicz', 'Ms K shows as Sue Kondratowicz');
 check(tcStaffLabel(state.timeclock.staff.tc_muq58dnhkazw, 'tc_muq58dnhkazw') === 'Abigail Hoefling', 'Abigail shows as Abigail Hoefling');
+check(tcStaffLabel(state.timeclock.staff.tc_ruthe, 'tc_ruthe') === 'Ruthe Sagartz', 'Ruthe shows as Ruthe Sagartz');
+check(tcStaffLabel({ name: 'Ruthe Sagartz', email: 'ruthe.sagartz@gmail.com' }, 'tc_other') === 'Ruthe Sagartz', 'a stored full name is not doubled for Ruthe');
+const rutheSeat = grab('DASH_KNOWN_SEATS')['ruthe.sagartz@gmail.com'];
+check(rutheSeat && rutheSeat.dashRole === 'frontdesk' && !rutheSeat.empId, 'Ruthe’s known seat is staff-tier and has no checklist');
+check(resolveDashRole({}, 'ruthe.sagartz@gmail.com') === 'frontdesk', 'a missing dashRole still leaves Ruthe on the staff tier');
+check(resolveDashRole({ dashRole: 'lead' }, 'ruthe.sagartz@gmail.com') === 'lead', 'an explicit dashboard tier on the live record still wins');
+check(resolveDashEmpId({}, 'ruthe.sagartz@gmail.com') === '', 'Ruthe does not inherit a checklist seat');
+check(!TASK_EMPLOYEES.some(e => /ruthe/i.test(e.id + ' ' + e.name)), 'Ruthe is not a task seat');
+check(!Object.prototype.hasOwnProperty.call(EMP_DAILY, 'rutheS') && !EMP_DAILY.ruthe, 'Ruthe has no lead daily list');
+check(!LEAD_STAFF.some(s => /ruthe/i.test(s.empId + ' ' + s.name)), 'Ruthe is not on the lead accountability list');
+check(!tcSchedulableAt({ id: 'tc_ruthe', name: 'Ruthe', loc: 'verona', email: 'ruthe.sagartz@gmail.com' }, 'eastmad'), 'Ruthe is not auto-added to East Madison');
+check(tcSchedulableAt(state.timeclock.staff.tc_ruthe, 'verona'), 'schedLocs puts Ruthe on the Verona chip before a shift');
 const sueSeat = TASK_EMPLOYEES.find(e => e.id === 'sueK');
 check(sueSeat && sueSeat.id === 'sueK', 'sueK task id is unchanged');
 check(grab('DASH_KNOWN_SEATS')['ahoefling7@gmail.com'].empId === 'sueK', 'Abigail’s login still opens Sue’s checklist');
@@ -254,7 +271,13 @@ state.schedLoc = 'verona';
 const verona = renderTcSchedule();
 check(verona.indexOf('Tarik Murrell') < 0, 'Tarik is not on the Verona chip');
 check(verona.indexOf('Bryan Goad') < 0, 'Bryan is not on Verona until he has a shift there');
+check(verona.indexOf('Ruthe Sagartz') >= 0, 'Verona lists Ruthe Sagartz from schedLocs');
+check(verona.indexOf("tcShiftOpen('tc_ruthe'") >= 0, 'Verona can add a shift for Ruthe');
 check(verona.indexOf('Joey Zaworski') >= 0, 'schedAll still covers every LVLUP chip');
+state.timeclock.staff.tc_ruthe.schedLocs = null;
+const veronaHomeOnly = renderTcSchedule();
+check(veronaHomeOnly.indexOf('Ruthe Sagartz') < 0, 'home school alone does not put Ruthe on the Verona chip');
+state.timeclock.staff.tc_ruthe.schedLocs = ['verona'];
 
 state.schedLoc = 'waunakee';
 const wau = renderTcSchedule();
@@ -286,6 +309,8 @@ check((all.match(/data-staff="tc_msk"/g) || []).length === 7, 'Sue Kondratowicz 
 check(all.indexOf('Meredith Fitz') >= 0, 'Meredith Fitz is on the schedule');
 check((all.match(/data-staff="tc_muq58dnhkazw"/g) || []).length === 7, 'Abigail has one schedule row');
 check(all.indexOf('Abigail Hoefling') >= 0, 'All locations shows Abigail Hoefling');
+check(all.indexOf('Ruthe Sagartz') >= 0, 'All locations shows Ruthe Sagartz');
+check((all.match(/data-staff="tc_ruthe"/g) || []).length === 7, 'Ruthe has one schedule row');
 check(all.indexOf('data-staff="tc_mvvjbiq88fhd"') < 0, 'the duplicate Meredith has no schedule row');
 
 const days = tcSchedDays();
@@ -312,6 +337,7 @@ check(picker.indexOf('>Ash Mouille</option>') >= 0, 'time-off staff picker shows
 check(picker.indexOf('>Mario Sanchez</option>') >= 0, 'time-off picker shows Mario Sanchez');
 check(picker.indexOf('>Sue Kondratowicz</option>') >= 0, 'time-off picker shows Sue Kondratowicz');
 check(picker.indexOf('>Abigail Hoefling</option>') >= 0, 'time-off picker lists Abigail Hoefling');
+check(picker.indexOf('>Ruthe Sagartz</option>') >= 0, 'time-off picker lists Ruthe Sagartz');
 check(picker.indexOf('>Meredith</option>') < 0, 'time-off picker does not list the bare Meredith duplicate');
 check(picker.indexOf('Meredith Fitz') >= 0, 'time-off picker lists Meredith Fitz');
 
@@ -410,6 +436,36 @@ check(sandbox.__writes.length === 0, 'front desk cannot file time off from the s
 dashAuth.isAdmin = true;
 dashAuth.dashRole = 'admin';
 state.tcShiftEdit = null;
+
+const rutheAuth = {
+  ready: true, allowed: true, isAdmin: false, canFinance: false, dashRole: 'frontdesk', empId: '',
+  name: 'Ruthe Sagartz', schools: ['verona'], access: { dashboard: true }, staffKey: 'ruthe,sagartz@gmail,com',
+  user: { email: 'ruthe.sagartz@gmail.com', emailVerified: true },
+};
+Object.assign(dashAuth, rutheAuth);
+state.schedLoc = 'verona';
+state.tcTimeoffReq = null;
+state.tcOffView = null;
+const staffPage = renderAccountabilityPage();
+check(staffPage.indexOf('Ruthe Sagartz') >= 0, 'a staff-tier Verona login sees Ruthe on the schedule');
+check(staffPage.indexOf('View only') >= 0, 'a staff-tier login is told the schedule is view only');
+check(staffPage.indexOf('Request time off') >= 0, 'a staff-tier login can open a time-off request');
+check(staffPage.indexOf('Copy last week') < 0, 'a staff-tier login does not get shift-editing tools');
+check(staffPage.indexOf('>Approve<') < 0 && staffPage.indexOf('>Deny<') < 0, 'a staff-tier login cannot approve time off');
+check(staffPage.indexOf('Payroll Timesheet') < 0, 'a staff-tier login does not see payroll');
+state.tcTimeoffReq = { empId: 'tc_ruthe', ctx: 'dash', start: '2026-11-24', end: '2026-11-24', type: 'unpaid', note: '' };
+const rutheForm = renderTcTimeoffModal();
+check(rutheForm.indexOf('Request time off') >= 0, 'the request form title is Request time off');
+check(rutheForm.indexOf('>Who<') >= 0 && rutheForm.indexOf('Ruthe Sagartz') >= 0, 'the dashboard form asks who and lists Ruthe');
+check(rutheForm.indexOf('>From<') >= 0 && rutheForm.indexOf('>To<') >= 0, 'the form asks for From and To dates');
+check(rutheForm.indexOf('Submit request') >= 0, 'the form submits with Submit request');
+check(rutheForm.indexOf('Unpaid time off') >= 0, 'an hourly instructor is told the request is unpaid');
+check(rutheForm.indexOf('Paid (PTO)') < 0, 'an hourly instructor does not get a PTO choice');
+dashAuth.isAdmin = true;
+dashAuth.dashRole = 'admin';
+dashAuth.empId = '';
+dashAuth.user = { email: 'fixture-admin@example.test', emailVerified: true };
+state.tcTimeoffReq = null;
 
 const wednesday = tcDateKey(new Date(new Date(tuesday + 'T12:00:00').getTime() + 86400000));
 const thursday = tcDateKey(new Date(new Date(wednesday + 'T12:00:00').getTime() + 86400000));

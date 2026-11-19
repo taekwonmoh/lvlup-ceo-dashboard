@@ -908,7 +908,7 @@ function dashLocalHost() {
 function dashLocalFixtureMode() {
   if (!dashLocalHost()) return false;
   const q = String(location.search || '');
-  return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(q) || /(?:\?|&)taskNoteFixtures=1(?:&|$)/.test(q) || /(?:\?|&)contentContextFixtures=1(?:&|$)/.test(q);
+  return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(q) || /(?:\?|&)taskNoteFixtures=1(?:&|$)/.test(q) || /(?:\?|&)contentContextFixtures=1(?:&|$)/.test(q) || /(?:\?|&)staffScheduleFixtures=1(?:&|$)/.test(q);
 }
 function taskNoteFixtureMode() {
   if (!dashLocalHost()) return false;
@@ -921,6 +921,13 @@ function contentContextFixtureMode() {
 function crqLocalFixtureMode() {
   if (!dashLocalHost()) return false;
   return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(String(location.search || ''));
+}
+function staffScheduleFixtureMode() {
+  if (!dashLocalHost()) return false;
+  return /(?:\?|&)staffScheduleFixtures=1(?:&|$)/.test(String(location.search || ''));
+}
+function staffScheduleTimeoffFixture() {
+  return staffScheduleFixtureMode() && /(?:\?|&)staffScheduleTimeoff=1(?:&|$)/.test(String(location.search || ''));
 }
 function crqStubRef() {
   const snap = { val() { return null; } };
@@ -986,6 +993,8 @@ const DASH_KNOWN_SEATS = {
   'andy.roszkowski@gmail.com': { dashRole: 'frontdesk', empId: 'andyR' },
   'applezgirl69@gmail.com': { dashRole: 'frontdesk', empId: 'erikaD' },
   'waunakee@lvlupma.com': { dashRole: 'frontdesk', empId: 'sueK' },
+  // Verona instructor. No empId: a checklist seat would fall through to the lead daily list.
+  'ruthe.sagartz@gmail.com': { dashRole: 'frontdesk' },
 };
 function blankDashAuth(extra) {
   return Object.assign({
@@ -4367,6 +4376,81 @@ function mountContentContextFixtureBar(){
   bar.textContent = 'Mock photos only. Not connected to Firebase. Nothing on this page is saved.';
   app.prepend(bar);
 }
+function staffScheduleBootFixtures(){
+  dashAuth = blankDashAuth({
+    ready: true,
+    allowed: true,
+    user: { email: 'ruthe.sagartz@gmail.com', emailVerified: true },
+    dashRole: 'frontdesk',
+    empId: '',
+    name: 'Ruthe Sagartz',
+    isAdmin: false,
+    canFinance: false,
+    schools: ['verona'],
+    access: { dashboard: true },
+    staffKey: 'ruthe,sagartz@gmail,com',
+  });
+  const days = tcSchedDays();
+  const monday = tcDateKey(days[0]);
+  const tuesday = tcDateKey(days[1]);
+  const thursday = tcDateKey(days[3]);
+  state.timeclock = {
+    staff: {
+      tc_ruthe: { name: 'Ruthe Sagartz', loc: 'verona', email: 'ruthe.sagartz@gmail.com', schedLocs: ['verona'] },
+      tc_bryan: { name: 'Bryan', loc: 'verona', email: 'bgoad.lvlupma@gmail.com', fullTime: true },
+      tc_mario: { name: 'Mario', loc: 'verona', email: 'mariosanchez566@gmail.com' },
+    },
+    schedule: {
+      tc_ruthe: {},
+      tc_bryan: {},
+    },
+    schedulePublished: {},
+    timeoff: {
+      to_ruthe_fixture: { empId: 'tc_ruthe', start: tuesday, end: tuesday, days: 1, type: 'unpaid', note: 'fixture only', status: 'pending', reqAt: 1, reqVia: 'dash' },
+    },
+    pins: {},
+  };
+  state.timeclock.schedule.tc_ruthe[thursday] = { s1: { start: '16:00', end: '20:00', loc: 'verona', role: 'Instructor' } };
+  state.timeclock.schedule.tc_bryan[tuesday] = { s1: { start: '16:00', end: '20:00', loc: 'verona', role: 'Lead' } };
+  state.timeclock.schedulePublished[monday] = {
+    publishedAt: Date.now() - 3600000,
+    snap: {
+      tc_ruthe: [thursday + '|16:00|20:00|verona|Instructor'],
+      tc_bryan: [tuesday + '|16:00|20:00|verona|Lead'],
+    },
+  };
+  state.tcLoaded = true;
+  state.tcWeekOffset = 0;
+  state.schedLoc = 'verona';
+  state.tcTeamLoc = 'verona';
+  state.activeSection = 'accountability';
+  state.opsSection = 'accountability';
+  if (location.hash === '#clock') {
+    state.gateOk = true;
+    state.gateUser = 'tc_ruthe';
+    state.tcSel = 'tc_ruthe';
+  }
+  if (staffScheduleTimeoffFixture()) tcTimeoffReqOpen('tc_ruthe', location.hash === '#clock' ? 'kiosk' : 'dash');
+  else render(true);
+}
+function markStaffScheduleFixtureOffline(){
+  const conn = document.getElementById('connStatus');
+  if (!conn) return;
+  conn.className = 'conn-status offline';
+  conn.textContent = 'Mock only — not connected';
+}
+function mountStaffScheduleFixtureBar(){
+  if (!staffScheduleFixtureMode()) return;
+  const app = document.getElementById('app');
+  if (!app || !app.prepend || document.getElementById('staffScheduleFixtureBar')) return;
+  markStaffScheduleFixtureOffline();
+  const bar = document.createElement('div');
+  bar.id = 'staffScheduleFixtureBar';
+  bar.setAttribute('data-staff-schedule-fixture', '1');
+  bar.style.cssText = 'background:#fffbeb;border-bottom:1px solid #fde68a;color:#92400e;padding:10px 14px;font:600 13px/1.45 system-ui,sans-serif;';
+  bar.textContent = 'Mock schedule for Ruthe Sagartz, Verona instructor, Front Desk tier. Not connected to Firebase. Nothing on this page is saved.';
+  app.prepend(bar);
+}
 function crqBootLabeledFixtures(){
   const role = /(?:\?|&)holdCancelRole=frontdesk(?:&|$)/.test(String(location.search || '')) ? 'frontdesk' : 'lead';
   dashAuth = blankDashAuth({
@@ -5205,6 +5289,7 @@ function render(force) {
     restoreTaskInputDrafts();
     mountTaskNoteFixtureBar();
     mountContentContextFixtureBar();
+    mountStaffScheduleFixtureBar();
   }
 }
 
@@ -6032,6 +6117,7 @@ const TC_DISPLAY_LAST = {
   tc_erika: 'Weiss', 'applezgirl69@gmail.com': 'Weiss',
   tc_mario: 'Sanchez', 'mariosanchez566@gmail.com': 'Sanchez',
   tc_muq58dnhkazw: 'Hoefling', 'ahoefling7@gmail.com': 'Hoefling',
+  tc_ruthe: 'Sagartz', 'ruthe.sagartz@gmail.com': 'Sagartz',
 };
 function tcStaffLabel(s, id){
   s = s || {};
@@ -16223,6 +16309,7 @@ function renderDevelopmentPage() {
   if (contentContextFixtureMode()) { contentContextBootFixtures(); return; }
   if (taskNoteFixtureMode()) { taskNoteBootFixtures(); return; }
   if (crqLocalFixtureMode()) { crqBootLabeledFixtures(); return; }
+  if (staffScheduleFixtureMode()) { staffScheduleBootFixtures(); return; }
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
   // Restore ACQ session unlock from sessionStorage
   if (sessionStorage && sessionStorage.getItem('acqUnlocked') === '1') state.acq.unlocked = true;
