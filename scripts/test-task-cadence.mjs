@@ -446,6 +446,7 @@ check(taskBonusComplete(burstTask, { ts: 1, burst: true }), 'a legacy record is 
 
 state.tasksLoc = 'joeyZ';
 state.tasksDate = '2026-11-16';
+state._proofNow = '2026-11-16T18:00:00Z';
 state.tasksData.joeyZ = { daily: { '2026-11-16': {} } };
 sandbox.__writes.length = 0;
 ['c1', 'c2', 'c3', 'c4'].forEach(id => completeTask('daily', id));
@@ -456,6 +457,7 @@ const live = state.tasksData.joeyZ.daily['2026-11-16'];
 check(['c1', 'c2', 'c3', 'c4'].every(id => live[id] && live[id].burst && !taskBonusComplete({ id }, live[id])), 'four rapid checks are marked needs-review in memory');
 live.c1.burstOk = true;
 check(taskBonusComplete({ id: 'c1' }, live.c1), 'confirming one burst item counts that item');
+state._proofNow = null;
 
 clearEls();
 const beforeBlank = sandbox.__writes.length;
@@ -477,12 +479,14 @@ check(sandbox.__writes.length === beforeCount, 'the stoplight number box cannot 
 
 state.tasksLoc = 'sueK';
 state.tasksDate = '2026-11-17';
+state._proofNow = '2026-11-17T18:00:00Z';
 if (!state.tasksData.sueK) state.tasksData.sueK = {};
 setEl('notes_daily_fd_messages', '');
 const beforeNone = sandbox.__writes.length;
 grab('proofUseNone')('daily', 'fd_messages');
 const noneWrite = sandbox.__writes[sandbox.__writes.length - 1];
 check(sandbox.__writes.length > beforeNone && noneWrite.val && noneWrite.val.none && noneWrite.val.notes === 'None today', 'None today completes the inbox task');
+state._proofNow = null;
 
 state.tasksLoc = 'ash';
 state.tasksDate = '2026-11-16';
@@ -591,6 +595,7 @@ check(taskBonusComplete({ id: 'ph_floor', priorPhoto: true, photo: true }, { ts:
 
 state.tasksLoc = 'joeyZ';
 state.tasksDate = '2026-11-16';
+state._proofNow = '2026-11-16T18:00:00Z';
 state.tasksData.joeyZ = { daily: { '2026-11-16': { ph_floor: { ts: 1, proofV: 1, photos: ['https://example.test/floor.jpg'] } } } };
 setEl('phflag_j_spray', '');
 setEl('phflag_j_wetmop', '');
@@ -679,6 +684,123 @@ SUE_CLEAN.forEach(([id, text]) => {
   check(sueCleanDaily.indexOf('data-task-id="' + id + '"') >= 0 && sueCleanDaily.indexOf(text) >= 0, 'Waunakee daily sheet shows ' + text);
 });
 check(section(sueCleanSheet, 'Weekly Responsibilities').indexOf('fd_dust_proshop') < 0, 'cleaning tasks stay off the weekly front desk list');
+
+// Weekly note fields are redrawn on every Firebase update. A typed note has to
+// survive that redraw, then save when the field is left, for every instructor.
+const taskFieldScope = grab('taskFieldScope');
+const taskDraftValue = grab('taskDraftValue');
+const captureTaskInputDrafts = grab('captureTaskInputDrafts');
+const leaveTaskField = grab('leaveTaskField');
+const render = grab('render');
+state.taskInputDrafts = {};
+state.taskSaveStatus = {};
+state.tasksLoc = 'ash';
+state.tasksDate = '2026-11-18';
+state._proofNow = '2026-11-18T18:00:00Z';
+if (!state.tasksData.ash) state.tasksData.ash = {};
+state.tasksData.ash.weekly = state.tasksData.ash.weekly || {};
+const ashWeekKey = getTaskWeekKey('2026-11-18');
+const noteScope = taskFieldScope('notes_weekly_events_promote');
+state.taskInputDrafts.notes_weekly_events_promote = { scope: noteScope, value: 'Told Tigers and Kids about the tournament' };
+const draftedSheet = sheet('ash', '2026-11-18');
+const draftedWeekly = section(draftedSheet, 'Weekly Recurring');
+check(draftedWeekly.indexOf('data-task-id="events_promote"') >= 0 && draftedWeekly.indexOf('data-task-draft="1"') >= 0, 'Ash weekly note fields keep a draft across a redraw');
+check(draftedWeekly.indexOf('Told Tigers and Kids about the tournament') >= 0, 'Ash weekly event note is still on the sheet after a redraw');
+check(draftedWeekly.indexOf('data-task-id="mia_report"') >= 0 && draftedWeekly.indexOf('Booster date') >= 0, 'the booster lesson row is one of the weekly fields');
+check(draftedWeekly.indexOf('data-task-id="ad_invites"') >= 0, 'the multi-line weekly invite note uses the same field');
+const rosterScope = taskFieldScope('notes_daily_rosters');
+state.taskInputDrafts.notes_daily_rosters = { scope: rosterScope, value: 'Tigers 6, Kids 10. Trial: Maya' };
+const dailyDraft = section(sheet('ash', '2026-11-18'), 'Daily Checklist');
+check(dailyDraft.indexOf('Trial: Maya') >= 0 && dailyDraft.indexOf('data-task-id="rosters"') >= 0, 'a daily note uses the same draft so a redraw does not clear it');
+
+state.tasksLoc = 'bryanG';
+state.tasksDate = '2026-11-18';
+if (!state.tasksData.bryanG) state.tasksData.bryanG = {};
+const bryanScope = taskFieldScope('notes_weekly_lead_audit');
+state.taskInputDrafts.notes_weekly_lead_audit = { scope: bryanScope, value: 'Sam still open, call Thursday' };
+const bryanDraft = section(sheet('bryanG', '2026-11-18'), 'Weekly Recurring');
+check(bryanDraft.indexOf('Sam still open, call Thursday') >= 0, 'another instructor’s weekly note survives the same redraw');
+
+state.tasksLoc = 'ash';
+state.tasksDate = '2026-11-18';
+const typing = {
+  id: 'notes_weekly_lead_audit',
+  value: 'All leads contacted',
+  tagName: 'INPUT',
+  style: {},
+  selectionStart: 4,
+  selectionEnd: 4,
+  getAttribute(name) {
+    if (name === 'data-task-draft') return '1';
+    if (name === 'data-task-section') return 'weekly';
+    if (name === 'data-task-id') return 'lead_audit';
+    if (name === 'data-task-scope') return taskFieldScope('notes_weekly_lead_audit');
+    return null;
+  },
+  focus() { sandbox.document.activeElement = typing; },
+  setSelectionRange() {},
+  setAttribute() {},
+};
+sandbox.document.activeElement = typing;
+sandbox.document.__app = sandbox.document.__blankEl();
+sandbox.document.__app.innerHTML = 'MARKER';
+const prevGet = sandbox.document.getElementById;
+sandbox.document.getElementById = function (id) {
+  if (id === 'app') return sandbox.document.__app;
+  if (id === typing.id) return typing;
+  return prevGet(id);
+};
+const prevQuery = sandbox.document.querySelectorAll;
+sandbox.document.querySelectorAll = function (sel) {
+  if (sel === '[data-task-draft]') return [typing];
+  return [];
+};
+const writesBeforeReplay = sandbox.__writes.length;
+render();
+check(sandbox.document.__app.innerHTML === 'MARKER', 'a live update does not redraw the page while a weekly note is focused');
+check(typing.value === 'All leads contacted', 'the focused weekly note is not cleared by that update');
+check(taskDraftValue('notes_weekly_lead_audit') === 'All leads contacted', 'the focused note is stored before the redraw is skipped');
+check(sandbox.__writes.length === writesBeforeReplay, 'skipping the redraw does not write the unfinished note');
+sandbox.document.activeElement = null;
+const writesBeforeLeave = sandbox.__writes.length;
+leaveTaskField(typing);
+const leadWrite = sandbox.__writes.slice(writesBeforeLeave).filter(w => String(w.path).indexOf('/weekly/') >= 0 && String(w.path).indexOf('lead_audit') >= 0).pop();
+check(leadWrite && leadWrite.val && leadWrite.val.notes === 'All leads contacted' && leadWrite.val.proofV === 1, 'leaving the weekly note saves it');
+check(String(leadWrite.path).indexOf('tasks/emp/ash/weekly/' + ashWeekKey + '/lead_audit') >= 0, 'Ash’s weekly note saves on her seat for this week');
+const savedSheet = section(sheet('ash', '2026-11-18'), 'Weekly Recurring');
+check(savedSheet.indexOf('data-proof-saved="1"') >= 0 && savedSheet.indexOf('All leads contacted') >= 0 && savedSheet.indexOf('data-proof-status="saved"') >= 0, 'the saved weekly note stays visible after the next redraw');
+
+setEl('notes_weekly_ad_invites', 'Only Sam');
+sandbox.document.__els.notes_weekly_ad_invites.value = 'Only Sam';
+sandbox.document.__els.notes_weekly_ad_invites.getAttribute = function () { return null; };
+const beforeShort = sandbox.__writes.length;
+completeTaskWithNotes('weekly', 'ad_invites');
+check(sandbox.__writes.length === beforeShort, 'one name still does not save the two-name weekly invite');
+check((state.taskSaveStatus || {})['weekly|ad_invites'] && state.taskSaveStatus['weekly|ad_invites'].kind === 'error', 'a weekly note that fails validation shows an error');
+state.taskInputDrafts.notes_weekly_ad_invites = { scope: taskFieldScope('notes_weekly_ad_invites'), value: 'Only Sam' };
+check(section(sheet('ash', '2026-11-18'), 'Weekly Recurring').indexOf('Only Sam') >= 0, 'the rejected weekly note is still in the field');
+
+function rowEl(id, value) {
+  const el = { id: id, value: value, style: {}, tagName: 'INPUT', focus() {}, setAttribute() {}, getAttribute() { return null; } };
+  sandbox.document.__els[id] = el;
+  return el;
+}
+rowEl('pf_weekly_mia_report_0_name', 'Maya Chen');
+rowEl('pf_weekly_mia_report_0_date', '2026-11-20');
+state.proofRows = state.proofRows || {};
+state.proofRows.mia_report = 1;
+const beforeBooster = sandbox.__writes.length;
+proofSaveStructured('weekly', 'mia_report');
+const boosterWrite = sandbox.__writes.slice(beforeBooster).filter(w => String(w.path).indexOf('mia_report') >= 0).pop();
+check(boosterWrite && boosterWrite.val && boosterWrite.val.rows && boosterWrite.val.rows[0].name === 'Maya Chen' && boosterWrite.val.rows[0].date === '2026-11-20', 'a booster lesson name and date save');
+check(section(sheet('ash', '2026-11-18'), 'Weekly Recurring').indexOf('Maya Chen') >= 0, 'the saved booster lesson is shown after a redraw');
+
+state.taskInputDrafts = {};
+state.taskSaveStatus = {};
+state._proofNow = null;
+sandbox.document.activeElement = null;
+sandbox.document.getElementById = prevGet;
+sandbox.document.querySelectorAll = prevQuery;
 
 if (failed) {
   console.error(failed + ' failed, ' + passed + ' passed');
