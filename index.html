@@ -908,11 +908,15 @@ function dashLocalHost() {
 function dashLocalFixtureMode() {
   if (!dashLocalHost()) return false;
   const q = String(location.search || '');
-  return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(q) || /(?:\?|&)taskNoteFixtures=1(?:&|$)/.test(q);
+  return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(q) || /(?:\?|&)taskNoteFixtures=1(?:&|$)/.test(q) || /(?:\?|&)contentContextFixtures=1(?:&|$)/.test(q);
 }
 function taskNoteFixtureMode() {
   if (!dashLocalHost()) return false;
   return /(?:\?|&)taskNoteFixtures=1(?:&|$)/.test(String(location.search || ''));
+}
+function contentContextFixtureMode() {
+  if (!dashLocalHost()) return false;
+  return /(?:\?|&)contentContextFixtures=1(?:&|$)/.test(String(location.search || ''));
 }
 function crqLocalFixtureMode() {
   if (!dashLocalHost()) return false;
@@ -938,7 +942,22 @@ function crqStubRef() {
 const CRQ_FIXTURE_BOOT = dashLocalFixtureMode();
 if (!CRQ_FIXTURE_BOOT) firebase.initializeApp(firebaseConfig);
 const db = CRQ_FIXTURE_BOOT ? { ref() { return crqStubRef(); } } : firebase.database();
-const storage = CRQ_FIXTURE_BOOT ? { ref() { return { put() { return { then() { return this; }, catch() { return this; } }; } }; } } : firebase.storage();
+// Local fixtures never touch the live bucket. put() resolves and the download
+// URL is a generated image so a practice upload can finish on this page.
+function dashFixtureStorage() {
+  return {
+    ref() {
+      return {
+        put() { return Promise.resolve(); },
+        getDownloadURL() {
+          const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400"><rect width="640" height="400" fill="#166534"/><text x="32" y="220" fill="#ffffff" font-family="sans-serif" font-size="32" font-weight="700">Mock upload</text></svg>';
+          return Promise.resolve('data:image/svg+xml,' + encodeURIComponent(svg));
+        },
+      };
+    },
+  };
+}
+const storage = CRQ_FIXTURE_BOOT ? dashFixtureStorage() : firebase.storage();
 const CEO = 'ceo'; // root path in Firebase
 
 /* ── Manager-dashboard sign-in gate (Phase 1a) ──────────────────────────────
@@ -4268,6 +4287,86 @@ function mountTaskNoteFixtureBar(){
     + '<button type="button" onmousedown="event.preventDefault()" onclick="taskNoteFixturePing()" style="margin-top:8px;padding:6px 12px;border:1px solid #f59e0b;background:#fff;border-radius:8px;font-weight:800;cursor:pointer;">Replay a live update</button>';
   app.prepend(bar);
 }
+function contentContextFixtureThumb(label, color){
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400"><rect width="640" height="400" fill="' + color + '"/><text x="32" y="220" fill="#ffffff" font-family="sans-serif" font-size="32" font-weight="700">' + label + '</text></svg>';
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+function contentContextBootFixtures(){
+  dashAuth = blankDashAuth({
+    ready: true,
+    allowed: true,
+    user: { email: 'fixture-admin@example.test', emailVerified: true },
+    dashRole: 'admin',
+    empId: 'ash',
+    name: 'Ash Mouille',
+    isAdmin: true,
+    schools: ['eastmad'],
+  });
+  const today = new Date().toISOString().split('T')[0];
+  const week = getTaskWeekKey(today);
+  state.activeSection = 'tasks';
+  state.opsSection = 'tasks';
+  state.tasksTab = 'sheets';
+  state.tasksLoc = 'ash';
+  state.tasksDate = today;
+  state.tasksData = { ash: {} };
+  state.mktTab = 'buffer';
+  state.mktBrandFilter = 'LVLUP';
+  state.contentSubmissions = {
+    cs_fixture_kalahari: {
+      url: contentContextFixtureThumb('Kalahari team', '#0f3460'),
+      type: 'image',
+      name: 'kalahari-team.jpg',
+      uploaderId: 'ash',
+      empId: 'ash',
+      uploaderName: 'E. Madison (Ash)',
+      school: 'eastmad',
+      brand: 'LVLUP',
+      pillar: 'Student Wins',
+      caption: 'East Madison at Kalahari',
+      context: '28 East Madison competitors at Kalahari, our biggest team ever.',
+      week: week,
+      at: Date.now(),
+      status: 'new',
+    },
+    cs_fixture_ninja: {
+      url: contentContextFixtureThumb('Go Ninja', '#e94560'),
+      type: 'image',
+      name: 'ninja-open-gym.jpg',
+      uploaderId: 'mirandaS',
+      empId: 'mirandaS',
+      uploaderName: 'Go Ninja (Miranda)',
+      school: 'goninjaW',
+      brand: 'GO NINJA',
+      pillar: 'Family Culture',
+      caption: 'Open gym',
+      context: 'Go Ninja only. This note stays off the LVLUP list.',
+      week: week,
+      at: Date.now() - 60000,
+      status: 'new',
+    },
+  };
+  render(true);
+  markContentContextFixtureOffline();
+}
+function markContentContextFixtureOffline(){
+  const conn = document.getElementById('connStatus');
+  if (!conn) return;
+  conn.className = 'conn-status offline';
+  conn.textContent = 'Mock only — not connected';
+}
+function mountContentContextFixtureBar(){
+  if (!contentContextFixtureMode()) return;
+  const app = document.getElementById('app');
+  if (!app || !app.prepend) return;
+  markContentContextFixtureOffline();
+  const bar = document.createElement('div');
+  bar.id = 'contentContextFixtureBar';
+  bar.setAttribute('data-content-context-fixture', '1');
+  bar.style.cssText = 'position:sticky;top:0;z-index:40;background:#fffbeb;border-bottom:1px solid #fde68a;color:#92400e;padding:10px 14px;font:600 13px/1.45 system-ui,sans-serif;';
+  bar.textContent = 'Mock photos only. Not connected to Firebase. Nothing on this page is saved.';
+  app.prepend(bar);
+}
 function crqBootLabeledFixtures(){
   const role = /(?:\?|&)holdCancelRole=frontdesk(?:&|$)/.test(String(location.search || '')) ? 'frontdesk' : 'lead';
   dashAuth = blankDashAuth({
@@ -4602,7 +4701,7 @@ function renderBufferHub(){
   h += '</div>';
   h += '<div style="background:#fff;border:1px solid #e8eaf0;border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);">';
   h += '<div style="font-size:14px;font-weight:800;color:#1a1a2e;margin-bottom:4px;">🖼️ Posts &amp; uploads</div>';
-  h += '<div style="font-size:12px;color:#888;margin-bottom:12px;">Photos instructors uploaded on their dashboard, plus any scheduled or published posts synced into <span style="font-family:monospace;">contentSubmissions</span>. Each card is badged LVLUP or Go Ninja.</div>';
+  h += '<div style="font-size:12px;color:#888;margin-bottom:12px;">Photos instructors uploaded on their dashboard, plus any scheduled or published posts synced into <span style="font-family:monospace;">contentSubmissions</span>. Each card is badged LVLUP or Go Ninja. A context note on the upload shows under the Uploaded status.</div>';
   if(!posts.length){
     h += '<div style="text-align:center;padding:28px 16px;color:#aaa;font-size:13px;border:1px dashed #e5e7eb;border-radius:12px;">No ' + (filter==='all'?'':'matching ') + 'posts yet.</div>';
   } else {
@@ -5105,6 +5204,7 @@ function render(force) {
     state._taskPainting = false;
     restoreTaskInputDrafts();
     mountTaskNoteFixtureBar();
+    mountContentContextFixtureBar();
   }
 }
 
@@ -11155,7 +11255,7 @@ const PROOF_MONTHS=['January','February','March','April','May','June','July','Au
 function taskFieldScope(id){
   id=String(id||'');
   const emp=state.tasksLoc||'';
-  if(id==='customTaskInput_weekly'||id.indexOf('notes_weekly_')===0||id.indexOf('pf_weekly_')===0||id.indexOf('count_weekly_')===0||id.indexOf('post_weekly_')===0||id.indexOf('cccap_weekly_')===0||id.indexOf('ccpillar_weekly_')===0)
+  if(id==='customTaskInput_weekly'||id.indexOf('notes_weekly_')===0||id.indexOf('pf_weekly_')===0||id.indexOf('count_weekly_')===0||id.indexOf('post_weekly_')===0||id.indexOf('cccap_weekly_')===0||id.indexOf('ccpillar_weekly_')===0||id.indexOf('ccctx_weekly_')===0)
     return emp+'|w|'+getTaskWeekKey(state.tasksDate);
   if(id==='exceptionLogInput'||id==='customTaskInput_daily'||id.indexOf('notes_daily_')===0||id.indexOf('pf_daily_')===0||id.indexOf('count_daily_')===0||id.indexOf('post_daily_')===0)
     return emp+'|d|'+(state.tasksDate||'');
@@ -12555,6 +12655,13 @@ function renderContentCard(rec, opts){
   h += '<span style="font-size:9px;font-weight:800;background:' + st.bg + ';color:' + st.color + ';border-radius:5px;padding:2px 6px;">' + esc(st.text) + '</span>';
   if(opts.yours) h += '<span style="font-size:9px;font-weight:800;background:#ecfdf5;color:#047857;border-radius:5px;padding:2px 6px;">Your upload</span>';
   h += '</div>';
+  const note = contentContextText(rec.context);
+  if(note){
+    h += '<div data-content-context="1" style="margin-top:6px;padding:6px 8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">';
+    h += '<div style="font-size:9px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:#64748b;">Context</div>';
+    h += '<div style="font-size:11.5px;color:#1e293b;line-height:1.4;margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(note) + '</div>';
+    h += '</div>';
+  }
   h += '<div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-top:5px;line-height:1.35;">' + esc(cap) + '</div>';
   if(who || school) h += '<div style="font-size:10px;color:#888;margin-top:2px;">' + esc([who, school].filter(Boolean).join(' · ')) + '</div>';
   h += '</div>';
@@ -12621,12 +12728,52 @@ function contentPatchTask(section, taskId, csId, meta, slot, postText){
   state.tasksData[emp][info.sPath][info.sKey][taskId] = cur;
 }
 // Capture Content uploader: photos go to Storage taskPhotos/content/, one record per file in ceo/contentSubmissions (status 'new') for the marketing bot.
-// `brand` is additive (LVLUP | GO NINJA). url, uploaderId, school, week, pillar, caption, status stay so the bot keeps working.
+// `brand` is additive (LVLUP | GO NINJA). Optional `context` is the staff note. url, uploaderId, school, week, pillar, caption, status stay so the bot keeps working.
 const CONTENT_VIDEO_ENABLED = true;   // videos go to Storage contentSubmissions/ (rule deployed 2026-11-04)
+const CONTENT_CONTEXT_MAX = 1000;
+const CONTENT_CONTEXT_PLACEHOLDER = 'Student names, event, why this moment matters (e.g. 28 East Madison competitors at Kalahari, our biggest team ever)';
+function contentContextText(raw){
+  let s = String(raw == null ? '' : raw).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  s = s.trim();
+  if(s.length > CONTENT_CONTEXT_MAX) s = s.slice(0, CONTENT_CONTEXT_MAX).trim();
+  return s;
+}
+function contentContextInput(el){
+  if(!el) return;
+  rememberTaskDraft(el);
+  const n = document.getElementById('ccctxn_' + String(el.id || '').replace(/^ccctx_/, ''));
+  if(n) n.textContent = String(el.value || '').length + ' / ' + CONTENT_CONTEXT_MAX;
+}
+function contentSubmissionPayload(opts){
+  opts = opts || {};
+  const context = contentContextText(opts.context);
+  const stored = {
+    url: opts.url || '',
+    path: opts.path || '',
+    type: opts.type === 'video' ? 'video' : 'image',
+    name: opts.name || '',
+    sizeBytes: opts.sizeBytes || 0,
+    uploaderId: opts.uploaderId || '',
+    empId: opts.empId || opts.uploaderId || '',
+    uploaderName: opts.uploaderName || '',
+    school: opts.school || '',
+    brand: opts.brand || '',
+    pillar: opts.pillar || '',
+    caption: opts.caption || '',
+    week: opts.week || '',
+    at: opts.at || 0,
+    status: 'new'
+  };
+  if(context) stored.context = context;
+  const meta = { url:stored.url, type:stored.type, pillar:stored.pillar, caption:stored.caption, name:stored.name, at:stored.at, status:'new', brand:stored.brand, week:stored.week };
+  if(context) meta.context = context;
+  return { stored:stored, meta:meta };
+}
 function renderContentUploadBox(section,taskId,active){
   const id=section+'_'+taskId, acc=CONTENT_VIDEO_ENABLED?'image/*,video/*':'image/*';
   const brandLabel = isGoNinja(state.tasksLoc) ? 'Go Ninja' : 'LVLUP';
-  let h='<div style="margin-left:34px;margin-top:6px;display:flex;flex-direction:column;gap:8px;">';
+  let h='<div data-content-upload="1" style="margin-left:34px;margin-top:6px;display:flex;flex-direction:column;gap:8px;">';
   h+='<div id="ccdrop_'+id+'" onclick="document.getElementById(\'ccfile_'+id+'\').click()" ondragover="event.preventDefault();this.style.background=\'#eef2ff\'" ondragleave="this.style.background=\'#f8faff\'" ondrop="event.preventDefault();this.style.background=\'#f8faff\';contentUploadFiles(\''+section+'\',\''+taskId+'\',event.dataTransfer.files)" style="border:2px dashed #93a5ff;border-radius:10px;background:#f8faff;padding:16px;text-align:center;cursor:pointer;">';
   h+='<div style="font-size:13px;font-weight:700;color:#2c4bff;">📸 Tap to upload a '+brandLabel+' photo or video</div><div style="font-size:11px;color:var(--gray-500);margin-top:3px;">You can pick several at once.'+(CONTENT_VIDEO_ENABLED?' Videos up to 250 MB.':' Videos coming soon.')+' It shows on this dashboard as soon as it uploads.</div></div>';
   h+='<input type="file" multiple accept="'+acc+'" id="ccfile_'+id+'" style="display:none" onchange="contentUploadFiles(\''+section+'\',\''+taskId+'\',this.files);this.value=\'\'">';
@@ -12634,6 +12781,15 @@ function renderContentUploadBox(section,taskId,active){
   const capId='cccap_'+id;
   const capDraft=taskDraftValue(capId);
   h+='<input id="'+capId+'"'+taskDraftMark(capId)+taskDraftHooks()+' type="text" value="'+escAttr(capDraft==null?'':capDraft)+'" placeholder="Caption (optional)" style="flex:1;min-width:140px;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;"></div>';
+  const ctxId='ccctx_'+id;
+  const ctxDraft=taskDraftValue(ctxId);
+  const ctxShown=String(ctxDraft==null?'':ctxDraft).slice(0, CONTENT_CONTEXT_MAX);
+  h+='<div data-content-context-field="1">';
+  h+='<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px;">';
+  h+='<label for="'+ctxId+'" style="font-size:12px;font-weight:700;color:#1a1a2e;">Context (optional)</label>';
+  h+='<span id="ccctxn_'+id+'" data-content-context-count="1" style="font-size:11px;color:#94a3b8;">'+ctxShown.length+' / '+CONTENT_CONTEXT_MAX+'</span></div>';
+  h+='<textarea id="'+ctxId+'"'+taskDraftMark(ctxId)+' maxlength="'+CONTENT_CONTEXT_MAX+'" rows="3" placeholder="'+escAttr(CONTENT_CONTEXT_PLACEHOLDER)+'" oninput="contentContextInput(this)" onblur="leaveTaskField(this)" style="width:100%;box-sizing:border-box;min-height:72px;resize:vertical;font-family:inherit;font-size:13px;line-height:1.45;padding:8px 10px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;color:var(--gray-800);">'+esc(ctxShown)+'</textarea>';
+  h+='</div>';
   h+='<span id="ccstat_'+id+'" style="font-size:11px;color:#888;"></span></div>';
   return h;
 }
@@ -12644,6 +12800,7 @@ async function contentUploadFiles(section,taskId,fileList){
   if(!ok.length){ alert(CONTENT_VIDEO_ENABLED?'Please pick photos or videos.':'Please pick photos. Videos coming soon.'); return; }
   const pillar=(document.getElementById('ccpillar_'+id)||{}).value||'';
   const caption=((document.getElementById('cccap_'+id)||{}).value||'').trim();
+  const context=contentContextText((document.getElementById('ccctx_'+id)||{}).value||'');
   const emp=TASK_EMPLOYEES.find(e=>e.id===state.tasksLoc)||{}, week=getTaskWeekKey(state.tasksDate);
   const brand=contentBrandForEmp(state.tasksLoc);
   const {base}=taskPathFor(section);
@@ -12662,10 +12819,10 @@ async function contentUploadFiles(section,taskId,fileList){
       const csId='cs_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
       const at=Date.now();
       const postText=(isVid?'🎬 ':'📸 ')+(pillar?pillar+': ':'')+(caption||f.name||'upload');
-      const stored={url,path,type:isVid?'video':'image',name:f.name||'',sizeBytes:blob.size||f.size||0,uploaderId:state.tasksLoc||'',empId:state.tasksLoc||'',uploaderName:emp.name||'',school:emp.loc||'',brand,pillar,caption,week,at,status:'new'};
+      const built=contentSubmissionPayload({url,path,type:isVid?'video':'image',name:f.name||'',sizeBytes:blob.size||f.size||0,uploaderId:state.tasksLoc||'',empId:state.tasksLoc||'',uploaderName:emp.name||'',school:emp.loc||'',brand,pillar,caption,context,week,at});
+      const stored=built.stored, meta=built.meta;
       fbSet('contentSubmissions/'+csId, stored);
       contentRemember(csId, Object.assign({_optimistic:true}, stored));
-      const meta={url,type:stored.type,pillar,caption,name:stored.name,at,status:'new',brand,week};
       fbSet(base+taskId+'/uploads/'+csId, meta);
       const vals=(taskDoneRec(section,taskId).posts)||{}; let slot=0;
       for(let i=1;i<=3;i++){ if(!String(vals[i]||'').trim()){ slot=i; break; } }
@@ -12674,10 +12831,19 @@ async function contentUploadFiles(section,taskId,fileList){
       done++;
     }catch(e){ alert('Upload failed: '+(e.message||e)); }
   }
-  if(done) render();
+  if(done){
+    const capEl=document.getElementById('cccap_'+id);
+    const ctxEl=document.getElementById('ccctx_'+id);
+    if(capEl) capEl.value='';
+    if(ctxEl) ctxEl.value='';
+    if(state.taskInputDrafts){
+      delete state.taskInputDrafts['cccap_'+id];
+      delete state.taskInputDrafts['ccctx_'+id];
+    }
+    render(true);
+  }
   const stat2=document.getElementById('ccstat_'+id);
   if(stat2) stat2.textContent=done?('✓ '+done+' uploaded — showing on your '+ (brand==='GO NINJA'?'Go Ninja':'LVLUP') +' dashboard'):'';
-  const c=document.getElementById('cccap_'+id); if(c&&done) c.value='';
 }
 function renderContentPillarsBlock(active){
   let h = '<div style="margin-left:34px;margin-top:8px;display:flex;flex-direction:column;gap:6px;">';
@@ -16054,6 +16220,7 @@ function renderDevelopmentPage() {
 }
 
   async function init() {
+  if (contentContextFixtureMode()) { contentContextBootFixtures(); return; }
   if (taskNoteFixtureMode()) { taskNoteBootFixtures(); return; }
   if (crqLocalFixtureMode()) { crqBootLabeledFixtures(); return; }
   db.ref('.info/connected').on('value', snap => updateConnStatus(snap.val()));
