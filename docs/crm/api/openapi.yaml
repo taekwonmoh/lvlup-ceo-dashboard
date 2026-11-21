@@ -1,0 +1,956 @@
+openapi: 3.0.3
+info:
+  title: LVLUP CRM API
+  version: 0.1.0
+  description: |
+    Draft contract for the staff dashboard, lvlupma.com, and the future Expo apps.
+    Not deployed. No server implements these routes yet.
+
+    Authentication is a Firebase ID token for project lvlup-members-app
+    (Google for staff, email link for guardians). The server maps the email
+    to a staff user or a guardian and ignores any school id the client sends
+    that is outside that scope.
+
+    Card numbers are not accepted. New cards use Authorize.net Accept.js;
+    the only card-related body is an opaque payment nonce plus a location id.
+    Responses expose brand and last4, never a PAN and never a CIM profile id
+    to a guardian token.
+servers:
+  - url: https://api.lvlupma.com/v1
+    description: Proposed production host. Not live.
+security:
+  - firebaseBearer: []
+tags:
+  - name: Session
+  - name: Members
+  - name: Billing
+  - name: Schedule
+  - name: Leads
+paths:
+  /me:
+    get:
+      tags: [Session]
+      operationId: getMe
+      summary: Who the token is, and which schools or family they can see.
+      responses:
+        '200':
+          description: Staff scope or guardian scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /locations:
+    get:
+      tags: [Session]
+      operationId: listLocations
+      summary: Schools the caller can access.
+      responses:
+        '200':
+          description: Locations in scope.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [locations]
+                properties:
+                  locations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Location'
+  /families/{familyId}:
+    get:
+      tags: [Members]
+      operationId: getFamily
+      summary: A family, its guardians, and its members.
+      parameters:
+        - $ref: '#/components/parameters/FamilyId'
+      responses:
+        '200':
+          description: Family in the caller's scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Family'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /members:
+    get:
+      tags: [Members]
+      operationId: listMembers
+      summary: Students. Guardians see their family. Staff see one school.
+      parameters:
+        - in: query
+          name: locationId
+          schema:
+            $ref: '#/components/schemas/LocationId'
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/MemberStatus'
+      responses:
+        '200':
+          description: Members in scope.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Member'
+  /members/{memberId}:
+    get:
+      tags: [Members]
+      operationId: getMember
+      summary: One student, including the current rank.
+      parameters:
+        - $ref: '#/components/parameters/MemberId'
+      responses:
+        '200':
+          description: One member, including current rank.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /memberships:
+    get:
+      tags: [Billing]
+      operationId: listMemberships
+      summary: Memberships in the caller's family or schools.
+      parameters:
+        - in: query
+          name: locationId
+          schema:
+            $ref: '#/components/schemas/LocationId'
+        - in: query
+          name: familyId
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Memberships in scope. Invoice amounts require finance access for staff; guardians see their own.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [memberships]
+                properties:
+                  memberships:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Membership'
+  /memberships/{membershipId}/holds:
+    post:
+      tags: [Billing]
+      operationId: requestHold
+      summary: File a hold. Billing pauses only after staff approve it.
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldRequest'
+      responses:
+        '201':
+          description: Hold stored as requested. Billing does not pause until staff approve.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cancellation-requests:
+    post:
+      tags: [Billing]
+      operationId: createCancellationRequest
+      summary: File a cancellation request. This does not end the membership.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationRequestInput'
+      responses:
+        '201':
+          description: Request only. Not an approval and not a charge.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequest'
+  /invoices:
+    get:
+      tags: [Billing]
+      operationId: listInvoices
+      summary: Invoices the caller is allowed to see.
+      parameters:
+        - in: query
+          name: membershipId
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: locationId
+          schema:
+            $ref: '#/components/schemas/LocationId'
+      responses:
+        '200':
+          description: Invoices the caller is allowed to see. Shadow drafts are staff-only.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoices]
+                properties:
+                  invoices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invoice'
+  /invoices/{invoiceId}/refunds:
+    post:
+      tags: [Billing]
+      operationId: refundInvoice
+      summary: Refund or void a captured charge on that school's merchant account.
+      description: Finance staff only. Same merchant account that captured the charge.
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundInput'
+      responses:
+        '201':
+          description: Refund submitted or voided when the capture has not settled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /payment-profiles/accept:
+    post:
+      tags: [Billing]
+      operationId: acceptPaymentProfile
+      summary: Turn an Accept.js token into a stored CIM profile id.
+      description: |
+        Exchange an Authorize.net Accept.js opaque token for a CIM payment
+        profile on that school's merchant account. The token is not stored.
+        Sandbox tokens are rejected once the location is live, and live
+        tokens are rejected while live billing is off.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptPaymentInput'
+      responses:
+        '201':
+          description: Profile stored. Response has brand and last4 only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethod'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /sessions:
+    get:
+      tags: [Schedule]
+      operationId: listSessions
+      summary: Upcoming class sessions for a school.
+      parameters:
+        - in: query
+          name: locationId
+          required: true
+          schema:
+            $ref: '#/components/schemas/LocationId'
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Sessions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClassSession'
+  /sessions/{sessionId}/bookings:
+    post:
+      tags: [Schedule]
+      operationId: createBooking
+      summary: Reserve a trial or a member spot on a class session.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingInput'
+      responses:
+        '201':
+          description: Spot held. Capacity is checked in the same transaction.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '409':
+          description: Session is full, or the idempotency key was reused with a different body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /attendance:
+    post:
+      tags: [Schedule]
+      operationId: recordAttendance
+      summary: Record present, absent, or late. Staff only.
+      description: Staff only.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceInput'
+      responses:
+        '201':
+          description: Attendance row stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attendance'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /leads:
+    post:
+      tags: [Leads]
+      operationId: createLead
+      summary: Store a trial lead. Replaces GymDesk create-lead after cutover.
+      description: |
+        Public trial flow calls this with a staff or site token, not with a
+        raw browser key. Replaces GymDesk create-lead for schools that have
+        cut over. The body must not contain a card number; the server rejects
+        a field that looks like one.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeadInput'
+      responses:
+        '201':
+          description: Lead stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lead'
+  /webhooks/authorize/{locationId}:
+    post:
+      tags: [Billing]
+      operationId: authorizeWebhook
+      summary: Confirm an Authorize.net event for a charge we already created.
+      security: []
+      description: |
+        Authorize.net webhook. Verified with that location's signature key.
+        Confirms a charge this API already created. It never originates a charge.
+      parameters:
+        - in: path
+          name: locationId
+          required: true
+          schema:
+            $ref: '#/components/schemas/LocationId'
+        - in: header
+          name: X-ANET-Signature
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Authorize.net notification body. Stored only as a deduped event id and type.
+      responses:
+        '200':
+          description: Accepted, including duplicates.
+        '401':
+          description: Signature mismatch. Body is not logged.
+components:
+  securitySchemes:
+    firebaseBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase ID token, audience lvlup-members-app.
+  parameters:
+    FamilyId:
+      in: path
+      name: familyId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MemberId:
+      in: path
+      name: memberId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MembershipId:
+      in: path
+      name: membershipId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    InvoiceId:
+      in: path
+      name: invoiceId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SessionId:
+      in: path
+      name: sessionId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 200
+  responses:
+    Unauthorized:
+      description: Missing or invalid Firebase token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Token is valid and the resource is outside the caller's schools or family.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not in scope. Same response as a missing row, so callers cannot probe other schools.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Idempotency key reused with a different request body.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unprocessable:
+      description: Token rejected, or the location is not allowed to accept a card yet.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    LocationId:
+      type: string
+      enum: [waunakee, eastmad, verona, deforest, goninjaW, goninjaV]
+    MemberStatus:
+      type: string
+      enum: [trial, active, hold, cancelled, inactive]
+    Money:
+      type: object
+      required: [cents, currency]
+      properties:
+        cents:
+          type: integer
+        currency:
+          type: string
+          enum: [USD]
+    Me:
+      type: object
+      required: [kind, email]
+      properties:
+        kind:
+          type: string
+          enum: [staff, guardian]
+        email:
+          type: string
+          format: email
+        dashRole:
+          type: string
+          enum: [admin, lead, ops, frontdesk]
+        canFinance:
+          type: boolean
+        locationIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocationId'
+        familyIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    Location:
+      type: object
+      required: [id, name, brand]
+      properties:
+        id:
+          $ref: '#/components/schemas/LocationId'
+        name:
+          type: string
+        brand:
+          type: string
+          enum: [lvlup, goninja]
+    Family:
+      type: object
+      required: [id, guardians, members]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          nullable: true
+        guardians:
+          type: array
+          items:
+            type: object
+            required: [id, email, roles]
+            properties:
+              id:
+                type: string
+                format: uuid
+              email:
+                type: string
+                format: email
+              firstName:
+                type: string
+              lastName:
+                type: string
+              roles:
+                type: array
+                items:
+                  type: string
+                  enum: [payer, contact]
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+    Member:
+      type: object
+      required: [id, familyId, locationId, firstName, lastName, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        familyId:
+          type: string
+          format: uuid
+        locationId:
+          $ref: '#/components/schemas/LocationId'
+        firstName:
+          type: string
+        lastName:
+          type: string
+        status:
+          $ref: '#/components/schemas/MemberStatus'
+        rank:
+          type: object
+          nullable: true
+          properties:
+            program:
+              type: string
+            name:
+              type: string
+            stripe:
+              type: string
+              nullable: true
+            awardedOn:
+              type: string
+              format: date
+    Membership:
+      type: object
+      required: [id, familyId, locationId, status, biller, plan]
+      properties:
+        id:
+          type: string
+          format: uuid
+        familyId:
+          type: string
+          format: uuid
+        locationId:
+          $ref: '#/components/schemas/LocationId'
+        status:
+          type: string
+          enum: [trial, active, hold, pending_cancel, cancelled, past_due]
+        biller:
+          type: string
+          enum: [gymdesk, lvlup]
+        nextBillOn:
+          type: string
+          format: date
+          nullable: true
+        paidThroughOn:
+          type: string
+          format: date
+          nullable: true
+        plan:
+          type: object
+          required: [name, interval, amount]
+          properties:
+            name:
+              type: string
+            interval:
+              type: string
+              enum: [every_4_weeks, monthly, prepaid_term]
+            amount:
+              $ref: '#/components/schemas/Money'
+        memberIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    HoldRequest:
+      type: object
+      required: [startOn, endOn, reason]
+      properties:
+        startOn:
+          type: string
+          format: date
+        endOn:
+          type: string
+          format: date
+        reason:
+          type: string
+          enum: [injury, travel, financial, schedule, other]
+        note:
+          type: string
+          maxLength: 2000
+    Hold:
+      allOf:
+        - $ref: '#/components/schemas/HoldRequest'
+        - type: object
+          required: [id, membershipId, status]
+          properties:
+            id:
+              type: string
+              format: uuid
+            membershipId:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [requested, approved, denied, active, ended]
+    CancellationRequestInput:
+      type: object
+      required: [locationId, receivedOn, agreementVersion]
+      properties:
+        membershipId:
+          type: string
+          format: uuid
+        locationId:
+          $ref: '#/components/schemas/LocationId'
+        submittedName:
+          type: string
+        reason:
+          type: string
+        receivedOn:
+          type: string
+          format: date
+          description: America/Chicago calendar date the written request was received.
+        agreementVersion:
+          type: string
+    CancellationRequest:
+      type: object
+      required: [id, status, receivedOn, earliestCompletionOn, approved]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [requested, approved, completed, withdrawn]
+        approved:
+          type: boolean
+          description: Always false on create.
+        receivedOn:
+          type: string
+          format: date
+        earliestCompletionOn:
+          type: string
+          format: date
+        timezone:
+          type: string
+          enum: [America/Chicago]
+    Invoice:
+      type: object
+      required: [id, locationId, familyId, status, total, shadow]
+      properties:
+        id:
+          type: string
+          format: uuid
+        membershipId:
+          type: string
+          format: uuid
+          nullable: true
+        locationId:
+          $ref: '#/components/schemas/LocationId'
+        familyId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [draft, open, paid, void, uncollectible]
+        shadow:
+          type: boolean
+        periodStart:
+          type: string
+          format: date
+          nullable: true
+        periodEnd:
+          type: string
+          format: date
+          nullable: true
+        total:
+          $ref: '#/components/schemas/Money'
+        lines:
+          type: array
+          items:
+            type: object
+            required: [kind, description, amount]
+            properties:
+              kind:
+                type: string
+                enum: [tuition, proration, hold_fee, notice_tuition, party, prepaid, upgrade, retail, refund_credit]
+              description:
+                type: string
+              amount:
+                $ref: '#/components/schemas/Money'
+    RefundInput:
+      type: object
+      required: [amount, reason]
+      properties:
+        amount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    Refund:
+      type: object
+      required: [id, invoiceId, amount, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        status:
+          type: string
+          enum: [voided, refunded]
+    AcceptPaymentInput:
+      type: object
+      required: [locationId, familyId, opaqueDataDescriptor, opaqueDataValue]
+      properties:
+        locationId:
+          $ref: '#/components/schemas/LocationId'
+        familyId:
+          type: string
+          format: uuid
+        opaqueDataDescriptor:
+          type: string
+          description: Accept.js dataDescriptor. Not a card number.
+        opaqueDataValue:
+          type: string
+          description: Accept.js dataValue. Single use. Not stored.
+    PaymentMethod:
+      type: object
+      required: [id, locationId, brand, last4]
+      properties:
+        id:
+          type: string
+          format: uuid
+        locationId:
+          $ref: '#/components/schemas/LocationId'
+        brand:
+          type: string
+        last4:
+          type: string
+          pattern: '^[0-9]{4}$'
+        expMonth:
+          type: integer
+          minimum: 1
+          maximum: 12
+        expYear:
+          type: integer
+    ClassSession:
+      type: object
+      required: [id, locationId, title, startsAt, endsAt, spotsLeft]
+      properties:
+        id:
+          type: string
+          format: uuid
+        locationId:
+          $ref: '#/components/schemas/LocationId'
+        title:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        spotsLeft:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum: [scheduled, cancelled]
+    BookingInput:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [trial, member]
+        memberId:
+          type: string
+          format: uuid
+        leadId:
+          type: string
+          format: uuid
+    Booking:
+      type: object
+      required: [id, sessionId, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [trial, member]
+    AttendanceInput:
+      type: object
+      required: [locationId, attendedOn, status]
+      properties:
+        locationId:
+          $ref: '#/components/schemas/LocationId'
+        sessionId:
+          type: string
+          format: uuid
+        memberId:
+          type: string
+          format: uuid
+        leadId:
+          type: string
+          format: uuid
+        attendedOn:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [present, absent, late]
+    Attendance:
+      allOf:
+        - $ref: '#/components/schemas/AttendanceInput'
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              format: uuid
+    LeadInput:
+      type: object
+      required: [locationId, guardianName, source]
+      properties:
+        locationId:
+          $ref: '#/components/schemas/LocationId'
+        guardianName:
+          type: string
+          maxLength: 120
+        phone:
+          type: string
+          maxLength: 40
+        email:
+          type: string
+          format: email
+        childName:
+          type: string
+          maxLength: 120
+        childAge:
+          type: string
+          maxLength: 20
+        source:
+          type: string
+          enum: [book, schedule_gate, event, phone, walk_in]
+    Lead:
+      allOf:
+        - $ref: '#/components/schemas/LeadInput'
+        - type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [new, booked, showed, no_show, enrolled, cold]
