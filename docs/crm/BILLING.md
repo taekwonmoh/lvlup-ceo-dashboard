@@ -14,9 +14,26 @@ All dates are America/Chicago calendar dates.
 
 | `plans.interval` | Next draft |
 |---|---|
-| `every_4_weeks` | `anchor_on` plus 28 days, repeatedly. A full year is 13 drafts. This is what the prepaid page assumes for standard tuition. |
-| `monthly` | Same day next month, clamped to the last day of a short month. Mini-Tigers is described as 12 payments a year. Confirm before using this for anyone else. |
-| `prepaid_term` | One invoice. `next_bill_on` moves to the day after `paid_through_on`. No weekly draft in between. |
+| `every_4_weeks` | `anchor_on` plus 28 days. A prepaid year is 13 drafts. Standard, leadership, legacy, ADP, Tiger Leaders, Fitboxing, and Competition Team use this unless the plan is flagged grandfathered. A calendar month can contain two drafts. |
+| `monthly` | Same day next month, clamped to a short month. Mini-Tigers, and any plan with `grandfathered = true` (the old 1st-of-month drafts). A prepaid year is 12 drafts. |
+| `prepaid_term` | One invoice. `next_bill_on` moves to the day after `paid_through_on`. |
+
+`anchor_on` defaults to the membership start date. Staff can set a different anchor on that membership. There is no single company anchor yet.
+
+## Merchant routes
+
+The charge uses the merchant account for `merchant_routes.merchant_location_id`, not a second brand.
+
+| School | Authorize.net account | Brand on reports |
+|---|---|---|
+| Waunakee, East Madison, Verona | Their own | LVLUP |
+| DeForest | Waunakee | LVLUP |
+| Go Ninja Waunakee | Waunakee | Go Ninja |
+| Go Ninja Verona | Verona | Go Ninja |
+
+## Family discount
+
+The 3rd paying member at a school, ordered by start date, is 30% off at Waunakee and 50% off at Verona, East Madison, and DeForest. A hold or a cancellation drops that person out of the count and the discount moves. The preview does not change the stored price. A write requires a snapshot of the upcoming charges taken first. Go Ninja is not in this rule. GymDesk’s exact auto-adjust settings are still unverified, and a manual code can disagree with the automatic percent.
 
 `next_bill_on` is the date the draft runs, not the date the period ends. For a 4-week plan the period is `[next_bill_on, next_bill_on + 28 days)`.
 

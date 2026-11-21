@@ -16339,6 +16339,8 @@ function crmBootPreview() {
   state.crmSchool = state.crmSchool || 'all';
   state.crmQuery = state.crmQuery || '';
   state.crmQuote = state.crmQuote || 'clinic10';
+  var sheetMatch = /(?:\?|&)crmSheet=(daily|weekly|monthly|cycle)/.exec(String(location.search || ''));
+  state.crmSheet = sheetMatch ? sheetMatch[1] : (state.crmSheet || 'daily');
   render(true);
   crmMarkOffline();
 }
@@ -16359,6 +16361,7 @@ function crmSearch(value) {
   if (el) { el.focus(); var n = el.value.length; el.setSelectionRange(n, n); }
 }
 function crmSetQuote(id) { state.crmQuote = id; state.crmTab = 'promos'; render(); }
+function crmSetSheet(id) { state.crmSheet = id; state.crmTab = 'ops'; render(); }
 function crmExitPreview() {
   var u = new URL(location.href);
   ['crmPreview', 'crmTab', 'crmTheme', 'crmSkeleton'].forEach(function (k) { u.searchParams.delete(k); });
@@ -16517,7 +16520,8 @@ function crmIcon(name) {
     box: '<path d="M3 8l9-4 9 4-9 4-9-4Z"/><path d="M3 8v8l9 4 9-4V8"/>',
     sun: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
     moon: '<path d="M16 3.5A8.2 8.2 0 1 0 20.5 14 6.4 6.4 0 0 1 16 3.5Z"/>',
-    search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>'
+    search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
+    clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l2.5 1.5"/>'
   };
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (p[name] || '') + '</svg>';
 }
@@ -16598,7 +16602,8 @@ function crmNav(which) {
     ['family', 'Family', 'home'],
     ['import', 'Import', 'box'],
     ['promos', 'Promos', 'tag'],
-    ['ops', 'Schedule', 'cal']
+    ['ops', 'Tasks', 'cal'],
+    ['payroll', 'Pay', 'clock']
   ];
   return items.map(function (it) {
     var on = which === it[0];
@@ -16757,16 +16762,41 @@ function crmPromoView() {
   return h;
 }
 function crmOpsView() {
-  var h = '<p style="margin:-6px 0 12px;color:var(--crm-muted);font-size:14px;">Fixture copy. Ops → Tasks and the Schedule tab still read and write Firebase.</p><div class="crm-split">';
-  h += '<section class="crm-card" style="padding:16px"><h3>Task sheet · Ash · East Madison</h3>';
-  [['Bathroom photo', 'Mon Nov 16', 'Done', 'ok'], ['Floor photo', 'Mon Nov 16', 'Done', 'ok'], ['Take out garbage', 'Week 47', 'Done', 'ok'], ['Invite two students', 'This week', 'Needs a name', 'warn']].forEach(function (t) {
-    h += '<div class="crm-task"><div><b>' + esc(t[0]) + '</b><div style="color:var(--crm-muted);font-size:12px;">' + esc(t[1]) + '</div></div><span class="crm-pill ' + t[3] + '">' + esc(t[2]) + '</span></div>';
+  var sheets = {
+    daily: { label: 'Daily', when: 'Mon Nov 16', rows: [['Open the school', 'Done', 'ok'], ['Bathroom photo', 'Done', 'ok'], ['Training floor photo', 'Done', 'ok'], ['Close the school', 'Open', 'neutral']] },
+    weekly: { label: 'Weekly', when: 'Week 47', rows: [['Take out garbage', 'Done', 'ok'], ['Wet-mop the mats', 'Done', 'ok'], ['Invite birthday families', 'Needs a name', 'warn'], ['Publish next week', 'Open', 'neutral']] },
+    monthly: { label: 'Monthly', when: 'November 2026', rows: [['Sync the roster', 'Open', 'neutral'], ['Review past-due drafts', 'Open', 'warn']] },
+    cycle: { label: 'Cycle', when: 'Honesty', rows: [['Book a party', '1 of 2', 'warn'], ['Invite birthday families', 'Open', 'neutral']] }
+  };
+  var key = sheets[state.crmSheet] ? state.crmSheet : 'daily';
+  var sheet = sheets[key];
+  var h = '<p style="margin:-6px 0 12px;color:var(--crm-muted);font-size:14px;">Ash · East Madison. Sign-off and did-not-work stay off this screen. The live task sheet still writes Firebase.</p>';
+  h += '<div class="crm-chips" role="group" aria-label="Task sheet">';
+  ['daily', 'weekly', 'monthly', 'cycle'].forEach(function (id) {
+    h += '<button type="button" aria-pressed="' + (key === id) + '" onclick="crmSetSheet(\'' + id + '\')">' + sheets[id].label + '</button>';
   });
-  h += '</section><section class="crm-card" style="padding:16px"><h3>Week schedule · 7 scheduled hours</h3>';
-  [['Mon', '4:00–8:00p', 'East Madison', '4h', ''], ['Tue', '4:00–7:00p', 'East Madison', '3h', ''], ['Fri', 'Time off', 'PTO approved', 'Blocked', 'warn']].forEach(function (s) {
-    h += '<div class="crm-shift"><time>' + esc(s[0]) + '</time><div><b>' + esc(s[1]) + '</b><div style="color:var(--crm-muted);font-size:12px;">' + esc(s[2]) + '</div></div><span class="crm-pill ' + (s[4] || 'neutral') + '">' + esc(s[3]) + '</span></div>';
+  h += '</div><section class="crm-card" style="padding:16px"><h3>' + esc(sheet.label) + ' · ' + esc(sheet.when) + '</h3>';
+  sheet.rows.forEach(function (t) {
+    h += '<div class="crm-task"><b>' + esc(t[0]) + '</b><span class="crm-pill ' + t[2] + '">' + esc(t[1]) + '</span></div>';
   });
-  h += '<p style="color:var(--crm-muted);font-size:13px;margin:12px 0 0;">A shift already on an approved day stays visible and is marked as a conflict. The kiosk punches are a separate total.</p></section></div>';
+  h += '</section>';
+  return h;
+}
+function crmPayrollView() {
+  var rows = [
+    ['Mon Nov 16', '4h 00m', '4h 00m', '4h 00m'],
+    ['Tue Nov 17', '3h 00m', 'No punch', '0h 00m']
+  ];
+  var h = '<div class="crm-kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">';
+  h += '<article class="crm-kpi"><div class="lbl">Pay hours</div><div class="num">4h 00m</div><div class="row"><span class="crm-delta up">From clock-in and clock-out</span></div></article>';
+  h += '<article class="crm-kpi"><div class="lbl">Scheduled</div><div class="num">7h 00m</div><div class="row"><span class="crm-delta flat">Comparison only</span></div></article>';
+  h += '<article class="crm-kpi"><div class="lbl">Difference</div><div class="num">−3h 00m</div><div class="row"><span class="crm-delta down">Tuesday was not punched</span></div></article>';
+  h += '</div><section class="crm-card"><div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>Day</th><th>Scheduled</th><th>Punched</th><th>Pay</th></tr></thead><tbody>';
+  rows.forEach(function (r) {
+    h += '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td><td><b>' + esc(r[3]) + '</b></td></tr>';
+  });
+  h += '</tbody></table></div></section>';
+  h += '<p style="color:var(--crm-muted);font-size:13px;margin:12px 4px 0;">Ash · East Madison. Pay is the punched time. The shift grid is not the paycheck. DeForest drafts on Waunakee. Go Ninja Waunakee drafts on Waunakee and Go Ninja Verona drafts on Verona. The brand on the report stays Go Ninja.</p>';
   return h;
 }
 function crmRenderPage() {
@@ -16776,13 +16806,15 @@ function crmRenderPage() {
     family: ['Sample family', 'Avery at Waunakee, Blake at Verona, one login.'],
     import: ['GymDesk import', 'Match status for the fixture. No live pull.'],
     promos: ['Promo codes', 'Checkout quote for a clinic booking.'],
-    ops: ['Tasks and schedule', 'Snapshot only. The live tools are unchanged.']
+    ops: ['Task sheets', 'Daily, weekly, monthly, and cycle. The live sheet is unchanged.'],
+    payroll: ['Payroll hours', 'Punched time is the paycheck. Shifts are the comparison.']
   };
   var pair = titles[tab] || titles.members;
   var body = tab === 'family' ? crmFamilyView()
     : tab === 'import' ? crmImportView()
     : tab === 'promos' ? crmPromoView()
     : tab === 'ops' ? crmOpsView()
+    : tab === 'payroll' ? crmPayrollView()
     : crmMembersView();
   return crmShell(pair[0], pair[1], body);
 }

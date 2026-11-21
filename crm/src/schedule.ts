@@ -83,6 +83,20 @@ export function scheduledMinutes(shifts: { minutes: number }[]) {
   return shifts.reduce((s, sh) => s + sh.minutes, 0);
 }
 
+/**
+ * Pay hours are punched clock-in to clock-out.
+ * Scheduled shift length is returned only so a screen can compare the two.
+ */
+export function payHours(punches: { minutes: number }[], shifts: { minutes: number }[] = []) {
+  const payMinutes = punches.reduce((s, p) => s + (p.minutes || 0), 0);
+  const scheduled = scheduledMinutes(shifts);
+  return {
+    payMinutes,
+    scheduledMinutes: scheduled,
+    source: 'punches' as const,
+  };
+}
+
 export function shiftOnApprovedTimeOff(shiftDate: string, timeOff: { startOn: string; endOn: string; status: string }[]) {
   return timeOff.some(t => t.status === 'approved' && shiftDate >= t.startOn && shiftDate <= t.endOn);
 }

@@ -3,6 +3,7 @@ import { matchCimProfiles, locationIdFromName, type CimProfile, type LeadRow, ty
 import { completionsFromFirebase, type FirebaseTaskExport, type TaskDef } from './tasks.ts';
 import { punchesFromFirebase, shiftsFromFirebase, timeOffFromFirebase, type ScheduleExport } from './schedule.ts';
 import type { PromoCode } from './pricing.ts';
+import { cadenceForPlan } from './billing.ts';
 
 export async function importMembers(pool: pg.Pool, members: MemberRow[], profiles: CimProfile[], leads: LeadRow[]) {
   const active = members.filter(m => m.status === 'active');
@@ -53,11 +54,13 @@ export async function importMembers(pool: pg.Pool, members: MemberRow[], profile
         `select id from plans where location_id = $1 and name = $2 limit 1`,
         [m.locationId, m.plan]);
       if (!plan.rowCount) {
-        const interval = /mini/i.test(m.plan) ? 'monthly' : 'every_4_weeks';
+        const grandfathered = /grandfather/i.test(m.plan);
+        const interval = cadenceForPlan({ name: m.plan, grandfathered });
+        const program = /mini/i.test(m.plan) ? 'mini_tigers' : 'taekwondo';
         plan = await client.query(
-          `insert into plans (location_id, name, program, amount_cents, interval)
-           values ($1, $2, $3, $4, $5) returning id`,
-          [m.locationId, m.plan, /mini/i.test(m.plan) ? 'mini_tigers' : 'taekwondo', m.amountCents, interval]);
+          `insert into plans (location_id, name, program, amount_cents, interval, grandfathered)
+           values ($1, $2, $3, $4, $5, $6) returning id`,
+          [m.locationId, m.plan, program, m.amountCents, interval, grandfathered]);
       }
       const existingMs = await client.query(
         `select id from memberships where location_id = $1 and gymdesk_member_id = $2`,
