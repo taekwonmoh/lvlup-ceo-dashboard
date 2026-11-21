@@ -3,3 +3,5 @@
 # GymDesk revenue snapshots live in Firebase (finance/gymdesk), never in git.
 gymdesk_data.json
 gymdesk_data.csv
+
+crm/node_modules/

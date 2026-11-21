@@ -1,0 +1,13 @@
+{
+  "name": "lvlup-crm",
+  "private": true,
+  "type": "module",
+  "description": "LVLUP CRM backbone. Local only. Does not deploy and does not call live GymDesk, Firebase, or Authorize.net.",
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "start": "node --experimental-strip-types src/server.ts"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}

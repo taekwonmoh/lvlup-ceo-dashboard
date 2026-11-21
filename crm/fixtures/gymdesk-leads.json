@@ -1,0 +1,14 @@
+{
+  "leads": [
+    {
+      "gymdeskLeadId": "501",
+      "locationId": "waunakee",
+      "guardianName": "Jordan Sample",
+      "phone": "6085550100",
+      "email": "jordan.sample@example.test",
+      "childName": "Riley Sample",
+      "childAge": "8",
+      "source": "book"
+    }
+  ]
+}

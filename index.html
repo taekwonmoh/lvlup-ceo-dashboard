@@ -908,7 +908,11 @@ function dashLocalHost() {
 function dashLocalFixtureMode() {
   if (!dashLocalHost()) return false;
   const q = String(location.search || '');
-  return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(q) || /(?:\?|&)taskNoteFixtures=1(?:&|$)/.test(q) || /(?:\?|&)contentContextFixtures=1(?:&|$)/.test(q) || /(?:\?|&)staffScheduleFixtures=1(?:&|$)/.test(q);
+  return /(?:\?|&)holdCancelFixtures=1(?:&|$)/.test(q) || /(?:\?|&)taskNoteFixtures=1(?:&|$)/.test(q) || /(?:\?|&)contentContextFixtures=1(?:&|$)/.test(q) || /(?:\?|&)staffScheduleFixtures=1(?:&|$)/.test(q) || /(?:\?|&)crmPreview=1(?:&|$)/.test(q);
+}
+function crmPreviewOn() {
+  try { return /(?:\?|&)crmPreview=1(?:&|$)/.test(String(location.search || '')); }
+  catch (e) { return false; }
 }
 function taskNoteFixtureMode() {
   if (!dashLocalHost()) return false;
@@ -1072,6 +1076,7 @@ function dashSectionAllowed(s) {
   if (['feedback', 'watchlist', 'firstfive', 'reviews', 'incidents'].includes(s)) return true;
   if (s === 'finance') return !!dashAuth.canFinance && dashCan('growth');
   if (['goals', 'marketing', 'scorecard', 'financials', 'rocks'].includes(s)) return dashCan('growthPages');
+  if (s === 'crm') return crmPreviewOn();
   return false;
 }
 function dashFallbackSection(s) {
@@ -5279,6 +5284,7 @@ function render(force) {
      ['feedback','watchlist','holds','applications','firstfive','reviews','incidents'].includes(s)   ? renderMembersPage()   :
      ['goals','marketing','scorecard','rocks','financials','finance'].includes(s) ? renderGrowthPage() :
      s === 'development'                                                      ? renderResourcesPage() :
+     s === 'crm' && crmPreviewOn()                                            ? crmRenderPage() :
      '') +
     (state.teamAccessOpen && dashAuth.isAdmin ? renderTeamAccessModal() : '');
   requestAnimationFrame(initSortable);
@@ -5301,6 +5307,7 @@ function renderHeader() {
     if (['feedback','watchlist','holds','applications','firstfive','reviews','incidents'].includes(s)) return 'members';
     if (['goals','marketing','monthlyGoals','scorecard','rocks','financials','performance','finance'].includes(s)) return 'growth';
     if (s === 'development')                                   return 'resources';
+    if (s === 'crm')                                           return 'crm';
     if (s === 'leadership')                                    return 'leadership';
     return null;
   };
@@ -5319,6 +5326,7 @@ function renderHeader() {
     { group: 'members', label: '👥 Members',  target: () => 'feedback', show: true },
     { group: 'growth',  label: '📈 Growth',   target: growthTarget, show: dashCan('growth') },
     { group: 'resources', label: '📚 Training', target: () => 'development', show: true },
+    { group: 'crm', label: 'CRM preview', target: () => 'crm', show: crmPreviewOn() },
   ].filter(t => t.show);
   const role = dashRoleNow();
   const rolePill = '<span class="dash-role-pill ' + role + '" title="' + esc(DASH_ROLE_LABEL[role] || role) + '">' + esc(DASH_ROLE_LABEL[role] || 'Front Desk') + '</span>';
@@ -16305,7 +16313,153 @@ function renderDevelopmentPage() {
   return html;
 }
 
+/* CRM preview. Only when ?crmPreview=1. Mock rows, no Firebase reads or writes.
+   The live task sheet and the live scheduler are unchanged. */
+function crmBootPreview() {
+  dashAuth = blankDashAuth({
+    ready: true,
+    allowed: true,
+    user: { email: 'preview@example.test', emailVerified: true },
+    dashRole: 'admin',
+    isAdmin: true,
+    canFinance: true,
+    name: 'Preview Admin',
+    schools: ['waunakee', 'eastmad', 'verona', 'deforest', 'goninjaW', 'goninjaV'],
+  });
+  state.activeSection = 'crm';
+  var tabMatch = /(?:\?|&)crmTab=([a-z]+)/.exec(String(location.search || ''));
+  state.crmTab = tabMatch ? tabMatch[1] : 'members';
+  state.crmChild = 'avery';
+  render(true);
+  crmMarkOffline();
+}
+function crmMarkOffline() {
+  const conn = document.getElementById('connStatus');
+  if (!conn) return;
+  conn.className = 'conn-status offline';
+  conn.textContent = 'Mock only — not connected';
+}
+function crmTab(tab) { state.crmTab = tab; render(); }
+function crmPickChild(id) { state.crmChild = id; state.crmTab = 'family'; render(); }
+function crmSavePromo() {
+  const code = (document.getElementById('crmCode') || {}).value || '';
+  const type = (document.getElementById('crmType') || {}).value || 'percent';
+  const clean = String(code).trim().toUpperCase();
+  if (!/^[A-Z0-9-]{3,20}$/.test(clean)) {
+    state.crmPromoNote = 'Use 3–20 letters or numbers.';
+    render();
+    return;
+  }
+  if (!state.crmPromos) state.crmPromos = [];
+  if (state.crmPromos.some(function (p) { return p.code === clean; })) {
+    state.crmPromoNote = clean + ' is already in this preview.';
+    render();
+    return;
+  }
+  state.crmPromos.push({
+    code: clean,
+    type: type,
+    scope: (document.getElementById('crmScope') || {}).value || 'All schools',
+    audience: (document.getElementById('crmAudience') || {}).value || 'all',
+    stacks: !!(document.getElementById('crmStacks') || {}).checked,
+  });
+  state.crmPromoNote = clean + ' is in this preview only. It is not saved to Firebase.';
+  render();
+}
+function crmRenderPage() {
+  const kids = {
+    avery: { name: 'Avery Sample', school: 'Waunakee', loc: 'waunakee', plan: 'Standard', every: 'every 4 weeks', rank: 'Yellow', merchant: 'Waunakee sandbox', last4: '1111', classes: 6 },
+    blake: { name: 'Blake Sample', school: 'Verona', loc: 'verona', plan: 'Standard', every: 'every 4 weeks', rank: 'White', merchant: 'Verona sandbox', last4: '2222', classes: 1 },
+  };
+  const child = kids[state.crmChild] || kids.avery;
+  if (!state.crmPromos) {
+    state.crmPromos = [
+      { code: 'CLINIC10', type: 'percent', scope: 'Event type: clinic', audience: 'all', stacks: true },
+      { code: 'FREEWEEK', type: 'free', scope: 'All schools', audience: 'new customers', stacks: false },
+    ];
+  }
+  const tab = state.crmTab || 'members';
+  const btn = function (id, label) {
+    const on = tab === id;
+    return '<button type="button" onclick="crmTab(\'' + id + '\')" style="border:1px solid ' + (on ? '#1a1a2e' : '#d8dbe6') + ';background:' + (on ? '#1a1a2e' : '#fff') + ';color:' + (on ? '#fff' : '#1a1a2e') + ';border-radius:999px;padding:6px 12px;font-weight:700;font-size:13px;cursor:pointer;">' + label + '</button>';
+  };
+  let h = '<div style="padding:16px 18px 40px;max-width:980px;">';
+  h += '<div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.45;margin-bottom:14px;"><b>CRM preview.</b> Mock families only. Nothing here is written to Firebase, GymDesk, or Authorize.net. The task sheet and the scheduler on the other tabs are unchanged. Open with <code>?crmPreview=1</code>.</div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' + btn('members', 'Members') + btn('family', 'Family') + btn('import', 'Import') + btn('promos', 'Promo codes') + btn('ops', 'Tasks & schedule') + '</div>';
+
+  if (tab === 'members') {
+    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:14px;"><thead><tr style="background:#f8fafc;text-align:left;">';
+    ['Member', 'School', 'Plan', 'Card', 'Biller'].forEach(function (c) {
+      h += '<th style="padding:10px 12px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#64748b;">' + c + '</th>';
+    });
+    h += '</tr></thead><tbody>';
+    [['Avery Sample', 'Waunakee', 'Standard', 'Visa 1111', 'GymDesk until cutover'], ['Blake Sample', 'Verona', 'Standard', 'Mastercard 2222', 'GymDesk until cutover'], ['Casey Sample', 'Waunakee', 'Mini-Tigers', 'No card on file', 'Needs Accept.js']].forEach(function (row) {
+      h += '<tr>' + row.map(function (cell) { return '<td style="padding:10px 12px;border-top:1px solid #f1f5f9;">' + esc(cell) + '</td>'; }).join('') + '</tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<div style="margin-top:12px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;">';
+    h += '<div style="font-weight:800;margin-bottom:4px;">' + esc(child.name) + '</div>';
+    h += '<div style="font-size:13px;color:#475569;line-height:1.5;">' + esc(child.school) + ' · ' + esc(child.plan) + ' · ' + esc(child.every) + '<br>Rank ' + esc(child.rank) + ' · ' + child.classes + ' classes in the fixture<br>Merchant ' + esc(child.merchant) + ' · last4 ' + esc(child.last4) + '</div>';
+    h += '<button type="button" onclick="crmPickChild(\'' + (state.crmChild === 'blake' ? 'avery' : 'blake') + '\')" style="margin-top:10px;border:0;background:#1d4ed8;color:#fff;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;">Switch child</button>';
+    h += '</div>';
+  } else if (tab === 'family') {
+    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;">';
+    h += '<div style="font-weight:800;">Sample family</div>';
+    h += '<div style="font-size:13px;color:#475569;margin:4px 0 10px;">One guardian login. Two schools, two merchant accounts. Switching a child does not sign the parent out.</div>';
+    h += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
+    Object.keys(kids).forEach(function (id) {
+      const on = state.crmChild === id;
+      h += '<button type="button" onclick="crmPickChild(\'' + id + '\')" style="border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer;border:1px solid ' + (on ? '#1d4ed8' : '#e5e7eb') + ';background:' + (on ? '#eff6ff' : '#fff') + ';">' + esc(kids[id].name.split(' ')[0]) + '</button>';
+    });
+    h += '</div><div style="font-size:14px;line-height:1.5;"><b>' + esc(child.name) + '</b> trains at ' + esc(child.school) + '.<br>Tuition drafts on the ' + esc(child.merchant) + ' account, card ending ' + esc(child.last4) + '.</div></div>';
+  } else if (tab === 'import') {
+    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.55;">';
+    h += '<div style="font-weight:800;margin-bottom:6px;">GymDesk fixture → CIM match</div>';
+    h += 'Joined on the numeric merchant customer id. No card numbers stored.<ul style="margin:8px 0 0 18px;">';
+    h += '<li>10000001 Waunakee matched profile 900000001, payment profile on file</li>';
+    h += '<li>10000002 Verona matched profile 900000002, payment profile on file</li>';
+    h += '<li>10000003 profile exists, no payment method</li>';
+    h += '<li>Profile 900000099 has merchant customer 99999999 and no member</li>';
+    h += '</ul><div style="margin-top:8px;color:#64748b;">Inactive rows in the export are not imported. Live billing stays off.</div></div>';
+  } else if (tab === 'promos') {
+    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;">';
+    h += '<div style="font-weight:800;margin-bottom:8px;">Codes in this preview</div>';
+    state.crmPromos.forEach(function (p) {
+      h += '<div style="padding:8px 0;border-top:1px solid #f1f5f9;font-size:14px;"><b>' + esc(p.code) + '</b> · ' + esc(p.type) + ' · ' + esc(p.scope) + ' · ' + esc(p.audience) + (p.stacks ? ' · stacks' : ' · does not stack') + '</div>';
+    });
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">';
+    h += '<input id="crmCode" placeholder="Code" style="border:1px solid #d8dbe6;border-radius:8px;padding:8px 10px;font:inherit;">';
+    h += '<select id="crmType" style="border:1px solid #d8dbe6;border-radius:8px;padding:8px 10px;font:inherit;"><option value="percent">Percent off</option><option value="fixed">Fixed amount</option><option value="free">Free</option></select>';
+    h += '<select id="crmScope" style="border:1px solid #d8dbe6;border-radius:8px;padding:8px 10px;font:inherit;"><option>All schools</option><option>Waunakee</option><option>Event type: clinic</option><option>Brand: LVLUP</option><option>Brand: Go Ninja</option></select>';
+    h += '<select id="crmAudience" style="border:1px solid #d8dbe6;border-radius:8px;padding:8px 10px;font:inherit;"><option value="all">Anyone</option><option value="members">Members only</option><option value="new customers">New customers only</option></select>';
+    h += '<label style="font-size:13px;display:flex;align-items:center;gap:6px;"><input id="crmStacks" type="checkbox"> Can stack</label>';
+    h += '<button type="button" onclick="crmSavePromo()" style="border:0;background:#1a1a2e;color:#fff;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;">Add code</button>';
+    h += '</div><div id="crmPromoMsg" style="margin-top:8px;font-size:13px;color:#1d4ed8;">' + esc(state.crmPromoNote || '') + '</div></div>';
+    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.5;">';
+    h += '<div style="font-weight:800;margin-bottom:6px;">Price check</div>';
+    h += 'These three numbers are what <code>crm/src/pricing.ts</code> returns in tests. The members site will call <code>POST /v1/quotes</code> and show <b>due</b> before confirm.<ul style="margin:8px 0 0 18px;">';
+    h += '<li>CLINIC10 on a $50.00 clinic → due $45.00</li>';
+    h += '<li>FREEWEEK for a new customer → due $0.00. A current member is rejected.</li>';
+    h += '<li>CLINIC10 and MEMBER5, both allowed to stack → due $40.00. A code that cannot stack is rejected.</li>';
+    h += '</ul></div>';
+  } else {
+    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.55;">';
+    h += '<div style="font-weight:800;">Imported snapshot, not the live sheet</div>';
+    h += '<div style="color:#475569;margin-bottom:8px;">Ops → Tasks and the Schedule tab still read and write Firebase. This is the CRM copy of a fixture.</div>';
+    h += '<div><b>Task.</b> ash · daily · 2026-11-16 · bathroom photo · done. Weekly garbage check the same week.</div>';
+    h += '<div style="margin-top:6px;"><b>Shift.</b> tc_ash · East Madison · Mon 4:00–8:00p and Tue 4:00–7:00p · 7 scheduled hours.</div>';
+    h += '<div style="margin-top:6px;"><b>Time off.</b> Approved PTO on Fri Nov 20 blocks that day. A shift already on that day would show as a conflict.</div>';
+    h += '<div style="margin-top:6px;"><b>Link.</b> A task completion can point at a member, a class session, or an event. The fixture does not guess a student from a note.</div>';
+    h += '</div>';
+  }
+  h += '</div>';
+  setTimeout(crmMarkOffline, 0);
+  return h;
+}
+
   async function init() {
+  if (crmPreviewOn() && dashLocalHost()) { crmBootPreview(); return; }
   if (contentContextFixtureMode()) { contentContextBootFixtures(); return; }
   if (taskNoteFixtureMode()) { taskNoteBootFixtures(); return; }
   if (crqLocalFixtureMode()) { crqBootLabeledFixtures(); return; }

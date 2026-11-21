@@ -1,0 +1,21 @@
+{
+  "empId": "ash",
+  "clockStaffId": "tc_ash",
+  "locationId": "eastmad",
+  "daily": {
+    "2026-11-16": {
+      "ph_bathroom": { "ts": 1763312400000, "proofV": 1 },
+      "ad_invites": {
+        "ts": 1763316000000,
+        "proofV": 1,
+        "note": "Sample Student A\nSample Student B",
+        "memberId": null
+      }
+    }
+  },
+  "weekly": {
+    "2026-W47": {
+      "lvlup_garbage": { "ts": 1763400000000, "proofV": 1 }
+    }
+  }
+}
