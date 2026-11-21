@@ -1,0 +1,36 @@
+{
+  "profiles": [
+    {
+      "locationId": "waunakee",
+      "customerProfileId": "900000001",
+      "merchantCustomerId": "10000001",
+      "paymentProfileId": "800000001",
+      "brand": "Visa",
+      "last4": "1111"
+    },
+    {
+      "locationId": "verona",
+      "customerProfileId": "900000002",
+      "merchantCustomerId": "10000002",
+      "paymentProfileId": "800000002",
+      "brand": "Mastercard",
+      "last4": "2222"
+    },
+    {
+      "locationId": "waunakee",
+      "customerProfileId": "900000003",
+      "merchantCustomerId": "10000003",
+      "paymentProfileId": null,
+      "brand": null,
+      "last4": null
+    },
+    {
+      "locationId": "waunakee",
+      "customerProfileId": "900000099",
+      "merchantCustomerId": "99999999",
+      "paymentProfileId": "800000099",
+      "brand": "Visa",
+      "last4": "9999"
+    }
+  ]
+}

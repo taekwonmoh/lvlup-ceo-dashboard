@@ -89,6 +89,10 @@ The members website stops sending that school’s trial bookings to `app.gymdesk
 - `ceo/cancellationRequests` keeps receiving the public form until the Holds page reads the API. New CRM rows are mirrored there so the badge does not drop to zero.
 - Belt journey, XP, and the red/black tracker stay on Firebase `students/{key}` until the members app reads rank events from the API. `firebase_student_key` is the join.
 
+## Task sheets and the scheduler
+
+Those stay on Firebase for this phase. The mapping and the order to move them are in [STAFF-OPS.md](STAFF-OPS.md). Do not turn off `ceo/tasks` or `ceo/timeclock` writes when the CRM import runs.
+
 ## Done
 
 GymDesk is retired when every school has `biller = lvlup`, the widget proxy is unused, the CSV buttons are gone, and one full interval has been collected with a reconciliation diff of zero unexpected double charges.

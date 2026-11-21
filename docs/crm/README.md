@@ -15,6 +15,9 @@ Mike Moh wants to replace GymDesk with a CRM and member platform that the staff 
 | [MIGRATION.md](MIGRATION.md) | How to leave GymDesk without double-billing. |
 | [schema/001_init.sql](schema/001_init.sql) | Draft Postgres schema. Not applied anywhere. |
 | [api/openapi.yaml](api/openapi.yaml) | Draft HTTP contract for the dashboard, the website, and the apps. |
+| [MEMBERS-API.md](MEMBERS-API.md) | Endpoints the lvlupma.com members area will call, including promo codes on a booking. |
+| [STAFF-OPS.md](STAFF-OPS.md) | How task sheets and the staff scheduler work today, and how they move into this model without a cutover. |
+| [`crm/`](../../crm/) | The runnable backbone: migrations, API, fixtures, and tests. |
 
 ## Decision in one paragraph
 
@@ -34,6 +37,11 @@ These block a build. They do not block this design.
 8. **Family across schools.** A family with a child in Waunakee and a child in Verona must be charged on two merchant accounts. Confirm that is acceptable, and whether a second guardian (not the GymDesk receipt email) should be able to sign in on day one.
 9. **ATA.** Rank checks on the dashboard say “GymDesk vs ATA”, and applications include “Register in ATA”. ATA EZSignup stays untouched. Should belt testing registration remain there, with this platform only recording the result?
 10. **What we retire last.** Member class booking, prepaid shop links, and the front-desk POS habit all live in GymDesk today. Which of those must work in the new system before the first school stops drafting in GymDesk?
+11. **Task sheets.** The lists in `index.html` cover daily, weekly, monthly, and cycle checks, plus custom rows, a weekly sign-off, and a “did not work” flag. Proof is a note, a count, a photo, or an automatic completion from inventory or the schedule. Which of those must the first CRM task screen reproduce, and which can wait?
+12. **Seat versus clock id.** A task seat (`ash`, `sueK`) is not always the clock id (`tc_ash`). Is there a table that pairs them, or should staff confirm each pair during import?
+13. **Hours.** Payroll can follow scheduled shift length or punched in/out. Which one should the CRM treat as the hours of record?
+14. **Promo stacking.** The engine allows a code to be marked stackable. Should a percent code and a fixed code on the same clinic be allowed in practice, or should the first codes you create all be non-stacking?
+15. **Curriculum.** Rank videos today are Vimeo embeds in the members page, organized by cycle theme. Should the CRM store one video per rank, or one set of videos per cycle that cuts across ranks?
 
 ## Hard rules for every later phase
 

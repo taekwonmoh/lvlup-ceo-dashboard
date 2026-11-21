@@ -1,0 +1,5 @@
+member_id,first_name,last_name,status,joined,rank,email,location,plan,amount
+10000001,Avery,Sample,active,03/02/2024,Yellow,avery.sample@example.test,Waunakee,Standard,224.00
+10000002,Blake,Sample,active,06/15/2025,White,avery.sample@example.test,Verona,Standard,209.00
+10000003,Casey,Sample,active,01/09/2026,Orange,casey.sample@example.test,Waunakee,Mini-Tigers,119.00
+10000004,Drew,Sample,inactive,11/01/2023,Green,drew.sample@example.test,East Madison,Standard,199.00

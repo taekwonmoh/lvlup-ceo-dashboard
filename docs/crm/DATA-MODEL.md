@@ -126,6 +126,14 @@ Dashboard fields staff already edit (`completedBy`, `cancelDate`, `retentionNote
 
 `external_ids`: entity type, entity id, system (`gymdesk`, `firebase_student`, `authorize_cim`), value. The crosswalk from phase 2.
 
+## Promo codes
+
+`promo_codes` is a percent, a fixed amount, or free. `promo_code_scopes` limits a code to a brand (`lvlup` or `goninja`), a school, an event type, one event, one class session, or everything. Dates are inclusive. `max_redemptions`, `max_per_family`, and `max_per_member` are null when there is no cap. `audience` is everyone, current members, or new customers. `stacks` false means the code cannot be combined with another code. `promo_redemptions` stores each use against a booking and, when a charge exists, a charge. The quote function does not insert a redemption. Confirming a booking does.
+
+## Staff tasks and the scheduler
+
+`task_definitions` is the checklist catalog (daily, weekly, cycle, monthly) with an optional seat and weekday list. `task_completions` is one done row per seat, task, and period, with an optional member, class session, or event. `staff_shifts` is the weekly grid. `staff_time_off` is PTO or unpaid. `time_punches` is the kiosk. `schedule_publications` is the posted week. `staff_users.clock_staff_id` joins a login to the clock roster. Live writes stay on Firebase until the cutover in [STAFF-OPS.md](STAFF-OPS.md).
+
 ## What is deliberately not a table
 
 - Card numbers, CVV, full magnetic stripe, Accept.js opaque tokens.

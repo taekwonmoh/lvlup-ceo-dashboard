@@ -377,6 +377,105 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Lead'
+  /quotes:
+    post:
+      tags: [Billing]
+      operationId: quoteBooking
+      summary: Price a class or event booking after promo codes. Does not charge.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [listPriceCents, on, locationId, brand, buyer, codes]
+              properties:
+                listPriceCents:
+                  type: integer
+                on:
+                  type: string
+                  format: date
+                locationId:
+                  $ref: '#/components/schemas/LocationId'
+                brand:
+                  type: string
+                  enum: [lvlup, goninja]
+                eventType:
+                  type: string
+                eventId:
+                  type: string
+                  format: uuid
+                sessionId:
+                  type: string
+                  format: uuid
+                buyer:
+                  type: string
+                  enum: [member, new_customer, lead]
+                familyId:
+                  type: string
+                  format: uuid
+                memberId:
+                  type: string
+                  format: uuid
+                codes:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: List price, discount, and amount due.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [listPriceCents, discountCents, dueCents, applied]
+                properties:
+                  listPriceCents:
+                    type: integer
+                  discountCents:
+                    type: integer
+                  dueCents:
+                    type: integer
+                  applied:
+                    type: array
+                    items:
+                      type: object
+                      required: [code, discountCents, priceAfterCents]
+                      properties:
+                        code:
+                          type: string
+                        discountCents:
+                          type: integer
+                        priceAfterCents:
+                          type: integer
+        '422':
+          description: Code is unknown, expired, out of scope, or cannot stack.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /tasks:
+    get:
+      tags: [Schedule]
+      operationId: listTaskCompletions
+      summary: Task-sheet completions imported from the dashboard snapshot. Staff only.
+      responses:
+        '200':
+          description: Completions in scope.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /staff-schedule:
+    get:
+      tags: [Schedule]
+      operationId: listStaffShifts
+      summary: Staff shifts imported from the scheduler snapshot. Staff only.
+      responses:
+        '200':
+          description: Shifts and scheduled minutes.
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /webhooks/authorize/{locationId}:
     post:
       tags: [Billing]

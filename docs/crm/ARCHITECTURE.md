@@ -1,6 +1,29 @@
 # Target architecture
 
-Phase 0 design. No service is created by this document. Companion detail: [DATA-MODEL.md](DATA-MODEL.md), [BILLING.md](BILLING.md), [MIGRATION.md](MIGRATION.md), [schema/001_init.sql](schema/001_init.sql), [api/openapi.yaml](api/openapi.yaml). How the two apps work today: [CURRENT-STATE.md](CURRENT-STATE.md).
+The backbone now lives in [`crm/`](../../crm/) in this repo: Postgres migrations, a local API, and adapters. It does not deploy, and it does not replace the live dashboard. Companion detail: [DATA-MODEL.md](DATA-MODEL.md), [BILLING.md](BILLING.md), [MIGRATION.md](MIGRATION.md), [MEMBERS-API.md](MEMBERS-API.md), [STAFF-OPS.md](STAFF-OPS.md), [schema/001_init.sql](schema/001_init.sql), [api/openapi.yaml](api/openapi.yaml). How the two apps work today: [CURRENT-STATE.md](CURRENT-STATE.md).
+
+## Module map
+
+Live behavior stays where it is. The backbone is the shared model and the API those screens can move onto later.
+
+| Module | In the backbone now | Still live elsewhere | Later |
+|---|---|---|---|
+| Members, families, parents | Tables, GymDesk fixture import, `/v1/members` and `/v1/families`. Guardian tokens see their own kids and can switch between them. | Firebase `students`, `families`, `familyByEmail`. Members app email-link sign-in. | Members-site PR calls this API. See [MEMBERS-API.md](MEMBERS-API.md). |
+| Billing and coupons | Plans, memberships, CIM profile ids, hold/cancel decision function, promo quote and redemption. Charge requests are built and **not sent**. | GymDesk drafts each school’s Authorize.net CIM profile. | Shadow billing, then one school at a time. |
+| Classes, scheduling, bookings | `class_sessions`, `bookings`, quote with a promo code. | Public trial widget and `{school}.gymdesk.com/members/schedule`. | Replace the widget per school. |
+| Attendance and check-in kiosk | `attendance` and `time_punches` tables. Punch adapter from the Firebase entry shape. | `#clock` kiosk writes `ceo/timeclock/entries`. Member class check-in is still GymDesk. | Kiosk stays PIN-only until a later cutover. It never gets a CRM key. |
+| Ranks and belt testing | Rank catalog, requirements, sign-off, eligibility function (classes + days in rank + instructor sign-off). | `gymdeskRank` string and the black-belt tracker on Firebase. ATA registration stays on the ATA portal. | Record results here. Do not rebuild EZSignup. |
+| Curriculum and videos | `curriculum_videos` stores a Vimeo id per rank. No video files. | Cycle videos are hard-coded in `members-curriculum.js`. | Point the members curriculum at these rows. |
+| Leads and trials | `leads` plus the fixture importer. | `/book` posts to GymDesk `create-lead`. `/api/lead` writes `classLeads`. | One school mirrors, then stops posting to GymDesk. |
+| Events, tournaments, parties | `events`, `event_registrations`, `parties`. Promo codes can target an event type. | `ceo/events` and the old `va-dashboard-bf7ca` events client. Go Ninja party counts are typed into KPIs. | One event writer. |
+| Staff tasks and task sheets | `task_definitions`, `task_completions`, Firebase snapshot adapter. | Ops → Tasks in this dashboard. Paths under `ceo/tasks/emp/{seat}`. | Read from the API, then stop writing Firebase. See [STAFF-OPS.md](STAFF-OPS.md). |
+| Staff scheduler and hours | `staff_shifts`, `staff_time_off`, `time_punches`, `schedule_publications`. Adapter sums scheduled minutes. | Schedule tab writes `ceo/timeclock/schedule` and punches. | Same cutover as tasks. Payroll hours stay a report on these rows. |
+| Communications | Not built. | Resend for leads, bookings, and hold mail. Slack for holds. Scheduler comments mention a future Slack reminder, not SMS. | One sender for receipts, dunning, and class reminders. |
+| Media | Not built. | Firebase Storage `events/`, `taskPhotos/`, `contentSubmissions/`. | Keep the buckets. The CRM stores the path, not the bytes. |
+| Reporting | Not built. | `finance/gymdesk`, planner baseline, scorecard, KPI grid. | Add CRM collected totals in front of the GymDesk snapshot after cutover. |
+| Parent and member apps | Same API and roles. No app binary. | Members PWA (`members-manifest.json`) opens GymDesk to book. | Expo app after the web members area uses this API. |
+
+## Recommendation
 
 ## Recommendation
 

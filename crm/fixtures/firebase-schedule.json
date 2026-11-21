@@ -1,0 +1,34 @@
+{
+  "clockStaffId": "tc_ash",
+  "schedule": {
+    "2026-11-16": {
+      "s_demo1": { "start": "16:00", "end": "20:00", "loc": "eastmad", "role": "lead" }
+    },
+    "2026-11-17": {
+      "s_demo2": { "start": "16:00", "end": "19:00", "loc": "eastmad", "role": "lead" }
+    }
+  },
+  "timeoff": [
+    {
+      "id": "to_demo",
+      "empId": "tc_ash",
+      "start": "2026-11-20",
+      "end": "2026-11-20",
+      "type": "pto",
+      "status": "approved",
+      "note": "fixture"
+    }
+  ],
+  "entries": {
+    "2026-11-16": {
+      "e_demo": {
+        "inAt": 1763323200000,
+        "outAt": 1763337600000,
+        "inLoc": "eastmad"
+      }
+    }
+  },
+  "published": {
+    "2026-W47": { "publishedAt": 1763200000000, "label": "fixture week" }
+  }
+}
