@@ -5277,6 +5277,9 @@ function render(force) {
   dashGuardSection();
   const s = state.activeSection;
 
+  if (s === 'crm' && crmPreviewOn()) {
+    app.innerHTML = crmRenderPage();
+  } else {
   app.innerHTML = renderHeader() +
     (s === 'home'                                                              ? renderHomePage()    :
      s === 'wall'                                                              ? renderWallPage()    :
@@ -5284,9 +5287,9 @@ function render(force) {
      ['feedback','watchlist','holds','applications','firstfive','reviews','incidents'].includes(s)   ? renderMembersPage()   :
      ['goals','marketing','scorecard','rocks','financials','finance'].includes(s) ? renderGrowthPage() :
      s === 'development'                                                      ? renderResourcesPage() :
-     s === 'crm' && crmPreviewOn()                                            ? crmRenderPage() :
      '') +
     (state.teamAccessOpen && dashAuth.isAdmin ? renderTeamAccessModal() : '');
+  }
   requestAnimationFrame(initSortable);
   if (state.tcMapLoc) requestAnimationFrame(tcInitMap);
   if (s === 'finance') requestAnimationFrame(initGymdeskFinanceCharts);
@@ -16328,19 +16331,39 @@ function crmBootPreview() {
   });
   state.activeSection = 'crm';
   var tabMatch = /(?:\?|&)crmTab=([a-z]+)/.exec(String(location.search || ''));
+  var themeMatch = /(?:\?|&)crmTheme=(light|dark)/.exec(String(location.search || ''));
   state.crmTab = tabMatch ? tabMatch[1] : 'members';
-  state.crmChild = 'avery';
+  state.crmTheme = themeMatch ? themeMatch[1] : (state.crmTheme || 'light');
+  state.crmChild = state.crmChild || 'avery';
+  state.crmMember = state.crmMember || 'avery';
+  state.crmSchool = state.crmSchool || 'all';
+  state.crmQuery = state.crmQuery || '';
+  state.crmQuote = state.crmQuote || 'clinic10';
   render(true);
   crmMarkOffline();
 }
 function crmMarkOffline() {
   const conn = document.getElementById('connStatus');
   if (!conn) return;
-  conn.className = 'conn-status offline';
-  conn.textContent = 'Mock only — not connected';
+  conn.style.display = 'none';
 }
 function crmTab(tab) { state.crmTab = tab; render(); }
-function crmPickChild(id) { state.crmChild = id; state.crmTab = 'family'; render(); }
+function crmPickChild(id) { state.crmChild = id; state.crmMember = id; state.crmTab = 'family'; render(); }
+function crmPickMember(id) { state.crmMember = id; render(); }
+function crmSetTheme(theme) { state.crmTheme = theme === 'dark' ? 'dark' : 'light'; render(); }
+function crmSetSchool(id) { state.crmSchool = id; render(); }
+function crmSearch(value) {
+  state.crmQuery = String(value || '');
+  render();
+  var el = document.getElementById('crmSearch');
+  if (el) { el.focus(); var n = el.value.length; el.setSelectionRange(n, n); }
+}
+function crmSetQuote(id) { state.crmQuote = id; state.crmTab = 'promos'; render(); }
+function crmExitPreview() {
+  var u = new URL(location.href);
+  ['crmPreview', 'crmTab', 'crmTheme', 'crmSkeleton'].forEach(function (k) { u.searchParams.delete(k); });
+  location.href = u.pathname + u.search + u.hash;
+}
 function crmSavePromo() {
   const code = (document.getElementById('crmCode') || {}).value || '';
   const type = (document.getElementById('crmType') || {}).value || 'percent';
@@ -16350,7 +16373,7 @@ function crmSavePromo() {
     render();
     return;
   }
-  if (!state.crmPromos) state.crmPromos = [];
+  if (!state.crmPromos) state.crmPromos = crmDefaultPromos();
   if (state.crmPromos.some(function (p) { return p.code === clean; })) {
     state.crmPromoNote = clean + ' is already in this preview.';
     render();
@@ -16366,97 +16389,404 @@ function crmSavePromo() {
   state.crmPromoNote = clean + ' is in this preview only. It is not saved to Firebase.';
   render();
 }
-function crmRenderPage() {
-  const kids = {
-    avery: { name: 'Avery Sample', school: 'Waunakee', loc: 'waunakee', plan: 'Standard', every: 'every 4 weeks', rank: 'Yellow', merchant: 'Waunakee sandbox', last4: '1111', classes: 6 },
-    blake: { name: 'Blake Sample', school: 'Verona', loc: 'verona', plan: 'Standard', every: 'every 4 weeks', rank: 'White', merchant: 'Verona sandbox', last4: '2222', classes: 1 },
+function crmEnsureCss() {
+  if (document.getElementById('crm-ds')) return;
+  var css = [
+    '.crm-app{--crm-bg:#f3f2ee;--crm-surface:#fff;--crm-surface-2:#f7f6f3;--crm-ink:#161513;--crm-muted:#5c5852;--crm-faint:#8a857c;--crm-line:#e4e1da;--crm-accent:#1d4ed8;--crm-accent-ink:#fff;--crm-accent-soft:#e8efff;--crm-ninja:#b42318;--crm-ninja-soft:#fdeceb;--crm-ok:#0d6b3d;--crm-ok-bg:#e5f6ec;--crm-warn:#8a5a00;--crm-warn-bg:#fff4d6;--crm-danger:#b42318;--crm-danger-bg:#fdeceb;--crm-shadow:0 1px 2px rgba(22,21,19,.05),0 10px 28px rgba(22,21,19,.06);--crm-radius:14px;--crm-font:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--crm-side:248px;',
+    'position:fixed;inset:0;z-index:80;display:grid;grid-template-columns:var(--crm-side) minmax(0,1fr);background:var(--crm-bg);color:var(--crm-ink);font-family:var(--crm-font);font-variant-numeric:tabular-nums;letter-spacing:-.011em;}',
+    '.crm-app[data-theme="dark"]{--crm-bg:#0e0f12;--crm-surface:#17181c;--crm-surface-2:#1e2026;--crm-ink:#f5f4f1;--crm-muted:#c2beb6;--crm-faint:#9b968c;--crm-line:#2c2e35;--crm-accent:#8eabff;--crm-accent-ink:#0e1220;--crm-accent-soft:#1c2744;--crm-ninja:#ff8f86;--crm-ninja-soft:#3a1816;--crm-ok:#7dcea5;--crm-ok-bg:#123226;--crm-warn:#f5c451;--crm-warn-bg:#3a2e12;--crm-danger:#ffb0aa;--crm-danger-bg:#3a1816;--crm-shadow:0 1px 2px rgba(0,0,0,.45),0 16px 40px rgba(0,0,0,.35);}',
+    '.crm-app[data-brand="ninja"]{--crm-accent:var(--crm-ninja);--crm-accent-soft:var(--crm-ninja-soft);--crm-accent-ink:#fff;}',
+    '.crm-app[data-theme="dark"][data-brand="ninja"]{--crm-accent-ink:#2a0d0b;}',
+    '.crm-app *{box-sizing:border-box;}',
+    '.crm-app :focus-visible{outline:2px solid var(--crm-accent);outline-offset:2px;}',
+    '.crm-app button,.crm-app input,.crm-app select{font-family:inherit;color:inherit;}',
+    '.crm-side{display:flex;flex-direction:column;gap:8px;padding:20px 14px 16px;border-right:1px solid var(--crm-line);background:var(--crm-surface);}',
+    '.crm-brand{display:flex;align-items:center;gap:10px;padding:0 8px 12px;}',
+    '.crm-mark{width:32px;height:32px;border-radius:10px;background:var(--crm-accent);color:var(--crm-accent-ink);display:grid;place-items:center;font-weight:800;font-size:13px;}',
+    '.crm-brand b{display:block;font-size:14px;font-weight:750;}',
+    '.crm-brand span{display:block;font-size:12px;color:var(--crm-muted);font-weight:500;}',
+    '.crm-school{margin:0 8px 8px;border:1px solid var(--crm-line);background:var(--crm-surface-2);border-radius:12px;padding:8px 10px;font-size:13px;font-weight:650;}',
+    '.crm-nav{display:flex;flex-direction:column;gap:2px;padding:4px;}',
+    '.crm-nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:transparent;border-radius:10px;padding:9px 10px;font-size:14px;font-weight:600;color:var(--crm-muted);cursor:pointer;transition:background .16s ease,color .16s ease;}',
+    '.crm-nav button svg{width:18px;height:18px;flex:none;}',
+    '.crm-nav button:hover{background:var(--crm-surface-2);color:var(--crm-ink);}',
+    '.crm-nav button[aria-current="page"]{background:var(--crm-accent-soft);color:var(--crm-accent);}',
+    '.crm-side-foot{margin-top:auto;padding:8px;}',
+    '.crm-side-foot button{width:100%;border:0;background:transparent;color:var(--crm-muted);font-size:12px;font-weight:650;padding:8px;border-radius:8px;cursor:pointer;text-align:left;}',
+    '.crm-side-foot button:hover{background:var(--crm-surface-2);color:var(--crm-ink);}',
+    '.crm-main{display:flex;flex-direction:column;min-width:0;min-height:0;}',
+    '.crm-top{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--crm-line);background:color-mix(in srgb,var(--crm-surface) 88%,transparent);backdrop-filter:saturate(1.2) blur(10px);position:sticky;top:0;z-index:2;}',
+    '.crm-search{flex:1;display:flex;align-items:center;gap:8px;background:var(--crm-surface-2);border:1px solid var(--crm-line);border-radius:12px;padding:0 12px;min-height:40px;}',
+    '.crm-search input{flex:1;border:0;background:transparent;padding:8px 0;font-size:14px;outline:none;}',
+    '.crm-search svg{width:16px;height:16px;color:var(--crm-faint);}',
+    '.crm-who{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:650;}',
+    '.crm-avatar{width:32px;height:32px;border-radius:999px;display:grid;place-items:center;font-size:12px;font-weight:750;background:var(--crm-accent-soft);color:var(--crm-accent);}',
+    '.crm-avatar.lg{width:40px;height:40px;font-size:14px;}',
+    '.crm-iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--crm-line);background:var(--crm-surface);cursor:pointer;display:grid;place-items:center;}',
+    '.crm-iconbtn:hover{background:var(--crm-surface-2);}',
+    '.crm-body{overflow:auto;padding:22px;padding-bottom:28px;}',
+    '.crm-pagehead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px;}',
+    '.crm-pagehead h2{margin:0;font-size:26px;font-weight:720;letter-spacing:-.03em;}',
+    '.crm-pagehead p{margin:4px 0 0;color:var(--crm-muted);font-size:14px;}',
+    '.crm-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px;}',
+    '.crm-kpi{background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:var(--crm-radius);box-shadow:var(--crm-shadow);padding:14px 14px 12px;min-height:108px;display:flex;flex-direction:column;gap:6px;}',
+    '.crm-kpi .lbl{font-size:12px;font-weight:680;color:var(--crm-muted);letter-spacing:.01em;}',
+    '.crm-kpi .num{font-size:26px;font-weight:720;letter-spacing:-.03em;line-height:1.1;}',
+    '.crm-kpi .row{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:auto;}',
+    '.crm-delta{font-size:12px;font-weight:700;}',
+    '.crm-delta.up{color:var(--crm-ok);} .crm-delta.down{color:var(--crm-danger);} .crm-delta.flat{color:var(--crm-warn);}',
+    '.crm-spark{width:84px;height:28px;}',
+    '.crm-split{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,.8fr);gap:14px;align-items:start;}',
+    '.crm-card{background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:var(--crm-radius);box-shadow:var(--crm-shadow);}',
+    '.crm-card h3{margin:0;font-size:15px;font-weight:720;}',
+    '.crm-table-wrap{overflow:auto;max-height:520px;}',
+    '.crm-table{width:100%;border-collapse:collapse;font-size:14px;}',
+    '.crm-table th{position:sticky;top:0;background:var(--crm-surface);text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--crm-muted);font-weight:700;padding:12px 14px;border-bottom:1px solid var(--crm-line);}',
+    '.crm-table td{padding:12px 14px;border-bottom:1px solid var(--crm-line);vertical-align:middle;}',
+    '.crm-table tr{cursor:pointer;transition:background .16s ease;}',
+    '.crm-table tbody tr:hover{background:var(--crm-surface-2);}',
+    '.crm-table tr[aria-selected="true"]{background:var(--crm-accent-soft);}',
+    '.crm-person{display:flex;align-items:center;gap:10px;font-weight:680;}',
+    '.crm-pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:720;letter-spacing:.01em;}',
+    '.crm-pill.ok{background:var(--crm-ok-bg);color:var(--crm-ok);} .crm-pill.warn{background:var(--crm-warn-bg);color:var(--crm-warn);} .crm-pill.bad{background:var(--crm-danger-bg);color:var(--crm-danger);} .crm-pill.neutral{background:var(--crm-surface-2);color:var(--crm-muted);}',
+    '.crm-detail{padding:16px;}',
+    '.crm-detail .who{display:flex;gap:12px;align-items:center;margin-bottom:12px;}',
+    '.crm-meta{display:grid;gap:10px;font-size:13px;}',
+    '.crm-meta div{display:flex;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--crm-line);}',
+    '.crm-meta span{color:var(--crm-muted);}',
+    '.crm-belt{display:inline-flex;align-items:center;gap:8px;font-weight:700;}',
+    '.crm-belt i{width:18px;height:10px;border-radius:3px;display:inline-block;border:1px solid var(--crm-line);}',
+    '.crm-stack{display:grid;gap:12px;}',
+    '.crm-kid{padding:16px;cursor:pointer;transition:box-shadow .16s ease,border-color .16s ease;}',
+    '.crm-kid[aria-pressed="true"]{border-color:var(--crm-accent);box-shadow:0 0 0 3px var(--crm-accent-soft),var(--crm-shadow);}',
+    '.crm-kid-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;}',
+    '.crm-balance{font-size:28px;font-weight:720;letter-spacing:-.03em;}',
+    '.crm-card-row{display:flex;gap:8px;align-items:center;color:var(--crm-muted);font-size:13px;margin-top:8px;}',
+    '.crm-quote{padding:18px 18px 16px;}',
+    '.crm-quote .kicker{font-size:12px;font-weight:720;letter-spacing:.08em;text-transform:uppercase;color:var(--crm-muted);margin:0 0 12px;}',
+    '.crm-line{display:flex;justify-content:space-between;gap:12px;padding:8px 0;font-size:15px;}',
+    '.crm-line.disc{color:var(--crm-ok);font-weight:680;}',
+    '.crm-due{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-top:8px;padding-top:12px;border-top:1px solid var(--crm-line);}',
+    '.crm-due span{font-size:13px;font-weight:700;color:var(--crm-muted);}',
+    '.crm-due b{font-size:40px;letter-spacing:-.04em;font-weight:740;line-height:.95;}',
+    '.crm-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}',
+    '.crm-chips button{border:1px solid var(--crm-line);background:var(--crm-surface);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:680;cursor:pointer;}',
+    '.crm-chips button[aria-pressed="true"]{background:var(--crm-accent);color:var(--crm-accent-ink);border-color:transparent;}',
+    '.crm-form{display:flex;flex-wrap:wrap;gap:8px;padding:14px;}',
+    '.crm-form input,.crm-form select{border:1px solid var(--crm-line);background:var(--crm-surface-2);border-radius:12px;padding:10px 12px;font-size:14px;min-height:42px;}',
+    '.crm-primary{border:0;background:var(--crm-accent);color:var(--crm-accent-ink);border-radius:12px;padding:10px 14px;font-weight:730;cursor:pointer;min-height:42px;}',
+    '.crm-primary:hover{filter:brightness(1.05);}',
+    '.crm-note{padding:0 14px 14px;font-size:13px;color:var(--crm-accent);font-weight:650;}',
+    '.crm-alert{margin:0 18px 14px;padding:10px 12px;border-radius:12px;background:var(--crm-danger-bg);color:var(--crm-danger);font-size:13px;font-weight:680;}',
+    '.crm-empty{padding:36px 16px;text-align:center;color:var(--crm-muted);}',
+    '.crm-empty b{display:block;color:var(--crm-ink);font-size:16px;margin-bottom:4px;}',
+    '.crm-skel{height:14px;border-radius:8px;background:linear-gradient(90deg,var(--crm-surface-2),var(--crm-line),var(--crm-surface-2));background-size:200% 100%;animation:crmShimmer 1.2s ease infinite;}',
+    '@keyframes crmShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}',
+    '.crm-task{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--crm-line);font-size:14px;}',
+    '.crm-shift{display:grid;grid-template-columns:72px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--crm-line);font-size:14px;}',
+    '.crm-shift time{font-weight:720;}',
+    '.crm-bottom{display:none;}',
+    '@media (max-width:860px){',
+    '.crm-app{grid-template-columns:1fr;}',
+    '.crm-side{display:none;}',
+    '.crm-top{padding:12px 14px;}',
+    '.crm-who span{display:none;}',
+    '.crm-body{padding:14px 14px 96px;}',
+    '.crm-table th:nth-child(3),.crm-table td:nth-child(3),.crm-table th:nth-child(5),.crm-table td:nth-child(5){display:none;}',
+    '.crm-kpis{grid-template-columns:1fr 1fr;}.crm-kpis .crm-kpi:last-child{grid-column:1 / -1;}',
+    '.crm-split{grid-template-columns:1fr;}',
+    '.crm-pagehead h2{font-size:22px;}',
+    '.crm-due b{font-size:34px;}',
+    '.crm-bottom{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--crm-surface);border-top:1px solid var(--crm-line);padding:6px 6px calc(8px + env(safe-area-inset-bottom));}',
+    '.crm-bottom button{flex:1;border:0;background:transparent;color:var(--crm-muted);font-size:10px;font-weight:720;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;cursor:pointer;}',
+    '.crm-bottom button svg{width:20px;height:20px;}',
+    '.crm-bottom button[aria-current="page"]{color:var(--crm-accent);}',
+    '}'
+  ].join('');
+  var tag = document.createElement('style');
+  tag.id = 'crm-ds';
+  tag.textContent = css;
+  document.head.appendChild(tag);
+}
+function crmIcon(name) {
+  var p = {
+    users: '<path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8.5 1.2a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8ZM2.8 18.2c.5-2.4 2.6-4 5.2-4s4.7 1.6 5.2 4M13 14.4c1.8.2 3.4 1.3 4 3.4"/>',
+    home: '<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"/>',
+    tag: '<path d="M3 12V5a2 2 0 0 1 2-2h7l9 9-8 8-9-9Z"/><circle cx="7.5" cy="7.5" r="1.2" fill="currentColor" stroke="none"/>',
+    cal: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M8 3.5V7M16 3.5V7M3.5 10h17"/>',
+    box: '<path d="M3 8l9-4 9 4-9 4-9-4Z"/><path d="M3 8v8l9 4 9-4V8"/>',
+    sun: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
+    moon: '<path d="M16 3.5A8.2 8.2 0 1 0 20.5 14 6.4 6.4 0 0 1 16 3.5Z"/>',
+    search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>'
   };
-  const child = kids[state.crmChild] || kids.avery;
-  if (!state.crmPromos) {
-    state.crmPromos = [
-      { code: 'CLINIC10', type: 'percent', scope: 'Event type: clinic', audience: 'all', stacks: true },
-      { code: 'FREEWEEK', type: 'free', scope: 'All schools', audience: 'new customers', stacks: false },
-    ];
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (p[name] || '') + '</svg>';
+}
+function crmMoney(cents) {
+  return (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
+function crmSpark(points) {
+  var w = 84, h = 28, max = Math.max.apply(null, points), min = Math.min.apply(null, points);
+  var d = points.map(function (p, i) {
+    var x = (i / (points.length - 1)) * w;
+    var y = h - ((p - min) / ((max - min) || 1)) * (h - 4) - 2;
+    return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+  }).join(' ');
+  return '<svg class="crm-spark" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true"><path d="' + d + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+function crmInitials(name) {
+  return name.split(' ').slice(0, 2).map(function (p) { return p[0] || ''; }).join('');
+}
+function crmRoster() {
+  return [
+    { id: 'avery', name: 'Avery Sample', school: 'Waunakee', loc: 'waunakee', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', rank: 'Yellow', belt: '#e4b406', next: 'Tue · 5:00p Beginners', balance: 22400, card: 'Visa', last4: '1111', status: 'active', checkin: 'Today · 4:52p' },
+    { id: 'blake', name: 'Blake Sample', school: 'Verona', loc: 'verona', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', rank: 'White', belt: '#f7f7f4', next: 'Wed · 6:15p Tigers', balance: 20900, card: 'Mastercard', last4: '2222', status: 'active', checkin: 'Yesterday' },
+    { id: 'casey', name: 'Casey Sample', school: 'Waunakee', loc: 'waunakee', brand: 'lvlup', plan: 'Mini-Tigers', interval: 'Monthly', rank: 'Orange', belt: '#f97316', next: 'Thu · 4:30p Mini Tigers', balance: 11900, card: '', last4: '', status: 'past_due', checkin: 'Nov 2' },
+    { id: 'jordan', name: 'Jordan Sample', school: 'East Madison', loc: 'eastmad', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', rank: 'Green', belt: '#16a34a', next: 'Mon · 6:00p Kids', balance: 19900, card: 'Visa', last4: '3333', status: 'active', checkin: 'Today · 5:10p' },
+    { id: 'quinn', name: 'Quinn Sample', school: 'DeForest', loc: 'deforest', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', rank: 'Camo', belt: '#6b705c', next: 'Tue · 5:30p Kids', balance: 19900, card: 'Visa', last4: '4444', status: 'active', checkin: 'Mon' },
+    { id: 'riley', name: 'Riley Sample', school: 'Go Ninja Waunakee', loc: 'goninjaW', brand: 'goninja', plan: 'Trial', interval: 'Drop-in', rank: 'Trial', belt: '#b42318', next: 'Sat · 10:00a Trial', balance: 0, card: '', last4: '', status: 'trial', checkin: 'Booked' },
+    { id: 'morgan', name: 'Morgan Sample', school: 'Go Ninja Verona', loc: 'goninjaV', brand: 'goninja', plan: 'Membership', interval: 'Monthly', rank: 'White', belt: '#f7f7f4', next: 'Fri · 4:00p Open gym', balance: 5000, card: 'Visa', last4: '5555', status: 'active', checkin: 'Fri' }
+  ];
+}
+function crmSchoolOk(person) {
+  var s = state.crmSchool || 'all';
+  if (s === 'all') return true;
+  if (s === 'lvlup') return person.brand === 'lvlup';
+  if (s === 'goninja') return person.brand === 'goninja';
+  return person.loc === s;
+}
+function crmQueryOk(text) {
+  var q = String(state.crmQuery || '').trim().toLowerCase();
+  if (!q) return true;
+  return String(text || '').toLowerCase().indexOf(q) !== -1;
+}
+function crmVisible() {
+  return crmRoster().filter(function (p) {
+    return crmSchoolOk(p) && crmQueryOk(p.name + ' ' + p.school + ' ' + p.plan + ' ' + p.status);
+  });
+}
+function crmStatusPill(status) {
+  if (status === 'active') return '<span class="crm-pill ok">Active</span>';
+  if (status === 'past_due') return '<span class="crm-pill bad">Past due</span>';
+  if (status === 'trial') return '<span class="crm-pill warn">Trial</span>';
+  return '<span class="crm-pill neutral">' + esc(status) + '</span>';
+}
+function crmDefaultPromos() {
+  return [
+    { code: 'CLINIC10', type: 'percent', scope: 'Event type: clinic', audience: 'all', stacks: true },
+    { code: 'FREEWEEK', type: 'free', scope: 'All schools', audience: 'new customers', stacks: false },
+    { code: 'MEMBER5', type: 'fixed', scope: 'Brand: LVLUP', audience: 'members', stacks: true }
+  ];
+}
+function crmQuoteModel() {
+  var id = state.crmQuote || 'clinic10';
+  var list = 5000;
+  if (id === 'free') {
+    return { title: 'Saturday clinic · Waunakee', buyer: 'New customer', lines: [{ label: 'Clinic', cents: list }, { label: 'FREEWEEK · free week', cents: -list, disc: true }], due: 0, error: '' };
   }
-  const tab = state.crmTab || 'members';
-  const btn = function (id, label) {
-    const on = tab === id;
-    return '<button type="button" onclick="crmTab(\'' + id + '\')" style="border:1px solid ' + (on ? '#1a1a2e' : '#d8dbe6') + ';background:' + (on ? '#1a1a2e' : '#fff') + ';color:' + (on ? '#fff' : '#1a1a2e') + ';border-radius:999px;padding:6px 12px;font-weight:700;font-size:13px;cursor:pointer;">' + label + '</button>';
-  };
-  let h = '<div style="padding:16px 18px 40px;max-width:980px;">';
-  h += '<div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.45;margin-bottom:14px;"><b>CRM preview.</b> Mock families only. Nothing here is written to Firebase, GymDesk, or Authorize.net. The task sheet and the scheduler on the other tabs are unchanged. Open with <code>?crmPreview=1</code>.</div>';
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' + btn('members', 'Members') + btn('family', 'Family') + btn('import', 'Import') + btn('promos', 'Promo codes') + btn('ops', 'Tasks & schedule') + '</div>';
-
-  if (tab === 'members') {
-    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">';
-    h += '<table style="width:100%;border-collapse:collapse;font-size:14px;"><thead><tr style="background:#f8fafc;text-align:left;">';
-    ['Member', 'School', 'Plan', 'Card', 'Biller'].forEach(function (c) {
-      h += '<th style="padding:10px 12px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#64748b;">' + c + '</th>';
-    });
-    h += '</tr></thead><tbody>';
-    [['Avery Sample', 'Waunakee', 'Standard', 'Visa 1111', 'GymDesk until cutover'], ['Blake Sample', 'Verona', 'Standard', 'Mastercard 2222', 'GymDesk until cutover'], ['Casey Sample', 'Waunakee', 'Mini-Tigers', 'No card on file', 'Needs Accept.js']].forEach(function (row) {
-      h += '<tr>' + row.map(function (cell) { return '<td style="padding:10px 12px;border-top:1px solid #f1f5f9;">' + esc(cell) + '</td>'; }).join('') + '</tr>';
-    });
-    h += '</tbody></table></div>';
-    h += '<div style="margin-top:12px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;">';
-    h += '<div style="font-weight:800;margin-bottom:4px;">' + esc(child.name) + '</div>';
-    h += '<div style="font-size:13px;color:#475569;line-height:1.5;">' + esc(child.school) + ' · ' + esc(child.plan) + ' · ' + esc(child.every) + '<br>Rank ' + esc(child.rank) + ' · ' + child.classes + ' classes in the fixture<br>Merchant ' + esc(child.merchant) + ' · last4 ' + esc(child.last4) + '</div>';
-    h += '<button type="button" onclick="crmPickChild(\'' + (state.crmChild === 'blake' ? 'avery' : 'blake') + '\')" style="margin-top:10px;border:0;background:#1d4ed8;color:#fff;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;">Switch child</button>';
-    h += '</div>';
-  } else if (tab === 'family') {
-    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;">';
-    h += '<div style="font-weight:800;">Sample family</div>';
-    h += '<div style="font-size:13px;color:#475569;margin:4px 0 10px;">One guardian login. Two schools, two merchant accounts. Switching a child does not sign the parent out.</div>';
-    h += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
-    Object.keys(kids).forEach(function (id) {
-      const on = state.crmChild === id;
-      h += '<button type="button" onclick="crmPickChild(\'' + id + '\')" style="border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer;border:1px solid ' + (on ? '#1d4ed8' : '#e5e7eb') + ';background:' + (on ? '#eff6ff' : '#fff') + ';">' + esc(kids[id].name.split(' ')[0]) + '</button>';
-    });
-    h += '</div><div style="font-size:14px;line-height:1.5;"><b>' + esc(child.name) + '</b> trains at ' + esc(child.school) + '.<br>Tuition drafts on the ' + esc(child.merchant) + ' account, card ending ' + esc(child.last4) + '.</div></div>';
-  } else if (tab === 'import') {
-    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.55;">';
-    h += '<div style="font-weight:800;margin-bottom:6px;">GymDesk fixture → CIM match</div>';
-    h += 'Joined on the numeric merchant customer id. No card numbers stored.<ul style="margin:8px 0 0 18px;">';
-    h += '<li>10000001 Waunakee matched profile 900000001, payment profile on file</li>';
-    h += '<li>10000002 Verona matched profile 900000002, payment profile on file</li>';
-    h += '<li>10000003 profile exists, no payment method</li>';
-    h += '<li>Profile 900000099 has merchant customer 99999999 and no member</li>';
-    h += '</ul><div style="margin-top:8px;color:#64748b;">Inactive rows in the export are not imported. Live billing stays off.</div></div>';
-  } else if (tab === 'promos') {
-    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;">';
-    h += '<div style="font-weight:800;margin-bottom:8px;">Codes in this preview</div>';
-    state.crmPromos.forEach(function (p) {
-      h += '<div style="padding:8px 0;border-top:1px solid #f1f5f9;font-size:14px;"><b>' + esc(p.code) + '</b> · ' + esc(p.type) + ' · ' + esc(p.scope) + ' · ' + esc(p.audience) + (p.stacks ? ' · stacks' : ' · does not stack') + '</div>';
-    });
-    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">';
-    h += '<input id="crmCode" placeholder="Code" style="border:1px solid #d8dbe6;border-radius:8px;padding:8px 10px;font:inherit;">';
-    h += '<select id="crmType" style="border:1px solid #d8dbe6;border-radius:8px;padding:8px 10px;font:inherit;"><option value="percent">Percent off</option><option value="fixed">Fixed amount</option><option value="free">Free</option></select>';
-    h += '<select id="crmScope" style="border:1px solid #d8dbe6;border-radius:8px;padding:8px 10px;font:inherit;"><option>All schools</option><option>Waunakee</option><option>Event type: clinic</option><option>Brand: LVLUP</option><option>Brand: Go Ninja</option></select>';
-    h += '<select id="crmAudience" style="border:1px solid #d8dbe6;border-radius:8px;padding:8px 10px;font:inherit;"><option value="all">Anyone</option><option value="members">Members only</option><option value="new customers">New customers only</option></select>';
-    h += '<label style="font-size:13px;display:flex;align-items:center;gap:6px;"><input id="crmStacks" type="checkbox"> Can stack</label>';
-    h += '<button type="button" onclick="crmSavePromo()" style="border:0;background:#1a1a2e;color:#fff;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;">Add code</button>';
-    h += '</div><div id="crmPromoMsg" style="margin-top:8px;font-size:13px;color:#1d4ed8;">' + esc(state.crmPromoNote || '') + '</div></div>';
-    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.5;">';
-    h += '<div style="font-weight:800;margin-bottom:6px;">Price check</div>';
-    h += 'These three numbers are what <code>crm/src/pricing.ts</code> returns in tests. The members site will call <code>POST /v1/quotes</code> and show <b>due</b> before confirm.<ul style="margin:8px 0 0 18px;">';
-    h += '<li>CLINIC10 on a $50.00 clinic → due $45.00</li>';
-    h += '<li>FREEWEEK for a new customer → due $0.00. A current member is rejected.</li>';
-    h += '<li>CLINIC10 and MEMBER5, both allowed to stack → due $40.00. A code that cannot stack is rejected.</li>';
-    h += '</ul></div>';
-  } else {
-    h += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.55;">';
-    h += '<div style="font-weight:800;">Imported snapshot, not the live sheet</div>';
-    h += '<div style="color:#475569;margin-bottom:8px;">Ops → Tasks and the Schedule tab still read and write Firebase. This is the CRM copy of a fixture.</div>';
-    h += '<div><b>Task.</b> ash · daily · 2026-11-16 · bathroom photo · done. Weekly garbage check the same week.</div>';
-    h += '<div style="margin-top:6px;"><b>Shift.</b> tc_ash · East Madison · Mon 4:00–8:00p and Tue 4:00–7:00p · 7 scheduled hours.</div>';
-    h += '<div style="margin-top:6px;"><b>Time off.</b> Approved PTO on Fri Nov 20 blocks that day. A shift already on that day would show as a conflict.</div>';
-    h += '<div style="margin-top:6px;"><b>Link.</b> A task completion can point at a member, a class session, or an event. The fixture does not guess a student from a note.</div>';
-    h += '</div>';
+  if (id === 'rejected') {
+    return { title: 'Saturday clinic · Waunakee', buyer: 'Current member', lines: [{ label: 'Clinic', cents: list }], due: list, error: 'FREEWEEK is for new customers. A current member is rejected.' };
   }
+  if (id === 'stack') {
+    var after = Math.round(list * 0.9);
+    return { title: 'Saturday clinic · Waunakee', buyer: 'Current member', lines: [{ label: 'Clinic', cents: list }, { label: 'CLINIC10 · 10%', cents: -(list - after), disc: true }, { label: 'MEMBER5 · $5 off', cents: -500, disc: true }], due: after - 500, error: '' };
+  }
+  return { title: 'Saturday clinic · Waunakee', buyer: 'Current member', lines: [{ label: 'Clinic', cents: list }, { label: 'CLINIC10 · 10%', cents: -500, disc: true }], due: 4500, error: '' };
+}
+function crmNav(which) {
+  var items = [
+    ['members', 'Members', 'users'],
+    ['family', 'Family', 'home'],
+    ['import', 'Import', 'box'],
+    ['promos', 'Promos', 'tag'],
+    ['ops', 'Schedule', 'cal']
+  ];
+  return items.map(function (it) {
+    var on = which === it[0];
+    return '<button type="button" onclick="crmTab(\'' + it[0] + '\')"' + (on ? ' aria-current="page"' : '') + '>' + crmIcon(it[2]) + '<span>' + it[1] + '</span></button>';
+  }).join('');
+}
+function crmShell(title, lede, body) {
+  crmEnsureCss();
+  var theme = state.crmTheme === 'dark' ? 'dark' : 'light';
+  var school = state.crmSchool || 'all';
+  var brand = (school === 'goninja' || school === 'goninjaW' || school === 'goninjaV') ? 'ninja' : 'lvlup';
+  var schools = [
+    ['all', 'All schools'],
+    ['lvlup', 'LVLUP'],
+    ['goninja', 'Go Ninja'],
+    ['waunakee', 'Waunakee'],
+    ['eastmad', 'East Madison'],
+    ['verona', 'Verona'],
+    ['deforest', 'DeForest'],
+    ['goninjaW', 'Go Ninja Waunakee'],
+    ['goninjaV', 'Go Ninja Verona']
+  ];
+  var tab = state.crmTab || 'members';
+  var h = '<div class="crm-app" data-theme="' + theme + '" data-brand="' + brand + '">';
+  h += '<aside class="crm-side"><div class="crm-brand"><div class="crm-mark">' + (brand === 'ninja' ? 'GN' : 'LU') + '</div><div><b>' + (brand === 'ninja' ? 'Go Ninja' : 'LVLUP') + '</b><span>Member platform</span></div></div>';
+  h += '<label class="crm-sr" for="crmSchool" style="position:absolute;width:1px;height:1px;overflow:hidden;">School</label>';
+  h += '<select id="crmSchool" class="crm-school" aria-label="School or brand" onchange="crmSetSchool(this.value)">';
+  schools.forEach(function (s) {
+    h += '<option value="' + s[0] + '"' + (school === s[0] ? ' selected' : '') + '>' + esc(s[1]) + '</option>';
+  });
+  h += '</select><nav class="crm-nav" aria-label="CRM">' + crmNav(tab) + '</nav>';
+  h += '<div class="crm-side-foot"><button type="button" onclick="crmExitPreview()">Back to HQ dashboard</button></div></aside>';
+  h += '<div class="crm-main"><header class="crm-top">';
+  h += '<label class="crm-search">' + crmIcon('search') + '<input id="crmSearch" type="search" placeholder="Search" value="' + esc(state.crmQuery || '') + '" oninput="crmSearch(this.value)" aria-label="Search"></label>';
+  h += '<button type="button" class="crm-iconbtn" aria-label="' + (theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') + '" aria-pressed="' + (theme === 'dark') + '" onclick="crmSetTheme(\'' + (theme === 'dark' ? 'light' : 'dark') + '\')">' + crmIcon(theme === 'dark' ? 'sun' : 'moon') + '</button>';
+  h += '<div class="crm-who"><div class="crm-avatar" aria-hidden="true">PA</div><span>Preview Admin<br><b style="font-weight:650;color:var(--crm-muted)">Admin</b></span></div>';
+  h += '</header><div class="crm-body">';
+  h += '<div class="crm-pagehead"><div><h2>' + esc(title) + '</h2><p>' + lede + '</p></div></div>';
+  h += body;
   h += '</div>';
+  h += '<nav class="crm-bottom" aria-label="CRM mobile">' + crmNav(tab) + '</nav>';
+  h += '</div></div>';
   setTimeout(crmMarkOffline, 0);
   return h;
 }
+function crmKpis(list) {
+  var active = list.filter(function (p) { return p.status === 'active'; });
+  var due = active.reduce(function (s, p) { return s + p.balance; }, 0);
+  var past = list.filter(function (p) { return p.status === 'past_due'; }).length;
+  var trials = list.filter(function (p) { return p.status === 'trial'; }).length;
+  var checks = list.filter(function (p) { return p.checkin.indexOf('Today') === 0; }).length;
+  var cards = [
+    ['Active members', String(active.length), 'up', '+2 this week', [8, 9, 9, 10, 11, 12, active.length || 1]],
+    ['Tuition due', crmMoney(due), 'up', '+3.1% vs last draft', [180, 190, 188, 210, 220, 240, Math.max(due / 100, 1)]],
+    ['Past due', String(past), past ? 'down' : 'flat', past ? past + ' need a card' : 'None', [2, 2, 1, 1, 2, 1, past || 0.2]],
+    ['Trials', String(trials), 'up', 'This week', [1, 0, 2, 1, 3, 2, trials || 0.2]],
+    ['Check-ins today', String(checks), 'up', 'Doors open', [6, 9, 8, 11, 10, 14, checks || 0.2]]
+  ];
+  return '<section class="crm-kpis" aria-label="Summary">' + cards.map(function (c) {
+    return '<article class="crm-kpi"><div class="lbl">' + esc(c[0]) + '</div><div class="num">' + esc(c[1]) + '</div><div class="row"><span class="crm-delta ' + c[2] + '">' + esc(c[3]) + '</span><span style="color:var(--crm-accent)">' + crmSpark(c[4]) + '</span></div></article>';
+  }).join('') + '</section>';
+}
+function crmMembersView() {
+  if (/(?:\?|&)crmSkeleton=1(?:&|$)/.test(String(location.search || ''))) {
+    return '<div class="crm-card" style="padding:16px;display:grid;gap:12px;">' + [1, 2, 3, 4, 5].map(function () {
+      return '<div class="crm-skel" style="height:36px"></div>';
+    }).join('') + '</div>';
+  }
+  var list = crmVisible();
+  var selected = list.filter(function (p) { return p.id === state.crmMember; })[0] || list[0];
+  var table;
+  if (!list.length) {
+    table = '<div class="crm-empty"><b>No members match</b>Try another school or clear the search. This preview never reads the live roster.</div>';
+  } else {
+    table = '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>Member</th><th>School</th><th>Plan</th><th>Status</th><th>Card</th></tr></thead><tbody>';
+    list.forEach(function (p) {
+      var on = selected && selected.id === p.id;
+      table += '<tr tabindex="0" role="button" aria-selected="' + (on ? 'true' : 'false') + '" onclick="crmPickMember(\'' + p.id + '\')" onkeydown="if(event.key===\'Enter\')crmPickMember(\'' + p.id + '\')">';
+      table += '<td><div class="crm-person"><span class="crm-avatar" aria-hidden="true">' + esc(crmInitials(p.name)) + '</span>' + esc(p.name) + '</div></td>';
+      table += '<td>' + esc(p.school) + '</td><td>' + esc(p.plan) + '</td><td>' + crmStatusPill(p.status) + '</td>';
+      table += '<td>' + (p.last4 ? esc(p.card) + ' ···· ' + esc(p.last4) : 'No card') + '</td></tr>';
+    });
+    table += '</tbody></table></div>';
+  }
+  var detail = '';
+  if (selected) {
+    detail = '<aside class="crm-card crm-detail"><div class="who"><span class="crm-avatar lg" aria-hidden="true">' + esc(crmInitials(selected.name)) + '</span><div><h3>' + esc(selected.name) + '</h3><div style="color:var(--crm-muted);font-size:13px;">' + esc(selected.school) + '</div></div></div>';
+    detail += '<div class="crm-meta">';
+    detail += '<div><span>Rank</span><b class="crm-belt"><i style="background:' + selected.belt + '"></i>' + esc(selected.rank) + '</b></div>';
+    detail += '<div><span>Next class</span><b>' + esc(selected.next) + '</b></div>';
+    detail += '<div><span>Next draft</span><b>' + crmMoney(selected.balance) + '</b></div>';
+    detail += '<div><span>Plan</span><b>' + esc(selected.interval) + '</b></div>';
+    detail += '<div><span>Card</span><b>' + (selected.last4 ? esc(selected.card) + ' ···· ' + esc(selected.last4) : 'None on file') + '</b></div>';
+    detail += '</div><button type="button" class="crm-primary" style="margin-top:14px;width:100%" onclick="crmPickChild(\'' + selected.id + '\')">Open family</button></aside>';
+  }
+  return crmKpis(crmSchoolOk ? crmRoster().filter(crmSchoolOk) : crmRoster()) + '<div class="crm-split"><div class="crm-card">' + table + '</div>' + detail + '</div>';
+}
+function crmFamilyView() {
+  var kids = crmRoster().filter(function (p) { return p.id === 'avery' || p.id === 'blake'; });
+  var h = '<p style="margin:-6px 0 12px;color:var(--crm-muted);font-size:14px;">One guardian login. Each child bills on that school’s own merchant account. Switching a child does not sign the parent out.</p><div class="crm-stack">';
+  kids.forEach(function (p) {
+    var on = state.crmChild === p.id;
+    h += '<article class="crm-card crm-kid" role="button" tabindex="0" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="crmPickChild(\'' + p.id + '\')" onkeydown="if(event.key===\'Enter\')crmPickChild(\'' + p.id + '\')">';
+    h += '<div class="crm-kid-top"><div class="crm-person"><span class="crm-avatar lg">' + esc(crmInitials(p.name)) + '</span><div><h3 style="margin:0">' + esc(p.name) + '</h3><div style="color:var(--crm-muted);font-size:13px;">' + esc(p.school) + ' · ' + esc(p.plan) + '</div></div></div>';
+    h += '<div style="text-align:right"><div class="crm-balance">' + crmMoney(p.balance) + '</div><div style="font-size:12px;color:var(--crm-muted)">next draft</div></div></div>';
+    h += '<div class="crm-card-row"><span class="crm-belt"><i style="background:' + p.belt + '"></i>' + esc(p.rank) + '</span><span>·</span><span>' + esc(p.next) + '</span></div>';
+    h += '<div class="crm-card-row">' + (p.last4 ? esc(p.card) + ' ···· ' + esc(p.last4) + ' · ' + esc(p.school) + ' sandbox' : 'No saved card') + '</div>';
+    h += '</article>';
+  });
+  h += '</div>';
+  return h;
+}
+function crmImportView() {
+  var rows = [
+    ['10000001', 'Avery Sample', 'Waunakee', '900000001', 'On file', 'ok'],
+    ['10000002', 'Blake Sample', 'Verona', '900000002', 'On file', 'ok'],
+    ['10000003', 'Casey Sample', 'Waunakee', '900000003', 'No payment method', 'warn'],
+    ['—', 'No member', 'Waunakee', '900000099', 'Unmatched profile', 'bad']
+  ];
+  var h = '<div class="crm-card"><div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>Member id</th><th>Name</th><th>School</th><th>CIM profile</th><th>Match</th></tr></thead><tbody>';
+  rows.forEach(function (r) {
+    h += '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td><td><span class="crm-pill ' + r[5] + '">' + esc(r[4]) + '</span></td></tr>';
+  });
+  h += '</tbody></table></div></div>';
+  h += '<p style="color:var(--crm-muted);font-size:13px;margin:12px 4px 0;">Joined on the numeric merchant customer id. Last four only. Inactive export rows are skipped. Live billing stays off.</p>';
+  return h;
+}
+function crmPromoView() {
+  if (!state.crmPromos) state.crmPromos = crmDefaultPromos();
+  var q = crmQuoteModel();
+  var h = '<div class="crm-chips" role="group" aria-label="Sample quotes">';
+  [['clinic10', 'CLINIC10 · $45'], ['free', 'FREEWEEK · $0'], ['rejected', 'Member + FREEWEEK'], ['stack', 'Stacked · $40']].forEach(function (c) {
+    var on = (state.crmQuote || 'clinic10') === c[0];
+    h += '<button type="button" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="crmSetQuote(\'' + c[0] + '\')">' + esc(c[1]) + '</button>';
+  });
+  h += '</div><div class="crm-split"><section class="crm-card crm-quote" aria-label="Quote"><p class="crm-kicker kicker">' + esc(q.title) + '</p><div style="font-size:13px;color:var(--crm-muted);margin-bottom:8px;">' + esc(q.buyer) + '</div>';
+  q.lines.forEach(function (line) {
+    h += '<div class="crm-line' + (line.disc ? ' disc' : '') + '"><span>' + esc(line.label) + '</span><span>' + (line.cents < 0 ? '−' + crmMoney(-line.cents) : crmMoney(line.cents)) + '</span></div>';
+  });
+  h += '<div class="crm-due"><span>Due today</span><b>' + crmMoney(q.due) + '</b></div>';
+  if (q.error) h += '<div class="crm-alert" role="alert">' + esc(q.error) + '</div>';
+  h += '</section><div class="crm-card"><div style="padding:14px 14px 0;font-weight:720;">Codes in this preview</div><div style="padding:4px 14px 0">';
+  state.crmPromos.forEach(function (p) {
+    if (!crmQueryOk(p.code + ' ' + p.scope)) return;
+    h += '<div class="crm-task"><div><b>' + esc(p.code) + '</b><div style="color:var(--crm-muted);font-size:12px;">' + esc(p.type) + ' · ' + esc(p.scope) + ' · ' + esc(p.audience) + '</div></div><span class="crm-pill ' + (p.stacks ? 'ok' : 'neutral') + '">' + (p.stacks ? 'Stacks' : 'No stack') + '</span></div>';
+  });
+  h += '</div><form class="crm-form" onsubmit="crmSavePromo();return false;">';
+  h += '<input id="crmCode" placeholder="Code" aria-label="Promo code" autocomplete="off">';
+  h += '<select id="crmType" aria-label="Discount type"><option value="percent">Percent off</option><option value="fixed">Fixed amount</option><option value="free">Free</option></select>';
+  h += '<select id="crmScope" aria-label="Where the code applies"><option>All schools</option><option>Waunakee</option><option>Event type: clinic</option><option>Brand: LVLUP</option><option>Brand: Go Ninja</option></select>';
+  h += '<select id="crmAudience" aria-label="Who can use the code"><option value="all">Anyone</option><option value="members">Members only</option><option value="new customers">New customers only</option></select>';
+  h += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:650;"><input id="crmStacks" type="checkbox"> Can stack</label>';
+  h += '<button class="crm-primary" type="submit">Add code</button></form>';
+  h += '<div class="crm-note" id="crmPromoMsg">' + esc(state.crmPromoNote || '') + '</div></div></div>';
+  h += '<p style="color:var(--crm-muted);font-size:13px;margin:12px 4px 0;">Due today uses the same amounts as <code>crm/src/pricing.ts</code>. The members site will show this card from <code>POST /v1/quotes</code> before confirm.</p>';
+  return h;
+}
+function crmOpsView() {
+  var h = '<p style="margin:-6px 0 12px;color:var(--crm-muted);font-size:14px;">Fixture copy. Ops → Tasks and the Schedule tab still read and write Firebase.</p><div class="crm-split">';
+  h += '<section class="crm-card" style="padding:16px"><h3>Task sheet · Ash · East Madison</h3>';
+  [['Bathroom photo', 'Mon Nov 16', 'Done', 'ok'], ['Floor photo', 'Mon Nov 16', 'Done', 'ok'], ['Take out garbage', 'Week 47', 'Done', 'ok'], ['Invite two students', 'This week', 'Needs a name', 'warn']].forEach(function (t) {
+    h += '<div class="crm-task"><div><b>' + esc(t[0]) + '</b><div style="color:var(--crm-muted);font-size:12px;">' + esc(t[1]) + '</div></div><span class="crm-pill ' + t[3] + '">' + esc(t[2]) + '</span></div>';
+  });
+  h += '</section><section class="crm-card" style="padding:16px"><h3>Week schedule · 7 scheduled hours</h3>';
+  [['Mon', '4:00–8:00p', 'East Madison', '4h', ''], ['Tue', '4:00–7:00p', 'East Madison', '3h', ''], ['Fri', 'Time off', 'PTO approved', 'Blocked', 'warn']].forEach(function (s) {
+    h += '<div class="crm-shift"><time>' + esc(s[0]) + '</time><div><b>' + esc(s[1]) + '</b><div style="color:var(--crm-muted);font-size:12px;">' + esc(s[2]) + '</div></div><span class="crm-pill ' + (s[4] || 'neutral') + '">' + esc(s[3]) + '</span></div>';
+  });
+  h += '<p style="color:var(--crm-muted);font-size:13px;margin:12px 0 0;">A shift already on an approved day stays visible and is marked as a conflict. The kiosk punches are a separate total.</p></section></div>';
+  return h;
+}
+function crmRenderPage() {
+  var tab = state.crmTab || 'members';
+  var titles = {
+    members: ['Members', 'Mock roster. Cards show brand and last four only.'],
+    family: ['Sample family', 'Avery at Waunakee, Blake at Verona, one login.'],
+    import: ['GymDesk import', 'Match status for the fixture. No live pull.'],
+    promos: ['Promo codes', 'Checkout quote for a clinic booking.'],
+    ops: ['Tasks and schedule', 'Snapshot only. The live tools are unchanged.']
+  };
+  var pair = titles[tab] || titles.members;
+  var body = tab === 'family' ? crmFamilyView()
+    : tab === 'import' ? crmImportView()
+    : tab === 'promos' ? crmPromoView()
+    : tab === 'ops' ? crmOpsView()
+    : crmMembersView();
+  return crmShell(pair[0], pair[1], body);
+}
+
 
   async function init() {
   if (crmPreviewOn() && dashLocalHost()) { crmBootPreview(); return; }
