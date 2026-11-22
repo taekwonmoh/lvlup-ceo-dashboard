@@ -16336,7 +16336,7 @@ function crmBootPreview() {
   state.crmTheme = themeMatch ? themeMatch[1] : (state.crmTheme || 'light');
   state.crmChild = state.crmChild || 'avery';
   state.crmMember = state.crmMember || 'avery';
-  state.crmSchool = state.crmSchool || 'all';
+  state.crmSchool = state.crmSchool || 'waunakee';
   state.crmQuery = state.crmQuery || '';
   state.crmQuote = state.crmQuote || 'clinic10';
   var sheetMatch = /(?:\?|&)crmSheet=(daily|weekly|monthly|cycle)/.exec(String(location.search || ''));
@@ -16362,6 +16362,8 @@ function crmSearch(value) {
 }
 function crmSetQuote(id) { state.crmQuote = id; state.crmTab = 'promos'; render(); }
 function crmSetSheet(id) { state.crmSheet = id; state.crmTab = 'ops'; render(); }
+function crmSetCal(id) { state.crmCal = id; state.crmTab = 'calendar'; render(); }
+function crmLaunchStep(n) { state.crmLaunch = n; state.crmTab = 'events'; render(); }
 function crmExitPreview() {
   var u = new URL(location.href);
   ['crmPreview', 'crmTab', 'crmTheme', 'crmSkeleton'].forEach(function (k) { u.searchParams.delete(k); });
@@ -16489,6 +16491,13 @@ function crmEnsureCss() {
     '.crm-shift{display:grid;grid-template-columns:72px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--crm-line);font-size:14px;}',
     '.crm-shift time{font-weight:720;}',
     '.crm-bottom{display:none;}',
+    '.crm-cal{display:grid;grid-template-columns:64px repeat(6,minmax(0,1fr));gap:8px;}',
+    '.crm-cal .h{font-size:12px;font-weight:720;color:var(--crm-muted);padding:4px 2px;}',
+    '.crm-slot{background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:12px;min-height:92px;padding:8px;font-size:12px;box-shadow:var(--crm-shadow);}',
+    '.crm-slot.closed{background:repeating-linear-gradient(-45deg,var(--crm-surface-2),var(--crm-surface-2) 6px,transparent 6px,transparent 12px);color:var(--crm-faint);box-shadow:none;}',
+    '.crm-block{background:var(--crm-accent-soft);border-radius:8px;padding:8px;font-weight:680;line-height:1.35;}',
+    '.crm-bar{height:8px;border-radius:99px;background:var(--crm-line);overflow:hidden;margin-top:12px;}',
+    '.crm-bar span{display:block;height:100%;background:var(--crm-accent);}',
     '@media (max-width:860px){',
     '.crm-app{grid-template-columns:1fr;}',
     '.crm-side{display:none;}',
@@ -16501,7 +16510,9 @@ function crmEnsureCss() {
     '.crm-pagehead h2{font-size:22px;}',
     '.crm-due b{font-size:34px;}',
     '.crm-bottom{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--crm-surface);border-top:1px solid var(--crm-line);padding:6px 6px calc(8px + env(safe-area-inset-bottom));}',
-    '.crm-bottom button{flex:1;border:0;background:transparent;color:var(--crm-muted);font-size:10px;font-weight:720;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;cursor:pointer;}',
+    '.crm-bottom{overflow-x:auto;}',
+    '.crm-bottom button{flex:0 0 68px;border:0;background:transparent;color:var(--crm-muted);font-size:10px;font-weight:720;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;cursor:pointer;}',
+    '.crm-cal{min-width:720px;}',
     '.crm-bottom button svg{width:20px;height:20px;}',
     '.crm-bottom button[aria-current="page"]{color:var(--crm-accent);}',
     '}'
@@ -16521,6 +16532,7 @@ function crmIcon(name) {
     sun: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
     moon: '<path d="M16 3.5A8.2 8.2 0 1 0 20.5 14 6.4 6.4 0 0 1 16 3.5Z"/>',
     search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
+    flag: '<path d="M5 21V4"/><path d="M5 4h11l-1.5 4L16 12H5"/>',
     clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l2.5 1.5"/>'
   };
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (p[name] || '') + '</svg>';
@@ -16598,11 +16610,13 @@ function crmQuoteModel() {
 }
 function crmNav(which) {
   var items = [
+    ['calendar', 'Calendar', 'cal'],
+    ['events', 'Events', 'flag'],
     ['members', 'Members', 'users'],
     ['family', 'Family', 'home'],
     ['import', 'Import', 'box'],
     ['promos', 'Promos', 'tag'],
-    ['ops', 'Tasks', 'cal'],
+    ['ops', 'Tasks', 'box'],
     ['payroll', 'Pay', 'clock']
   ];
   return items.map(function (it) {
@@ -16699,7 +16713,25 @@ function crmMembersView() {
     detail += '<div><span>Card</span><b>' + (selected.last4 ? esc(selected.card) + ' ···· ' + esc(selected.last4) : 'None on file') + '</b></div>';
     detail += '</div><button type="button" class="crm-primary" style="margin-top:14px;width:100%" onclick="crmPickChild(\'' + selected.id + '\')">Open family</button></aside>';
   }
-  return crmKpis(crmSchoolOk ? crmRoster().filter(crmSchoolOk) : crmRoster()) + '<div class="crm-split"><div class="crm-card">' + table + '</div>' + detail + '</div>';
+  return crmLocationTabs() + crmKpis(crmRoster().filter(crmSchoolOk)) + '<div class="crm-split"><div class="crm-card">' + table + '</div>' + detail + '</div>';
+}
+function crmLocationTabs() {
+  var locs = [
+    ['waunakee', 'Waunakee'],
+    ['verona', 'Verona'],
+    ['eastmad', 'East Madison'],
+    ['deforest', 'DeForest'],
+    ['goninjaW', 'Go Ninja Waunakee'],
+    ['goninjaV', 'Go Ninja Verona']
+  ];
+  if (dashAuth && dashAuth.isAdmin) locs.unshift(['all', 'All schools']);
+  var cur = state.crmSchool || 'waunakee';
+  if (cur === 'all' && !(dashAuth && dashAuth.isAdmin)) cur = 'waunakee';
+  var h = '<div class="crm-chips" role="tablist" aria-label="Location">';
+  locs.forEach(function (l) {
+    h += '<button type="button" role="tab" aria-selected="' + (cur === l[0]) + '" onclick="crmSetSchool(\'' + l[0] + '\')">' + esc(l[1]) + '</button>';
+  });
+  return h + '</div>';
 }
 function crmFamilyView() {
   var kids = crmRoster().filter(function (p) { return p.id === 'avery' || p.id === 'blake'; });
@@ -16799,6 +16831,121 @@ function crmPayrollView() {
   h += '<p style="color:var(--crm-muted);font-size:13px;margin:12px 4px 0;">Ash · East Madison. Pay is the punched time. The shift grid is not the paycheck. DeForest drafts on Waunakee. Go Ninja Waunakee drafts on Waunakee and Go Ninja Verona drafts on Verona. The brand on the report stays Go Ninja.</p>';
   return h;
 }
+function crmEventRows() {
+  var extra = state.crmLaunched || [];
+  return [
+    { title: 'November belt test', school: 'Waunakee', loc: 'waunakee', brand: 'LVLUP', type: 'Belt test', when: 'Sat Nov 21 · 9:00a', cap: 40, reg: 28, price: 4500, past: false },
+    { title: 'Sparring clinic', school: 'Verona', loc: 'verona', brand: 'LVLUP', type: 'Clinic', when: 'Sat Nov 28 · 10:00a', cap: 20, reg: 8, price: 4000, past: false },
+    { title: 'Holiday camp', school: 'East Madison', loc: 'eastmad', brand: 'LVLUP', type: 'Camp', when: 'Mon Dec 21 · 9:00a', cap: 30, reg: 12, price: 12000, past: false },
+    { title: 'Birthday party', school: 'Go Ninja Waunakee', loc: 'goninjaW', brand: 'Go Ninja', type: 'Party', when: 'Sat Nov 21 · 11:00a', cap: 16, reg: 16, price: 25000, past: false },
+    { title: 'Fall tournament', school: 'Waunakee', loc: 'waunakee', brand: 'LVLUP', type: 'Tournament', when: 'Sat Oct 17 · 8:00a', cap: 80, reg: 64, price: 6000, past: true }
+  ].concat(extra);
+}
+function crmEventsView() {
+  if (state.crmLaunch) return crmLaunchView();
+  var rows = crmEventRows().filter(function (e) {
+    return crmSchoolOk({ loc: e.loc, brand: e.loc.indexOf('goninja') === 0 ? 'goninja' : 'lvlup' }) && crmQueryOk(e.title + ' ' + e.school + ' ' + e.type);
+  });
+  var h = '<div style="display:flex;justify-content:flex-end;margin:-8px 0 12px;"><button type="button" class="crm-primary" onclick="crmLaunchStep(1)">Launch event</button></div>';
+  if (!rows.length) return h + '<div class="crm-empty"><b>No events at this school</b>Launch one, or switch location.</div>';
+  h += '<div class="crm-stack">';
+  rows.forEach(function (e) {
+    var pct = Math.round(100 * e.reg / e.cap);
+    h += '<article class="crm-card" style="padding:16px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><div class="crm-pill ' + (e.brand === 'Go Ninja' ? 'bad' : 'ok') + '">' + esc(e.brand) + '</div><h3 style="margin-top:8px">' + esc(e.title) + '</h3><div style="color:var(--crm-muted);font-size:13px;">' + esc(e.type) + ' · ' + esc(e.school) + ' · ' + esc(e.when) + (e.past ? ' · Past' : '') + '</div></div><div style="text-align:right"><div class="crm-balance">' + crmMoney(e.price * e.reg) + '</div><div style="font-size:12px;color:var(--crm-muted)">' + e.reg + ' registered</div></div></div>';
+    h += '<div class="crm-bar" style="margin-top:12px" aria-label="Capacity"><span style="width:' + pct + '%"></span></div>';
+    h += '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--crm-muted);margin-top:6px"><span>' + e.reg + ' / ' + e.cap + ' spots</span><span>' + pct + '% full</span></div></article>';
+  });
+  return h + '</div>';
+}
+function crmLaunchView() {
+  var step = state.crmLaunch || 1;
+  var draft = state.crmDraft || {};
+  var h = '<div class="crm-chips" aria-label="Launch steps"><span class="crm-pill ' + (step === 1 ? 'ok' : 'neutral') + '">1 Details</span><span class="crm-pill ' + (step === 2 ? 'ok' : 'neutral') + '">2 Schedule</span><span class="crm-pill ' + (step === 3 ? 'ok' : 'neutral') + '">3 Price</span></div>';
+  h += '<form class="crm-card crm-form" style="display:grid" onsubmit="crmLaunchNext();return false;">';
+  if (step === 1) {
+    h += '<input id="evTitle" placeholder="Title" aria-label="Title" value="' + esc(draft.title || '') + '" required>';
+    h += '<select id="evType" aria-label="Event type"><option>Belt test</option><option>Clinic</option><option>Tournament</option><option>Party</option><option>Camp</option></select>';
+    h += '<select id="evLoc" aria-label="School"><option value="waunakee">Waunakee</option><option value="verona">Verona</option><option value="eastmad">East Madison</option><option value="deforest">DeForest</option><option value="goninjaW">Go Ninja Waunakee</option><option value="goninjaV">Go Ninja Verona</option></select>';
+  } else if (step === 2) {
+    h += '<input id="evWhen" type="datetime-local" aria-label="Date and time" value="2026-11-28T10:00">';
+    h += '<input id="evSessions" type="number" min="1" value="1" aria-label="Number of sessions">';
+    h += '<input id="evCap" type="number" min="1" value="20" aria-label="Capacity">';
+    h += '<p style="margin:0;color:var(--crm-muted);font-size:13px;">Banner image is a placeholder. No file is uploaded.</p>';
+  } else {
+    h += '<label>Member price <input id="evMember" type="number" value="40" aria-label="Member price in dollars"></label>';
+    h += '<label>Non-member <input id="evGuest" type="number" value="55" aria-label="Non-member price in dollars"></label>';
+    h += '<input id="evElig" placeholder="Eligibility, for example Yellow and up" aria-label="Eligibility" value="Yellow and up">';
+    h += '<input id="evOpen" type="date" aria-label="Registration opens" value="2026-11-01"><input id="evClose" type="date" aria-label="Registration closes" value="2026-11-27">';
+    h += '<select id="evPromo" aria-label="Promo code"><option value="">No promo</option><option>CLINIC10</option><option>FREEWEEK</option></select>';
+    h += '<label style="display:flex;align-items:center;gap:8px;font-weight:680"><input id="evPublish" type="checkbox" checked> Publish for the members site</label>';
+  }
+  h += '<div style="display:flex;gap:8px"><button type="button" class="crm-iconbtn" style="width:auto;padding:0 12px" onclick="crmLaunchStep(' + (step === 1 ? 0 : step - 1) + ')">Back</button><button class="crm-primary" type="submit">' + (step === 3 ? 'Publish' : 'Next') + '</button></div></form>';
+  return h;
+}
+function crmLaunchNext() {
+  var step = state.crmLaunch || 1;
+  state.crmDraft = state.crmDraft || {};
+  if (step === 1) {
+    state.crmDraft.title = (document.getElementById('evTitle') || {}).value || 'New event';
+    state.crmDraft.type = (document.getElementById('evType') || {}).value || 'Clinic';
+    state.crmDraft.loc = (document.getElementById('evLoc') || {}).value || 'waunakee';
+    state.crmLaunch = 2;
+  } else if (step === 2) {
+    state.crmDraft.cap = parseInt((document.getElementById('evCap') || {}).value, 10) || 20;
+    state.crmLaunch = 3;
+  } else {
+    var dollars = parseInt((document.getElementById('evMember') || {}).value, 10) || 40;
+    var loc = state.crmDraft.loc || 'waunakee';
+    var names = { waunakee: 'Waunakee', verona: 'Verona', eastmad: 'East Madison', deforest: 'DeForest', goninjaW: 'Go Ninja Waunakee', goninjaV: 'Go Ninja Verona' };
+    state.crmLaunched = (state.crmLaunched || []).concat([{
+      title: state.crmDraft.title, school: names[loc] || loc, loc: loc,
+      brand: loc.indexOf('goninja') === 0 ? 'Go Ninja' : 'LVLUP',
+      type: state.crmDraft.type, when: 'Just launched', cap: state.crmDraft.cap || 20, reg: 0,
+      price: dollars * 100, past: false
+    }]);
+    state.crmLaunch = 0;
+    state.crmDraft = {};
+  }
+  render();
+}
+function crmCalendarView() {
+  var mode = state.crmCal || 'week';
+  var school = state.crmSchool === 'all' || state.crmSchool === 'lvlup' || state.crmSchool === 'goninja' ? 'waunakee' : state.crmSchool;
+  var h = '<div class="crm-chips" role="group" aria-label="Calendar range">';
+  ['week', 'day', 'month'].forEach(function (id) {
+    h += '<button type="button" aria-pressed="' + (mode === id) + '" onclick="crmSetCal(\'' + id + '\')">' + id.charAt(0).toUpperCase() + id.slice(1) + '</button>';
+  });
+  h += '</div><p style="margin:0 0 12px;color:var(--crm-muted);font-size:13px;">Mon–Thu 2:00–8:30p all schools. Friday 3:00–7:30p Waunakee only. Saturday 9:00a–1:00p except DeForest. Closed Sunday. Nov 16 is a Waunakee holiday, so that class is cancelled.</p>';
+  if (mode === 'day') {
+    return h + '<section class="crm-card" style="padding:16px"><h3>Monday Nov 16 · ' + esc(school) + '</h3><div class="crm-task"><div><b>Beginners · 5:00–6:00p</b><div style="color:var(--crm-muted);font-size:12px;">Ash · Room A · Yellow and below</div></div><span class="crm-pill warn">Cancelled · 0 / 20</span></div><div class="crm-task"><div><b>Kids · 6:15–7:15p</b><div style="color:var(--crm-muted);font-size:12px;">Ash · 14 checked in</div></div><span class="crm-pill ok">14 / 24</span></div></section>';
+  }
+  if (mode === 'month') {
+    h += '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px">';
+    ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(function (d) { h += '<div class="h" style="text-align:center">' + d + '</div>'; });
+    for (var n = 1; n <= 30; n++) {
+      var mark = (n === 17 || n === 18 || n === 20 || n === 21);
+      h += '<div class="crm-slot" style="min-height:64px"><b>' + n + '</b>' + (mark ? '<div class="crm-block">Class</div>' : '') + '</div>';
+    }
+    return h + '</div>';
+  }
+  var days = [
+    ['Mon 16', school === 'waunakee' ? 'closed' : '', '5:00p Beginners', 'Cancelled'],
+    ['Tue 17', '', '5:00p Kids', '18 / 24'],
+    ['Wed 18', '', '6:15p Teens', '11 / 20'],
+    ['Thu 19', '', '4:30p Mini Tigers', '9 / 12'],
+    ['Fri 20', school === 'waunakee' ? '' : 'closed', '4:00p Friday class', school === 'waunakee' ? '12 / 16' : 'Closed'],
+    ['Sat 21', school === 'deforest' ? 'closed' : '', '10:00a Saturday', school === 'deforest' ? 'Closed' : '8 / 12']
+  ];
+  h += '<div style="overflow:auto"><div class="crm-cal"><div class="h">Time</div>';
+  days.forEach(function (d) { h += '<div class="h">' + d[0] + '</div>'; });
+  h += '<div class="h">2–8:30</div>';
+  days.forEach(function (d) {
+    var closed = d[1] === 'closed';
+    h += '<div class="crm-slot' + (closed ? ' closed' : '') + '">' + (closed ? esc(d[3]) : '<div class="crm-block">' + esc(d[2]) + '<div style="font-weight:500;color:var(--crm-muted)">' + esc(d[3]) + ' · Ash</div></div>') + '</div>';
+  });
+  h += '</div></div>';
+  return h;
+}
 function crmRenderPage() {
   var tab = state.crmTab || 'members';
   var titles = {
@@ -16807,7 +16954,9 @@ function crmRenderPage() {
     import: ['GymDesk import', 'Match status for the fixture. No live pull.'],
     promos: ['Promo codes', 'Checkout quote for a clinic booking.'],
     ops: ['Task sheets', 'Daily, weekly, monthly, and cycle. The live sheet is unchanged.'],
-    payroll: ['Payroll hours', 'Punched time is the paycheck. Shifts are the comparison.']
+    payroll: ['Payroll hours', 'Punched time is the paycheck. Shifts are the comparison.'],
+    events: ['Events', 'Belt tests, clinics, tournaments, parties, and camps. Mock only.'],
+    calendar: ['Class calendar', 'Week of Nov 16. Instructors come from the staff schedule.']
   };
   var pair = titles[tab] || titles.members;
   var body = tab === 'family' ? crmFamilyView()
@@ -16815,6 +16964,8 @@ function crmRenderPage() {
     : tab === 'promos' ? crmPromoView()
     : tab === 'ops' ? crmOpsView()
     : tab === 'payroll' ? crmPayrollView()
+    : tab === 'events' ? crmEventsView()
+    : tab === 'calendar' ? crmCalendarView()
     : crmMembersView();
   return crmShell(pair[0], pair[1], body);
 }
