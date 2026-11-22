@@ -16341,6 +16341,8 @@ function crmBootPreview() {
   state.crmQuote = state.crmQuote || 'clinic10';
   var sheetMatch = /(?:\?|&)crmSheet=(daily|weekly|monthly|cycle)/.exec(String(location.search || ''));
   state.crmSheet = sheetMatch ? sheetMatch[1] : (state.crmSheet || 'daily');
+  var calMatch = /(?:\?|&)crmCal=(week|day|month)/.exec(String(location.search || ''));
+  if (calMatch) state.crmCal = calMatch[1];
   render(true);
   crmMarkOffline();
 }
@@ -16366,7 +16368,7 @@ function crmSetCal(id) { state.crmCal = id; state.crmTab = 'calendar'; render();
 function crmLaunchStep(n) { state.crmLaunch = n; state.crmTab = 'events'; render(); }
 function crmExitPreview() {
   var u = new URL(location.href);
-  ['crmPreview', 'crmTab', 'crmTheme', 'crmSkeleton'].forEach(function (k) { u.searchParams.delete(k); });
+  ['crmPreview', 'crmTab', 'crmTheme', 'crmSkeleton', 'crmCal'].forEach(function (k) { u.searchParams.delete(k); });
   location.href = u.pathname + u.search + u.hash;
 }
 function crmSavePromo() {
@@ -16496,6 +16498,28 @@ function crmEnsureCss() {
     '.crm-slot{background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:12px;min-height:92px;padding:8px;font-size:12px;box-shadow:var(--crm-shadow);}',
     '.crm-slot.closed{background:repeating-linear-gradient(-45deg,var(--crm-surface-2),var(--crm-surface-2) 6px,transparent 6px,transparent 12px);color:var(--crm-faint);box-shadow:none;}',
     '.crm-block{background:var(--crm-accent-soft);border-radius:8px;padding:8px;font-weight:680;line-height:1.35;}',
+    '.crm-week{display:grid;grid-template-columns:64px repeat(7,minmax(108px,1fr));background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:16px;box-shadow:var(--crm-shadow);overflow:auto;max-height:760px;}',
+    '.crm-week-head{position:sticky;top:0;z-index:4;background:var(--crm-surface);border-bottom:1px solid var(--crm-line);padding:8px;font-size:12px;font-weight:750;}',
+    '.crm-week-head small{display:block;color:var(--crm-muted);font-weight:650;}',
+    '.crm-times{position:relative;}',
+    '.crm-hour{position:absolute;left:0;right:0;border-top:1px solid var(--crm-line);font-size:11px;color:var(--crm-muted);padding:2px 6px;box-sizing:border-box;}',
+    '.crm-day{position:relative;border-left:1px solid var(--crm-line);}',
+    '.crm-shade{position:absolute;left:0;right:0;background:repeating-linear-gradient(-45deg,var(--crm-surface-2),var(--crm-surface-2) 5px,transparent 5px,transparent 10px);opacity:.85;pointer-events:none;}',
+    '.crm-ev{position:absolute;border:0;border-radius:8px;padding:4px 6px;text-align:left;cursor:pointer;overflow:hidden;z-index:2;line-height:1.2;box-shadow:0 1px 2px rgba(20,20,19,.12);}',
+    '.crm-ev b{display:block;font-size:12px;} .crm-ev small{display:block;font-size:10px;font-weight:650;opacity:.9;}',
+    '.crm-ev .cap{height:3px;border-radius:99px;background:rgba(0,0,0,.16);margin-top:4px;} .crm-ev .cap i{display:block;height:100%;background:rgba(0,0,0,.55);}',
+    '.crm-ev.cancelled{opacity:.55;text-decoration:line-through;}',
+    '.crm-now{position:absolute;left:0;right:0;height:2px;background:#e11d48;z-index:3;pointer-events:none;}',
+    '.crm-now::before{content:"";position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:99px;background:#e11d48;}',
+    '.crm-legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin:8px 0 12px;}',
+    '.crm-legend button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--crm-line);background:var(--crm-surface);border-radius:999px;padding:4px 8px;font-size:12px;font-weight:680;cursor:pointer;}',
+    '.crm-legend button[aria-pressed="true"]{border-color:var(--crm-accent);box-shadow:0 0 0 2px var(--crm-accent-soft);}',
+    '.crm-swatch{width:10px;height:10px;border-radius:3px;}',
+    '.crm-drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--crm-surface);color:var(--crm-ink);border-left:1px solid var(--crm-line);box-shadow:var(--crm-shadow);z-index:90;padding:22px;overflow:auto;}',
+    '.crm-month{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}',
+    '.crm-month .cell{background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:12px;min-height:84px;padding:8px;font-size:12px;}',
+    '.crm-month .cell b{font-size:13px;}',
+    '.crm-agenda{display:none;}',
     '.crm-bar{height:8px;border-radius:99px;background:var(--crm-line);overflow:hidden;margin-top:12px;}',
     '.crm-bar span{display:block;height:100%;background:var(--crm-accent);}',
     '@media (max-width:860px){',
@@ -16513,6 +16537,9 @@ function crmEnsureCss() {
     '.crm-bottom{overflow-x:auto;}',
     '.crm-bottom button{flex:0 0 68px;border:0;background:transparent;color:var(--crm-muted);font-size:10px;font-weight:720;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;cursor:pointer;}',
     '.crm-cal{min-width:720px;}',
+    '.crm-week{display:none;}',
+    '.crm-agenda{display:block;}',
+    '.crm-month .cell{min-height:64px;}',
     '.crm-bottom button svg{width:20px;height:20px;}',
     '.crm-bottom button[aria-current="page"]{color:var(--crm-accent);}',
     '}'
@@ -16908,42 +16935,202 @@ function crmLaunchNext() {
   }
   render();
 }
+function crmClock(mins) {
+  var h = Math.floor(mins / 60), m = mins % 60, ap = h >= 12 ? 'p' : 'a';
+  var hr = h % 12 || 12;
+  return hr + ':' + String(m).padStart(2, '0') + ap;
+}
+function crmPrograms() {
+  return {
+    mini: { name: 'Mini Tigers', bg: '#fde68a', fg: '#713f12' },
+    tigers: { name: 'Tigers', bg: '#fed7aa', fg: '#7c2d12' },
+    beginners: { name: 'Beginners', bg: '#bfdbfe', fg: '#1e3a8a' },
+    intermediate: { name: 'Intermediate', bg: '#ddd6fe', fg: '#4c1d95' },
+    advanced: { name: 'Advanced / Black Belt', bg: '#99f6e4', fg: '#134e4a' },
+    adult: { name: 'Adult', bg: '#bae6fd', fg: '#0c4a6e' },
+    fit: { name: 'Fitboxing', bg: '#fbcfe8', fg: '#831843' },
+    comp: { name: 'Competition Team', bg: '#fcd34d', fg: '#78350f' },
+    adp: { name: 'ADP', bg: '#c7d2fe', fg: '#312e81' }
+  };
+}
+function crmWeekRows(school) {
+  var lead = { waunakee: 'Tarik', eastmad: 'Ash', verona: 'Bryan', deforest: 'Joey', goninjaW: 'Miranda', goninjaV: 'Miranda' }[school] || 'Tarik';
+  var helper = school === 'waunakee' ? 'Cat' : lead;
+  var rows = [];
+  function add(day, start, dur, program, who, room, cap, checked, rank) {
+    rows.push({ id: school + '-' + day + '-' + start + '-' + program, day: day, start: start, dur: dur, program: program, instructor: who, room: room, cap: cap, checked: checked, rank: rank });
+  }
+  [0, 1, 2, 3].forEach(function (day) {
+    add(day, 14 * 60, 45, 'mini', helper, 'Room A', 12, 9, 'White');
+    add(day, 14 * 60, 60, 'adult', lead, 'Room B', 16, 7, 'Adult');
+    add(day, 15 * 60, 50, 'tigers', helper, 'Room A', 18, 14, 'White–Orange');
+    add(day, 16 * 60, 55, 'beginners', lead, 'Room A', 24, 18, 'White–Yellow');
+    add(day, 17 * 60, 55, 'intermediate', lead, 'Room A', 20, 12, 'Camo–Green');
+    add(day, 17 * 60 + 30, 90, 'adp', lead, 'Room B', 10, 8, 'Leadership');
+    add(day, 18 * 60, 60, 'advanced', lead, 'Room A', 16, 9, 'Blue–Black');
+    if (school === 'waunakee') add(day, 19 * 60, 80, 'fit', helper, 'Room B', 18, 11, 'All ranks');
+    if (day === 2) add(day, 19 * 60, 75, 'comp', lead, 'Mat', 12, 8, 'Invite');
+  });
+  if (school === 'waunakee') {
+    add(4, 15 * 60, 50, 'tigers', helper, 'Room A', 16, 12, 'White–Orange');
+    add(4, 16 * 60, 55, 'beginners', lead, 'Room A', 20, 14, 'White–Yellow');
+    add(4, 17 * 60, 50, 'intermediate', lead, 'Room A', 16, 10, 'Camo–Green');
+    add(4, 18 * 60, 80, 'adult', lead, 'Room B', 14, 6, 'Adult');
+  }
+  if (school !== 'deforest') {
+    add(5, 9 * 60, 45, 'mini', helper, 'Room A', 12, 8, 'White');
+    add(5, 10 * 60, 50, 'tigers', helper, 'Room A', 16, 11, 'White–Orange');
+    add(5, 11 * 60, 55, 'beginners', lead, 'Room A', 20, 13, 'White–Yellow');
+    add(5, 12 * 60, 55, 'intermediate', lead, 'Room A', 16, 7, 'Camo–Green');
+  }
+  (state.crmAdded || []).forEach(function (row) { if (row.school === school) rows.push(row); });
+  return rows;
+}
+function crmOpenClass(id) { state.crmOpen = id; state.crmAdd = false; render(); }
+function crmFilterProg(id) { state.crmProg = state.crmProg === id ? '' : id; render(); }
+function crmFilterInstr(name) { state.crmInstr = name; render(); }
+function crmPickDay(n) { state.crmDay = n; state.crmCal = 'day'; state.crmTab = 'calendar'; render(); }
+function crmToggleAdd() { state.crmAdd = !state.crmAdd; state.crmOpen = ''; render(); }
+function crmSaveClass() {
+  var school = state.crmSchool === 'all' || state.crmSchool === 'lvlup' || state.crmSchool === 'goninja' ? 'waunakee' : state.crmSchool;
+  var day = Number(document.getElementById('crm-add-day').value);
+  var start = Number(document.getElementById('crm-add-start').value);
+  var dur = Number(document.getElementById('crm-add-dur').value);
+  var program = document.getElementById('crm-add-prog').value;
+  var who = document.getElementById('crm-add-who').value || 'Tarik';
+  var end = start + dur;
+  var open = (day >= 0 && day <= 3 && start >= 14 * 60 && end <= 20 * 60 + 30)
+    || (day === 4 && school === 'waunakee' && start >= 15 * 60 && end <= 19 * 60 + 30)
+    || (day === 5 && school !== 'deforest' && start >= 9 * 60 && end <= 13 * 60);
+  if (!open) { state.crmCalNote = 'That time is outside this school’s open hours, so the template was not added.'; render(); return; }
+  state.crmAdded = (state.crmAdded || []).concat([{
+    id: 'new-' + Date.now(), school: school, day: day, start: start, dur: dur, program: program,
+    instructor: who, room: 'Room A', cap: 16, checked: 0, rank: 'All ranks'
+  }]);
+  state.crmAdd = false;
+  state.crmCalNote = '';
+  render();
+}
+function crmCancelClass(id, series) {
+  state.crmCancelled = state.crmCancelled || {};
+  state.crmCancelled[id] = series ? 'series' : 'session';
+  render();
+}
 function crmCalendarView() {
   var mode = state.crmCal || 'week';
   var school = state.crmSchool === 'all' || state.crmSchool === 'lvlup' || state.crmSchool === 'goninja' ? 'waunakee' : state.crmSchool;
+  var programs = crmPrograms();
+  var rows = crmWeekRows(school).filter(function (row) {
+    if (state.crmProg && row.program !== state.crmProg) return false;
+    if (state.crmInstr && row.instructor !== state.crmInstr) return false;
+    return true;
+  });
+  var names = ['Mon 16', 'Tue 17', 'Wed 18', 'Thu 19', 'Fri 20', 'Sat 21', 'Sun 22'];
+  var startMin = 9 * 60, endMin = 20 * 60 + 30, px = 52;
+  var height = (endMin - startMin) / 60 * px;
+  var now = 17 * 60 + 40;
   var h = '<div class="crm-chips" role="group" aria-label="Calendar range">';
   ['week', 'day', 'month'].forEach(function (id) {
     h += '<button type="button" aria-pressed="' + (mode === id) + '" onclick="crmSetCal(\'' + id + '\')">' + id.charAt(0).toUpperCase() + id.slice(1) + '</button>';
   });
-  h += '</div><p style="margin:0 0 12px;color:var(--crm-muted);font-size:13px;">Mon–Thu 2:00–8:30p all schools. Friday 3:00–7:30p Waunakee only. Saturday 9:00a–1:00p except DeForest. Closed Sunday. Nov 16 is a Waunakee holiday, so that class is cancelled.</p>';
-  if (mode === 'day') {
-    return h + '<section class="crm-card" style="padding:16px"><h3>Monday Nov 16 · ' + esc(school) + '</h3><div class="crm-task"><div><b>Beginners · 5:00–6:00p</b><div style="color:var(--crm-muted);font-size:12px;">Ash · Room A · Yellow and below</div></div><span class="crm-pill warn">Cancelled · 0 / 20</span></div><div class="crm-task"><div><b>Kids · 6:15–7:15p</b><div style="color:var(--crm-muted);font-size:12px;">Ash · 14 checked in</div></div><span class="crm-pill ok">14 / 24</span></div></section>';
+  h += '</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px;">';
+  h += '<label class="h">Instructor <select onchange="crmFilterInstr(this.value)"><option value="">All</option>';
+  ['Tarik', 'Ash', 'Bryan', 'Joey', 'Miranda', 'Cat'].forEach(function (name) {
+    h += '<option' + (state.crmInstr === name ? ' selected' : '') + '>' + name + '</option>';
+  });
+  h += '</select></label><button type="button" class="crm-primary" onclick="crmToggleAdd()">Add class</button></div>';
+  h += '<div class="crm-legend" role="group" aria-label="Programs">';
+  Object.keys(programs).forEach(function (id) {
+    h += '<button type="button" aria-pressed="' + (state.crmProg === id) + '" onclick="crmFilterProg(\'' + id + '\')"><i class="crm-swatch" style="background:' + programs[id].bg + '"></i>' + esc(programs[id].name) + '</button>';
+  });
+  h += '</div><p style="margin:0 0 12px;color:var(--crm-muted);font-size:13px;">Week of Nov 16. Weekdays 2:00–8:30p, Friday 3:00–7:30p at Waunakee, Saturday 9:00a–1:00p except DeForest. Sunday is closed. The red line is the preview clock, Wednesday 5:40p. Nov 16 is a Waunakee holiday, so those sessions are cancelled.</p>';
+  if (state.crmCalNote) h += '<p class="crm-pill warn">' + esc(state.crmCalNote) + '</p>';
+  if (state.crmAdd) {
+    h += '<section class="crm-card" style="padding:16px;margin-bottom:12px"><h3>Recurring template</h3><div class="crm-field"><label>Program</label><select id="crm-add-prog">';
+    Object.keys(programs).forEach(function (id) { h += '<option value="' + id + '">' + esc(programs[id].name) + '</option>'; });
+    h += '</select></div><div class="crm-field"><label>Weekday</label><select id="crm-add-day"><option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option></select></div>';
+    h += '<div class="crm-field"><label>Start</label><select id="crm-add-start"><option value="840">2:00p</option><option value="900">3:00p</option><option value="960">4:00p</option><option value="1020">5:00p</option><option value="540">9:00a</option><option value="600">10:00a</option></select></div>';
+    h += '<div class="crm-field"><label>Duration</label><select id="crm-add-dur"><option value="45">45 min</option><option value="55">55 min</option><option value="60">60 min</option></select></div>';
+    h += '<div class="crm-field"><label>Instructor</label><input id="crm-add-who" value="Tarik"></div><button type="button" class="crm-primary" onclick="crmSaveClass()">Save template</button></section>';
   }
   if (mode === 'month') {
-    h += '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px">';
-    ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(function (d) { h += '<div class="h" style="text-align:center">' + d + '</div>'; });
+    h += '<div class="crm-month">';
+    ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(function (d) { h += '<div class="h" style="text-align:center">' + d + '</div>'; });
     for (var n = 1; n <= 30; n++) {
-      var mark = (n === 17 || n === 18 || n === 20 || n === 21);
-      h += '<div class="crm-slot" style="min-height:64px"><b>' + n + '</b>' + (mark ? '<div class="crm-block">Class</div>' : '') + '</div>';
+      var dow = (n - 1) % 7;
+      var count = 0, closed = dow === 0;
+      if (dow >= 1 && dow <= 4) count = rows.filter(function (r) { return r.day === dow - 1; }).length;
+      if (dow === 5) count = school === 'waunakee' ? rows.filter(function (r) { return r.day === 4; }).length : 0;
+      if (dow === 6) count = school === 'deforest' ? 0 : rows.filter(function (r) { return r.day === 5; }).length;
+      if (n === 16 && school === 'waunakee') { closed = true; count = 0; }
+      if ((dow === 5 && school !== 'waunakee') || (dow === 6 && school === 'deforest')) closed = true;
+      h += '<div class="cell' + (closed ? ' closed' : '') + '" style="' + (closed ? 'background:repeating-linear-gradient(-45deg,var(--crm-surface-2),var(--crm-surface-2) 5px,transparent 5px,transparent 10px);' : '') + '"><b>' + n + '</b><div style="margin-top:6px;color:var(--crm-muted)">' + (closed ? 'Closed' : count + ' classes') + '</div></div>';
     }
     return h + '</div>';
   }
-  var days = [
-    ['Mon 16', school === 'waunakee' ? 'closed' : '', '5:00p Beginners', 'Cancelled'],
-    ['Tue 17', '', '5:00p Kids', '18 / 24'],
-    ['Wed 18', '', '6:15p Teens', '11 / 20'],
-    ['Thu 19', '', '4:30p Mini Tigers', '9 / 12'],
-    ['Fri 20', school === 'waunakee' ? '' : 'closed', '4:00p Friday class', school === 'waunakee' ? '12 / 16' : 'Closed'],
-    ['Sat 21', school === 'deforest' ? 'closed' : '', '10:00a Saturday', school === 'deforest' ? 'Closed' : '8 / 12']
-  ];
-  h += '<div style="overflow:auto"><div class="crm-cal"><div class="h">Time</div>';
-  days.forEach(function (d) { h += '<div class="h">' + d[0] + '</div>'; });
-  h += '<div class="h">2–8:30</div>';
+  var dayFocus = state.crmDay == null ? 2 : state.crmDay;
+  var days = mode === 'day' ? [dayFocus] : [0, 1, 2, 3, 4, 5, 6];
+  h += '<div class="crm-week" style="grid-template-columns:64px repeat(' + days.length + ',minmax(120px,1fr))">';
+  h += '<div class="crm-week-head">Time</div>';
   days.forEach(function (d) {
-    var closed = d[1] === 'closed';
-    h += '<div class="crm-slot' + (closed ? ' closed' : '') + '">' + (closed ? esc(d[3]) : '<div class="crm-block">' + esc(d[2]) + '<div style="font-weight:500;color:var(--crm-muted)">' + esc(d[3]) + ' · Ash</div></div>') + '</div>';
+    h += '<button type="button" class="crm-week-head" onclick="crmPickDay(' + d + ')">' + names[d] + (d === 6 ? '<small>Closed</small>' : '') + '</button>';
   });
-  h += '</div></div>';
+  h += '<div class="crm-times" style="height:' + height + 'px">';
+  for (var t = startMin; t < endMin; t += 60) {
+    h += '<div class="crm-hour" style="top:' + ((t - startMin) / 60 * px) + 'px;height:' + px + 'px">' + crmClock(t) + '</div>';
+  }
+  h += '</div>';
+  days.forEach(function (d) {
+    h += '<div class="crm-day" style="height:' + height + 'px">';
+    var windows = [];
+    if (d <= 3) windows.push([14 * 60, 20 * 60 + 30]);
+    else if (d === 4 && school === 'waunakee') windows.push([15 * 60, 19 * 60 + 30]);
+    else if (d === 5 && school !== 'deforest') windows.push([9 * 60, 13 * 60]);
+    var cursor = startMin;
+    windows.forEach(function (w) {
+      if (w[0] > cursor) h += '<div class="crm-shade" style="top:' + ((cursor - startMin) / 60 * px) + 'px;height:' + ((w[0] - cursor) / 60 * px) + 'px"></div>';
+      cursor = w[1];
+    });
+    if (!windows.length) h += '<div class="crm-shade" style="top:0;height:' + height + 'px"></div>';
+    else if (cursor < endMin) h += '<div class="crm-shade" style="top:' + ((cursor - startMin) / 60 * px) + 'px;height:' + ((endMin - cursor) / 60 * px) + 'px"></div>';
+    var here = rows.filter(function (r) { return r.day === d; }).sort(function (a, b) { return a.start - b.start; });
+    var laneEnd = [];
+    here.forEach(function (row) {
+      var lane = 0;
+      while (laneEnd[lane] > row.start) lane++;
+      row.lane = lane;
+      laneEnd[lane] = row.start + row.dur;
+    });
+    var lanes = Math.max(1, laneEnd.length);
+    here.forEach(function (row) {
+      var prog = programs[row.program] || programs.beginners;
+      var cancelled = (state.crmCancelled && state.crmCancelled[row.id]) || (school === 'waunakee' && d === 0);
+      var top = (row.start - startMin) / 60 * px;
+      var blockH = Math.max(28, row.dur / 60 * px - 3);
+      var width = 100 / lanes;
+      h += '<button type="button" class="crm-ev' + (cancelled ? ' cancelled' : '') + '" style="top:' + top + 'px;height:' + blockH + 'px;left:calc(' + (row.lane * width) + '% + 2px);width:calc(' + width + '% - 4px);background:' + prog.bg + ';color:' + prog.fg + '" onclick="crmOpenClass(\'' + row.id + '\')"><b>' + esc(prog.name) + '</b><small>' + esc(row.instructor) + ' · ' + row.checked + '/' + row.cap + '</small><span class="cap"><i style="width:' + Math.round(row.checked / row.cap * 100) + '%"></i></span></button>';
+    });
+    if (d === 2) h += '<div class="crm-now" style="top:' + ((now - startMin) / 60 * px) + 'px" title="5:40p"></div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  var agendaDay = mode === 'day' ? dayFocus : 2;
+  h += '<div class="crm-agenda"><div class="crm-chips">';
+  names.forEach(function (label, i) { h += '<button type="button" aria-pressed="' + (agendaDay === i) + '" onclick="crmPickDay(' + i + ')">' + label + '</button>'; });
+  h += '</div><section class="crm-card" style="padding:8px 16px">';
+  rows.filter(function (r) { return r.day === agendaDay; }).sort(function (a, b) { return a.start - b.start; }).forEach(function (row) {
+    var prog = programs[row.program] || programs.beginners;
+    var cancelled = (state.crmCancelled && state.crmCancelled[row.id]) || (school === 'waunakee' && agendaDay === 0);
+    h += '<button type="button" class="crm-task" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer" onclick="crmOpenClass(\'' + row.id + '\')"><div><b>' + esc(prog.name) + ' · ' + crmClock(row.start) + '–' + crmClock(row.start + row.dur) + '</b><div style="color:var(--crm-muted);font-size:12px">' + esc(row.instructor) + ' · ' + esc(row.room) + ' · ' + esc(row.rank) + '</div></div><span class="crm-pill ' + (cancelled ? 'warn' : 'ok') + '">' + (cancelled ? 'Cancelled' : row.checked + ' / ' + row.cap) + '</span></button>';
+  });
+  if (!rows.some(function (r) { return r.day === agendaDay; })) h += '<p style="color:var(--crm-muted)">Closed. No classes this day.</p>';
+  h += '</section></div>';
+  var open = rows.filter(function (r) { return r.id === state.crmOpen; })[0];
+  if (open) {
+    var prog = programs[open.program] || programs.beginners;
+    var cancelled = (state.crmCancelled && state.crmCancelled[open.id]) || (school === 'waunakee' && open.day === 0);
+    h += '<aside class="crm-drawer" role="dialog" aria-label="Class detail"><button type="button" class="crm-iconbtn" onclick="crmOpenClass(\'\')">Close</button><p class="crm-kicker">' + esc(prog.name) + '</p><h2>' + names[open.day] + ' · ' + crmClock(open.start) + '–' + crmClock(open.start + open.dur) + '</h2><p>' + esc(open.instructor) + ' · ' + esc(open.room) + ' · ' + esc(open.rank) + '</p><p>Roster ' + open.cap + ' · checked in ' + open.checked + '</p><div class="crm-bar"><span style="width:' + Math.round(open.checked / open.cap * 100) + '%"></span></div><p style="margin-top:12px">' + (cancelled ? 'This session is cancelled.' : 'This session is on the schedule.') + '</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="crm-primary" onclick="crmToggleAdd()">Edit series</button><button type="button" class="crm-primary" onclick="crmCancelClass(\'' + open.id + '\', false)">Cancel this session</button><button type="button" class="crm-primary" onclick="crmCancelClass(\'' + open.id + '\', true)">Cancel series</button></div></aside>';
+  }
   return h;
 }
 function crmRenderPage() {
