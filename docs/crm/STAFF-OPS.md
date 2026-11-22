@@ -41,7 +41,7 @@ Schedule tab, same dashboard. Staff roster is `ceo/timeclock/staff/{id}` (`name`
 
 Approved time off blocks the day on the grid. A shift that is already there is marked as a conflict. Pending time off does not remove the add button. The `#clock` kiosk writes punches and does not get the time-off switch.
 
-`crm/src/schedule.ts` maps that shape, sums scheduled minutes, and flags a shift that lands on approved time off. `POST /v1/staff-schedule/import` loads `crm/fixtures/firebase-schedule.json`. Hours in the API response are scheduled minutes, not punched minutes. Punched minutes are on the punch rows.
+`crm/src/schedule.ts` maps that shape and flags a shift that lands on approved time off. `payHours` is the paycheck: punched minutes only. Scheduled minutes are returned beside it for comparison. `POST /v1/staff-schedule/import` loads `crm/fixtures/firebase-schedule.json`.
 
 Class sessions (`class_sessions`) are the member calendar. A staff shift can point at `class_session_id` when someone is assigned to a class. The fixture does not invent that link.
 

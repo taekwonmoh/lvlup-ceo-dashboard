@@ -18,6 +18,7 @@ Mike Moh wants to replace GymDesk with a CRM and member platform that the staff 
 | [MEMBERS-API.md](MEMBERS-API.md) | Endpoints the lvlupma.com members area will call, including promo codes on a booking. |
 | [STAFF-OPS.md](STAFF-OPS.md) | How task sheets and the staff scheduler work today, and how they move into this model without a cutover. |
 | [`crm/`](../../crm/) | The runnable backbone: migrations, API, fixtures, and tests. |
+| [GYMDESK-PARITY.md](GYMDESK-PARITY.md) | Gus’s GymDesk inventory as a built / planned checklist. Unverified items stay marked. |
 
 ## Decision in one paragraph
 
@@ -29,19 +30,19 @@ These block a build. They do not block this design.
 
 1. **GymDesk exports.** Which of these can we download, per school, without member lists landing in git: members (id, status, joined, rank, plan, family), guardians and emails, attendance, payment history (dates and amounts, not cards), leads, the class schedule, and prepaid balances? The website already expects a Members CSV (`First Name`, `Last Name`, `Joined`, `Status`) and a check-ins export.
 2. **Authorize.net, per school.** For Waunakee, East Madison, Verona, DeForest, Go Ninja Waunakee, and Go Ninja Verona: is there a separate merchant account, and who can create a **sandbox** API login, transaction key, and signature key? Production keys stay out of git and out of this repo. Waunakee is described as 363 CIM profiles, 358 with a payment method, each with a 7–8 digit merchant customer id that is probably the GymDesk member id. Please confirm that join on a handful of profiles before any import.
-3. **Billing cadence.** The 2027 prepaid page treats a standard year as **13 payments** (a charge about every 4 weeks) and Mini-Tigers as **12**. Is every live plan on a 4-week draft, a calendar month, or a mix? What is the anchor: join date, a fixed weekday, or the 1st?
-4. **DeForest money.** The dashboard warns that DeForest GymDesk revenue is gross, before the MPK split, and that MyStudio collections are not in the snapshot. Which merchant account actually drafts DeForest tuition?
-5. **Go Ninja.** Revenue for both Go Ninja schools is in the GymDesk snapshot, but the public booker and the members roster do not include them. Are they GymDesk locations with their own CIM accounts, or a different billing setup? Parties and camps are first-class on the Go Ninja KPI grid.
+3. **Billing cadence.** Decided. Mini-Tigers and grandfathered plans are monthly. Everything else is every 4 weeks. The anchor defaults to each membership’s start date and can be changed on that membership. A company-wide anchor is not set.
+4. **DeForest merchant.** Decided. DeForest drafts on Waunakee’s Authorize.net account. The dashboard’s gross-versus-split warning is still open: MyStudio collections and the MPK split are not in the GymDesk snapshot.
+5. **Go Ninja merchant.** Decided. Go Ninja Waunakee drafts on Waunakee, and Go Ninja Verona drafts on Verona. The brand on reports stays Go Ninja. Parties and camps are still not in the members-app roster.
 6. **Hold fee and notice.** The public hold form stores a request only. A $15 monthly hold fee is a draft and is not charged. Notice is 30 calendar days from the written request, and days already on hold do not count. Still open: the fee amount, per student or per family, the proration denominator, whether a paid hold fee is credited against notice-period tuition, and the effective date. Nothing should start charging until Mike signs that policy.
 7. **Failed drafts.** After how many retries should a student keep training, and when should the membership pause? Suggested default is in [BILLING.md](BILLING.md) and is not a decision.
 8. **Family across schools.** A family with a child in Waunakee and a child in Verona must be charged on two merchant accounts. Confirm that is acceptable, and whether a second guardian (not the GymDesk receipt email) should be able to sign in on day one.
 9. **ATA.** Rank checks on the dashboard say “GymDesk vs ATA”, and applications include “Register in ATA”. ATA EZSignup stays untouched. Should belt testing registration remain there, with this platform only recording the result?
 10. **What we retire last.** Member class booking, prepaid shop links, and the front-desk POS habit all live in GymDesk today. Which of those must work in the new system before the first school stops drafting in GymDesk?
-11. **Task sheets.** The lists in `index.html` cover daily, weekly, monthly, and cycle checks, plus custom rows, a weekly sign-off, and a “did not work” flag. Proof is a note, a count, a photo, or an automatic completion from inventory or the schedule. Which of those must the first CRM task screen reproduce, and which can wait?
+11. **Task sheets.** Decided for the first screen: Daily, Weekly, Monthly, and Cycle. Sign-off and did-not-work wait. Proof types (note, count, photo, automatic) are still open.
 12. **Seat versus clock id.** A task seat (`ash`, `sueK`) is not always the clock id (`tc_ash`). Is there a table that pairs them, or should staff confirm each pair during import?
-13. **Hours.** Payroll can follow scheduled shift length or punched in/out. Which one should the CRM treat as the hours of record?
+13. **Hours.** Decided. Pay hours are clock-in and clock-out. Scheduled shifts are shown only for comparison.
 14. **Promo stacking.** The engine allows a code to be marked stackable. Should a percent code and a fixed code on the same clinic be allowed in practice, or should the first codes you create all be non-stacking?
-15. **Curriculum.** Rank videos today are Vimeo embeds in the members page, organized by cycle theme. Should the CRM store one video per rank, or one set of videos per cycle that cuts across ranks?
+15. **Curriculum.** Decided. Videos are grouped by cycle theme.
 
 ## Hard rules for every later phase
 
