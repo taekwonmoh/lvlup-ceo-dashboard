@@ -143,7 +143,7 @@ export const BIRTHDAY_QUEUE = [
 ];
 
 export const UPCOMING_EVENTS = [
-  { id: 'belt', title: 'November belt test', locationId: 'waunakee' as HomeSchool, when: 'Sat Dec 12', kind: 'belt_test' },
+  { id: 'belt', title: 'Cycle 6 belt test', locationId: 'waunakee' as HomeSchool, when: 'Sat Dec 12', kind: 'belt_test' },
   { id: 'clinic', title: 'Sparring clinic', locationId: 'verona' as HomeSchool, when: 'Sat Nov 28', kind: 'clinic' },
   { id: 'party', title: 'Birthday party', locationId: 'goninjaW' as HomeSchool, when: 'Sat Nov 28', kind: 'party' },
   { id: 'camp', title: 'Holiday camp', locationId: 'eastmad' as HomeSchool, when: 'Mon Dec 21', kind: 'camp' },

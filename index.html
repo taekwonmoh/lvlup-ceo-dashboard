@@ -16351,7 +16351,8 @@ function crmMarkOffline() {
   if (!conn) return;
   conn.style.display = 'none';
 }
-function crmTab(tab) { state.crmTab = tab; render(); }
+function crmTab(tab) { state.crmTab = tab; state.crmMore = false; render(); }
+function crmToggleMore() { state.crmMore = !state.crmMore; render(); }
 function crmPickChild(id) { state.crmChild = id; state.crmMember = id; state.crmTab = 'family'; render(); }
 function crmPickMember(id) { state.crmMember = id; render(); }
 function crmSetTheme(theme) { state.crmTheme = theme === 'dark' ? 'dark' : 'light'; render(); }
@@ -16406,7 +16407,9 @@ function crmEnsureCss() {
     '.crm-app[data-theme="dark"][data-brand="ninja"]{--crm-accent-ink:#2a0d0b;}',
     '.crm-app *{box-sizing:border-box;}',
     '.crm-app :focus-visible{outline:2px solid var(--crm-accent);outline-offset:2px;}',
-    '.crm-app button,.crm-app input,.crm-app select{font-family:inherit;color:inherit;}',
+    '.crm-app button,.crm-app input{font-family:inherit;color:inherit;}',
+    '.crm-app select{font-family:inherit;background:var(--crm-surface-2);color:var(--crm-ink);border:1px solid var(--crm-line);border-radius:12px;padding:8px 10px;color-scheme:light;}',
+    '.crm-app[data-theme="dark"] select,.crm-app[data-theme="dark"] select option{background:#1e2026;color:#f5f4f1;border-color:#3a3d46;color-scheme:dark;}',
     '.crm-side{display:flex;flex-direction:column;gap:8px;padding:20px 14px 16px;border-right:1px solid var(--crm-line);background:var(--crm-surface);}',
     '.crm-brand{display:flex;align-items:center;gap:10px;padding:0 8px 12px;}',
     '.crm-mark{width:32px;height:32px;border-radius:10px;background:var(--crm-accent);color:var(--crm-accent-ink);display:grid;place-items:center;font-weight:800;font-size:13px;}',
@@ -16478,10 +16481,13 @@ function crmEnsureCss() {
     '.crm-due b{font-size:40px;letter-spacing:-.04em;font-weight:740;line-height:.95;}',
     '.crm-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}',
     '.crm-chips button{border:1px solid var(--crm-line);background:var(--crm-surface);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:680;cursor:pointer;}',
-    '.crm-chips button[aria-pressed="true"]{background:var(--crm-accent);color:var(--crm-accent-ink);border-color:transparent;}',
+    '.crm-app .crm-chips button[aria-pressed="true"],.crm-app .crm-chips button[aria-selected="true"]{background:var(--crm-accent);color:#fff;border-color:transparent;}',
+    '.crm-app[data-theme="dark"] .crm-chips button[aria-pressed="true"],.crm-app[data-theme="dark"] .crm-chips button[aria-selected="true"]{color:#0b1220;}',
     '.crm-form{display:flex;flex-wrap:wrap;gap:8px;padding:14px;}',
     '.crm-form input,.crm-form select{border:1px solid var(--crm-line);background:var(--crm-surface-2);border-radius:12px;padding:10px 12px;font-size:14px;min-height:42px;}',
-    '.crm-primary{border:0;background:var(--crm-accent);color:var(--crm-accent-ink);border-radius:12px;padding:10px 14px;font-weight:730;cursor:pointer;min-height:42px;}',
+    '.crm-primary{border:0;background:var(--crm-accent);border-radius:12px;padding:10px 14px;font-weight:730;cursor:pointer;min-height:42px;}',
+    '.crm-app .crm-primary,.crm-app .crm-primary:hover{color:#fff;}',
+    '.crm-app[data-theme="dark"] .crm-primary,.crm-app[data-theme="dark"] .crm-primary:hover{color:#0b1220;}',
     '.crm-primary:hover{filter:brightness(1.05);}',
     '.crm-note{padding:0 14px 14px;font-size:13px;color:var(--crm-accent);font-weight:650;}',
     '.crm-alert{margin:0 18px 14px;padding:10px 12px;border-radius:12px;background:var(--crm-danger-bg);color:var(--crm-danger);font-size:13px;font-weight:680;}',
@@ -16493,6 +16499,7 @@ function crmEnsureCss() {
     '.crm-shift{display:grid;grid-template-columns:72px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--crm-line);font-size:14px;}',
     '.crm-shift time{font-weight:720;}',
     '.crm-bottom{display:none;}',
+    '.crm-more{display:none;}',
     '.crm-cal{display:grid;grid-template-columns:64px repeat(6,minmax(0,1fr));gap:8px;}',
     '.crm-cal .h{font-size:12px;font-weight:720;color:var(--crm-muted);padding:4px 2px;}',
     '.crm-slot{background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:12px;min-height:92px;padding:8px;font-size:12px;box-shadow:var(--crm-shadow);}',
@@ -16556,19 +16563,23 @@ function crmEnsureCss() {
     '.crm-split{grid-template-columns:1fr;}',
     '.crm-pagehead h2{font-size:22px;}',
     '.crm-due b{font-size:34px;}',
-    '.crm-bottom{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--crm-surface);border-top:1px solid var(--crm-line);padding:6px 6px calc(8px + env(safe-area-inset-bottom));}',
-    '.crm-bottom{overflow-x:auto;}',
-    '.crm-bottom button{flex:0 0 68px;border:0;background:transparent;color:var(--crm-muted);font-size:10px;font-weight:720;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;cursor:pointer;}',
+    '.crm-bottom{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--crm-surface);border-top:1px solid var(--crm-line);padding:4px 2px calc(6px + env(safe-area-inset-bottom));overflow:hidden;}',
+    '.crm-bottom button{flex:1 1 0;min-width:0;border:0;background:transparent;color:var(--crm-muted);font-size:11px;font-weight:720;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border-radius:10px;cursor:pointer;}',
+    '.crm-bottom button span{white-space:nowrap;letter-spacing:-.01em;}',
     '.crm-cal{min-width:720px;}',
     '.crm-week{display:none;}',
     '.crm-agenda{display:block;}',
     '.crm-month .cell{min-height:64px;}',
     '.crm-bottom button svg{width:20px;height:20px;}',
-    '.crm-bottom button[aria-current="page"]{color:var(--crm-accent);}',
+    '.crm-bottom button[aria-current="page"],.crm-bottom button[aria-expanded="true"]{color:var(--crm-accent);}',
     '.crm-ops{grid-template-columns:1fr;}',
     '.crm-cycle .crm-primary{margin-left:0;width:100%;}',
     '.crm-kpis.six{grid-template-columns:1fr 1fr;}',
     '.crm-lesson{grid-template-columns:1fr;}',
+    '.crm-more{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:fixed;left:10px;right:10px;bottom:74px;z-index:6;background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:16px;padding:10px;box-shadow:var(--crm-shadow);}',
+    '.crm-more button{display:flex;align-items:center;gap:8px;border:0;background:var(--crm-surface-2);color:var(--crm-ink);border-radius:12px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;text-align:left;}',
+    '.crm-more button[aria-current="page"]{background:var(--crm-accent-soft);color:var(--crm-accent);}',
+    '.crm-more button svg{width:18px;height:18px;flex:none;}',
     '}'
   ].join('');
   var tag = document.createElement('style');
@@ -16588,7 +16599,8 @@ function crmIcon(name) {
     search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
     flag: '<path d="M5 21V4"/><path d="M5 4h11l-1.5 4L16 12H5"/>',
     clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l2.5 1.5"/>',
-    book: '<path d="M5 4.5h9.5A2.5 2.5 0 0 1 17 7v13H7.5A2.5 2.5 0 0 0 5 22.5V4.5Z"/><path d="M5 17.5h12"/>'
+    book: '<path d="M5 4.5h9.5A2.5 2.5 0 0 1 17 7v13H7.5A2.5 2.5 0 0 0 5 22.5V4.5Z"/><path d="M5 17.5h12"/>',
+    more: '<circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/>'
   };
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (p[name] || '') + '</svg>';
 }
@@ -16693,8 +16705,8 @@ function crmQuoteModel() {
   }
   return { title: 'Saturday clinic · Waunakee', buyer: 'Current member', lines: [{ label: 'Clinic', cents: list }, { label: 'CLINIC10 · 10%', cents: -500, disc: true }], due: 4500, error: '' };
 }
-function crmNav(which) {
-  var items = [
+function crmNavItems() {
+  return [
     ['home', 'Home', 'home'],
     ['members', 'Members', 'users'],
     ['calendar', 'Calendar', 'cal'],
@@ -16706,10 +16718,30 @@ function crmNav(which) {
     ['promos', 'Promos', 'tag'],
     ['import', 'Import', 'box']
   ];
-  return items.map(function (it) {
-    var on = which === it[0];
-    return '<button type="button" onclick="crmTab(\'' + it[0] + '\')"' + (on ? ' aria-current="page"' : '') + '>' + crmIcon(it[2]) + '<span>' + it[1] + '</span></button>';
-  }).join('');
+}
+function crmNavButton(it, which) {
+  var on = which === it[0];
+  return '<button type="button" onclick="crmTab(\'' + it[0] + '\')"' + (on ? ' aria-current="page"' : '') + '>' + crmIcon(it[2]) + '<span>' + it[1] + '</span></button>';
+}
+function crmNav(which, mobile) {
+  var items = crmNavItems();
+  if (!mobile) return items.map(function (it) { return crmNavButton(it, which); }).join('');
+  var primary = ['home', 'calendar', 'members', 'curriculum'];
+  var html = items.filter(function (it) { return primary.indexOf(it[0]) >= 0; }).sort(function (a, b) {
+    return primary.indexOf(a[0]) - primary.indexOf(b[0]);
+  }).map(function (it) { return crmNavButton(it, which); }).join('');
+  var inMore = primary.indexOf(which) < 0;
+  html += '<button type="button" onclick="crmToggleMore()" aria-expanded="' + (state.crmMore ? 'true' : 'false') + '"' + (inMore ? ' aria-current="page"' : '') + '>' + crmIcon('more') + '<span>More</span></button>';
+  return html;
+}
+function crmMoreSheet(which) {
+  if (!state.crmMore) return '';
+  var extra = ['events', 'family', 'ops', 'payroll', 'promos', 'import'];
+  var h = '<div class="crm-more" role="menu" aria-label="More">';
+  crmNavItems().filter(function (it) { return extra.indexOf(it[0]) >= 0; }).forEach(function (it) {
+    h += crmNavButton(it, which);
+  });
+  return h + '</div>';
 }
 function crmShell(title, lede, body) {
   crmEnsureCss();
@@ -16745,7 +16777,8 @@ function crmShell(title, lede, body) {
   h += '<div class="crm-pagehead"><div><h2>' + esc(title) + '</h2><p>' + lede + '</p></div></div>';
   h += body;
   h += '</div>';
-  h += '<nav class="crm-bottom" aria-label="CRM mobile">' + crmNav(tab) + '</nav>';
+  h += crmMoreSheet(tab);
+  h += '<nav class="crm-bottom" aria-label="CRM mobile">' + crmNav(tab, true) + '</nav>';
   h += '</div></div>';
   setTimeout(crmMarkOffline, 0);
   return h;
@@ -17333,7 +17366,7 @@ function crmHomeView() {
     h += '<p class="crm-quiet" style="margin:-2px 4px 14px;font-size:13px">Scheduled ' + crmMoney(s.scheduled) + ' · <button type="button" onclick="crmFocus(\'overdue\')" style="border:0;background:transparent;padding:0;font:inherit;font-weight:760;color:var(--crm-danger);cursor:pointer">Overdue ' + crmMoney(s.overdue) + '</button> · Goal ' + (s.goalPct == null ? '—' : s.goalPct + '%') + '</p>';
   } else {
     h += '<section class="crm-kpis" aria-label="Summary">';
-    h += '<article class="crm-kpi"><div class="lbl">Active members</div><div class="num">' + s.active + '</div><div class="row"><span class="crm-delta ' + (s.net >= 0 ? 'up' : 'down') + '">' + (s.net >= 0 ? '+' : '') + s.net + ' net</span>' + crmSpark([s.active - 6, s.active - 4, s.active - 3, s.active - 1, s.active]) + '</div><div class="split"><span class="crm-pill ' + (s.onTrack ? 'ok' : 'warn') + '">Attrition ' + s.attrition + '% · goal ≤ 3%</span></div></article>';
+    h += '<article class="crm-kpi"><div class="lbl">Active members</div><div class="num">' + s.active + '</div><div class="row"><span class="crm-delta ' + (s.net >= 0 ? 'up' : 'down') + '">' + (s.net >= 0 ? '+' : '') + s.net + ' net</span><span style="color:var(--crm-ok)">' + crmSpark([s.active - 6, s.active - 4, s.active - 3, s.active - 1, s.active]) + '</span></div><div class="split"><span class="crm-pill ' + (s.onTrack ? 'ok' : 'warn') + '">Attrition ' + s.attrition + '% · goal ≤ 3%</span></div></article>';
     h += '<article class="crm-kpi' + (state.crmHomeFocus === 'overdue' ? ' crm-ring' : '') + '"><div class="lbl">Payments this month</div><div class="num">' + crmMoney(s.collected) + '</div><div class="split"><span>Scheduled ' + crmMoney(s.scheduled) + '</span><button type="button" onclick="crmFocus(\'overdue\')">Overdue ' + crmMoney(s.overdue) + '</button></div><div class="goal' + ((s.goalPct || 0) < 80 ? ' warn' : '') + ' crm-goal"><span style="width:' + Math.min(100, s.goalPct || 0) + '%"></span></div><div class="split"><span>MTD vs goal ' + s.goalPct + '%</span><span>ARM ' + crmMoney(s.arm) + '</span></div></article>';
     h += '<article class="crm-kpi"><div class="lbl">Leads and trials</div><div class="num">' + s.day1Pct + '%</div><div class="split"><span>' + s.leads + ' leads</span><span>' + s.booked + ' booked</span><span>' + s.shown + ' shown</span></div><div class="row"><span class="crm-delta up">Day-1 close</span></div></article>';
     h += '<article class="crm-kpi"><div class="lbl">7-day attendance</div><div class="num">' + s.checks + '</div><div class="row">' + crmBars(s.bars) + '<span class="crm-delta up">Today</span></div><button type="button" class="crm-primary" style="margin-top:8px" onclick="crmLaunchCheckin()">Launch check-in</button></article>';
@@ -17392,7 +17425,7 @@ function crmHomeView() {
     h += '<div class="crm-row"><b>' + esc(row[0]) + '</b><span style="color:var(--crm-muted)">' + esc(row[1]) + '</span></div>';
   });
   h += '</div><div>';
-  [['November belt test', 'Sat Dec 12 · Waunakee', 'waunakee'], ['Sparring clinic', 'Sat Nov 28 · Verona', 'verona'], ['Birthday party', 'Sat Nov 28 · Go Ninja Waunakee', 'goninjaW'], ['Holiday camp', 'Mon Dec 21 · East Madison', 'eastmad']].forEach(function (row) {
+  [['Cycle 6 belt test', 'Sat Dec 12 · Waunakee', 'waunakee'], ['Sparring clinic', 'Sat Nov 28 · Verona', 'verona'], ['Birthday party', 'Sat Nov 28 · Go Ninja Waunakee', 'goninjaW'], ['Holiday camp', 'Mon Dec 21 · East Madison', 'eastmad']].forEach(function (row) {
     if (s.ids.indexOf(row[2]) < 0) return;
     h += '<div class="crm-row"><b>' + esc(row[0]) + '</b><span style="color:var(--crm-muted)">' + esc(row[1]) + '</span></div>';
   });
