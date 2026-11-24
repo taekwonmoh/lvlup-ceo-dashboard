@@ -176,4 +176,48 @@ test('staff import, family scope, quotes, and schedule adapters', async () => {
   assert.equal(self.json.gymdeskMemberId, undefined);
   const tasksDenied = await api('GET', '/v1/tasks', memberTok);
   assert.equal(tasksDenied.status, 403);
+
+  const ranks = await pool.query(`select program_code, count(*)::int as n from ranks group by 1`);
+  const byProgram = Object.fromEntries(ranks.rows.map((row: { program_code: string; n: number }) => [row.program_code, row.n]));
+  assert.equal(byProgram.mini_tiger, 18);
+  assert.equal(byProgram.tiger, 18);
+  assert.equal(byProgram.songahm, 25);
+  assert.equal(byProgram.legacy, 9);
+  assert.equal(byProgram.ata_instructor, 4);
+  assert.equal(byProgram.goninja, 8);
+  assert.equal(byProgram.mpk, 21);
+  const alias = await pool.query('select count(*)::int as n from rank_aliases');
+  assert.ok(alias.rows[0].n > 100);
+  const cycles = await pool.query(`select theme, test_on::text as test_on from curriculum_cycles where start_on = '2026-10-19'`);
+  assert.equal(cycles.rows[0].theme, 'Honesty');
+  assert.equal(String(cycles.rows[0].test_on).slice(0, 10), '2026-12-12');
+
+  const home = await api('GET', '/v1/home/summary?scope=all&asOf=2026-11-24', admin);
+  assert.equal(home.status, 200);
+  assert.equal(home.json.members.active, 494);
+  assert.equal(home.json.cycle.theme, 'Honesty');
+  assert.equal(home.json.cycle.week, 6);
+  const gn = await api('GET', '/v1/home/summary?scope=goninja', admin);
+  assert.equal(gn.json.brand, 'goninja');
+  assert.equal(gn.json.goninja.academyStudents, 84);
+  assert.equal(gn.json.goninja.afterSchoolFillPct, 90.9);
+  const one = await api('GET', '/v1/home/summary?scope=waunakee', admin);
+  assert.equal(one.json.goninja, null);
+  assert.equal(one.json.members.attritionOnTrack, true);
+  const deniedHome = await api('GET', '/v1/home/summary?scope=all', memberTok);
+  assert.equal(deniedHome.status, 403);
+
+  const mini = await api('GET', '/v1/curriculum?program=mini_tiger&rank=White&asOf=2026-11-24', admin);
+  const tiger = await api('GET', '/v1/curriculum?program=tiger&rank=White&asOf=2026-11-24', admin);
+  const belt = await api('GET', '/v1/curriculum?program=songahm&rank=Yellow&asOf=2026-11-24', admin);
+  assert.equal(mini.json.curriculumLevel, 'mini_tigers');
+  assert.equal(tiger.json.curriculumLevel, 'tigers');
+  assert.equal(belt.json.curriculumLevel, 'beginners');
+  assert.notEqual(mini.json.rank.canonicalId, tiger.json.rank.canonicalId);
+  assert.equal(mini.json.sections[0].sample, true);
+  const resolved = await api('GET', '/v1/ranks/resolve?program=tiger&name=Tiger%20Ara%20Belt', admin);
+  assert.equal(resolved.json.rank.canonicalId, 'tiger.ara');
+  const retry = await api('POST', '/v1/payments/retry-preview', admin, { invoiceId: 'inv_casey' });
+  assert.equal(retry.json.submitted, false);
+  assert.equal(retry.json.sandbox, true);
 });

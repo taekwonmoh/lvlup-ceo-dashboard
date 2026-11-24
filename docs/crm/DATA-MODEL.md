@@ -58,11 +58,19 @@ One-time money (Legacy investment, leadership uniform, a birthday party deposit,
 
 ATA Songahm for LVLUP color belts, stored as data so a wrong stripe rule is a row change:
 
-`rank_programs`: `songahm`, `tiger`, `mini_tiger`, `goninja`.
+`rank_programs`: `mini_tiger`, `tiger`, `songahm`, `legacy`, `ata_instructor`, `goninja`, `adp`, `mpk`, plus unranked `fitboxing`, `competition`, `events_camps`, `tiger_leaders`, `birthday_parties`, `summer_camp`, and `trials`.
 
-`ranks`: program, sort order, name. Seed for `songahm`, in order: White, Orange, Yellow, Camo, Green, Purple, Blue, Brown, Red, Red/Black, then 1st through 9th degree black. This seed is the usual Songahm sequence. Mike should confirm it against the rank list staff actually type into GymDesk before anyone is promoted from it.
+`ranks`: program, sort order, canonical id, name, belt color, optional mascot, sessions, and `curriculum_level`. Mini Tigers and Tigers each have the 18 GymDesk steps (color, then ATA animal). Taekwondo has the 21 GymDesk ranks (Recommended and Decided from Camo through Red, Red / Black, 1st through 5th Degree Black Belt) and keeps 6th through 9th Degree. Legacy has 9 levels. ATA Instructor Certification has 4 collar ranks with minimum ages. Go Ninja Movement Academy has Recruit through Completed. DeForest MPK keeps its 21 legacy names. ADP does not get a second belt: grade-prefixed names are aliases onto the Taekwondo rank.
 
-`rank_stripe_defs`: for Red/Black the members app already uses four stripes, `blue`, `black`, `silver`, `gold`. Other ranks can have zero or one stripe until someone writes the real rule down. The schema allows N named stripes per rank. It does not invent a stripe for every color.
+`rank_aliases`: GymDesk’s two Tiger naming sets (`Tiger White Belt` and `White`, `Tiger Ara Belt` and `Ara the Turtle`) resolve only inside the program they were imported under. The same word “White” is three ranks.
+
+`curriculum_level` is `mini_tigers`, `tigers`, `beginners` (White through Camo Decided), `intermediate` (Green Recommended through Blue Decided), `advanced` (Brown Recommended through Red Decided), `black_belt` (Red / Black and every black-belt degree), `legacy`, or `go_ninja`. A program plus a rank picks one level. Legacy, competition, XMA, and Go Ninja can be added as overlays when the student is enrolled.
+
+`stripe_system_steps`: color belts use White (4 credits), Blue (8), Red (12), then optional Gold, Silver, and Green Set-to-Test. Red / Black keeps the four stripes Blue, Black, Silver, and Gold. `degree_requirements` holds the coded black-belt tracker through 4th degree. 5th through 9th stay on the ladder with no coded requirements.
+
+`curriculum_cycles`: six 8-week cycles. Cycle 5 starts 2026-08-24 (Self-Esteem) and cycle 6 starts 2026-10-19 (Honesty). The belt test is the Saturday of week 8. `curriculum_lessons` is the slot list for that level and cycle. Mini Tigers and Go Ninja slots are marked sample. A Vimeo player URL, when an id exists, always includes `texttrack=false`.
+
+`rank_stripe_defs`: the original Red/Black rows (`blue`, `black`, `silver`, `gold`) stay. New stripes live on the stripe system so every color belt shares one rule.
 
 `member_rank_events`: member, rank, stripe, `awarded_on`, source (`gymdesk_import`, `staff`, `testing`). Current rank is the latest event, not a column that gets edited in place. `students.gymdeskRank` during the bridge is a mirror of that latest event.
 
@@ -139,4 +147,4 @@ Dashboard fields staff already edit (`completedBy`, `cancelDate`, `retentionNote
 - Card numbers, CVV, full magnetic stripe, Accept.js opaque tokens.
 - A copy of the GymDesk revenue snapshot. Historical months stay in `finance/gymdesk`.
 - Staff PINs and the time clock.
-- Curriculum video URLs. They stay in the website until a content phase. Rank rows do not embed Vimeo links.
+- Curriculum video files. `curriculum_lessons` stores the slot (level, cycle, category, title). A Vimeo id is optional and the player URL always sets `texttrack=false`. Mini Tigers and Go Ninja slots are samples until the members site defines those videos.

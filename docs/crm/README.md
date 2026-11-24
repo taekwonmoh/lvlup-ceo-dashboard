@@ -42,7 +42,7 @@ These block a build. They do not block this design.
 12. **Seat versus clock id.** A task seat (`ash`, `sueK`) is not always the clock id (`tc_ash`). Is there a table that pairs them, or should staff confirm each pair during import?
 13. **Hours.** Decided. Pay hours are clock-in and clock-out. Scheduled shifts are shown only for comparison.
 14. **Promo stacking.** The engine allows a code to be marked stackable. Should a percent code and a fixed code on the same clinic be allowed in practice, or should the first codes you create all be non-stacking?
-15. **Curriculum.** Decided. Videos are grouped by cycle theme.
+15. **Curriculum.** Decided. One cycle calendar feeds Home and the curriculum view. A program and a rank pick the level. Videos are grouped by that cycle’s theme.
 
 ## Hard rules for every later phase
 

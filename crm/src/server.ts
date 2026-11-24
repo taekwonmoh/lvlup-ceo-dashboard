@@ -8,7 +8,11 @@ import { CrmError } from './errors.ts';
 import { migrate } from './migrate.ts';
 import { parseMembersCsv, type CimProfile, type LeadRow } from './gymdesk.ts';
 import { buildChargeProfileRequest, buildGetCustomerProfileRequest, getCustomerProfile, submitCharge, type SandboxProfile } from './authorize.ts';
+import { curriculumForRank, vimeoPlayerUrl } from './curriculum.ts';
+import { activeCycle } from './cycles.ts';
+import { homeSummary, previewPaymentRetry } from './home.ts';
 import { quoteBooking, type PromoCode } from './pricing.ts';
+import { PROGRAMS, ranksForProgram, resolveRank } from './ranks.ts';
 import {
   getFamily, getMember, importMembers, importSchedule, importTasks, latestImport,
   listMembers, listShifts, listTasks, loadCatalog, loadRedemptions, recordRedemptions, savePromo,
@@ -282,6 +286,66 @@ export function createApp(pool: pg.Pool): App {
         send(res, 200, summary);
         return;
       }
+      if (req.method === 'GET' && url.pathname === '/v1/ranks') {
+        assertStaff(actor);
+        const program = url.searchParams.get('program') || '';
+        send(res, 200, {
+          programs: PROGRAMS,
+          ranks: program ? ranksForProgram(program) : ranksForProgram('songahm').concat(ranksForProgram('tiger'), ranksForProgram('mini_tiger'), ranksForProgram('goninja'), ranksForProgram('legacy'), ranksForProgram('ata_instructor'), ranksForProgram('mpk')),
+        });
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/v1/ranks/resolve') {
+        assertStaff(actor);
+        const resolved = resolveRank(url.searchParams.get('program') || '', url.searchParams.get('name') || '');
+        if (!resolved) { send(res, 404, { error: { code: 'not_found', message: 'No matching rank in that program.' } }); return; }
+        send(res, 200, resolved);
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/v1/cycles/active') {
+        assertStaff(actor);
+        send(res, 200, activeCycle(url.searchParams.get('asOf') || '2026-11-24'));
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/v1/curriculum') {
+        assertStaff(actor);
+        const overlays = (url.searchParams.get('overlays') || '').split(',').map(s => s.trim()).filter(Boolean);
+        const found = curriculumForRank({
+          program: url.searchParams.get('program') || '',
+          rank: url.searchParams.get('rank') || '',
+          asOf: url.searchParams.get('asOf') || '2026-11-24',
+          locationId: url.searchParams.get('locationId'),
+          overlays: overlays as Array<'legacy' | 'competition' | 'xma' | 'go_ninja'>,
+        });
+        if (!found) { send(res, 404, { error: { code: 'not_found', message: 'No curriculum for that program and rank.' } }); return; }
+        send(res, 200, {
+          ...found,
+          sections: found.sections.map(section => ({
+            ...section,
+            lessons: section.lessons.map(lesson => ({
+              ...lesson,
+              playerUrl: lesson.vimeoId ? vimeoPlayerUrl(lesson.vimeoId) : null,
+            })),
+          })),
+        });
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/v1/home/summary') {
+        assertStaff(actor);
+        try {
+          send(res, 200, homeSummary(url.searchParams.get('scope') || 'all', url.searchParams.get('asOf') || '2026-11-24'));
+        } catch (err) {
+          send(res, 404, { error: { code: 'not_found', message: err instanceof Error ? err.message : 'Unknown scope.' } });
+        }
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/v1/payments/retry-preview') {
+        assertStaff(actor);
+        const body = JSON.parse(await readBody(req) || '{}');
+        send(res, 200, previewPaymentRetry(String(body.invoiceId || '')));
+        return;
+      }
+
       if (req.method === 'GET' && url.pathname === '/v1/staff-schedule') {
         assertStaff(actor);
         const shifts = await listShifts(pool, url.searchParams.get('staff') || undefined);
