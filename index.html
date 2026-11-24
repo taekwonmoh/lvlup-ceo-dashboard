@@ -16340,11 +16340,13 @@ function crmBootPreview() {
   state.crmTheme = themeMatch ? themeMatch[1] : (state.crmTheme || 'light');
   state.crmChild = state.crmChild || 'avery';
   state.crmMember = state.crmMember || 'avery';
-  state.crmSchool = state.crmSchool || 'all';
+  state.crmSchool = state.crmSchool || 'waunakee';
   state.crmQuery = state.crmQuery || '';
   state.crmQuote = state.crmQuote || 'clinic10';
   var sheetMatch = /(?:\?|&)crmSheet=(daily|weekly|monthly|cycle)/.exec(String(location.search || ''));
   state.crmSheet = sheetMatch ? sheetMatch[1] : (state.crmSheet || 'daily');
+  var calMatch = /(?:\?|&)crmCal=(week|day|month)/.exec(String(location.search || ''));
+  if (calMatch) state.crmCal = calMatch[1];
   render(true);
   crmMarkOffline();
 }
@@ -16366,9 +16368,11 @@ function crmSearch(value) {
 }
 function crmSetQuote(id) { state.crmQuote = id; state.crmTab = 'promos'; render(); }
 function crmSetSheet(id) { state.crmSheet = id; state.crmTab = 'ops'; render(); }
+function crmSetCal(id) { state.crmCal = id; state.crmTab = 'calendar'; render(); }
+function crmLaunchStep(n) { state.crmLaunch = n; state.crmTab = 'events'; render(); }
 function crmExitPreview() {
   var u = new URL(location.href);
-  ['crmPreview', 'crmTab', 'crmTheme', 'crmSkeleton'].forEach(function (k) { u.searchParams.delete(k); });
+  ['crmPreview', 'crmTab', 'crmTheme', 'crmSkeleton', 'crmCal'].forEach(function (k) { u.searchParams.delete(k); });
   location.href = u.pathname + u.search + u.hash;
 }
 function crmSavePromo() {
@@ -16493,6 +16497,35 @@ function crmEnsureCss() {
     '.crm-shift{display:grid;grid-template-columns:72px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--crm-line);font-size:14px;}',
     '.crm-shift time{font-weight:720;}',
     '.crm-bottom{display:none;}',
+    '.crm-cal{display:grid;grid-template-columns:64px repeat(6,minmax(0,1fr));gap:8px;}',
+    '.crm-cal .h{font-size:12px;font-weight:720;color:var(--crm-muted);padding:4px 2px;}',
+    '.crm-slot{background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:12px;min-height:92px;padding:8px;font-size:12px;box-shadow:var(--crm-shadow);}',
+    '.crm-slot.closed{background:repeating-linear-gradient(-45deg,var(--crm-surface-2),var(--crm-surface-2) 6px,transparent 6px,transparent 12px);color:var(--crm-faint);box-shadow:none;}',
+    '.crm-block{background:var(--crm-accent-soft);border-radius:8px;padding:8px;font-weight:680;line-height:1.35;}',
+    '.crm-week{display:grid;grid-template-columns:64px repeat(7,minmax(108px,1fr));background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:16px;box-shadow:var(--crm-shadow);overflow:auto;max-height:760px;}',
+    '.crm-week-head{position:sticky;top:0;z-index:4;background:var(--crm-surface);border-bottom:1px solid var(--crm-line);padding:8px;font-size:12px;font-weight:750;}',
+    '.crm-week-head small{display:block;color:var(--crm-muted);font-weight:650;}',
+    '.crm-times{position:relative;}',
+    '.crm-hour{position:absolute;left:0;right:0;border-top:1px solid var(--crm-line);font-size:11px;color:var(--crm-muted);padding:2px 6px;box-sizing:border-box;}',
+    '.crm-day{position:relative;border-left:1px solid var(--crm-line);}',
+    '.crm-shade{position:absolute;left:0;right:0;background:repeating-linear-gradient(-45deg,var(--crm-surface-2),var(--crm-surface-2) 5px,transparent 5px,transparent 10px);opacity:.85;pointer-events:none;}',
+    '.crm-ev{position:absolute;border:0;border-radius:8px;padding:4px 6px;text-align:left;cursor:pointer;overflow:hidden;z-index:2;line-height:1.2;box-shadow:0 1px 2px rgba(20,20,19,.12);}',
+    '.crm-ev b{display:block;font-size:12px;} .crm-ev small{display:block;font-size:10px;font-weight:650;opacity:.9;}',
+    '.crm-ev .cap{height:3px;border-radius:99px;background:rgba(0,0,0,.16);margin-top:4px;} .crm-ev .cap i{display:block;height:100%;background:rgba(0,0,0,.55);}',
+    '.crm-ev.cancelled{opacity:.55;text-decoration:line-through;}',
+    '.crm-now{position:absolute;left:0;right:0;height:2px;background:#e11d48;z-index:3;pointer-events:none;}',
+    '.crm-now::before{content:"";position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:99px;background:#e11d48;}',
+    '.crm-legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin:8px 0 12px;}',
+    '.crm-legend button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--crm-line);background:var(--crm-surface);border-radius:999px;padding:4px 8px;font-size:12px;font-weight:680;cursor:pointer;}',
+    '.crm-legend button[aria-pressed="true"]{border-color:var(--crm-accent);box-shadow:0 0 0 2px var(--crm-accent-soft);}',
+    '.crm-swatch{width:10px;height:10px;border-radius:3px;}',
+    '.crm-drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--crm-surface);color:var(--crm-ink);border-left:1px solid var(--crm-line);box-shadow:var(--crm-shadow);z-index:90;padding:22px;overflow:auto;}',
+    '.crm-month{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}',
+    '.crm-month .cell{background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:12px;min-height:84px;padding:8px;font-size:12px;}',
+    '.crm-month .cell b{font-size:13px;}',
+    '.crm-agenda{display:none;}',
+    '.crm-bar{height:8px;border-radius:99px;background:var(--crm-line);overflow:hidden;margin-top:12px;}',
+    '.crm-bar span{display:block;height:100%;background:var(--crm-accent);}',
     '@media (max-width:860px){',
     '.crm-app{grid-template-columns:1fr;}',
     '.crm-side{display:none;}',
@@ -16505,7 +16538,12 @@ function crmEnsureCss() {
     '.crm-pagehead h2{font-size:22px;}',
     '.crm-due b{font-size:34px;}',
     '.crm-bottom{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--crm-surface);border-top:1px solid var(--crm-line);padding:6px 6px calc(8px + env(safe-area-inset-bottom));}',
-    '.crm-bottom button{flex:1;border:0;background:transparent;color:var(--crm-muted);font-size:10px;font-weight:720;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;cursor:pointer;}',
+    '.crm-bottom{overflow-x:auto;}',
+    '.crm-bottom button{flex:0 0 68px;border:0;background:transparent;color:var(--crm-muted);font-size:10px;font-weight:720;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;cursor:pointer;}',
+    '.crm-cal{min-width:720px;}',
+    '.crm-week{display:none;}',
+    '.crm-agenda{display:block;}',
+    '.crm-month .cell{min-height:64px;}',
     '.crm-bottom button svg{width:20px;height:20px;}',
     '.crm-bottom button[aria-current="page"]{color:var(--crm-accent);}',
     '}'
@@ -16525,6 +16563,7 @@ function crmIcon(name) {
     sun: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
     moon: '<path d="M16 3.5A8.2 8.2 0 1 0 20.5 14 6.4 6.4 0 0 1 16 3.5Z"/>',
     search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
+    flag: '<path d="M5 21V4"/><path d="M5 4h11l-1.5 4L16 12H5"/>',
     clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l2.5 1.5"/>'
   };
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (p[name] || '') + '</svg>';
@@ -16602,11 +16641,13 @@ function crmQuoteModel() {
 }
 function crmNav(which) {
   var items = [
+    ['calendar', 'Calendar', 'cal'],
+    ['events', 'Events', 'flag'],
     ['members', 'Members', 'users'],
     ['family', 'Family', 'home'],
     ['import', 'Import', 'box'],
     ['promos', 'Promos', 'tag'],
-    ['ops', 'Tasks', 'cal'],
+    ['ops', 'Tasks', 'box'],
     ['payroll', 'Pay', 'clock']
   ];
   return items.map(function (it) {
@@ -16703,7 +16744,25 @@ function crmMembersView() {
     detail += '<div><span>Card</span><b>' + (selected.last4 ? esc(selected.card) + ' ···· ' + esc(selected.last4) : 'None on file') + '</b></div>';
     detail += '</div><button type="button" class="crm-primary" style="margin-top:14px;width:100%" onclick="crmPickChild(\'' + selected.id + '\')">Open family</button></aside>';
   }
-  return crmKpis(crmSchoolOk ? crmRoster().filter(crmSchoolOk) : crmRoster()) + '<div class="crm-split"><div class="crm-card">' + table + '</div>' + detail + '</div>';
+  return crmLocationTabs() + crmKpis(crmRoster().filter(crmSchoolOk)) + '<div class="crm-split"><div class="crm-card">' + table + '</div>' + detail + '</div>';
+}
+function crmLocationTabs() {
+  var locs = [
+    ['waunakee', 'Waunakee'],
+    ['verona', 'Verona'],
+    ['eastmad', 'East Madison'],
+    ['deforest', 'DeForest'],
+    ['goninjaW', 'Go Ninja Waunakee'],
+    ['goninjaV', 'Go Ninja Verona']
+  ];
+  if (dashAuth && dashAuth.isAdmin) locs.unshift(['all', 'All schools']);
+  var cur = state.crmSchool || 'waunakee';
+  if (cur === 'all' && !(dashAuth && dashAuth.isAdmin)) cur = 'waunakee';
+  var h = '<div class="crm-chips" role="tablist" aria-label="Location">';
+  locs.forEach(function (l) {
+    h += '<button type="button" role="tab" aria-selected="' + (cur === l[0]) + '" onclick="crmSetSchool(\'' + l[0] + '\')">' + esc(l[1]) + '</button>';
+  });
+  return h + '</div>';
 }
 function crmFamilyView() {
   var kids = crmRoster().filter(function (p) { return p.id === 'avery' || p.id === 'blake'; });
@@ -16803,6 +16862,281 @@ function crmPayrollView() {
   h += '<p style="color:var(--crm-muted);font-size:13px;margin:12px 4px 0;">Ash · East Madison. Pay is the punched time. The shift grid is not the paycheck. DeForest drafts on Waunakee. Go Ninja Waunakee drafts on Waunakee and Go Ninja Verona drafts on Verona. The brand on the report stays Go Ninja.</p>';
   return h;
 }
+function crmEventRows() {
+  var extra = state.crmLaunched || [];
+  return [
+    { title: 'November belt test', school: 'Waunakee', loc: 'waunakee', brand: 'LVLUP', type: 'Belt test', when: 'Sat Nov 21 · 9:00a', cap: 40, reg: 28, price: 4500, past: false },
+    { title: 'Sparring clinic', school: 'Verona', loc: 'verona', brand: 'LVLUP', type: 'Clinic', when: 'Sat Nov 28 · 10:00a', cap: 20, reg: 8, price: 4000, past: false },
+    { title: 'Holiday camp', school: 'East Madison', loc: 'eastmad', brand: 'LVLUP', type: 'Camp', when: 'Mon Dec 21 · 9:00a', cap: 30, reg: 12, price: 12000, past: false },
+    { title: 'Birthday party', school: 'Go Ninja Waunakee', loc: 'goninjaW', brand: 'Go Ninja', type: 'Party', when: 'Sat Nov 21 · 11:00a', cap: 16, reg: 16, price: 25000, past: false },
+    { title: 'Fall tournament', school: 'Waunakee', loc: 'waunakee', brand: 'LVLUP', type: 'Tournament', when: 'Sat Oct 17 · 8:00a', cap: 80, reg: 64, price: 6000, past: true }
+  ].concat(extra);
+}
+function crmEventsView() {
+  if (state.crmLaunch) return crmLaunchView();
+  var rows = crmEventRows().filter(function (e) {
+    return crmSchoolOk({ loc: e.loc, brand: e.loc.indexOf('goninja') === 0 ? 'goninja' : 'lvlup' }) && crmQueryOk(e.title + ' ' + e.school + ' ' + e.type);
+  });
+  var h = '<div style="display:flex;justify-content:flex-end;margin:-8px 0 12px;"><button type="button" class="crm-primary" onclick="crmLaunchStep(1)">Launch event</button></div>';
+  if (!rows.length) return h + '<div class="crm-empty"><b>No events at this school</b>Launch one, or switch location.</div>';
+  h += '<div class="crm-stack">';
+  rows.forEach(function (e) {
+    var pct = Math.round(100 * e.reg / e.cap);
+    h += '<article class="crm-card" style="padding:16px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><div class="crm-pill ' + (e.brand === 'Go Ninja' ? 'bad' : 'ok') + '">' + esc(e.brand) + '</div><h3 style="margin-top:8px">' + esc(e.title) + '</h3><div style="color:var(--crm-muted);font-size:13px;">' + esc(e.type) + ' · ' + esc(e.school) + ' · ' + esc(e.when) + (e.past ? ' · Past' : '') + '</div></div><div style="text-align:right"><div class="crm-balance">' + crmMoney(e.price * e.reg) + '</div><div style="font-size:12px;color:var(--crm-muted)">' + e.reg + ' registered</div></div></div>';
+    h += '<div class="crm-bar" style="margin-top:12px" aria-label="Capacity"><span style="width:' + pct + '%"></span></div>';
+    h += '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--crm-muted);margin-top:6px"><span>' + e.reg + ' / ' + e.cap + ' spots</span><span>' + pct + '% full</span></div></article>';
+  });
+  return h + '</div>';
+}
+function crmLaunchView() {
+  var step = state.crmLaunch || 1;
+  var draft = state.crmDraft || {};
+  var h = '<div class="crm-chips" aria-label="Launch steps"><span class="crm-pill ' + (step === 1 ? 'ok' : 'neutral') + '">1 Details</span><span class="crm-pill ' + (step === 2 ? 'ok' : 'neutral') + '">2 Schedule</span><span class="crm-pill ' + (step === 3 ? 'ok' : 'neutral') + '">3 Price</span></div>';
+  h += '<form class="crm-card crm-form" style="display:grid" onsubmit="crmLaunchNext();return false;">';
+  if (step === 1) {
+    h += '<input id="evTitle" placeholder="Title" aria-label="Title" value="' + esc(draft.title || '') + '" required>';
+    h += '<select id="evType" aria-label="Event type"><option>Belt test</option><option>Clinic</option><option>Tournament</option><option>Party</option><option>Camp</option></select>';
+    h += '<select id="evLoc" aria-label="School"><option value="waunakee">Waunakee</option><option value="verona">Verona</option><option value="eastmad">East Madison</option><option value="deforest">DeForest</option><option value="goninjaW">Go Ninja Waunakee</option><option value="goninjaV">Go Ninja Verona</option></select>';
+  } else if (step === 2) {
+    h += '<input id="evWhen" type="datetime-local" aria-label="Date and time" value="2026-11-28T10:00">';
+    h += '<input id="evSessions" type="number" min="1" value="1" aria-label="Number of sessions">';
+    h += '<input id="evCap" type="number" min="1" value="20" aria-label="Capacity">';
+    h += '<p style="margin:0;color:var(--crm-muted);font-size:13px;">Banner image is a placeholder. No file is uploaded.</p>';
+  } else {
+    h += '<label>Member price <input id="evMember" type="number" value="40" aria-label="Member price in dollars"></label>';
+    h += '<label>Non-member <input id="evGuest" type="number" value="55" aria-label="Non-member price in dollars"></label>';
+    h += '<input id="evElig" placeholder="Eligibility, for example Yellow and up" aria-label="Eligibility" value="Yellow and up">';
+    h += '<input id="evOpen" type="date" aria-label="Registration opens" value="2026-11-01"><input id="evClose" type="date" aria-label="Registration closes" value="2026-11-27">';
+    h += '<select id="evPromo" aria-label="Promo code"><option value="">No promo</option><option>CLINIC10</option><option>FREEWEEK</option></select>';
+    h += '<label style="display:flex;align-items:center;gap:8px;font-weight:680"><input id="evPublish" type="checkbox" checked> Publish for the members site</label>';
+  }
+  h += '<div style="display:flex;gap:8px"><button type="button" class="crm-iconbtn" style="width:auto;padding:0 12px" onclick="crmLaunchStep(' + (step === 1 ? 0 : step - 1) + ')">Back</button><button class="crm-primary" type="submit">' + (step === 3 ? 'Publish' : 'Next') + '</button></div></form>';
+  return h;
+}
+function crmLaunchNext() {
+  var step = state.crmLaunch || 1;
+  state.crmDraft = state.crmDraft || {};
+  if (step === 1) {
+    state.crmDraft.title = (document.getElementById('evTitle') || {}).value || 'New event';
+    state.crmDraft.type = (document.getElementById('evType') || {}).value || 'Clinic';
+    state.crmDraft.loc = (document.getElementById('evLoc') || {}).value || 'waunakee';
+    state.crmLaunch = 2;
+  } else if (step === 2) {
+    state.crmDraft.cap = parseInt((document.getElementById('evCap') || {}).value, 10) || 20;
+    state.crmLaunch = 3;
+  } else {
+    var dollars = parseInt((document.getElementById('evMember') || {}).value, 10) || 40;
+    var loc = state.crmDraft.loc || 'waunakee';
+    var names = { waunakee: 'Waunakee', verona: 'Verona', eastmad: 'East Madison', deforest: 'DeForest', goninjaW: 'Go Ninja Waunakee', goninjaV: 'Go Ninja Verona' };
+    state.crmLaunched = (state.crmLaunched || []).concat([{
+      title: state.crmDraft.title, school: names[loc] || loc, loc: loc,
+      brand: loc.indexOf('goninja') === 0 ? 'Go Ninja' : 'LVLUP',
+      type: state.crmDraft.type, when: 'Just launched', cap: state.crmDraft.cap || 20, reg: 0,
+      price: dollars * 100, past: false
+    }]);
+    state.crmLaunch = 0;
+    state.crmDraft = {};
+  }
+  render();
+}
+function crmClock(mins) {
+  var h = Math.floor(mins / 60), m = mins % 60, ap = h >= 12 ? 'p' : 'a';
+  var hr = h % 12 || 12;
+  return hr + ':' + String(m).padStart(2, '0') + ap;
+}
+function crmPrograms() {
+  return {
+    mini: { name: 'Mini Tigers', bg: '#fde68a', fg: '#713f12' },
+    tigers: { name: 'Tigers', bg: '#fed7aa', fg: '#7c2d12' },
+    beginners: { name: 'Beginners', bg: '#bfdbfe', fg: '#1e3a8a' },
+    intermediate: { name: 'Intermediate', bg: '#ddd6fe', fg: '#4c1d95' },
+    advanced: { name: 'Advanced / Black Belt', bg: '#99f6e4', fg: '#134e4a' },
+    adult: { name: 'Adult', bg: '#bae6fd', fg: '#0c4a6e' },
+    fit: { name: 'Fitboxing', bg: '#fbcfe8', fg: '#831843' },
+    comp: { name: 'Competition Team', bg: '#fcd34d', fg: '#78350f' },
+    adp: { name: 'ADP', bg: '#c7d2fe', fg: '#312e81' }
+  };
+}
+function crmWeekRows(school) {
+  var lead = { waunakee: 'Tarik', eastmad: 'Ash', verona: 'Bryan', deforest: 'Joey', goninjaW: 'Miranda', goninjaV: 'Miranda' }[school] || 'Tarik';
+  var helper = school === 'waunakee' ? 'Cat' : lead;
+  var rows = [];
+  function add(day, start, dur, program, who, room, cap, checked, rank) {
+    rows.push({ id: school + '-' + day + '-' + start + '-' + program, day: day, start: start, dur: dur, program: program, instructor: who, room: room, cap: cap, checked: checked, rank: rank });
+  }
+  [0, 1, 2, 3].forEach(function (day) {
+    add(day, 14 * 60, 45, 'mini', helper, 'Room A', 12, 9, 'White');
+    add(day, 14 * 60, 60, 'adult', lead, 'Room B', 16, 7, 'Adult');
+    add(day, 15 * 60, 50, 'tigers', helper, 'Room A', 18, 14, 'White–Orange');
+    add(day, 16 * 60, 55, 'beginners', lead, 'Room A', 24, 18, 'White–Yellow');
+    add(day, 17 * 60, 55, 'intermediate', lead, 'Room A', 20, 12, 'Camo–Green');
+    add(day, 17 * 60 + 30, 90, 'adp', lead, 'Room B', 10, 8, 'Leadership');
+    add(day, 18 * 60, 60, 'advanced', lead, 'Room A', 16, 9, 'Blue–Black');
+    if (school === 'waunakee') add(day, 19 * 60, 80, 'fit', helper, 'Room B', 18, 11, 'All ranks');
+    if (day === 2) add(day, 19 * 60, 75, 'comp', lead, 'Mat', 12, 8, 'Invite');
+  });
+  if (school === 'waunakee') {
+    add(4, 15 * 60, 50, 'tigers', helper, 'Room A', 16, 12, 'White–Orange');
+    add(4, 16 * 60, 55, 'beginners', lead, 'Room A', 20, 14, 'White–Yellow');
+    add(4, 17 * 60, 50, 'intermediate', lead, 'Room A', 16, 10, 'Camo–Green');
+    add(4, 18 * 60, 80, 'adult', lead, 'Room B', 14, 6, 'Adult');
+  }
+  if (school !== 'deforest') {
+    add(5, 9 * 60, 45, 'mini', helper, 'Room A', 12, 8, 'White');
+    add(5, 10 * 60, 50, 'tigers', helper, 'Room A', 16, 11, 'White–Orange');
+    add(5, 11 * 60, 55, 'beginners', lead, 'Room A', 20, 13, 'White–Yellow');
+    add(5, 12 * 60, 55, 'intermediate', lead, 'Room A', 16, 7, 'Camo–Green');
+  }
+  (state.crmAdded || []).forEach(function (row) { if (row.school === school) rows.push(row); });
+  return rows;
+}
+function crmOpenClass(id) { state.crmOpen = id; state.crmAdd = false; render(); }
+function crmFilterProg(id) { state.crmProg = state.crmProg === id ? '' : id; render(); }
+function crmFilterInstr(name) { state.crmInstr = name; render(); }
+function crmPickDay(n) { state.crmDay = n; state.crmCal = 'day'; state.crmTab = 'calendar'; render(); }
+function crmToggleAdd() { state.crmAdd = !state.crmAdd; state.crmOpen = ''; render(); }
+function crmSaveClass() {
+  var school = state.crmSchool === 'all' || state.crmSchool === 'lvlup' || state.crmSchool === 'goninja' ? 'waunakee' : state.crmSchool;
+  var day = Number(document.getElementById('crm-add-day').value);
+  var start = Number(document.getElementById('crm-add-start').value);
+  var dur = Number(document.getElementById('crm-add-dur').value);
+  var program = document.getElementById('crm-add-prog').value;
+  var who = document.getElementById('crm-add-who').value || 'Tarik';
+  var end = start + dur;
+  var open = (day >= 0 && day <= 3 && start >= 14 * 60 && end <= 20 * 60 + 30)
+    || (day === 4 && school === 'waunakee' && start >= 15 * 60 && end <= 19 * 60 + 30)
+    || (day === 5 && school !== 'deforest' && start >= 9 * 60 && end <= 13 * 60);
+  if (!open) { state.crmCalNote = 'That time is outside this school’s open hours, so the template was not added.'; render(); return; }
+  state.crmAdded = (state.crmAdded || []).concat([{
+    id: 'new-' + Date.now(), school: school, day: day, start: start, dur: dur, program: program,
+    instructor: who, room: 'Room A', cap: 16, checked: 0, rank: 'All ranks'
+  }]);
+  state.crmAdd = false;
+  state.crmCalNote = '';
+  render();
+}
+function crmCancelClass(id, series) {
+  state.crmCancelled = state.crmCancelled || {};
+  state.crmCancelled[id] = series ? 'series' : 'session';
+  render();
+}
+function crmCalendarView() {
+  var mode = state.crmCal || 'week';
+  var school = state.crmSchool === 'all' || state.crmSchool === 'lvlup' || state.crmSchool === 'goninja' ? 'waunakee' : state.crmSchool;
+  var programs = crmPrograms();
+  var rows = crmWeekRows(school).filter(function (row) {
+    if (state.crmProg && row.program !== state.crmProg) return false;
+    if (state.crmInstr && row.instructor !== state.crmInstr) return false;
+    return true;
+  });
+  var names = ['Mon 16', 'Tue 17', 'Wed 18', 'Thu 19', 'Fri 20', 'Sat 21', 'Sun 22'];
+  var startMin = 9 * 60, endMin = 20 * 60 + 30, px = 52;
+  var height = (endMin - startMin) / 60 * px;
+  var now = 17 * 60 + 40;
+  var h = '<div class="crm-chips" role="group" aria-label="Calendar range">';
+  ['week', 'day', 'month'].forEach(function (id) {
+    h += '<button type="button" aria-pressed="' + (mode === id) + '" onclick="crmSetCal(\'' + id + '\')">' + id.charAt(0).toUpperCase() + id.slice(1) + '</button>';
+  });
+  h += '</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px;">';
+  h += '<label class="h">Instructor <select onchange="crmFilterInstr(this.value)"><option value="">All</option>';
+  ['Tarik', 'Ash', 'Bryan', 'Joey', 'Miranda', 'Cat'].forEach(function (name) {
+    h += '<option' + (state.crmInstr === name ? ' selected' : '') + '>' + name + '</option>';
+  });
+  h += '</select></label><button type="button" class="crm-primary" onclick="crmToggleAdd()">Add class</button></div>';
+  h += '<div class="crm-legend" role="group" aria-label="Programs">';
+  Object.keys(programs).forEach(function (id) {
+    h += '<button type="button" aria-pressed="' + (state.crmProg === id) + '" onclick="crmFilterProg(\'' + id + '\')"><i class="crm-swatch" style="background:' + programs[id].bg + '"></i>' + esc(programs[id].name) + '</button>';
+  });
+  h += '</div><p style="margin:0 0 12px;color:var(--crm-muted);font-size:13px;">Week of Nov 16. Weekdays 2:00–8:30p, Friday 3:00–7:30p at Waunakee, Saturday 9:00a–1:00p except DeForest. Sunday is closed. The red line is the preview clock, Wednesday 5:40p. Nov 16 is a Waunakee holiday, so those sessions are cancelled.</p>';
+  if (state.crmCalNote) h += '<p class="crm-pill warn">' + esc(state.crmCalNote) + '</p>';
+  if (state.crmAdd) {
+    h += '<section class="crm-card" style="padding:16px;margin-bottom:12px"><h3>Recurring template</h3><div class="crm-field"><label>Program</label><select id="crm-add-prog">';
+    Object.keys(programs).forEach(function (id) { h += '<option value="' + id + '">' + esc(programs[id].name) + '</option>'; });
+    h += '</select></div><div class="crm-field"><label>Weekday</label><select id="crm-add-day"><option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option></select></div>';
+    h += '<div class="crm-field"><label>Start</label><select id="crm-add-start"><option value="840">2:00p</option><option value="900">3:00p</option><option value="960">4:00p</option><option value="1020">5:00p</option><option value="540">9:00a</option><option value="600">10:00a</option></select></div>';
+    h += '<div class="crm-field"><label>Duration</label><select id="crm-add-dur"><option value="45">45 min</option><option value="55">55 min</option><option value="60">60 min</option></select></div>';
+    h += '<div class="crm-field"><label>Instructor</label><input id="crm-add-who" value="Tarik"></div><button type="button" class="crm-primary" onclick="crmSaveClass()">Save template</button></section>';
+  }
+  if (mode === 'month') {
+    h += '<div class="crm-month">';
+    ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(function (d) { h += '<div class="h" style="text-align:center">' + d + '</div>'; });
+    for (var n = 1; n <= 30; n++) {
+      var dow = (n - 1) % 7;
+      var count = 0, closed = dow === 0;
+      if (dow >= 1 && dow <= 4) count = rows.filter(function (r) { return r.day === dow - 1; }).length;
+      if (dow === 5) count = school === 'waunakee' ? rows.filter(function (r) { return r.day === 4; }).length : 0;
+      if (dow === 6) count = school === 'deforest' ? 0 : rows.filter(function (r) { return r.day === 5; }).length;
+      if (n === 16 && school === 'waunakee') { closed = true; count = 0; }
+      if ((dow === 5 && school !== 'waunakee') || (dow === 6 && school === 'deforest')) closed = true;
+      h += '<div class="cell' + (closed ? ' closed' : '') + '" style="' + (closed ? 'background:repeating-linear-gradient(-45deg,var(--crm-surface-2),var(--crm-surface-2) 5px,transparent 5px,transparent 10px);' : '') + '"><b>' + n + '</b><div style="margin-top:6px;color:var(--crm-muted)">' + (closed ? 'Closed' : count + ' classes') + '</div></div>';
+    }
+    return h + '</div>';
+  }
+  var dayFocus = state.crmDay == null ? 2 : state.crmDay;
+  var days = mode === 'day' ? [dayFocus] : [0, 1, 2, 3, 4, 5, 6];
+  h += '<div class="crm-week" style="grid-template-columns:64px repeat(' + days.length + ',minmax(120px,1fr))">';
+  h += '<div class="crm-week-head">Time</div>';
+  days.forEach(function (d) {
+    h += '<button type="button" class="crm-week-head" onclick="crmPickDay(' + d + ')">' + names[d] + (d === 6 ? '<small>Closed</small>' : '') + '</button>';
+  });
+  h += '<div class="crm-times" style="height:' + height + 'px">';
+  for (var t = startMin; t < endMin; t += 60) {
+    h += '<div class="crm-hour" style="top:' + ((t - startMin) / 60 * px) + 'px;height:' + px + 'px">' + crmClock(t) + '</div>';
+  }
+  h += '</div>';
+  days.forEach(function (d) {
+    h += '<div class="crm-day" style="height:' + height + 'px">';
+    var windows = [];
+    if (d <= 3) windows.push([14 * 60, 20 * 60 + 30]);
+    else if (d === 4 && school === 'waunakee') windows.push([15 * 60, 19 * 60 + 30]);
+    else if (d === 5 && school !== 'deforest') windows.push([9 * 60, 13 * 60]);
+    var cursor = startMin;
+    windows.forEach(function (w) {
+      if (w[0] > cursor) h += '<div class="crm-shade" style="top:' + ((cursor - startMin) / 60 * px) + 'px;height:' + ((w[0] - cursor) / 60 * px) + 'px"></div>';
+      cursor = w[1];
+    });
+    if (!windows.length) h += '<div class="crm-shade" style="top:0;height:' + height + 'px"></div>';
+    else if (cursor < endMin) h += '<div class="crm-shade" style="top:' + ((cursor - startMin) / 60 * px) + 'px;height:' + ((endMin - cursor) / 60 * px) + 'px"></div>';
+    var here = rows.filter(function (r) { return r.day === d; }).sort(function (a, b) { return a.start - b.start; });
+    var laneEnd = [];
+    here.forEach(function (row) {
+      var lane = 0;
+      while (laneEnd[lane] > row.start) lane++;
+      row.lane = lane;
+      laneEnd[lane] = row.start + row.dur;
+    });
+    var lanes = Math.max(1, laneEnd.length);
+    here.forEach(function (row) {
+      var prog = programs[row.program] || programs.beginners;
+      var cancelled = (state.crmCancelled && state.crmCancelled[row.id]) || (school === 'waunakee' && d === 0);
+      var top = (row.start - startMin) / 60 * px;
+      var blockH = Math.max(28, row.dur / 60 * px - 3);
+      var width = 100 / lanes;
+      h += '<button type="button" class="crm-ev' + (cancelled ? ' cancelled' : '') + '" style="top:' + top + 'px;height:' + blockH + 'px;left:calc(' + (row.lane * width) + '% + 2px);width:calc(' + width + '% - 4px);background:' + prog.bg + ';color:' + prog.fg + '" onclick="crmOpenClass(\'' + row.id + '\')"><b>' + esc(prog.name) + '</b><small>' + esc(row.instructor) + ' · ' + row.checked + '/' + row.cap + '</small><span class="cap"><i style="width:' + Math.round(row.checked / row.cap * 100) + '%"></i></span></button>';
+    });
+    if (d === 2) h += '<div class="crm-now" style="top:' + ((now - startMin) / 60 * px) + 'px" title="5:40p"></div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  var agendaDay = mode === 'day' ? dayFocus : 2;
+  h += '<div class="crm-agenda"><div class="crm-chips">';
+  names.forEach(function (label, i) { h += '<button type="button" aria-pressed="' + (agendaDay === i) + '" onclick="crmPickDay(' + i + ')">' + label + '</button>'; });
+  h += '</div><section class="crm-card" style="padding:8px 16px">';
+  rows.filter(function (r) { return r.day === agendaDay; }).sort(function (a, b) { return a.start - b.start; }).forEach(function (row) {
+    var prog = programs[row.program] || programs.beginners;
+    var cancelled = (state.crmCancelled && state.crmCancelled[row.id]) || (school === 'waunakee' && agendaDay === 0);
+    h += '<button type="button" class="crm-task" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer" onclick="crmOpenClass(\'' + row.id + '\')"><div><b>' + esc(prog.name) + ' · ' + crmClock(row.start) + '–' + crmClock(row.start + row.dur) + '</b><div style="color:var(--crm-muted);font-size:12px">' + esc(row.instructor) + ' · ' + esc(row.room) + ' · ' + esc(row.rank) + '</div></div><span class="crm-pill ' + (cancelled ? 'warn' : 'ok') + '">' + (cancelled ? 'Cancelled' : row.checked + ' / ' + row.cap) + '</span></button>';
+  });
+  if (!rows.some(function (r) { return r.day === agendaDay; })) h += '<p style="color:var(--crm-muted)">Closed. No classes this day.</p>';
+  h += '</section></div>';
+  var open = rows.filter(function (r) { return r.id === state.crmOpen; })[0];
+  if (open) {
+    var prog = programs[open.program] || programs.beginners;
+    var cancelled = (state.crmCancelled && state.crmCancelled[open.id]) || (school === 'waunakee' && open.day === 0);
+    h += '<aside class="crm-drawer" role="dialog" aria-label="Class detail"><button type="button" class="crm-iconbtn" onclick="crmOpenClass(\'\')">Close</button><p class="crm-kicker">' + esc(prog.name) + '</p><h2>' + names[open.day] + ' · ' + crmClock(open.start) + '–' + crmClock(open.start + open.dur) + '</h2><p>' + esc(open.instructor) + ' · ' + esc(open.room) + ' · ' + esc(open.rank) + '</p><p>Roster ' + open.cap + ' · checked in ' + open.checked + '</p><div class="crm-bar"><span style="width:' + Math.round(open.checked / open.cap * 100) + '%"></span></div><p style="margin-top:12px">' + (cancelled ? 'This session is cancelled.' : 'This session is on the schedule.') + '</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="crm-primary" onclick="crmToggleAdd()">Edit series</button><button type="button" class="crm-primary" onclick="crmCancelClass(\'' + open.id + '\', false)">Cancel this session</button><button type="button" class="crm-primary" onclick="crmCancelClass(\'' + open.id + '\', true)">Cancel series</button></div></aside>';
+  }
+  return h;
+}
 function crmRenderPage() {
   var tab = state.crmTab || 'members';
   var titles = {
@@ -16811,7 +17145,9 @@ function crmRenderPage() {
     import: ['GymDesk import', 'Match status for the fixture. No live pull.'],
     promos: ['Promo codes', 'Checkout quote for a clinic booking.'],
     ops: ['Task sheets', 'Daily, weekly, monthly, and cycle. The live sheet is unchanged.'],
-    payroll: ['Payroll hours', 'Punched time is the paycheck. Shifts are the comparison.']
+    payroll: ['Payroll hours', 'Punched time is the paycheck. Shifts are the comparison.'],
+    events: ['Events', 'Belt tests, clinics, tournaments, parties, and camps. Mock only.'],
+    calendar: ['Class calendar', 'Week of Nov 16. Instructors come from the staff schedule.']
   };
   var pair = titles[tab] || titles.members;
   var body = tab === 'family' ? crmFamilyView()
@@ -16819,6 +17155,8 @@ function crmRenderPage() {
     : tab === 'promos' ? crmPromoView()
     : tab === 'ops' ? crmOpsView()
     : tab === 'payroll' ? crmPayrollView()
+    : tab === 'events' ? crmEventsView()
+    : tab === 'calendar' ? crmCalendarView()
     : crmMembersView();
   return crmShell(pair[0], pair[1], body);
 }

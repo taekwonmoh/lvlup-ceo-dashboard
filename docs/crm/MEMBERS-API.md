@@ -12,7 +12,8 @@ Guardian tokens see only their `familyIds`. A member token sees only their own m
 |---|---|---|
 | Sign-in home, child switcher | `GET /v1/me` then `GET /v1/families/{familyId}` | Guardian email, each child, each child’s `locationId`. Switching children does not change the token. |
 | Belt / rank | `GET /v1/members/{memberId}` | Name, school, plan. Rank events are the next field to add on this payload; until then the Firebase belt journey stays the display. |
-| Book a class | `GET /v1/sessions?locationId&from&to` (OpenAPI) | Our sessions, not a GymDesk tab, once that school has cut over. Until then keep the GymDesk link. |
+| Book a class | `GET /v1/sessions?locationId&from&to` | Sessions generated from class templates inside open hours. Until a school cuts over, keep the GymDesk link. |
+| Book an event | `GET /v1/events?locationId` then `POST /v1/quotes` | Published events only. The booking body is `eventId`, `title`, `locationId`, `brand`, `eventType`, `startsAt`, `listPriceCents`, `dueCents`, `discountCents`, `spotsLeft`. Member and non-member prices differ. A full or unpublished event has `available: false`. |
 | Price on a clinic, tournament prep, or event | `POST /v1/quotes` | Body below. Show `dueCents` next to `listPriceCents` before the parent confirms. |
 | Confirm a booking with a code | `POST /v1/sessions/{sessionId}/bookings` with the code, then `POST /v1/promo-redemptions` | Redemption is stored against the booking. `chargeId` stays null until a real charge exists. This backbone does not charge. |
 | Hold or cancel | `POST /v1/memberships/{id}/holds` and `POST /v1/cancellation-requests` | Request only. Notice is 30 days from the Chicago receipt date. An approved hold suppresses tuition drafts. The hold fee stays off until Mike enables it. |
