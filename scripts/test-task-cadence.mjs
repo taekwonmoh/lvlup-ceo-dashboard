@@ -502,6 +502,7 @@ proofSaveStructured('cycle_checklist', 'cc_bday');
 const partyWrite = sandbox.__writes[sandbox.__writes.length - 1];
 check(partyWrite && partyWrite.val && partyWrite.val.bookings && partyWrite.val.bookings.length === 2, 'two named parties with dates complete Book a party');
 
+state._proofNow = '2026-11-18T18:00:00Z';
 const monProof = sheet('ash', '2026-11-16');
 check(monProof.indexOf('How many today') < 0, 'the stoplight sheet has no manual count box');
 check(monProof.indexOf('Students page') >= 0, 'stoplight tells staff to use the Students page');
@@ -801,6 +802,125 @@ state._proofNow = null;
 sandbox.document.activeElement = null;
 sandbox.document.getElementById = prevGet;
 sandbox.document.querySelectorAll = prevQuery;
+
+// Daily checklist text: a live refresh must not drop what is being typed, and
+// Save must send that text. A day snapshot that does not contain the write yet
+// must not erase it, and a rejected write must say so.
+const applyTaskSnap = grab('applyTaskSnap');
+const taskFieldKey = grab('taskFieldKey');
+const rememberTaskDraft = grab('rememberTaskDraft');
+const undoTask = grab('undoTask');
+vm.runInContext('__fbSetRestore = fbSet;', sandbox);
+state.tasksLoc = 'ash';
+state.tasksDate = '2026-11-18';
+state._proofNow = '2026-11-18T18:00:00Z';
+state.taskInputDrafts = {};
+state.taskSaveStatus = {};
+state.taskPendingWrites = {};
+if (!state.tasksData.ash) state.tasksData.ash = {};
+state.tasksData.ash.daily = state.tasksData.ash.daily || {};
+state.tasksData.ash.daily['2026-11-18'] = { opening: { ts: 1, proofV: 1, photos: ['http://example.test/open.jpg'] } };
+const roster = {
+  id: 'notes_daily_rosters',
+  value: 'Tigers 7, Kids 11. Trial: Maya',
+  tagName: 'INPUT',
+  style: {},
+  selectionStart: 8,
+  selectionEnd: 8,
+  getAttribute(name) {
+    if (name === 'data-task-draft') return '1';
+    if (name === 'data-task-section') return 'daily';
+    if (name === 'data-task-id') return 'rosters';
+    if (name === 'data-task-scope') return taskFieldScope('notes_daily_rosters');
+    return null;
+  },
+  focus() { sandbox.document.activeElement = roster; },
+  setSelectionRange(a, b) { roster.selectionStart = a; roster.selectionEnd = b; },
+  setAttribute() {},
+};
+sandbox.document.activeElement = roster;
+sandbox.document.__app = sandbox.document.__blankEl();
+sandbox.document.__app.innerHTML = 'DAILY-MARKER';
+const rosterPrevGet = sandbox.document.getElementById;
+sandbox.document.getElementById = function (id) {
+  if (id === 'app') return sandbox.document.__app;
+  if (id === roster.id) return roster;
+  return rosterPrevGet(id);
+};
+const rosterPrevQuery = sandbox.document.querySelectorAll;
+sandbox.document.querySelectorAll = function (sel) {
+  if (sel === '[data-task-draft]') return [roster];
+  return [];
+};
+const writesBeforeRoster = sandbox.__writes.length;
+render();
+check(sandbox.document.__app.innerHTML === 'DAILY-MARKER', 'a live update does not redraw the daily checklist while a proof box is focused');
+check(roster.value === 'Tigers 7, Kids 11. Trial: Maya', 'the focused roster note is not cleared by that update');
+check(taskDraftValue('notes_daily_rosters') === 'Tigers 7, Kids 11. Trial: Maya', 'the roster note is stored before the redraw is skipped');
+check(sandbox.__writes.length === writesBeforeRoster, 'skipping the daily redraw does not write the unfinished note');
+applyTaskSnap('ash', 'daily', '2026-11-18', { opening: { ts: 2, proofV: 1, photos: ['http://example.test/open.jpg'] } });
+render();
+check(roster.value === 'Tigers 7, Kids 11. Trial: Maya' && sandbox.document.activeElement === roster, 'a day snapshot during typing leaves the roster text and focus alone');
+
+// Blur can report an empty box after the letters were already stored.
+roster.value = '';
+const writesBeforeEmptyBlur = sandbox.__writes.length;
+leaveTaskField(roster);
+const emptyBlurWrite = sandbox.__writes.slice(writesBeforeEmptyBlur).filter(w => String(w.path).indexOf('/rosters') >= 0).pop();
+check(emptyBlurWrite && emptyBlurWrite.val && emptyBlurWrite.val.notes === 'Tigers 7, Kids 11. Trial: Maya' && emptyBlurWrite.val.proofV === 1, 'leaving the roster box saves the typed text when the blur value is empty');
+check(String(emptyBlurWrite.path) === 'tasks/emp/ash/daily/2026-11-18/rosters', 'the roster note is saved on today\'s daily record');
+
+// Hold the write open the way Firebase does, then deliver an older day snapshot.
+undoTask('daily', 'rosters');
+state.tasksData.ash.daily['2026-11-18'] = { opening: { ts: 1, proofV: 1, photos: ['http://example.test/open.jpg'] } };
+state.taskPendingWrites = {};
+state.taskInputDrafts = {};
+state.taskSaveStatus = {};
+roster.value = 'No new / no trials';
+sandbox.document.__els.notes_daily_rosters = roster;
+let releaseSave;
+const held = new Promise(function (resolve) { releaseSave = resolve; });
+const fbSetNow = grab('fbSet');
+vm.runInContext('fbSet = function(path, val){ __writes.push({path:path, val:val}); return __held; };', sandbox);
+sandbox.__held = { then(ok) { held.then(ok); } };
+const writesBeforeEnter = sandbox.__writes.length;
+const enterEvent = { key: 'Enter', defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+taskFieldKey(enterEvent, roster);
+const enterWrite = sandbox.__writes.slice(writesBeforeEnter).filter(w => String(w.path).indexOf('/rosters') >= 0).pop();
+check(enterEvent.defaultPrevented, 'Enter in a roster box does not submit the page');
+check(enterWrite && enterWrite.val && enterWrite.val.notes === 'No new / no trials', 'Enter saves the roster text');
+applyTaskSnap('ash', 'daily', '2026-11-18', { opening: { ts: 3, proofV: 1, photos: ['http://example.test/open.jpg'] } });
+const heldRec = state.tasksData.ash.daily['2026-11-18'].rosters;
+check(heldRec && heldRec.notes === 'No new / no trials' && heldRec.proofV === 1, 'a day snapshot without the new proof does not drop it');
+const heldSheet = section(sheet('ash', '2026-11-18'), 'Daily Checklist');
+check(heldSheet.indexOf('data-proof-saved="1"') >= 0 && heldSheet.indexOf('No new / no trials') >= 0 && heldSheet.indexOf('data-proof-status="saved"') >= 0, 'the roster card stays saved, with the typed text, after that snapshot');
+check(heldSheet.indexOf('Saved ·') >= 0, 'the saved roster proof shows a timestamp');
+releaseSave();
+await held;
+vm.runInContext('fbSet = __fbSetRestore;', sandbox);
+
+// Rejected write: the text stays on the card and the error is visible.
+state.taskPendingWrites = {};
+state.taskSaveStatus = {};
+undoTask('daily', 'rosters');
+state.tasksData.ash.daily['2026-11-18'] = {};
+roster.value = 'Teens 4';
+state.taskInputDrafts = {};
+rememberTaskDraft(roster);
+vm.runInContext('fbSet = function(){ return { then: function(ok, bad){ Promise.resolve().then(function(){ bad(new Error("permission_denied")); }); } }; };', sandbox);
+const writesBeforeReject = sandbox.__writes.length;
+completeTaskWithNotes('daily', 'rosters', 'Teens 4');
+await Promise.resolve();
+check(sandbox.__writes.length === writesBeforeReject, 'a rejected roster save does not count as a stored write');
+check(state.taskSaveStatus['daily|rosters'] && state.taskSaveStatus['daily|rosters'].kind === 'error' && /could not save/i.test(state.taskSaveStatus['daily|rosters'].text), 'a rejected roster save shows an error');
+const rejectedSheet = section(sheet('ash', '2026-11-18'), 'Daily Checklist');
+check(rejectedSheet.indexOf('Teens 4') >= 0 && rejectedSheet.indexOf('data-proof-saved="1"') < 0, 'the rejected roster text stays in the box');
+vm.runInContext('fbSet = __fbSetRestore;', sandbox);
+sandbox.document.getElementById = prevGet;
+sandbox.document.querySelectorAll = prevQuery;
+sandbox.document.activeElement = null;
+state.taskPendingWrites = {};
+state._proofNow = null;
 
 if (failed) {
   console.error(failed + ' failed, ' + passed + ' passed');

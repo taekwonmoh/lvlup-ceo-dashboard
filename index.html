@@ -1682,15 +1682,75 @@ function attachBurst(section, taskId, payload){
   }
   return payload;
 }
+// A day/week listener replaces the whole bucket with snap.val(). A snapshot that
+// was queued before this write, or a server rejection, would otherwise delete
+// the proof the person just typed. Hold that payload until the write settles.
+function taskPendingMap(emp, sPath, sKey){
+  if(!state.taskPendingWrites) state.taskPendingWrites={};
+  const k=emp+'|'+sPath+'|'+sKey;
+  if(!state.taskPendingWrites[k]) state.taskPendingWrites[k]={};
+  return state.taskPendingWrites[k];
+}
+function applyTaskSnap(emp, sPath, sKey, snapVal){
+  const incoming=(snapVal&&typeof snapVal==='object')?snapVal:{};
+  const pending=taskPendingMap(emp, sPath, sKey);
+  const merged={};
+  Object.keys(incoming).forEach(function(id){ merged[id]=incoming[id]; });
+  // Pending stays until fbSet settles. An optimistic echo matches the payload
+  // and must not clear it — the next event can still be the pre-write snapshot.
+  Object.keys(pending).forEach(function(id){
+    const payload=pending[id];
+    if(payload==null) delete merged[id];
+    else merged[id]=payload;
+  });
+  if(!state.tasksData[emp]) state.tasksData[emp]={};
+  if(!state.tasksData[emp][sPath]) state.tasksData[emp][sPath]={};
+  state.tasksData[emp][sPath][sKey]=merged;
+  return merged;
+}
+function ackTaskWrite(section, taskId, emp, info, payload){
+  const pending=taskPendingMap(emp, info.sPath, info.sKey);
+  if(pending[taskId]!==payload) return;
+  delete pending[taskId];
+}
+function taskWriteFailed(section, taskId, emp, info, payload){
+  if(state._taskWriteFailing) return;
+  const pending=taskPendingMap(emp, info.sPath, info.sKey);
+  if(pending[taskId]!==payload) return;
+  state._taskWriteFailing=true;
+  try{
+    delete pending[taskId];
+    const bucket=((state.tasksData[emp]||{})[info.sPath]||{})[info.sKey];
+    if(bucket&&bucket[taskId]===payload) delete bucket[taskId];
+    if(payload&&payload.notes){
+      const id='notes_'+section+'_'+taskId;
+      if(!state.taskInputDrafts) state.taskInputDrafts={};
+      state.taskInputDrafts[id]={scope:taskFieldScope(id), value:String(payload.notes), focused:false};
+    }
+    taskProofStatus(section, taskId, 'error', 'Could not save this. Check the connection and try again.');
+    render(true);
+  }finally{
+    state._taskWriteFailing=false;
+  }
+}
 function writeTask(section, taskId, payload){
   const info=taskPathFor(section);
   const emp=state.tasksLoc;
   if(!state.tasksData[emp]) state.tasksData[emp]={};
   if(!state.tasksData[emp][info.sPath]) state.tasksData[emp][info.sPath]={};
   if(!state.tasksData[emp][info.sPath][info.sKey]) state.tasksData[emp][info.sPath][info.sKey]={};
+  taskPendingMap(emp, info.sPath, info.sKey)[taskId]=payload;
   if(payload==null) delete state.tasksData[emp][info.sPath][info.sKey][taskId];
   else state.tasksData[emp][info.sPath][info.sKey][taskId]=payload;
-  fbSet(info.base+taskId, payload);
+  let result;
+  try { result=fbSet(info.base+taskId, payload); }
+  catch(err){ taskWriteFailed(section, taskId, emp, info, payload); return false; }
+  if(result&&typeof result.then==='function'){
+    result.then(function(){ ackTaskWrite(section, taskId, emp, info, payload); }, function(){ taskWriteFailed(section, taskId, emp, info, payload); });
+  }else{
+    ackTaskWrite(section, taskId, emp, info, payload);
+  }
+  return true;
 }
 function taskNow(){ return state._proofNow ? new Date(state._proofNow) : new Date(); }
 function ctDateKey(now){
@@ -1780,8 +1840,7 @@ function commitTask(section, taskId, payload, opts){
   const gated=guardTaskWrite(section, task, payload);
   if(!gated) return false;
   if(!opts||!opts.skipBurst) attachBurst(section, taskId, gated);
-  writeTask(section, taskId, gated);
-  return true;
+  return writeTask(section, taskId, gated)!==false;
 }
 function setClockGate(loc, on){
   if(!(dashAuth&&dashAuth.isAdmin)) return;
@@ -2669,8 +2728,8 @@ function linkify(s) { return esc(s).replace(/(https?:\/\/[^\s<>"]+)/g, '<a href=
 function fbRef(path) { return dashLocalFixtureMode() ? crqStubRef() : db.ref(CEO + '/' + path); }
 
 function fbSet(path, val) {
-  if (dashLocalFixtureMode()) return;
-  fbRef(path).set(val);
+  if (dashLocalFixtureMode()) return Promise.resolve();
+  return fbRef(path).set(val);
 }
 
 function fbDebounce(path, val, ms) {
@@ -5239,6 +5298,8 @@ function render(force) {
   // A Firebase listener redraws the whole page by replacing innerHTML. Note
   // fields only live in the DOM until Save, so capture them first and skip the
   // redraw while one is focused. A forced render (after a real save) still paints.
+  // Replacing #app also jumps the window back to the top, which closes the
+  // phone keyboard, so a paint puts the scroll position back.
   captureTaskInputDrafts();
   if (!force && taskInputIsEditing()) {
     state.taskRenderPending = true;
@@ -5247,6 +5308,8 @@ function render(force) {
   state.taskRenderPending = false;
   if (state._taskPainting) return;
   state._taskPainting = true;
+  let taskScrollY = 0;
+  try { taskScrollY = window.scrollY || (document.documentElement && document.documentElement.scrollTop) || 0; } catch (e) { taskScrollY = 0; }
   try {
   gdDestroyFinanceCharts();
   const app = document.getElementById('app');
@@ -5300,6 +5363,7 @@ function render(force) {
   } finally {
     state._taskPainting = false;
     restoreTaskInputDrafts();
+    try { if (taskScrollY && window.scrollTo) window.scrollTo(0, taskScrollY); } catch (e) {}
     mountTaskNoteFixtureBar();
     mountContentContextFixtureBar();
     mountStaffScheduleFixtureBar();
@@ -11053,7 +11117,9 @@ function getWeekMonday(weekKey){
 function getWeekSunday(weekKey){const mon=getWeekMonday(weekKey);const sun=new Date(mon);sun.setDate(mon.getDate()+6);return sun;}
 function isWeekLocked(weekKey){
   const sun=getWeekSunday(weekKey);sun.setHours(23,59,59,0);
-  return new Date()>sun;
+  // _proofNow is the checklist test clock. Production leaves it unset.
+  const now=state._proofNow?new Date(state._proofNow):new Date();
+  return now>sun;
 }
 function getMonthWeekKeys(year,month){
   // Weeks where Monday falls in the given month (1-indexed)
@@ -11065,60 +11131,46 @@ function getMonthWeekKeys(year,month){
 
 /*  -  -  Tasks Firebase Listeners  -  -  */
 function empPath(empId){return 'tasks/emp/'+empId;}
+let _taskListenRegs=[];
 function listenTasks(){
+  _taskListenRegs.forEach(function(reg){ try{ reg.ref.off(reg.event); }catch(e){} });
+  activeListeners=activeListeners.filter(function(l){ return _taskListenRegs.indexOf(l)<0; });
+  _taskListenRegs=[];
+  function watch(ref, fn){
+    ref.on('value', fn);
+    const rec={ref:ref, event:'value'};
+    _taskListenRegs.push(rec);
+    activeListeners.push(rec);
+  }
   const emp=state.tasksLoc,dateKey=state.tasksDate,weekKey=getTaskWeekKey(dateKey);
   const base=empPath(emp);
   const dailyRef=fbRef(base+'/daily/'+dateKey);
-  dailyRef.on('value',snap=>{
-    if(!state.tasksData[emp])state.tasksData[emp]={};
-    if(!state.tasksData[emp].daily)state.tasksData[emp].daily={};
-    state.tasksData[emp].daily[dateKey]=snap.val()||{};render();
-  });activeListeners.push({ref:dailyRef,event:'value'});
+  watch(dailyRef, function(snap){ applyTaskSnap(emp, 'daily', dateKey, snap.val()); render(); });
   const weeklyRef=fbRef(base+'/weekly/'+weekKey);
-  weeklyRef.on('value',snap=>{
-    if(!state.tasksData[emp])state.tasksData[emp]={};
-    if(!state.tasksData[emp].weekly)state.tasksData[emp].weekly={};
-    state.tasksData[emp].weekly[weekKey]=snap.val()||{};render();
-  });activeListeners.push({ref:weeklyRef,event:'value'});
+  watch(weeklyRef, function(snap){ applyTaskSnap(emp, 'weekly', weekKey, snap.val()); render(); });
   const _isGN=isGoNinja(emp);
   const cycleKey=getCycleChecklistKey();
   const cycleRef=_isGN?fbRef(base+'/cycle/'+cycleKey):fbRef(base+'/cycle_checklist/'+cycleKey);
-  cycleRef.on('value',snap=>{
-    if(!state.tasksData[emp])state.tasksData[emp]={};
-    if(_isGN){
-      if(!state.tasksData[emp].cycle)state.tasksData[emp].cycle={};
-      state.tasksData[emp].cycle[cycleKey]=snap.val()||{};
-    }else{
-      if(!state.tasksData[emp].cycle_checklist)state.tasksData[emp].cycle_checklist={};
-      state.tasksData[emp].cycle_checklist[cycleKey]=snap.val()||{};
-    }
-    render();
-  });activeListeners.push({ref:cycleRef,event:'value'});
+  const cyclePath=_isGN?'cycle':'cycle_checklist';
+  watch(cycleRef, function(snap){ applyTaskSnap(emp, cyclePath, cycleKey, snap.val()); render(); });
   const monthKey=getTaskMonthKey();
   const monthlyRef=fbRef(base+'/monthly/'+monthKey);
-  monthlyRef.on('value',snap=>{
-    if(!state.tasksData[emp])state.tasksData[emp]={};
-    if(!state.tasksData[emp].monthly)state.tasksData[emp].monthly={};
-    state.tasksData[emp].monthly[monthKey]=snap.val()||{};render();
-  });activeListeners.push({ref:monthlyRef,event:'value'});
+  watch(monthlyRef, function(snap){ applyTaskSnap(emp, 'monthly', monthKey, snap.val()); render(); });
   [['daily',dateKey],['weekly',weekKey],['monthly',monthKey]].forEach(([section,sKey])=>{
     const cRef=fbRef(base+'/custom_'+section+'/'+sKey);
-    cRef.on('value',snap=>{
+    watch(cRef, function(snap){
       if(!state.tasksData[emp])state.tasksData[emp]={};
       const key='custom_'+section;
       if(!state.tasksData[emp][key])state.tasksData[emp][key]={};
       state.tasksData[emp][key][sKey]=snap.val()||{};render();
-    });activeListeners.push({ref:cRef,event:'value'});
+    });
   });
   const dnwRef=fbRef(base+'/did_not_work');
-  dnwRef.on('value',snap=>{if(!state.tasksData[emp])state.tasksData[emp]={};state.tasksData[emp].did_not_work=snap.val()||{};render();});
-  activeListeners.push({ref:dnwRef,event:'value'});
+  watch(dnwRef, function(snap){ if(!state.tasksData[emp])state.tasksData[emp]={}; state.tasksData[emp].did_not_work=snap.val()||{}; render(); });
   const signoffRef=fbRef(base+'/weekly_signoff');
-  signoffRef.on('value',snap=>{if(!state.tasksData[emp])state.tasksData[emp]={};state.tasksData[emp].weekly_signoff=snap.val()||{};render();});
-  activeListeners.push({ref:signoffRef,event:'value'});
+  watch(signoffRef, function(snap){ if(!state.tasksData[emp])state.tasksData[emp]={}; state.tasksData[emp].weekly_signoff=snap.val()||{}; render(); });
   const exLogRef=fbRef(base+'/exception_log/'+dateKey);
-  exLogRef.on('value',snap=>{if(!state.tasksData[emp])state.tasksData[emp]={};if(!state.tasksData[emp].exception_log)state.tasksData[emp].exception_log={};state.tasksData[emp].exception_log[dateKey]=snap.val()||'';render();});
-  activeListeners.push({ref:exLogRef,event:'value'});
+  watch(exLogRef, function(snap){ if(!state.tasksData[emp])state.tasksData[emp]={}; if(!state.tasksData[emp].exception_log)state.tasksData[emp].exception_log={}; state.tasksData[emp].exception_log[dateKey]=snap.val()||''; render(); });
 }
 function listenGoals(){
   const loc=state.goalsLoc,mk=state.goalsMonth;
@@ -11227,8 +11279,7 @@ function completeTaskWithNotes(section,taskId,forced,opts){
     flag('Could not save this note. Try again.');
     return;
   }
-  clearTaskDrafts(section, taskId);
-  if(proofFieldsOk(task, payload)) taskProofStatus(section, taskId, 'saved', 'Saved');
+  if(proofFieldsOk(task, payload)) taskProofStatus(section, taskId, 'saved', taskSavedLabel(payload.ts));
   else taskProofStatus(section, taskId, 'error', 'The note was saved. The rest of the proof is still required before this counts.');
   render(true);
 }
@@ -11243,12 +11294,12 @@ function completeTaskCount(section,taskId){
     if(el){el.style.borderColor='var(--red)';el.focus();}
     return;
   }
-  if(!commitTask(section, taskId, {ts:Date.now(), proofV:1, count:n})){
+  const countPayload={ts:Date.now(), proofV:1, count:n};
+  if(!commitTask(section, taskId, countPayload)){
     taskProofStatus(section, taskId, 'error', 'Could not save this count. Try again.');
     return;
   }
-  clearTaskDrafts(section, taskId);
-  taskProofStatus(section, taskId, 'saved', 'Saved');
+  taskProofStatus(section, taskId, 'saved', taskSavedLabel(countPayload.ts));
   render(true);
 }
 function proofSaveStructured(section, taskId, opts){
@@ -11306,8 +11357,7 @@ function proofSaveStructured(section, taskId, opts){
     taskProofStatus(section, taskId, 'error', 'Could not save this. Try again.');
     return;
   }
-  clearTaskDrafts(section, taskId);
-  taskProofStatus(section, taskId, 'saved', 'Saved');
+  taskProofStatus(section, taskId, 'saved', taskSavedLabel(payload.ts));
   if(kind==='invites'||kind==='bookings') mirrorPartyBookings(payload.bookings||[]);
   render(true);
 }
@@ -11383,13 +11433,21 @@ function taskDraftHooks(section, taskId){
   return h;
 }
 function escAttr(s){ return esc(s).replace(/"/g,'&quot;'); }
-function rememberTaskDraft(el){
+function rememberTaskDraft(el, fromBlur){
   if(!el||!el.id) return;
   if(!state.taskInputDrafts) state.taskInputDrafts={};
   let start=null,end=null;
   try{ start=el.selectionStart; end=el.selectionEnd; }catch(e){}
   const scope=(el.getAttribute&&el.getAttribute('data-task-scope'))||taskFieldScope(el.id);
-  state.taskInputDrafts[el.id]={scope:scope, value:el.value==null?'':String(el.value), start:start, end:end, focused:document.activeElement===el};
+  const value=el.value==null?'':String(el.value);
+  const prev=state.taskInputDrafts[el.id];
+  // A blur caused by a redraw can report an empty box after the letters were
+  // already stored. Do not replace that text with nothing.
+  if(fromBlur&&!value&&prev&&prev.value&&prev.scope===scope){
+    prev.focused=false;
+    return;
+  }
+  state.taskInputDrafts[el.id]={scope:scope, value:value, start:start, end:end, focused:document.activeElement===el};
   if(state._capturingDrafts) return;
   const section=el.getAttribute&&el.getAttribute('data-task-section');
   const taskId=el.getAttribute&&el.getAttribute('data-task-id');
@@ -11456,6 +11514,10 @@ function clearTaskDrafts(section, taskId){
     if(id===noteId||id===countId||id.indexOf(pfPrefix)===0) delete drafts[id];
   });
 }
+function taskSavedLabel(ts){
+  const when=proofWhenLabel(ts);
+  return when?('Saved · '+when):'Saved';
+}
 function taskProofStatus(section, taskId, kind, text){
   if(!state.taskSaveStatus) state.taskSaveStatus={};
   const key=section+'|'+taskId;
@@ -11477,7 +11539,7 @@ function taskProofStatusHtml(section, taskId){
 function taskSavedBadge(section, taskId){
   const st=(state.taskSaveStatus||{})[section+'|'+taskId];
   if(!st||st.kind!=='saved') return '';
-  return '<span data-proof-status="saved" style="display:inline-block;margin-right:6px;font-size:10px;font-weight:800;color:#15803d;background:#dcfce7;border-radius:999px;padding:1px 6px;">Saved</span>';
+  return '<span data-proof-status="saved" style="display:inline-block;margin-right:6px;font-size:10px;font-weight:800;color:#15803d;background:#dcfce7;border-radius:999px;padding:1px 6px;">'+esc(st.text)+'</span>';
 }
 function scheduleTaskRenderFlush(){
   clearTimeout(state._taskRenderFlush);
@@ -11495,7 +11557,10 @@ function taskFieldKey(event, el){
 }
 function leaveTaskField(el){
   if(state._taskPainting) return;
-  rememberTaskDraft(el);
+  // Replacing the page removes the focused box. That blur is not the person
+  // leaving the field, and the detached box can read as empty.
+  if(el&&el.isConnected===false) return;
+  rememberTaskDraft(el, true);
   const section=el&&el.getAttribute&&el.getAttribute('data-task-section');
   const taskId=el&&el.getAttribute&&el.getAttribute('data-task-id');
   if(section&&taskId) saveTaskField(el, {fromBlur:true});
@@ -11511,13 +11576,17 @@ function saveTaskField(el, opts){
   const kind=proofKindOf(task);
   if(kind==='note'||kind==='lines'||kind==='photoNote'||kind==='photoOrNone'){
     const box=document.getElementById('notes_'+section+'_'+taskId);
-    const notes=box?String(box.value||'').trim():'';
+    let notes=box?String(box.value||'').trim():'';
+    if(!notes){
+      const drafted=taskDraftValue('notes_'+section+'_'+taskId);
+      if(drafted!=null&&String(drafted).trim()) notes=String(drafted).trim();
+    }
     if(!notes){
       if(opts.explicit) completeTaskWithNotes(section, taskId, null, {keepFocus:false});
       else taskProofStatus(section, taskId, '', '');
       return;
     }
-    completeTaskWithNotes(section, taskId, null, {keepFocus:!!opts.fromBlur&&!opts.explicit});
+    completeTaskWithNotes(section, taskId, notes, {keepFocus:!!opts.fromBlur&&!opts.explicit});
     return;
   }
   if(kind==='count'){
@@ -11723,8 +11792,7 @@ function proofUseNone(section, taskId){
       taskProofStatus(section, taskId, 'error', 'Could not save this. Try again.');
       return;
     }
-    clearTaskDrafts(section, taskId);
-    taskProofStatus(section, taskId, 'saved', 'Saved');
+    taskProofStatus(section, taskId, 'saved', taskSavedLabel(payload.ts));
     render(true);
     return;
   }
@@ -11734,8 +11802,7 @@ function proofUseNone(section, taskId){
       taskProofStatus(section, taskId, 'error', 'Could not save this. Try again.');
       return;
     }
-    clearTaskDrafts(section, taskId);
-    taskProofStatus(section, taskId, 'saved', 'Saved');
+    taskProofStatus(section, taskId, 'saved', taskSavedLabel(payload.ts));
     render(true);
     return;
   }
