@@ -16336,11 +16336,11 @@ function crmBootPreview() {
   state.activeSection = 'crm';
   var tabMatch = /(?:\?|&)crmTab=([a-z]+)/.exec(String(location.search || ''));
   var themeMatch = /(?:\?|&)crmTheme=(light|dark)/.exec(String(location.search || ''));
-  state.crmTab = tabMatch ? tabMatch[1] : 'members';
+  state.crmTab = tabMatch ? tabMatch[1] : 'home';
   state.crmTheme = themeMatch ? themeMatch[1] : (state.crmTheme || 'light');
   state.crmChild = state.crmChild || 'avery';
   state.crmMember = state.crmMember || 'avery';
-  state.crmSchool = state.crmSchool || 'waunakee';
+  state.crmSchool = state.crmSchool || 'all';
   state.crmQuery = state.crmQuery || '';
   state.crmQuote = state.crmQuote || 'clinic10';
   var sheetMatch = /(?:\?|&)crmSheet=(daily|weekly|monthly|cycle)/.exec(String(location.search || ''));
@@ -16355,7 +16355,8 @@ function crmMarkOffline() {
   if (!conn) return;
   conn.style.display = 'none';
 }
-function crmTab(tab) { state.crmTab = tab; render(); }
+function crmTab(tab) { state.crmTab = tab; state.crmMore = false; render(); }
+function crmToggleMore() { state.crmMore = !state.crmMore; render(); }
 function crmPickChild(id) { state.crmChild = id; state.crmMember = id; state.crmTab = 'family'; render(); }
 function crmPickMember(id) { state.crmMember = id; render(); }
 function crmSetTheme(theme) { state.crmTheme = theme === 'dark' ? 'dark' : 'light'; render(); }
@@ -16410,7 +16411,9 @@ function crmEnsureCss() {
     '.crm-app[data-theme="dark"][data-brand="ninja"]{--crm-accent-ink:#2a0d0b;}',
     '.crm-app *{box-sizing:border-box;}',
     '.crm-app :focus-visible{outline:2px solid var(--crm-accent);outline-offset:2px;}',
-    '.crm-app button,.crm-app input,.crm-app select{font-family:inherit;color:inherit;}',
+    '.crm-app button,.crm-app input{font-family:inherit;color:inherit;}',
+    '.crm-app select{font-family:inherit;background:var(--crm-surface-2);color:var(--crm-ink);border:1px solid var(--crm-line);border-radius:12px;padding:8px 10px;color-scheme:light;}',
+    '.crm-app[data-theme="dark"] select,.crm-app[data-theme="dark"] select option{background:#1e2026;color:#f5f4f1;border-color:#3a3d46;color-scheme:dark;}',
     '.crm-side{display:flex;flex-direction:column;gap:8px;padding:20px 14px 16px;border-right:1px solid var(--crm-line);background:var(--crm-surface);}',
     '.crm-brand{display:flex;align-items:center;gap:10px;padding:0 8px 12px;}',
     '.crm-mark{width:32px;height:32px;border-radius:10px;background:var(--crm-accent);color:var(--crm-accent-ink);display:grid;place-items:center;font-weight:800;font-size:13px;}',
@@ -16465,8 +16468,8 @@ function crmEnsureCss() {
     '.crm-meta{display:grid;gap:10px;font-size:13px;}',
     '.crm-meta div{display:flex;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--crm-line);}',
     '.crm-meta span{color:var(--crm-muted);}',
-    '.crm-belt{display:inline-flex;align-items:center;gap:8px;font-weight:700;}',
-    '.crm-belt i{width:18px;height:10px;border-radius:3px;display:inline-block;border:1px solid var(--crm-line);}',
+    '.crm-belt{display:inline-flex;align-items:center;gap:8px;font-weight:700;max-width:100%;}',
+    '.crm-belt i{width:28px;height:12px;border-radius:3px;display:inline-block;border:1px solid var(--crm-line);flex:none;}',
     '.crm-stack{display:grid;gap:12px;}',
     '.crm-kid{padding:16px;cursor:pointer;transition:box-shadow .16s ease,border-color .16s ease;}',
     '.crm-kid[aria-pressed="true"]{border-color:var(--crm-accent);box-shadow:0 0 0 3px var(--crm-accent-soft),var(--crm-shadow);}',
@@ -16482,10 +16485,13 @@ function crmEnsureCss() {
     '.crm-due b{font-size:40px;letter-spacing:-.04em;font-weight:740;line-height:.95;}',
     '.crm-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}',
     '.crm-chips button{border:1px solid var(--crm-line);background:var(--crm-surface);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:680;cursor:pointer;}',
-    '.crm-chips button[aria-pressed="true"]{background:var(--crm-accent);color:var(--crm-accent-ink);border-color:transparent;}',
+    '.crm-app .crm-chips button[aria-pressed="true"],.crm-app .crm-chips button[aria-selected="true"]{background:var(--crm-accent);color:#fff;border-color:transparent;}',
+    '.crm-app[data-theme="dark"] .crm-chips button[aria-pressed="true"],.crm-app[data-theme="dark"] .crm-chips button[aria-selected="true"]{color:#0b1220;}',
     '.crm-form{display:flex;flex-wrap:wrap;gap:8px;padding:14px;}',
     '.crm-form input,.crm-form select{border:1px solid var(--crm-line);background:var(--crm-surface-2);border-radius:12px;padding:10px 12px;font-size:14px;min-height:42px;}',
-    '.crm-primary{border:0;background:var(--crm-accent);color:var(--crm-accent-ink);border-radius:12px;padding:10px 14px;font-weight:730;cursor:pointer;min-height:42px;}',
+    '.crm-primary{border:0;background:var(--crm-accent);border-radius:12px;padding:10px 14px;font-weight:730;cursor:pointer;min-height:42px;}',
+    '.crm-app .crm-primary,.crm-app .crm-primary:hover{color:#fff;}',
+    '.crm-app[data-theme="dark"] .crm-primary,.crm-app[data-theme="dark"] .crm-primary:hover{color:#0b1220;}',
     '.crm-primary:hover{filter:brightness(1.05);}',
     '.crm-note{padding:0 14px 14px;font-size:13px;color:var(--crm-accent);font-weight:650;}',
     '.crm-alert{margin:0 18px 14px;padding:10px 12px;border-radius:12px;background:var(--crm-danger-bg);color:var(--crm-danger);font-size:13px;font-weight:680;}',
@@ -16497,6 +16503,7 @@ function crmEnsureCss() {
     '.crm-shift{display:grid;grid-template-columns:72px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--crm-line);font-size:14px;}',
     '.crm-shift time{font-weight:720;}',
     '.crm-bottom{display:none;}',
+    '.crm-more{display:none;}',
     '.crm-cal{display:grid;grid-template-columns:64px repeat(6,minmax(0,1fr));gap:8px;}',
     '.crm-cal .h{font-size:12px;font-weight:720;color:var(--crm-muted);padding:4px 2px;}',
     '.crm-slot{background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:12px;min-height:92px;padding:8px;font-size:12px;box-shadow:var(--crm-shadow);}',
@@ -16526,6 +16533,29 @@ function crmEnsureCss() {
     '.crm-agenda{display:none;}',
     '.crm-bar{height:8px;border-radius:99px;background:var(--crm-line);overflow:hidden;margin-top:12px;}',
     '.crm-bar span{display:block;height:100%;background:var(--crm-accent);}',
+    '.crm-cycle{display:flex;flex-wrap:wrap;align-items:center;gap:14px 18px;background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:16px;padding:14px 16px;margin-bottom:14px;box-shadow:var(--crm-shadow);}',
+    '.crm-cycle .badge{background:var(--crm-accent);color:var(--crm-accent-ink);border-radius:999px;padding:5px 10px;font-size:12px;font-weight:800;}',
+    '.crm-cycle .sub{color:var(--crm-muted);font-size:12px;font-weight:650;margin-top:2px;}',
+    '.crm-cycle .crm-primary{margin-left:auto;}',
+    '.crm-kpi .split{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;font-weight:700;color:var(--crm-muted);}',
+    '.crm-kpi .split button{border:0;background:transparent;padding:0;font:inherit;font-weight:760;color:var(--crm-danger);cursor:pointer;}',
+    '.crm-goal{height:6px;border-radius:99px;background:var(--crm-line);overflow:hidden;margin-top:8px;}',
+    '.crm-goal span{display:block;height:100%;background:var(--crm-ok);}',
+    '.crm-goal.warn span{background:var(--crm-warn);}',
+    '.crm-bars{display:flex;align-items:flex-end;gap:3px;height:32px;}',
+    '.crm-bars i{display:block;width:8px;border-radius:3px 3px 0 0;background:var(--crm-accent);min-height:2px;}',
+    '.crm-ops{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:14px;}',
+    '.crm-ops .span2{grid-column:1 / -1;}',
+    '.crm-pad{padding:14px 16px 8px;}',
+    '.crm-row{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--crm-line);font-size:14px;}',
+    '.crm-quiet{color:var(--crm-muted);font-size:12px;font-weight:650;}',
+    '.crm-rankbtn{border:0;background:transparent;padding:0;cursor:pointer;color:inherit;font:inherit;}',
+    '.crm-rankbtn:hover .crm-belt{color:var(--crm-accent);}',
+    '.crm-lesson{display:grid;grid-template-columns:112px minmax(0,1fr);gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--crm-line);}',
+    '.crm-sample{background:var(--crm-warn-bg);color:var(--crm-warn);border-radius:12px;padding:10px 12px;font-size:13px;font-weight:680;margin:0 0 12px;}',
+    '.crm-ring{box-shadow:0 0 0 3px var(--crm-accent-soft),var(--crm-shadow);}',
+    '.crm-kpis.six{grid-template-columns:repeat(3,minmax(0,1fr));}',
+    '.crm-inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}',
     '@media (max-width:860px){',
     '.crm-app{grid-template-columns:1fr;}',
     '.crm-side{display:none;}',
@@ -16537,15 +16567,23 @@ function crmEnsureCss() {
     '.crm-split{grid-template-columns:1fr;}',
     '.crm-pagehead h2{font-size:22px;}',
     '.crm-due b{font-size:34px;}',
-    '.crm-bottom{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--crm-surface);border-top:1px solid var(--crm-line);padding:6px 6px calc(8px + env(safe-area-inset-bottom));}',
-    '.crm-bottom{overflow-x:auto;}',
-    '.crm-bottom button{flex:0 0 68px;border:0;background:transparent;color:var(--crm-muted);font-size:10px;font-weight:720;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;cursor:pointer;}',
+    '.crm-bottom{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--crm-surface);border-top:1px solid var(--crm-line);padding:4px 2px calc(6px + env(safe-area-inset-bottom));overflow:hidden;}',
+    '.crm-bottom button{flex:1 1 0;min-width:0;border:0;background:transparent;color:var(--crm-muted);font-size:11px;font-weight:720;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border-radius:10px;cursor:pointer;}',
+    '.crm-bottom button span{white-space:nowrap;letter-spacing:-.01em;}',
     '.crm-cal{min-width:720px;}',
     '.crm-week{display:none;}',
     '.crm-agenda{display:block;}',
     '.crm-month .cell{min-height:64px;}',
     '.crm-bottom button svg{width:20px;height:20px;}',
-    '.crm-bottom button[aria-current="page"]{color:var(--crm-accent);}',
+    '.crm-bottom button[aria-current="page"],.crm-bottom button[aria-expanded="true"]{color:var(--crm-accent);}',
+    '.crm-ops{grid-template-columns:1fr;}',
+    '.crm-cycle .crm-primary{margin-left:0;width:100%;}',
+    '.crm-kpis.six{grid-template-columns:1fr 1fr;}',
+    '.crm-lesson{grid-template-columns:1fr;}',
+    '.crm-more{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:fixed;left:10px;right:10px;bottom:74px;z-index:6;background:var(--crm-surface);border:1px solid var(--crm-line);border-radius:16px;padding:10px;box-shadow:var(--crm-shadow);}',
+    '.crm-more button{display:flex;align-items:center;gap:8px;border:0;background:var(--crm-surface-2);color:var(--crm-ink);border-radius:12px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;text-align:left;}',
+    '.crm-more button[aria-current="page"]{background:var(--crm-accent-soft);color:var(--crm-accent);}',
+    '.crm-more button svg{width:18px;height:18px;flex:none;}',
     '}'
   ].join('');
   var tag = document.createElement('style');
@@ -16564,7 +16602,9 @@ function crmIcon(name) {
     moon: '<path d="M16 3.5A8.2 8.2 0 1 0 20.5 14 6.4 6.4 0 0 1 16 3.5Z"/>',
     search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
     flag: '<path d="M5 21V4"/><path d="M5 4h11l-1.5 4L16 12H5"/>',
-    clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l2.5 1.5"/>'
+    clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l2.5 1.5"/>',
+    book: '<path d="M5 4.5h9.5A2.5 2.5 0 0 1 17 7v13H7.5A2.5 2.5 0 0 0 5 22.5V4.5Z"/><path d="M5 17.5h12"/>',
+    more: '<circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/>'
   };
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (p[name] || '') + '</svg>';
 }
@@ -16585,14 +16625,44 @@ function crmInitials(name) {
 }
 function crmRoster() {
   return [
-    { id: 'avery', name: 'Avery Sample', school: 'Waunakee', loc: 'waunakee', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', rank: 'Yellow', belt: '#e4b406', next: 'Tue · 5:00p Beginners', balance: 22400, card: 'Visa', last4: '1111', status: 'active', checkin: 'Today · 4:52p' },
-    { id: 'blake', name: 'Blake Sample', school: 'Verona', loc: 'verona', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', rank: 'White', belt: '#f7f7f4', next: 'Wed · 6:15p Tigers', balance: 20900, card: 'Mastercard', last4: '2222', status: 'active', checkin: 'Yesterday' },
-    { id: 'casey', name: 'Casey Sample', school: 'Waunakee', loc: 'waunakee', brand: 'lvlup', plan: 'Mini-Tigers', interval: 'Monthly', rank: 'Orange', belt: '#f97316', next: 'Thu · 4:30p Mini Tigers', balance: 11900, card: '', last4: '', status: 'past_due', checkin: 'Nov 2' },
-    { id: 'jordan', name: 'Jordan Sample', school: 'East Madison', loc: 'eastmad', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', rank: 'Green', belt: '#16a34a', next: 'Mon · 6:00p Kids', balance: 19900, card: 'Visa', last4: '3333', status: 'active', checkin: 'Today · 5:10p' },
-    { id: 'quinn', name: 'Quinn Sample', school: 'DeForest', loc: 'deforest', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', rank: 'Camo', belt: '#6b705c', next: 'Tue · 5:30p Kids', balance: 19900, card: 'Visa', last4: '4444', status: 'active', checkin: 'Mon' },
-    { id: 'riley', name: 'Riley Sample', school: 'Go Ninja Waunakee', loc: 'goninjaW', brand: 'goninja', plan: 'Trial', interval: 'Drop-in', rank: 'Trial', belt: '#b42318', next: 'Sat · 10:00a Trial', balance: 0, card: '', last4: '', status: 'trial', checkin: 'Booked' },
-    { id: 'morgan', name: 'Morgan Sample', school: 'Go Ninja Verona', loc: 'goninjaV', brand: 'goninja', plan: 'Membership', interval: 'Monthly', rank: 'White', belt: '#f7f7f4', next: 'Fri · 4:00p Open gym', balance: 5000, card: 'Visa', last4: '5555', status: 'active', checkin: 'Fri' }
+    { id: 'avery', name: 'Avery Sample', school: 'Waunakee', loc: 'waunakee', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', program: 'songahm', programLabel: 'Taekwondo', rank: 'Yellow', belt: '#facc15', mascot: '', level: 'beginners', levelLabel: 'Beginners', sessions: 11, need: 12, stripes: 'White stripe in progress · 4 credits', next: 'Tue · 5:00p Beginners', balance: 22400, card: 'Visa', last4: '1111', status: 'active', checkin: 'Today · 4:52p', promo: false },
+    { id: 'blake', name: 'Blake Sample', school: 'Verona', loc: 'verona', brand: 'lvlup', plan: 'Tigers', interval: 'Every 4 weeks', program: 'tiger', programLabel: 'Tigers', rank: 'Ara the Turtle', belt: '#f1f5f9', mascot: 'Turtle', level: 'tigers', levelLabel: 'Tigers', sessions: 12, need: 12, stripes: '12 sessions', next: 'Wed · 6:15p Tigers', balance: 20900, card: 'Mastercard', last4: '2222', status: 'active', checkin: 'Yesterday', promo: true },
+    { id: 'casey', name: 'Casey Sample', school: 'Waunakee', loc: 'waunakee', brand: 'lvlup', plan: 'Mini-Tigers', interval: 'Monthly', program: 'mini_tiger', programLabel: 'Mini Tigers', rank: 'Orange', belt: '#f97316', mascot: '', level: 'mini_tigers', levelLabel: 'Mini Tigers', sessions: 6, need: 6, stripes: '6 sessions', next: 'Thu · 4:30p Mini Tigers', balance: 11900, card: '', last4: '', status: 'past_due', checkin: 'Nov 2', promo: true },
+    { id: 'jordan', name: 'Jordan Sample', school: 'East Madison', loc: 'eastmad', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', program: 'songahm', programLabel: 'Taekwondo', rank: 'Green - Decided', belt: '#16a34a', mascot: '', level: 'intermediate', levelLabel: 'Intermediate', sessions: 12, need: 12, stripes: 'Blue stripe · 8 credits', next: 'Mon · 6:00p Intermediate', balance: 19900, card: 'Visa', last4: '3333', status: 'active', checkin: 'Today · 5:10p', promo: true },
+    { id: 'quinn', name: 'Quinn Sample', school: 'DeForest', loc: 'deforest', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', program: 'songahm', programLabel: 'Taekwondo', rank: 'Camo - Decided', belt: '#557142', mascot: '', level: 'beginners', levelLabel: 'Beginners', sessions: 8, need: 12, stripes: 'White stripe · 4 credits', next: 'Tue · 5:30p Beginners', balance: 19900, card: 'Visa', last4: '4444', status: 'active', checkin: 'Mon', promo: false },
+    { id: 'skyler', name: 'Skyler Sample', school: 'Verona', loc: 'verona', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', program: 'songahm', programLabel: 'Taekwondo', rank: 'Red / Black', belt: 'linear-gradient(90deg,#dc2626 55%,#141414 55%)', mascot: '', level: 'black_belt', levelLabel: 'Black Belt', sessions: 36, need: 36, stripes: 'Blue, Black, Silver, Gold', next: 'Tue · 6:00p Black Belt', balance: 22400, card: 'Visa', last4: '6666', status: 'active', checkin: 'Today · 6:05p', promo: true },
+    { id: 'rowan', name: 'Rowan Sample', school: 'Waunakee', loc: 'waunakee', brand: 'lvlup', plan: 'Standard', interval: 'Every 4 weeks', program: 'songahm', programLabel: 'Taekwondo', rank: '1st Degree Black Belt', belt: '#141414', mascot: '', level: 'black_belt', levelLabel: 'Black Belt', sessions: 40, need: 60, stripes: '1 year · 36 midterm points', next: 'Thu · 6:30p Black Belt', balance: 22400, card: 'Visa', last4: '7777', status: 'active', checkin: 'Thu', promo: false },
+    { id: 'riley', name: 'Riley Sample', school: 'Go Ninja Waunakee', loc: 'goninjaW', brand: 'goninja', plan: 'Movement Academy', interval: 'Monthly', program: 'goninja', programLabel: 'Movement Academy', rank: 'Recruit', belt: '#b42318', mascot: '', level: 'go_ninja', levelLabel: 'Movement Academy', sessions: 8, need: 8, stripes: 'Level 1', next: 'Sat · 10:00a Ninja', balance: 0, card: '', last4: '', status: 'trial', checkin: 'Booked', promo: true },
+    { id: 'morgan', name: 'Morgan Sample', school: 'Go Ninja Verona', loc: 'goninjaV', brand: 'goninja', plan: 'Movement Academy', interval: 'Monthly', program: 'goninja', programLabel: 'Movement Academy', rank: 'Ranger', belt: '#b42318', mascot: '', level: 'go_ninja', levelLabel: 'Movement Academy', sessions: 4, need: 8, stripes: 'Level 3', next: 'Fri · 4:00p Ninja', balance: 5000, card: 'Visa', last4: '5555', status: 'active', checkin: 'Fri', promo: false }
   ];
+}
+function crmPerson(id) {
+  return crmRoster().filter(function (p) { return p.id === id; })[0] || null;
+}
+function crmRankButton(p) {
+  var label = p.rank;
+  if (p.mascot && p.rank.indexOf(p.mascot) < 0) label += ' · ' + p.mascot;
+  return '<button type="button" class="crm-rankbtn" onclick="event.stopPropagation();crmOpenCurriculum(\'' + p.id + '\')" aria-label="Open cycle curriculum for ' + esc(p.name) + '"><span class="crm-belt"><i style="background:' + p.belt + '"></i>' + esc(label) + '</span></button>';
+}
+function crmOpenCurriculum(id) {
+  var person = crmPerson(id);
+  state.crmMember = id;
+  state.crmChild = id;
+  state.crmCurriculumMember = id;
+  if (person) state.crmCurrLevel = person.level;
+  state.crmTab = 'curriculum';
+  render();
+}
+function crmBrowseLevel(level) {
+  state.crmCurriculumMember = '';
+  state.crmCurrLevel = level;
+  state.crmTab = 'curriculum';
+  render();
+}
+function crmOpenCycle() {
+  state.crmTab = 'curriculum';
+  if (!state.crmCurrLevel) state.crmCurrLevel = 'beginners';
+  render();
 }
 function crmSchoolOk(person) {
   var s = state.crmSchool || 'all';
@@ -16639,21 +16709,43 @@ function crmQuoteModel() {
   }
   return { title: 'Saturday clinic · Waunakee', buyer: 'Current member', lines: [{ label: 'Clinic', cents: list }, { label: 'CLINIC10 · 10%', cents: -500, disc: true }], due: 4500, error: '' };
 }
-function crmNav(which) {
-  var items = [
+function crmNavItems() {
+  return [
+    ['home', 'Home', 'home'],
+    ['members', 'Members', 'users'],
     ['calendar', 'Calendar', 'cal'],
     ['events', 'Events', 'flag'],
-    ['members', 'Members', 'users'],
+    ['curriculum', 'Curriculum', 'book'],
     ['family', 'Family', 'home'],
-    ['import', 'Import', 'box'],
-    ['promos', 'Promos', 'tag'],
     ['ops', 'Tasks', 'box'],
-    ['payroll', 'Pay', 'clock']
+    ['payroll', 'Pay', 'clock'],
+    ['promos', 'Promos', 'tag'],
+    ['import', 'Import', 'box']
   ];
-  return items.map(function (it) {
-    var on = which === it[0];
-    return '<button type="button" onclick="crmTab(\'' + it[0] + '\')"' + (on ? ' aria-current="page"' : '') + '>' + crmIcon(it[2]) + '<span>' + it[1] + '</span></button>';
-  }).join('');
+}
+function crmNavButton(it, which) {
+  var on = which === it[0];
+  return '<button type="button" onclick="crmTab(\'' + it[0] + '\')"' + (on ? ' aria-current="page"' : '') + '>' + crmIcon(it[2]) + '<span>' + it[1] + '</span></button>';
+}
+function crmNav(which, mobile) {
+  var items = crmNavItems();
+  if (!mobile) return items.map(function (it) { return crmNavButton(it, which); }).join('');
+  var primary = ['home', 'calendar', 'members', 'curriculum'];
+  var html = items.filter(function (it) { return primary.indexOf(it[0]) >= 0; }).sort(function (a, b) {
+    return primary.indexOf(a[0]) - primary.indexOf(b[0]);
+  }).map(function (it) { return crmNavButton(it, which); }).join('');
+  var inMore = primary.indexOf(which) < 0;
+  html += '<button type="button" onclick="crmToggleMore()" aria-expanded="' + (state.crmMore ? 'true' : 'false') + '"' + (inMore ? ' aria-current="page"' : '') + '>' + crmIcon('more') + '<span>More</span></button>';
+  return html;
+}
+function crmMoreSheet(which) {
+  if (!state.crmMore) return '';
+  var extra = ['events', 'family', 'ops', 'payroll', 'promos', 'import'];
+  var h = '<div class="crm-more" role="menu" aria-label="More">';
+  crmNavItems().filter(function (it) { return extra.indexOf(it[0]) >= 0; }).forEach(function (it) {
+    h += crmNavButton(it, which);
+  });
+  return h + '</div>';
 }
 function crmShell(title, lede, body) {
   crmEnsureCss();
@@ -16671,7 +16763,7 @@ function crmShell(title, lede, body) {
     ['goninjaW', 'Go Ninja Waunakee'],
     ['goninjaV', 'Go Ninja Verona']
   ];
-  var tab = state.crmTab || 'members';
+  var tab = state.crmTab || 'home';
   var h = '<div class="crm-app" data-theme="' + theme + '" data-brand="' + brand + '">';
   h += '<aside class="crm-side"><div class="crm-brand"><div class="crm-mark">' + (brand === 'ninja' ? 'GN' : 'LU') + '</div><div><b>' + (brand === 'ninja' ? 'Go Ninja' : 'LVLUP') + '</b><span>Member platform</span></div></div>';
   h += '<label class="crm-sr" for="crmSchool" style="position:absolute;width:1px;height:1px;overflow:hidden;">School</label>';
@@ -16689,7 +16781,8 @@ function crmShell(title, lede, body) {
   h += '<div class="crm-pagehead"><div><h2>' + esc(title) + '</h2><p>' + lede + '</p></div></div>';
   h += body;
   h += '</div>';
-  h += '<nav class="crm-bottom" aria-label="CRM mobile">' + crmNav(tab) + '</nav>';
+  h += crmMoreSheet(tab);
+  h += '<nav class="crm-bottom" aria-label="CRM mobile">' + crmNav(tab, true) + '</nav>';
   h += '</div></div>';
   setTimeout(crmMarkOffline, 0);
   return h;
@@ -16727,7 +16820,7 @@ function crmMembersView() {
     list.forEach(function (p) {
       var on = selected && selected.id === p.id;
       table += '<tr tabindex="0" role="button" aria-selected="' + (on ? 'true' : 'false') + '" onclick="crmPickMember(\'' + p.id + '\')" onkeydown="if(event.key===\'Enter\')crmPickMember(\'' + p.id + '\')">';
-      table += '<td><div class="crm-person"><span class="crm-avatar" aria-hidden="true">' + esc(crmInitials(p.name)) + '</span>' + esc(p.name) + '</div></td>';
+      table += '<td><div class="crm-person"><span class="crm-avatar" aria-hidden="true">' + esc(crmInitials(p.name)) + '</span><span>' + esc(p.name) + '</span></div><div style="margin:4px 0 0 42px">' + crmRankButton(p) + '</div></td>';
       table += '<td>' + esc(p.school) + '</td><td>' + esc(p.plan) + '</td><td>' + crmStatusPill(p.status) + '</td>';
       table += '<td>' + (p.last4 ? esc(p.card) + ' ···· ' + esc(p.last4) : 'No card') + '</td></tr>';
     });
@@ -16737,12 +16830,12 @@ function crmMembersView() {
   if (selected) {
     detail = '<aside class="crm-card crm-detail"><div class="who"><span class="crm-avatar lg" aria-hidden="true">' + esc(crmInitials(selected.name)) + '</span><div><h3>' + esc(selected.name) + '</h3><div style="color:var(--crm-muted);font-size:13px;">' + esc(selected.school) + '</div></div></div>';
     detail += '<div class="crm-meta">';
-    detail += '<div><span>Rank</span><b class="crm-belt"><i style="background:' + selected.belt + '"></i>' + esc(selected.rank) + '</b></div>';
+    detail += '<div><span>Rank</span>' + crmRankButton(selected) + '</div>';
     detail += '<div><span>Next class</span><b>' + esc(selected.next) + '</b></div>';
     detail += '<div><span>Next draft</span><b>' + crmMoney(selected.balance) + '</b></div>';
     detail += '<div><span>Plan</span><b>' + esc(selected.interval) + '</b></div>';
     detail += '<div><span>Card</span><b>' + (selected.last4 ? esc(selected.card) + ' ···· ' + esc(selected.last4) : 'None on file') + '</b></div>';
-    detail += '</div><button type="button" class="crm-primary" style="margin-top:14px;width:100%" onclick="crmPickChild(\'' + selected.id + '\')">Open family</button></aside>';
+    detail += '</div><div class="crm-inline" style="margin-top:14px"><button type="button" class="crm-primary" onclick="crmOpenCurriculum(\'' + selected.id + '\')">Cycle curriculum</button><button type="button" class="crm-primary" onclick="crmPickChild(\'' + selected.id + '\')">Open family</button></div></aside>';
   }
   return crmLocationTabs() + crmKpis(crmRoster().filter(crmSchoolOk)) + '<div class="crm-split"><div class="crm-card">' + table + '</div>' + detail + '</div>';
 }
@@ -16765,15 +16858,16 @@ function crmLocationTabs() {
   return h + '</div>';
 }
 function crmFamilyView() {
-  var kids = crmRoster().filter(function (p) { return p.id === 'avery' || p.id === 'blake'; });
-  var h = '<p style="margin:-6px 0 12px;color:var(--crm-muted);font-size:14px;">One guardian login. Each child bills on that school’s own merchant account. Switching a child does not sign the parent out.</p><div class="crm-stack">';
+  var kids = crmRoster().filter(function (p) { return p.id === 'avery' || p.id === 'blake' || p.id === 'casey' || p.id === 'skyler'; });
+  var h = '<p style="margin:-6px 0 12px;color:var(--crm-muted);font-size:14px;">One guardian login. Each child’s rank opens that student’s cycle curriculum. Switching a child does not sign the parent out.</p><div class="crm-stack">';
   kids.forEach(function (p) {
     var on = state.crmChild === p.id;
-    h += '<article class="crm-card crm-kid" role="button" tabindex="0" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="crmPickChild(\'' + p.id + '\')" onkeydown="if(event.key===\'Enter\')crmPickChild(\'' + p.id + '\')">';
-    h += '<div class="crm-kid-top"><div class="crm-person"><span class="crm-avatar lg">' + esc(crmInitials(p.name)) + '</span><div><h3 style="margin:0">' + esc(p.name) + '</h3><div style="color:var(--crm-muted);font-size:13px;">' + esc(p.school) + ' · ' + esc(p.plan) + '</div></div></div>';
+    h += '<article class="crm-card crm-kid" aria-pressed="' + (on ? 'true' : 'false') + '">';
+    h += '<div class="crm-kid-top"><div class="crm-person"><span class="crm-avatar lg">' + esc(crmInitials(p.name)) + '</span><div><h3 style="margin:0">' + esc(p.name) + '</h3><div style="color:var(--crm-muted);font-size:13px;">' + esc(p.school) + ' · ' + esc(p.programLabel) + '</div></div></div>';
     h += '<div style="text-align:right"><div class="crm-balance">' + crmMoney(p.balance) + '</div><div style="font-size:12px;color:var(--crm-muted)">next draft</div></div></div>';
-    h += '<div class="crm-card-row"><span class="crm-belt"><i style="background:' + p.belt + '"></i>' + esc(p.rank) + '</span><span>·</span><span>' + esc(p.next) + '</span></div>';
+    h += '<div class="crm-card-row">' + crmRankButton(p) + '<span>·</span><span>' + esc(p.levelLabel) + '</span><span>·</span><span>' + p.sessions + ' / ' + p.need + ' sessions</span></div>';
     h += '<div class="crm-card-row">' + (p.last4 ? esc(p.card) + ' ···· ' + esc(p.last4) + ' · ' + esc(p.school) + ' sandbox' : 'No saved card') + '</div>';
+    h += '<button type="button" class="crm-primary" style="margin-top:10px" onclick="crmOpenCurriculum(\'' + p.id + '\')">Cycle curriculum</button>';
     h += '</article>';
   });
   h += '</div>';
@@ -17137,11 +17231,277 @@ function crmCalendarView() {
   }
   return h;
 }
+function crmHomeFixture() {
+  return {
+    waunakee: { brand: 'lvlup', active: 140, gained: 7, lost: 3, collected: 2400000, scheduled: 800000, overdue: 45000, goal: 3200000, paying: 120, leads: 12, booked: 8, shown: 6, day1: 3, bars: [22, 24, 18, 26, 0, 14, 16], checks: 18, holds: 1, cancels: 0, risk: 4, out: 2, onb: 3, done: 6, total: 8 },
+    eastmad: { brand: 'lvlup', active: 90, gained: 4, lost: 2, collected: 1600000, scheduled: 500000, overdue: 20000, goal: 2100000, paying: 80, leads: 8, booked: 5, shown: 4, day1: 2, bars: [14, 16, 12, 15, 0, 8, 9], checks: 11, holds: 0, cancels: 1, risk: 2, out: 1, onb: 2, done: 5, total: 8 },
+    verona: { brand: 'lvlup', active: 110, gained: 5, lost: 3, collected: 1900000, scheduled: 600000, overdue: 30000, goal: 2500000, paying: 100, leads: 9, booked: 6, shown: 5, day1: 2, bars: [16, 18, 15, 19, 0, 10, 11], checks: 13, holds: 1, cancels: 1, risk: 3, out: 1, onb: 2, done: 7, total: 8 },
+    deforest: { brand: 'lvlup', active: 70, gained: 2, lost: 4, collected: 900000, scheduled: 300000, overdue: 55000, goal: 1400000, paying: 60, leads: 5, booked: 3, shown: 2, day1: 1, bars: [10, 12, 9, 11, 0, 0, 0], checks: 8, holds: 1, cancels: 0, risk: 3, out: 2, onb: 1, done: 4, total: 8 },
+    goninjaW: { brand: 'goninja', active: 48, gained: 3, lost: 1, collected: 420000, scheduled: 80000, overdue: 15000, goal: 600000, paying: 40, leads: 6, booked: 4, shown: 3, day1: 2, bars: [8, 9, 7, 10, 0, 6, 5], checks: 7, holds: 0, cancels: 0, risk: 1, out: 1, onb: 2, done: 3, total: 5, academy: 48, ninja: [41, 50], camps: [16, 25], after: [20, 22], parties: 6 },
+    goninjaV: { brand: 'goninja', active: 36, gained: 2, lost: 1, collected: 300000, scheduled: 70000, overdue: 10000, goal: 450000, paying: 30, leads: 4, booked: 2, shown: 2, day1: 1, bars: [6, 7, 5, 8, 0, 4, 4], checks: 5, holds: 0, cancels: 1, risk: 1, out: 0, onb: 1, done: 3, total: 5, academy: 36, ninja: [28, 38], camps: [11, 20], after: null, parties: 3 }
+  };
+}
+function crmScopeIds(scope) {
+  var all = ['waunakee', 'eastmad', 'verona', 'deforest', 'goninjaW', 'goninjaV'];
+  if (!scope || scope === 'all') return all;
+  if (scope === 'lvlup') return all.slice(0, 4);
+  if (scope === 'goninja') return ['goninjaW', 'goninjaV'];
+  return all.indexOf(scope) >= 0 ? [scope] : all;
+}
+function crmSum(rows, key) {
+  return rows.reduce(function (t, row) { return t + (row[key] || 0); }, 0);
+}
+function crmPct(part, whole) {
+  if (!whole) return null;
+  return Math.round(part / whole * 1000) / 10;
+}
+function crmFill(rows, key) {
+  var filled = 0, cap = 0;
+  rows.forEach(function (row) {
+    var pair = row[key];
+    if (!pair || !pair[1]) return;
+    filled += pair[0];
+    cap += pair[1];
+  });
+  return cap ? Math.round(filled / cap * 1000) / 10 : null;
+}
+function crmHomeSummary(scope) {
+  var fx = crmHomeFixture();
+  var ids = crmScopeIds(scope);
+  var rows = ids.map(function (id) { return fx[id]; });
+  var gn = rows.filter(function (row) { return row.brand === 'goninja'; });
+  var brand = rows.every(function (row) { return row.brand === 'goninja'; }) ? 'goninja' : rows.every(function (row) { return row.brand === 'lvlup'; }) ? 'lvlup' : 'all';
+  var active = crmSum(rows, 'active');
+  var lost = crmSum(rows, 'lost');
+  var shown = crmSum(rows, 'shown');
+  var collected = crmSum(rows, 'collected');
+  var paying = crmSum(rows, 'paying');
+  var goal = crmSum(rows, 'goal');
+  var bars = [0, 0, 0, 0, 0, 0, 0];
+  rows.forEach(function (row) { row.bars.forEach(function (n, i) { bars[i] += n; }); });
+  return {
+    brand: brand,
+    ids: ids,
+    active: active,
+    net: crmSum(rows, 'gained') - lost,
+    attrition: crmPct(lost, active),
+    onTrack: crmPct(lost, active) <= 3,
+    collected: collected,
+    scheduled: crmSum(rows, 'scheduled'),
+    overdue: crmSum(rows, 'overdue'),
+    goal: goal,
+    goalPct: crmPct(collected, goal),
+    arm: paying ? Math.round(collected / paying) : 0,
+    leads: crmSum(rows, 'leads'),
+    booked: crmSum(rows, 'booked'),
+    shown: shown,
+    day1: crmSum(rows, 'day1'),
+    day1Pct: crmPct(crmSum(rows, 'day1'), shown),
+    bars: bars,
+    checks: crmSum(rows, 'checks'),
+    holds: crmSum(rows, 'holds') + crmSum(rows, 'cancels'),
+    risk: crmSum(rows, 'risk'),
+    out: crmSum(rows, 'out'),
+    onb: crmSum(rows, 'onb'),
+    done: crmSum(rows, 'done'),
+    total: crmSum(rows, 'total'),
+    academy: crmSum(gn, 'academy'),
+    ninja: crmFill(gn, 'ninja'),
+    camps: crmFill(gn, 'camps'),
+    after: crmFill(gn, 'after'),
+    parties: crmSum(gn, 'parties')
+  };
+}
+function crmCycleStrip(withLink) {
+  var h = '<section class="crm-cycle" aria-label="Active cycle"><span class="badge">Cycle 6</span>';
+  h += '<div><b>Honesty</b><div class="sub">Week 6 of 8 · 3 weeks left</div></div>';
+  h += '<div><b>Sat Dec 12</b><div class="sub">Belt test · 18 days</div></div>';
+  if (withLink) h += '<button type="button" class="crm-primary" onclick="crmOpenCycle()">Cycle curriculum</button>';
+  return h + '</section>';
+}
+function crmFocus(which) {
+  state.crmHomeFocus = which;
+  state.crmTab = 'home';
+  render();
+}
+function crmLaunchCheckin() { state.crmCheckin = true; render(); }
+function crmCloseCheckin() { state.crmCheckin = false; render(); }
+function crmToggleCheck(id) {
+  state.crmChecked = state.crmChecked || {};
+  state.crmChecked[id] = !state.crmChecked[id];
+  render();
+}
+function crmRetryPreview(id) {
+  state.crmRetry = id;
+  state.crmRetryNote = 'Sandbox preview. No charge was sent.';
+  state.crmHomeFocus = 'overdue';
+  render();
+}
+function crmSetPromoFilter(kind, value) {
+  if (kind === 'program') state.crmPromoProgram = value;
+  else state.crmPromoRank = value;
+  render();
+}
+function crmBars(points) {
+  var max = Math.max.apply(null, points.concat([1]));
+  return '<span class="crm-bars" aria-hidden="true">' + points.map(function (n) {
+    return '<i style="height:' + Math.max(8, Math.round(n / max * 32)) + 'px"></i>';
+  }).join('') + '</span>';
+}
+function crmHomeView() {
+  var scope = state.crmSchool || 'all';
+  var s = crmHomeSummary(scope);
+  var ninja = s.brand === 'goninja';
+  var h = crmCycleStrip(true);
+  if (ninja) {
+    h += '<section class="crm-kpis six" aria-label="Go Ninja summary">';
+    var gnCards = [
+      ['Movement Academy', String(s.academy), 'Students on the ladder'],
+      ['Ninja classes', (s.ninja == null ? '—' : s.ninja + '%'), 'Filled'],
+      ['Camps', (s.camps == null ? '—' : s.camps + '%'), 'Filled'],
+      ['After school', (s.after == null ? '—' : s.after + '%'), scope === 'goninjaV' ? 'Waunakee only' : 'Filled'],
+      ['Birthday parties', String(s.parties), 'Booked'],
+      ['Payments this month', crmMoney(s.collected), 'Collected']
+    ];
+    gnCards.forEach(function (card) {
+      h += '<article class="crm-kpi"><div class="lbl">' + esc(card[0]) + '</div><div class="num">' + esc(card[1]) + '</div><div class="row"><span class="crm-quiet">' + esc(card[2]) + '</span></div></article>';
+    });
+    h += '</section>';
+    h += '<p class="crm-quiet" style="margin:-2px 4px 14px;font-size:13px">Scheduled ' + crmMoney(s.scheduled) + ' · <button type="button" onclick="crmFocus(\'overdue\')" style="border:0;background:transparent;padding:0;font:inherit;font-weight:760;color:var(--crm-danger);cursor:pointer">Overdue ' + crmMoney(s.overdue) + '</button> · Goal ' + (s.goalPct == null ? '—' : s.goalPct + '%') + '</p>';
+  } else {
+    h += '<section class="crm-kpis" aria-label="Summary">';
+    h += '<article class="crm-kpi"><div class="lbl">Active members</div><div class="num">' + s.active + '</div><div class="row"><span class="crm-delta ' + (s.net >= 0 ? 'up' : 'down') + '">' + (s.net >= 0 ? '+' : '') + s.net + ' net</span><span style="color:var(--crm-ok)">' + crmSpark([s.active - 6, s.active - 4, s.active - 3, s.active - 1, s.active]) + '</span></div><div class="split"><span class="crm-pill ' + (s.onTrack ? 'ok' : 'warn') + '">Attrition ' + s.attrition + '% · goal ≤ 3%</span></div></article>';
+    h += '<article class="crm-kpi' + (state.crmHomeFocus === 'overdue' ? ' crm-ring' : '') + '"><div class="lbl">Payments this month</div><div class="num">' + crmMoney(s.collected) + '</div><div class="split"><span>Scheduled ' + crmMoney(s.scheduled) + '</span><button type="button" onclick="crmFocus(\'overdue\')">Overdue ' + crmMoney(s.overdue) + '</button></div><div class="goal' + ((s.goalPct || 0) < 80 ? ' warn' : '') + ' crm-goal"><span style="width:' + Math.min(100, s.goalPct || 0) + '%"></span></div><div class="split"><span>MTD vs goal ' + s.goalPct + '%</span><span>ARM ' + crmMoney(s.arm) + '</span></div></article>';
+    h += '<article class="crm-kpi"><div class="lbl">Leads and trials</div><div class="num">' + s.day1Pct + '%</div><div class="split"><span>' + s.leads + ' leads</span><span>' + s.booked + ' booked</span><span>' + s.shown + ' shown</span></div><div class="row"><span class="crm-delta up">Day-1 close</span></div></article>';
+    h += '<article class="crm-kpi"><div class="lbl">7-day attendance</div><div class="num">' + s.checks + '</div><div class="row">' + crmBars(s.bars) + '<span class="crm-delta up">Today</span></div><button type="button" class="crm-primary" style="margin-top:8px" onclick="crmLaunchCheckin()">Launch check-in</button></article>';
+    h += '<article class="crm-kpi' + (state.crmHomeFocus === 'holds' ? ' crm-ring' : '') + '"><div class="lbl">Holds and cancellations</div><div class="num">' + s.holds + '</div><div class="row"><span class="crm-delta ' + (s.holds ? 'down' : 'up') + '">' + (s.holds ? 'Pending review' : 'Queue clear') + '</span></div><button type="button" class="crm-primary" style="margin-top:8px" onclick="crmFocus(\'holds\')">Review queue</button></article>';
+    h += '</section>';
+  }
+  var schedule = ninja
+    ? [['3:30p', 'Ninja class', 'Miranda', '12 / 16'], ['4:30p', 'Movement Academy', 'Miranda', '10 / 14'], ['5:30p', 'After school', 'Miranda', scope === 'goninjaV' ? 'Not at Verona' : '8 / 12']]
+    : [['2:00p', 'Mini Tigers', 'Cat', '9 / 12'], ['3:00p', 'Tigers', 'Cat', '14 / 18'], ['4:00p', 'Beginners', 'Tarik', '18 / 24'], ['5:00p', 'Intermediate', 'Tarik', '12 / 20'], ['6:00p', 'Advanced / Black Belt', 'Tarik', '9 / 16']];
+  h += '<div class="crm-ops">';
+  h += '<section class="crm-card"><div class="crm-pad"><h3>Today’s schedule</h3><div class="sub" style="color:var(--crm-muted);font-size:12px;margin-top:4px">Tuesday, Nov 24</div></div><div class="crm-pad">';
+  schedule.forEach(function (row) {
+    h += '<div class="crm-row"><div><b>' + esc(row[0]) + ' · ' + esc(row[1]) + '</b><div style="color:var(--crm-muted);font-size:12px">' + esc(row[2]) + '</div></div><span class="crm-pill neutral">' + esc(row[3]) + '</span></div>';
+  });
+  h += '<div class="crm-inline" style="margin:12px 0"><button type="button" class="crm-primary" onclick="crmLaunchCheckin()">Check in</button><button type="button" class="crm-primary" onclick="crmTab(\'calendar\')">Open calendar</button></div></div></section>';
+  var overdue = [
+    { id: 'inv_casey', who: 'casey', due: 'Nov 2', cents: 11900 },
+    { id: 'inv_quinn', who: 'quinn', due: 'Nov 9', cents: 19900 },
+    { id: 'inv_morgan', who: 'morgan', due: 'Nov 12', cents: 5000 }
+  ].filter(function (row) {
+    var person = crmPerson(row.who);
+    return person && crmSchoolOk(person);
+  });
+  h += '<section class="crm-card' + (state.crmHomeFocus === 'overdue' ? ' crm-ring' : '') + '" id="crm-overdue"><div class="crm-pad"><h3>Overdue and failed payments</h3></div><div class="crm-pad">';
+  if (!overdue.length) h += '<p style="color:var(--crm-muted)">No failed drafts in this sandbox scope.</p>';
+  overdue.forEach(function (row) {
+    var person = crmPerson(row.who);
+    h += '<div class="crm-row"><div><b>' + esc(person.name) + '</b><div style="color:var(--crm-muted);font-size:12px">' + crmMoney(row.cents) + ' · due ' + esc(row.due) + '</div></div><button type="button" class="crm-primary" onclick="crmRetryPreview(\'' + row.id + '\')">Retry preview</button></div>';
+  });
+  if (state.crmRetryNote) h += '<p class="crm-note">' + esc(state.crmRetryNote) + '</p>';
+  h += '</div></section>';
+  h += '<section class="crm-card"><div class="crm-pad"><h3>Staff tasks and retention</h3></div><div class="crm-pad">';
+  [['At-risk, 14 days', s.risk], ['Out 3 weeks', s.out], ['ONB90 check-ins', s.onb]].forEach(function (row) {
+    h += '<div class="crm-row"><b>' + esc(row[0]) + '</b><span class="crm-pill ' + (row[1] ? 'warn' : 'ok') + '">' + row[1] + '</span></div>';
+  });
+  var taskPct = s.total ? Math.round(s.done / s.total * 100) : 0;
+  h += '<div class="crm-row"><b>Today’s task sheet</b><span>' + s.done + ' / ' + s.total + '</span></div><div class="crm-goal"><span style="width:' + taskPct + '%"></span></div></div></section>';
+  var promos = crmRoster().filter(function (p) {
+    return p.promo && crmSchoolOk(p) && (!state.crmPromoProgram || p.program === state.crmPromoProgram) && (!state.crmPromoRank || p.rank === state.crmPromoRank);
+  });
+  var programs = [['', 'All programs'], ['mini_tiger', 'Mini Tigers'], ['tiger', 'Tigers'], ['songahm', 'Taekwondo'], ['goninja', 'Movement Academy']];
+  h += '<section class="crm-card' + (state.crmHomeFocus === 'promos' ? ' crm-ring' : '') + '"><div class="crm-pad"><h3>Promotion-ready</h3><div class="crm-inline" style="margin-top:8px"><select aria-label="Program" onchange="crmSetPromoFilter(\'program\', this.value)">';
+  programs.forEach(function (opt) {
+    h += '<option value="' + opt[0] + '"' + (state.crmPromoProgram === opt[0] ? ' selected' : '') + '>' + esc(opt[1]) + '</option>';
+  });
+  h += '</select></div></div><div class="crm-pad">';
+  if (!promos.length) h += '<p style="color:var(--crm-muted)">Nobody in this filter is ready to test.</p>';
+  promos.forEach(function (p) {
+    h += '<div class="crm-row"><div><b>' + esc(p.name) + '</b><div class="crm-quiet">' + esc(p.programLabel) + ' · ' + p.sessions + '/' + p.need + '</div>' + crmRankButton(p) + '</div><span class="crm-pill ok">Ready</span></div>';
+  });
+  h += '</div></section>';
+  h += '<section class="crm-card span2" id="crm-holds"><div class="crm-pad"><h3>Birthdays and upcoming events</h3></div><div class="crm-pad crm-ops" style="padding-top:0">';
+  h += '<div>';
+  [['Avery Sample', 'Turns 9 on Sat Nov 28', 'waunakee'], ['Blake Sample', 'Turns 7 on Wed Dec 2', 'verona'], ['Riley Sample', 'Turns 8 on Sun Dec 6', 'goninjaW']].forEach(function (row) {
+    if (s.ids.indexOf(row[2]) < 0) return;
+    h += '<div class="crm-row"><b>' + esc(row[0]) + '</b><span style="color:var(--crm-muted)">' + esc(row[1]) + '</span></div>';
+  });
+  h += '</div><div>';
+  [['Cycle 6 belt test', 'Sat Dec 12 · Waunakee', 'waunakee'], ['Sparring clinic', 'Sat Nov 28 · Verona', 'verona'], ['Birthday party', 'Sat Nov 28 · Go Ninja Waunakee', 'goninjaW'], ['Holiday camp', 'Mon Dec 21 · East Madison', 'eastmad']].forEach(function (row) {
+    if (s.ids.indexOf(row[2]) < 0) return;
+    h += '<div class="crm-row"><b>' + esc(row[0]) + '</b><span style="color:var(--crm-muted)">' + esc(row[1]) + '</span></div>';
+  });
+  h += '</div></div>';
+  if (state.crmHomeFocus === 'holds') h += '<p class="crm-note">Sandbox queue. Approving a hold here does not write Firebase.</p>';
+  h += '</section></div>';
+  if (state.crmCheckin) {
+    h += '<aside class="crm-drawer" role="dialog" aria-label="Check-in preview"><button type="button" class="crm-iconbtn" onclick="crmCloseCheckin()">Close</button><p class="crm-kicker">Front desk</p><h2>Check-in preview</h2><p>Tuesday, Nov 24. This list stays in the browser. Nothing is punched.</p>';
+    crmRoster().filter(crmSchoolOk).slice(0, 5).forEach(function (p) {
+      var on = state.crmChecked && state.crmChecked[p.id];
+      h += '<div class="crm-row"><b>' + esc(p.name) + '</b><button type="button" class="crm-primary" onclick="crmToggleCheck(\'' + p.id + '\')">' + (on ? 'Checked in' : 'Check in') + '</button></div>';
+    });
+    h += '</aside>';
+  }
+  return h;
+}
+function crmLessons(level, theme) {
+  var pack = {
+    mini_tigers: [['kick', 'Animal walks and first kicks'], ['one_step', 'Partner tap and step-back'], ['form', 'Color-belt animal form'], ['weapon', 'Foam noodle strikes'], ['sparring', 'Bubble-tag control'], ['board_break', 'Pad tap, one break']],
+    tigers: [['kick', 'Side kicks'], ['one_step', 'Self-defense'], ['weapon', 'Bo staff form'], ['form', 'Raon the Lion form'], ['sparring', 'Tiger tag sparring'], ['board_break', 'One board, your options'], ['stripe', 'Red stripe Baeoh form']],
+    beginners: [['sparring', 'Sparring kick combo'], ['weapon', 'Beginner bo staff'], ['form', 'Songahm 3B'], ['one_step', 'One-step self-defense'], ['board_break', 'One board, your options'], ['stripe', 'White stripe kicks · 4 credits']],
+    intermediate: [['sparring', 'Sliding side, round kick, reverse side'], ['weapon', 'Bo staff, partial'], ['form', 'Inwha 1B'], ['one_step', 'One-step self-defense'], ['board_break', 'One board, your options'], ['stripe', 'Blue stripe bo staff · 8 credits']],
+    advanced: [['sparring', 'Advanced sparring combo'], ['weapon', 'Bo staff'], ['form', 'Choong Jung 2B'], ['one_step', 'One-step self-defense'], ['board_break', 'One board, your options'], ['stripe', 'Red stripe form · 12 credits']],
+    black_belt: [['form', 'Shim Jun'], ['form', 'Jung Yul'], ['form', 'Chung Jung'], ['weapon', 'Black belt weapons'], ['sparring', 'Black belt sparring'], ['one_step', 'Black belt one-step'], ['board_break', 'Board breaks']],
+    legacy: [['form', 'Legacy Songahm 1–5'], ['form', 'Legacy In Wha'], ['weapon', 'Legacy weapons'], ['one_step', 'Legacy one-step']],
+    go_ninja: [['kick', 'Movement circuit'], ['form', 'Level flow'], ['sparring', 'Partner challenge'], ['board_break', 'Skill station']]
+  };
+  var rows = pack[level] || pack.beginners;
+  var fixed = level === 'black_belt' || level === 'legacy';
+  return rows.map(function (row) {
+    return { category: row[0], title: fixed ? row[1] : theme + ' · ' + row[1], sample: level === 'mini_tigers' || level === 'go_ninja' };
+  });
+}
+function crmCurriculumView() {
+  var member = state.crmCurriculumMember ? crmPerson(state.crmCurriculumMember) : null;
+  var level = (member && member.level) || state.crmCurrLevel || 'beginners';
+  var levels = [['mini_tigers', 'Mini Tigers'], ['tigers', 'Tigers'], ['beginners', 'Beginners'], ['intermediate', 'Intermediate'], ['advanced', 'Advanced'], ['black_belt', 'Black Belt'], ['legacy', 'Legacy'], ['go_ninja', 'Go Ninja']];
+  var h = '<div class="crm-chips" role="tablist" aria-label="Curriculum level">';
+  levels.forEach(function (row) {
+    h += '<button type="button" role="tab" aria-selected="' + (level === row[0]) + '" onclick="crmBrowseLevel(\'' + row[0] + '\')">' + esc(row[1]) + '</button>';
+  });
+  h += '</div>' + crmCycleStrip(false);
+  if (member) {
+    var pct = Math.min(100, Math.round(member.sessions / member.need * 100));
+    var track = member.programLabel === member.levelLabel ? member.programLabel : member.programLabel + ' · ' + member.levelLabel;
+    h += '<article class="crm-card crm-pad" style="margin-bottom:14px"><div class="crm-kid-top"><div><div class="crm-kicker">' + esc(track) + '</div><h3 style="margin-top:6px">' + esc(member.name) + '</h3>' + crmRankButton(member) + '<div style="color:var(--crm-muted);font-size:13px;margin-top:6px">' + esc(member.stripes) + '</div></div><div style="min-width:140px;text-align:right"><b>' + member.sessions + ' / ' + member.need + '</b><div style="color:var(--crm-muted);font-size:12px">toward testing</div><div class="crm-goal" style="margin-top:8px"><span style="width:' + pct + '%"></span></div></div></div></article>';
+  }
+  if (level === 'mini_tigers' || level === 'go_ninja') {
+    h += '<p class="crm-sample">Starter sample. Website videos are not defined for this track yet. When a Vimeo id is added, the player URL includes texttrack=false.</p>';
+  } else {
+    h += '<p class="crm-sample" style="background:var(--crm-accent-soft);color:var(--crm-accent)">Lesson slots for this cycle. Imported Vimeo URLs use texttrack=false. No video file is stored here.</p>';
+  }
+  h += '<section class="crm-card crm-pad"><h3>' + esc((levels.filter(function (row) { return row[0] === level; })[0] || levels[2])[1]) + ' · Honesty</h3>';
+  crmLessons(level, 'Honesty').forEach(function (lesson) {
+    h += '<div class="crm-lesson"><span class="crm-pill neutral">' + esc(lesson.category.replace('_', ' ')) + '</span><div><b>' + esc(lesson.title) + '</b>';
+    if (lesson.sample) h += '<div style="color:var(--crm-muted);font-size:12px">Sample card</div>';
+    h += '</div></div>';
+  });
+  if (level === 'black_belt') {
+    h += '<div class="crm-lesson"><span class="crm-pill warn">tracker</span><div><b>Red / Black to 1st degree</b><div style="color:var(--crm-muted);font-size:12px">Pass 7/10 · 32 classes · four stripes · in-school tournament</div></div></div>';
+    h += '<div class="crm-lesson"><span class="crm-pill warn">tracker</span><div><b>1st to 2nd degree</b><div style="color:var(--crm-muted);font-size:12px">Pass 8/10 · 1 year · 36 midterm points · Class B+ and Class C</div></div></div>';
+  }
+  h += '</section>';
+  return h;
+}
 function crmRenderPage() {
-  var tab = state.crmTab || 'members';
+  var tab = state.crmTab || 'home';
   var titles = {
-    members: ['Members', 'Mock roster. Cards show brand and last four only.'],
-    family: ['Sample family', 'Avery at Waunakee, Blake at Verona, one login.'],
+    home: ['Home', 'Tuesday, Nov 24. Sandbox counts only. Nothing here bills or writes Firebase.'],
+    members: ['Members', 'Mock roster. A rank opens that student’s cycle curriculum.'],
+    family: ['Sample family', 'Mini Tigers, Tigers, a color belt, and Red / Black. One login.'],
+    curriculum: ['Curriculum', 'Cycle 6 · Honesty. Rank picks the level. The cycle picks the lessons.'],
     import: ['GymDesk import', 'Match status for the fixture. No live pull.'],
     promos: ['Promo codes', 'Checkout quote for a clinic booking.'],
     ops: ['Task sheets', 'Daily, weekly, monthly, and cycle. The live sheet is unchanged.'],
@@ -17149,8 +17509,10 @@ function crmRenderPage() {
     events: ['Events', 'Belt tests, clinics, tournaments, parties, and camps. Mock only.'],
     calendar: ['Class calendar', 'Week of Nov 16. Instructors come from the staff schedule.']
   };
-  var pair = titles[tab] || titles.members;
-  var body = tab === 'family' ? crmFamilyView()
+  var pair = titles[tab] || titles.home;
+  var body = tab === 'home' ? crmHomeView()
+    : tab === 'curriculum' ? crmCurriculumView()
+    : tab === 'family' ? crmFamilyView()
     : tab === 'import' ? crmImportView()
     : tab === 'promos' ? crmPromoView()
     : tab === 'ops' ? crmOpsView()
