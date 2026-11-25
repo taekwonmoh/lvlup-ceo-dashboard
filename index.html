@@ -883,6 +883,987 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <div class="app" id="app"><p style="text-align:center;padding:80px;color:var(--gray-400);">Loading dashboard...</p></div>
 
 <script>
+// FINANCIALS_BUNDLE_START
+var LVLUPFin = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // crm/src/financials.ts
+  var financials_exports = {};
+  __export(financials_exports, {
+    CATEGORY_LABEL: () => CATEGORY_LABEL,
+    CHARGES: () => CHARGES,
+    EXTRA_ATTEMPTS: () => EXTRA_ATTEMPTS,
+    FAILURE_ALLOWANCE_RATE: () => FAILURE_ALLOWANCE_RATE,
+    FIN_AS_OF: () => FIN_AS_OF,
+    FIN_SCHOOLS: () => FIN_SCHOOLS,
+    MEMBERSHIPS: () => MEMBERSHIPS,
+    MERCHANT_META: () => MERCHANT_META,
+    MOVEMENTS: () => MOVEMENTS,
+    PAST_DUE: () => PAST_DUE,
+    REPORTS: () => REPORTS,
+    SCHEDULED_OTHER: () => SCHEDULED_OTHER,
+    SCHOOL_META: () => SCHOOL_META,
+    SYNC_ERRORS: () => SYNC_ERRORS,
+    addDaysIso: () => addDaysIso,
+    cardExpiresBefore: () => cardExpiresBefore,
+    countsAsCollected: () => countsAsCollected,
+    daysBetween: () => daysBetween,
+    financialReport: () => financialReport,
+    financialsSummary: () => financialsSummary,
+    goalTone: () => goalTone,
+    holdCovers: () => holdCovers,
+    isBillingMember: () => isBillingMember,
+    ledgerCharges: () => ledgerCharges,
+    membershipDrafts: () => membershipDrafts,
+    monthlyEquivalentCents: () => monthlyEquivalentCents,
+    monthsBetween: () => monthsBetween,
+    netBilling: () => netBilling,
+    nextDraftOn: () => nextDraftOn,
+    pct: () => pct,
+    periodRange: () => periodRange,
+    schoolsInScope: () => schoolsInScope,
+    scopeAllowed: () => scopeAllowed,
+    scopeBrand: () => scopeBrand,
+    snapshotCents: () => snapshotCents,
+    snapshotCount: () => snapshotCount,
+    stillExpectedDrafts: () => stillExpectedDrafts,
+    toCsv: () => toCsv
+  });
+
+  // crm/src/billing.ts
+  function addDays(iso, days) {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + days);
+    return dt.toISOString().slice(0, 10);
+  }
+  function addMonths(iso, months) {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1 + months, 1));
+    const last = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 0)).getUTCDate();
+    const day = Math.min(d, last);
+    return dt.toISOString().slice(0, 8) + String(day).padStart(2, "0");
+  }
+  function draftDates(input) {
+    if (input.cadence === "prepaid_term") return [];
+    const out = [];
+    if (input.cadence === "every_4_weeks") {
+      let cursor2 = input.anchor;
+      while (cursor2 < input.from) cursor2 = addDays(cursor2, 28);
+      while (cursor2 <= input.through) {
+        out.push(cursor2);
+        cursor2 = addDays(cursor2, 28);
+      }
+      return out;
+    }
+    let cursor = input.anchor;
+    while (cursor < input.from) cursor = addMonths(cursor, 1);
+    while (cursor <= input.through) {
+      out.push(cursor);
+      cursor = addMonths(cursor, 1);
+    }
+    return out;
+  }
+
+  // crm/src/financials.ts
+  var FIN_AS_OF = "2026-11-24";
+  var FIN_SCHOOLS = ["waunakee", "eastmad", "verona", "deforest", "goninjaW", "goninjaV"];
+  var FAILURE_ALLOWANCE_RATE = 0.04;
+  var SCHOOL_META = {
+    waunakee: { name: "Waunakee", brand: "lvlup", goalCents: 12e4, merchant: "waunakee" },
+    eastmad: { name: "East Madison", brand: "lvlup", goalCents: 8e4, merchant: "eastmad" },
+    verona: { name: "Verona", brand: "lvlup", goalCents: 7e4, merchant: "verona" },
+    deforest: { name: "DeForest", brand: "lvlup", goalCents: 6e4, merchant: "waunakee" },
+    goninjaW: { name: "Go Ninja Waunakee", brand: "goninja", goalCents: 36e3, merchant: "waunakee" },
+    goninjaV: { name: "Go Ninja Verona", brand: "goninja", goalCents: 2e4, merchant: "verona" }
+  };
+  var MERCHANT_META = {
+    waunakee: { name: "Waunakee account", schools: ["waunakee", "deforest", "goninjaW"] },
+    verona: { name: "Verona account", schools: ["verona", "goninjaV"] },
+    eastmad: { name: "East Madison account", schools: ["eastmad"] }
+  };
+  var MOVEMENT_GOALS = {
+    waunakee: { neu: 2, upgrade: 1, renewal: 2, hold: 1, cancel: 1 },
+    eastmad: { neu: 1, upgrade: 1, renewal: 1, hold: 1, cancel: 1 },
+    verona: { neu: 1, upgrade: 1, renewal: 1, hold: 1, cancel: 1 },
+    deforest: { neu: 1, upgrade: 0, renewal: 1, hold: 1, cancel: 1 },
+    goninjaW: { neu: 1, upgrade: 0, renewal: 1, hold: 0, cancel: 0 },
+    goninjaV: { neu: 1, upgrade: 0, renewal: 1, hold: 0, cancel: 0 }
+  };
+  var M = (id, name, locationId, plan, program, cadence, amountCents, listCents, discountPct, status, startedOn, anchor, cardLast4, cardExp, method, extra = {}) => ({
+    id,
+    name,
+    locationId,
+    plan,
+    program,
+    cadence,
+    amountCents,
+    listCents,
+    discountPct,
+    status,
+    startedOn,
+    anchor,
+    cardLast4,
+    cardExp,
+    method,
+    prepaidMonths: extra.prepaidMonths,
+    ...extra
+  });
+  var MEMBERSHIPS = [
+    M("avery", "Avery Sample", "waunakee", "Standard", "Taekwondo", "every_4_weeks", 22400, 22400, 0, "active", "2024-06-03", "2026-11-03", "1111", "2027-08", "card"),
+    M("rowan", "Rowan Sample", "waunakee", "Standard", "Taekwondo", "every_4_weeks", 22400, 22400, 0, "active", "2023-02-14", "2026-11-06", "7777", "2028-01", "card"),
+    M("parker", "Parker Sample", "waunakee", "Mini-Tigers", "Mini Tigers", "monthly", 11900, 11900, 0, "active", "2026-02-05", "2026-11-05", "1212", "2027-06", "card"),
+    M("hayden", "Hayden Sample", "waunakee", "Standard", "Taekwondo", "every_4_weeks", 15680, 22400, 30, "active", "2025-09-06", "2026-11-06", "1313", "2027-03", "card"),
+    M("reese", "Reese Sample", "waunakee", "Grandfathered", "Taekwondo", "monthly", 17900, 17900, 0, "active", "2019-04-28", "2026-10-28", "1414", "2027-11", "card"),
+    M("drew", "Drew Sample", "waunakee", "Leadership", "Leadership", "every_4_weeks", 29900, 29900, 0, "active", "2026-11-10", "2026-11-10", "1515", "2028-02", "card"),
+    M("emerson", "Emerson Sample", "waunakee", "Standard", "Taekwondo", "every_4_weeks", 22400, 22400, 0, "hold", "2024-01-18", "2026-10-21", "1616", "2027-09", "card", { holdStart: "2026-11-01", holdEnd: "2026-12-15" }),
+    M("finley", "Finley Sample", "waunakee", "Standard", "Taekwondo", "every_4_weeks", 22400, 22400, 0, "cancelled", "2022-08-08", "2022-08-08", "1717", "2026-12", "card", { endedOn: "2026-11-08" }),
+    M("harper", "Harper Sample", "waunakee", "Standard", "Taekwondo", "every_4_weeks", 17900, 22400, 0, "active", "2023-11-12", "2026-11-26", "1818", "2027-04", "card"),
+    M("casey", "Casey Sample", "waunakee", "Mini-Tigers", "Mini Tigers", "monthly", 11900, 11900, 0, "past_due", "2025-11-02", "2026-10-02", "", "2026-11", "card"),
+    M("noah", "Noah Sample", "eastmad", "Prepaid Year", "Taekwondo", "prepaid_term", 291200, 291200, 0, "active", "2026-01-15", "2026-01-15", "1919", "2027-09", "card", { prepaidMonths: 12 }),
+    M("jordan", "Jordan Sample", "eastmad", "Leadership", "Leadership", "every_4_weeks", 29900, 29900, 0, "active", "2024-03-04", "2026-11-04", "3333", "2027-07", "card"),
+    M("blake", "Blake Sample", "verona", "Tigers", "Tigers", "every_4_weeks", 20900, 20900, 0, "active", "2025-04-07", "2026-11-07", "2222", "2027-12", "card"),
+    M("skyler", "Skyler Sample", "verona", "BB Club", "Black Belt", "every_4_weeks", 22400, 22400, 0, "active", "2021-09-09", "2026-11-09", "6666", "2026-11", "card"),
+    M("sage", "Sage Sample", "verona", "Standard", "Taekwondo", "every_4_weeks", 10450, 20900, 50, "active", "2026-11-09", "2026-11-09", "2323", "2027-10", "card"),
+    M("remy", "Remy Sample", "verona", "Standard", "Taekwondo", "every_4_weeks", 0, 0, 0, "comp", "2024-05-01", "2024-05-01", "", "", "card"),
+    M("quinn", "Quinn Sample", "deforest", "Standard", "Taekwondo", "every_4_weeks", 19900, 19900, 0, "past_due", "2025-06-02", "2026-11-02", "4444", "2027-04", "card"),
+    M("logan", "Logan Sample", "deforest", "Standard", "Taekwondo", "every_4_weeks", 19900, 19900, 0, "active", "2024-11-11", "2026-11-11", "2525", "2028-03", "card"),
+    M("riley", "Riley Sample", "goninjaW", "Movement Academy", "Movement Academy", "every_4_weeks", 0, 0, 0, "trial", "2026-11-21", "2026-11-21", "", "", "card"),
+    M("cameron", "Cameron Sample", "goninjaW", "Movement Academy", "Movement Academy", "every_4_weeks", 8900, 8900, 0, "active", "2025-08-04", "2026-11-04", "2626", "2027-08", "card"),
+    M("morgan", "Morgan Sample", "goninjaV", "Movement Academy", "Movement Academy", "every_4_weeks", 5e3, 5e3, 0, "past_due", "2026-03-12", "2026-10-15", "5555", "2027-01", "card"),
+    M("taylor", "Taylor Sample", "goninjaV", "Movement Academy", "Movement Academy", "every_4_weeks", 8900, 8900, 0, "active", "2026-11-08", "2026-11-08", "2727", "2028-06", "card")
+  ];
+  function ch(row) {
+    const status = row.status || "captured";
+    return {
+      taxCents: 0,
+      method: "card",
+      category: "tuition",
+      program: "Taekwondo",
+      plan: "Standard",
+      ...row,
+      status,
+      authStatus: row.authStatus || (status === "declined" ? "declined" : status === "refund" ? "refund" : status === "settled" ? "settled" : "captured")
+    };
+  }
+  var CHARGES = [
+    ch({ id: "ch_avery", membershipId: "avery", name: "Avery Sample", locationId: "waunakee", on: "2026-11-03", amountCents: 22400 }),
+    ch({ id: "ch_rowan", membershipId: "rowan", name: "Rowan Sample", locationId: "waunakee", on: "2026-11-06", amountCents: 22400 }),
+    ch({ id: "ch_parker", membershipId: "parker", name: "Parker Sample", locationId: "waunakee", on: "2026-11-05", amountCents: 11900, plan: "Mini-Tigers", program: "Mini Tigers" }),
+    ch({ id: "ch_hayden", membershipId: "hayden", name: "Hayden Sample", locationId: "waunakee", on: "2026-11-06", amountCents: 15680 }),
+    ch({ id: "ch_drew", membershipId: "drew", name: "Drew Sample", locationId: "waunakee", on: "2026-11-10", amountCents: 29900, plan: "Leadership", program: "Leadership", firstCharge: true }),
+    ch({ id: "ch_shop", name: "Avery Sample", locationId: "waunakee", on: "2026-11-12", amountCents: 4500, taxCents: 248, method: "cash", status: "settled", category: "proshop", program: "Pro Shop", plan: "Retail", authStatus: "cash" }),
+    ch({ id: "ch_refund", name: "Avery Sample", locationId: "waunakee", on: "2026-11-18", amountCents: -2e3, taxCents: -110, status: "refund", category: "proshop", program: "Pro Shop", plan: "Retail" }),
+    ch({ id: "ch_jordan", membershipId: "jordan", name: "Jordan Sample", locationId: "eastmad", on: "2026-11-04", amountCents: 22400 }),
+    ch({ id: "ch_jordan_up", membershipId: "jordan", name: "Jordan Sample", locationId: "eastmad", on: "2026-11-12", amountCents: 7500, plan: "Leadership", program: "Leadership" }),
+    ch({ id: "ch_camp", name: "Jordan Sample", locationId: "eastmad", on: "2026-11-15", amountCents: 12e3, category: "camps", program: "Camp", plan: "Holiday camp" }),
+    ch({ id: "ch_today", name: "Alex Sample", locationId: "eastmad", on: "2026-11-24", amountCents: 3500, method: "cash", status: "settled", category: "other", program: "Drop-in", plan: "Drop-in", authStatus: "cash" }),
+    ch({ id: "ch_blake", membershipId: "blake", name: "Blake Sample", locationId: "verona", on: "2026-11-07", amountCents: 20900, plan: "Tigers", program: "Tigers" }),
+    ch({ id: "ch_skyler", membershipId: "skyler", name: "Skyler Sample", locationId: "verona", on: "2026-11-09", amountCents: 22400, plan: "BB Club", program: "Black Belt" }),
+    ch({ id: "ch_sage", membershipId: "sage", name: "Sage Sample", locationId: "verona", on: "2026-11-09", amountCents: 10450, firstCharge: true }),
+    ch({ id: "ch_clinic", name: "Blake Sample", locationId: "verona", on: "2026-11-20", amountCents: 8e3, category: "events", program: "Clinic", plan: "Sparring clinic" }),
+    ch({ id: "ch_logan", membershipId: "logan", name: "Logan Sample", locationId: "deforest", on: "2026-11-11", amountCents: 19900 }),
+    ch({ id: "ch_test", name: "Logan Sample", locationId: "deforest", on: "2026-11-14", amountCents: 4500, category: "testing", program: "Testing", plan: "Belt test" }),
+    ch({ id: "ch_cameron", membershipId: "cameron", name: "Cameron Sample", locationId: "goninjaW", on: "2026-11-04", amountCents: 8900, plan: "Movement Academy", program: "Movement Academy" }),
+    ch({ id: "ch_party", name: "Cameron Sample", locationId: "goninjaW", on: "2026-11-21", amountCents: 25e3, category: "parties", program: "Party", plan: "Birthday party" }),
+    ch({ id: "ch_taylor", membershipId: "taylor", name: "Taylor Sample", locationId: "goninjaV", on: "2026-11-08", amountCents: 8900, plan: "Movement Academy", program: "Movement Academy" }),
+    ch({ id: "ch_quinn_dec", membershipId: "quinn", name: "Quinn Sample", locationId: "deforest", on: "2026-11-02", amountCents: 19900, status: "declined" }),
+    ch({ id: "ch_casey_dec", membershipId: "casey", name: "Casey Sample", locationId: "waunakee", on: "2026-11-02", amountCents: 11900, status: "declined", plan: "Mini-Tigers", program: "Mini Tigers" }),
+    ch({ id: "ch_morgan_dec", membershipId: "morgan", name: "Morgan Sample", locationId: "goninjaV", on: "2026-11-12", amountCents: 5e3, status: "declined", plan: "Movement Academy", program: "Movement Academy" }),
+    ch({ id: "ch_oct_avery", membershipId: "avery", name: "Avery Sample", locationId: "waunakee", on: "2026-10-06", amountCents: 22400 }),
+    ch({ id: "ch_oct_blake", membershipId: "blake", name: "Blake Sample", locationId: "verona", on: "2026-10-10", amountCents: 20900, plan: "Tigers", program: "Tigers" }),
+    ch({ id: "ch_oct_tourney", name: "Skyler Sample", locationId: "verona", on: "2026-10-17", amountCents: 6e3, status: "settled", category: "events", program: "Tournament", plan: "Fall tournament", authStatus: "settled" })
+  ];
+  function mv(row) {
+    var _a;
+    const monthly = (_a = row.monthlyCents) != null ? _a : row.sign * monthlyEquivalentCents(row.amountCents, row.cadence);
+    return {
+      id: row.id,
+      membershipId: row.membershipId,
+      name: row.name,
+      locationId: row.locationId,
+      kind: row.kind,
+      plan: row.plan,
+      cadence: row.cadence,
+      chargedCents: row.chargedCents,
+      on: row.on,
+      monthlyCents: monthly,
+      frequency: row.frequency || (row.cadence === "monthly" ? "Monthly" : "Every 4 weeks")
+    };
+  }
+  var MOVEMENTS = [
+    mv({ id: "mv_drew", membershipId: "drew", name: "Drew Sample", locationId: "waunakee", kind: "new_day1", plan: "Leadership", cadence: "every_4_weeks", amountCents: 29900, sign: 1, chargedCents: 29900, on: "2026-11-10" }),
+    mv({ id: "mv_sage", membershipId: "sage", name: "Sage Sample", locationId: "verona", kind: "new_later", plan: "Standard", cadence: "every_4_weeks", amountCents: 10450, sign: 1, chargedCents: 10450, on: "2026-11-09" }),
+    mv({ id: "mv_taylor", membershipId: "taylor", name: "Taylor Sample", locationId: "goninjaV", kind: "new_later", plan: "Movement Academy", cadence: "every_4_weeks", amountCents: 8900, sign: 1, chargedCents: 8900, on: "2026-11-08" }),
+    mv({ id: "mv_jordan", membershipId: "jordan", name: "Jordan Sample", locationId: "eastmad", kind: "upgrade", plan: "Leadership", cadence: "every_4_weeks", amountCents: 7500, sign: 1, chargedCents: 7500, on: "2026-11-12", monthlyCents: monthlyEquivalentCents(7500, "every_4_weeks") }),
+    mv({ id: "mv_avery", membershipId: "avery", name: "Avery Sample", locationId: "waunakee", kind: "renewal", plan: "Standard", cadence: "every_4_weeks", amountCents: 22400, sign: 1, chargedCents: 22400, on: "2026-11-03" }),
+    mv({ id: "mv_blake", membershipId: "blake", name: "Blake Sample", locationId: "verona", kind: "renewal", plan: "Tigers", cadence: "every_4_weeks", amountCents: 20900, sign: 1, chargedCents: 20900, on: "2026-11-07" }),
+    mv({ id: "mv_logan", membershipId: "logan", name: "Logan Sample", locationId: "deforest", kind: "renewal", plan: "Standard", cadence: "every_4_weeks", amountCents: 19900, sign: 1, chargedCents: 19900, on: "2026-11-11" }),
+    mv({ id: "mv_emerson", membershipId: "emerson", name: "Emerson Sample", locationId: "waunakee", kind: "hold", plan: "Standard", cadence: "every_4_weeks", amountCents: 22400, sign: -1, chargedCents: 0, on: "2026-11-01" }),
+    mv({ id: "mv_finley", membershipId: "finley", name: "Finley Sample", locationId: "waunakee", kind: "cancel", plan: "Standard", cadence: "every_4_weeks", amountCents: 22400, sign: -1, chargedCents: 0, on: "2026-11-08" }),
+    mv({ id: "mv_harper", membershipId: "harper", name: "Harper Sample", locationId: "waunakee", kind: "downgrade", plan: "Standard", cadence: "every_4_weeks", amountCents: 4500, sign: -1, chargedCents: 17900, on: "2026-11-12", monthlyCents: -monthlyEquivalentCents(4500, "every_4_weeks") })
+  ];
+  var PAST_DUE = [
+    { id: "pd_quinn", membershipId: "quinn", name: "Quinn Sample", locationId: "deforest", plan: "Standard", attempts: 3, lastAttempt: "2026-11-22", declineReason: "Insufficient funds", overdueCents: 19900, last4: "4444", method: "Visa", nextRetry: "2026-11-26", dueOn: "2026-11-02" },
+    { id: "pd_casey", membershipId: "casey", name: "Casey Sample", locationId: "waunakee", plan: "Mini-Tigers", attempts: 4, lastAttempt: "2026-11-16", declineReason: "Expired card", overdueCents: 11900, last4: "", method: "Visa", nextRetry: null, dueOn: "2026-11-02" },
+    { id: "pd_morgan", membershipId: "morgan", name: "Morgan Sample", locationId: "goninjaV", plan: "Movement Academy", attempts: 2, lastAttempt: "2026-11-23", declineReason: "Do not honor", overdueCents: 5e3, last4: "5555", method: "Visa", nextRetry: "2026-11-27", dueOn: "2026-11-12" }
+  ];
+  var SCHEDULED_OTHER = [
+    { id: "oth_party", name: "Cameron Sample", locationId: "goninjaW", on: "2026-11-29", amountCents: 15e3, label: "Birthday party balance", pastDue: false },
+    { id: "oth_event", name: "Parker Sample", locationId: "waunakee", on: "2026-11-10", amountCents: 6500, label: "Event payment plan", pastDue: true }
+  ];
+  var EXTRA_ATTEMPTS = [
+    { id: "at_quinn_2", name: "Quinn Sample", locationId: "deforest", on: "2026-11-12", amountCents: 19900, status: "declined", reason: "Insufficient funds", plan: "Standard" },
+    { id: "at_quinn_3", name: "Quinn Sample", locationId: "deforest", on: "2026-11-22", amountCents: 19900, status: "declined", reason: "Insufficient funds", plan: "Standard" },
+    { id: "at_casey_2", name: "Casey Sample", locationId: "waunakee", on: "2026-11-09", amountCents: 11900, status: "declined", reason: "Expired card", plan: "Mini-Tigers" },
+    { id: "at_casey_3", name: "Casey Sample", locationId: "waunakee", on: "2026-11-16", amountCents: 11900, status: "declined", reason: "Expired card", plan: "Mini-Tigers" },
+    { id: "at_morgan_2", name: "Morgan Sample", locationId: "goninjaV", on: "2026-11-23", amountCents: 5e3, status: "declined", reason: "Do not honor", plan: "Movement Academy" }
+  ];
+  var SYNC_ERRORS = [
+    { id: "sync_eastmad", locationId: "eastmad", message: "Authorize.net CIM sync error at East Madison" }
+  ];
+  var CATEGORY_LABEL = {
+    tuition: "Tuition",
+    events: "Events / Tournaments",
+    camps: "Camps",
+    parties: "Birthday Parties",
+    proshop: "Pro Shop / Retail",
+    testing: "Testing (pre-2027)",
+    other: "Other"
+  };
+  var REPORTS = [
+    { id: "transactions", title: "Financial Transactions", about: "Payments in the range, all methods, split by the membership\u2019s school. Amounts are pre-tax. Refunds are negative." },
+    { id: "by-category", title: "Transactions by Category", about: "The same payments grouped by income category. Tax is not included here." },
+    { id: "by-membership", title: "Transactions by Membership", about: "Tuition grouped by plan. Events, camps, parties, and pro shop stay in their own categories." },
+    { id: "forecast", title: "Financial Forecast Report", about: "Scheduled drafts in the range, including a second draft when a 4-week plan lands twice. Holds that cover the draft date are left out." },
+    { id: "gross-history", title: "Gross Financial History", about: "Collected by month, this year beside last year. November 2026 matches the ledger. Earlier months are stored snapshots." },
+    { id: "refunds", title: "Financial Refund Report", about: "Refunds in the range. They already reduce Collected." },
+    { id: "autocharge", title: "Autocharge Report", about: "Card attempts on the sandbox ledger. Approved and declined. Nothing here was sent to Authorize.net." },
+    { id: "past-due", title: "Past Due Memberships", about: "Open overdue balances with attempts, the last attempt, and the decline reason." },
+    { id: "sales-tax", title: "Sales Tax Report", about: "Pro shop tax only. Dashboard tiles stay pre-tax." },
+    { id: "down-payments", title: "Membership Down Payments", about: "First tuition charges in the range." },
+    { id: "credits", title: "Account Credits Applied", about: "Credits applied in the range. In this fixture that is the pro shop refund." },
+    { id: "scheduled", title: "Scheduled Payments", about: "Event and party schedules, paid and unpaid. Separate from membership drafts." },
+    { id: "end-of-day", title: "End of Day", about: "Charges on the as-of date, plus the month-to-date collected total." },
+    { id: "items-sold", title: "Items Sold", about: "Pro shop lines in the range, pre-tax." },
+    { id: "ach", title: "ACH / EFT Status", about: "No school in this preview takes ACH. Drafts are card, cash, or check." },
+    { id: "stats-history", title: "Stats History", about: "Stored month-end snapshots. They are not recomputed from today\u2019s ledger." }
+  ];
+  function monthlyEquivalentCents(amountCents, cadence, prepaidMonths = 1) {
+    if (cadence === "monthly") return amountCents;
+    if (cadence === "every_4_weeks") return Math.round(amountCents * 13 / 12);
+    const months = Math.max(1, prepaidMonths);
+    return Math.round(amountCents / months);
+  }
+  function schoolsInScope(scope) {
+    if (scope === "all") return [...FIN_SCHOOLS];
+    if (scope === "lvlup") return FIN_SCHOOLS.filter((id) => SCHOOL_META[id].brand === "lvlup");
+    if (scope === "goninja") return FIN_SCHOOLS.filter((id) => SCHOOL_META[id].brand === "goninja");
+    if (FIN_SCHOOLS.includes(scope)) return [scope];
+    throw new Error("Unknown scope " + scope);
+  }
+  function scopeBrand(ids) {
+    if (ids.every((id) => SCHOOL_META[id].brand === "goninja")) return "goninja";
+    if (ids.every((id) => SCHOOL_META[id].brand === "lvlup")) return "lvlup";
+    return "all";
+  }
+  function goalTone(pct2) {
+    if (pct2 == null) return "none";
+    if (pct2 >= 80) return "ok";
+    if (pct2 >= 50) return "warn";
+    return "bad";
+  }
+  function pct(part, whole) {
+    if (!whole) return null;
+    return Math.round(part / whole * 1e3) / 10;
+  }
+  function holdCovers(member, date) {
+    if (member.status !== "hold" || !member.holdStart || !member.holdEnd) return false;
+    return date >= member.holdStart && date <= member.holdEnd;
+  }
+  function isBillingMember(member) {
+    return member.status === "active" || member.status === "past_due";
+  }
+  function countsAsCollected(charge) {
+    return charge.status === "captured" || charge.status === "settled" || charge.status === "refund";
+  }
+  function daysBetween(from, to) {
+    const ms = Date.parse(to + "T00:00:00Z") - Date.parse(from + "T00:00:00Z");
+    return Math.round(ms / 864e5);
+  }
+  function addDaysIso(iso, days) {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + days);
+    return dt.toISOString().slice(0, 10);
+  }
+  function monthsBetween(from, to) {
+    const [y1, m1, d1] = from.split("-").map(Number);
+    const [y2, m2, d2] = to.split("-").map(Number);
+    let months = (y2 - y1) * 12 + (m2 - m1);
+    if (d2 < d1) months -= 1;
+    return Math.max(0, months);
+  }
+  function cardExpiresBefore(cardExp, draftOn) {
+    if (!/^\d{4}-\d{2}$/.test(cardExp)) return false;
+    const [y, m] = cardExp.split("-").map(Number);
+    const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    return last < draftOn;
+  }
+  function nextDraftOn(member, asOf) {
+    if (member.cadence === "prepaid_term" || member.status === "cancelled" || member.status === "trial" || member.status === "comp") {
+      return null;
+    }
+    const dates = draftDates({ anchor: member.anchor, cadence: member.cadence, from: asOf, through: addDaysIso(asOf, 370) });
+    return dates.find((date) => !holdCovers(member, date)) || null;
+  }
+  function membershipDrafts(member, from, through) {
+    if (member.status === "cancelled" || member.status === "trial" || member.status === "comp" || member.cadence === "prepaid_term") return [];
+    const dates = draftDates({ anchor: member.anchor, cadence: member.cadence, from, through });
+    return dates.filter((date) => !holdCovers(member, date)).map((date) => ({
+      id: member.id + ":" + date,
+      membershipId: member.id,
+      name: member.name,
+      locationId: member.locationId,
+      on: date,
+      amountCents: member.amountCents,
+      plan: member.plan,
+      cadence: member.cadence,
+      frequency: member.cadence === "monthly" ? "Monthly" : member.cadence === "every_4_weeks" ? "Every 4 weeks" : "Prepaid",
+      kind: "membership",
+      label: member.plan
+    }));
+  }
+  function settledDraftKeys() {
+    const keys = /* @__PURE__ */ new Set();
+    for (const charge of CHARGES) {
+      if (!charge.membershipId) continue;
+      if (charge.status !== "captured" && charge.status !== "settled") continue;
+      keys.add(charge.membershipId + ":" + charge.on);
+    }
+    return keys;
+  }
+  function stillExpectedDrafts(ids, from, through) {
+    const settled = settledDraftKeys();
+    const rows = [];
+    for (const member of MEMBERSHIPS) {
+      if (!ids.includes(member.locationId)) continue;
+      for (const draft of membershipDrafts(member, from, through)) {
+        if (settled.has(draft.id)) continue;
+        rows.push(draft);
+      }
+    }
+    for (const item of SCHEDULED_OTHER) {
+      if (!ids.includes(item.locationId) || item.pastDue) continue;
+      if (item.on < from || item.on > through) continue;
+      rows.push({
+        id: item.id,
+        membershipId: "",
+        name: item.name,
+        locationId: item.locationId,
+        on: item.on,
+        amountCents: item.amountCents,
+        plan: item.label,
+        cadence: "monthly",
+        frequency: "Scheduled",
+        kind: "other",
+        label: item.label
+      });
+    }
+    return rows.sort((a, b) => a.on.localeCompare(b.on) || a.name.localeCompare(b.name));
+  }
+  function netBilling(rows) {
+    let gainCents = 0;
+    let lossCents = 0;
+    let holdCents = 0;
+    for (const row of rows) {
+      if (row.kind === "hold") {
+        holdCents += Math.abs(row.monthlyCents);
+        continue;
+      }
+      if (row.monthlyCents >= 0) gainCents += row.monthlyCents;
+      else lossCents += Math.abs(row.monthlyCents);
+    }
+    return { gainCents, lossCents, netCents: gainCents - lossCents, holdCents };
+  }
+  function inScope(rows, ids) {
+    return rows.filter((row) => ids.includes(row.locationId));
+  }
+  function ledgerCharges(ids, from, through, pred = countsAsCollected) {
+    return CHARGES.filter((charge) => ids.includes(charge.locationId) && charge.on >= from && charge.on <= through && pred(charge));
+  }
+  function sumAmount(rows) {
+    return rows.reduce((total, row) => total + row.amountCents, 0);
+  }
+  var novCollectedCache = null;
+  var novMrrCache = null;
+  var novNetCache = null;
+  var novPastDueCache = null;
+  var novPayingCache = null;
+  function perSchool(build) {
+    const out = {};
+    for (const id of FIN_SCHOOLS) out[id] = build(id);
+    return out;
+  }
+  function novCollectedMap() {
+    if (!novCollectedCache) {
+      novCollectedCache = perSchool((id) => sumAmount(ledgerCharges([id], "2026-11-01", "2026-11-30")));
+    }
+    return novCollectedCache;
+  }
+  function mrrFor(ids) {
+    const rows = MEMBERSHIPS.filter((member) => ids.includes(member.locationId) && isBillingMember(member));
+    const cents = rows.reduce((total, member) => total + monthlyEquivalentCents(member.amountCents, member.cadence, member.prepaidMonths), 0);
+    return { cents, paying: rows.length, rows };
+  }
+  function novMrrMap() {
+    if (!novMrrCache) novMrrCache = perSchool((id) => mrrFor([id]).cents);
+    return novMrrCache;
+  }
+  function novNetMap() {
+    if (!novNetCache) novNetCache = perSchool((id) => netBilling(inScope(MOVEMENTS, [id])).netCents);
+    return novNetCache;
+  }
+  function novPastDueMap() {
+    if (!novPastDueCache) novPastDueCache = perSchool((id) => sumAmount(inScope(PAST_DUE, [id]).map((row) => ({ amountCents: row.overdueCents }))));
+    return novPastDueCache;
+  }
+  function novPayingMap() {
+    if (!novPayingCache) novPayingCache = perSchool((id) => mrrFor([id]).paying);
+    return novPayingCache;
+  }
+  function monthsBack(year, month) {
+    return (2026 - year) * 12 + (11 - month);
+  }
+  function snapshotCents(locationId, year, month, kind) {
+    if (year === 2026 && month === 11) {
+      if (kind === "collected") return novCollectedMap()[locationId];
+      if (kind === "mrr") return novMrrMap()[locationId];
+      if (kind === "net") return novNetMap()[locationId];
+      return novPastDueMap()[locationId];
+    }
+    const base = kind === "collected" ? novCollectedMap()[locationId] : kind === "mrr" ? novMrrMap()[locationId] : kind === "net" ? novNetMap()[locationId] : novPastDueMap()[locationId];
+    const back = monthsBack(year, month);
+    const wobble = ((month * 17 + locationId.charCodeAt(0) + (kind === "mrr" ? 3 : 0)) % 7 - 3) * 0.01;
+    const factor = 1 - back * 0.015 + wobble;
+    return Math.round(base * factor);
+  }
+  function snapshotCount(locationId, year, month) {
+    const base = novPayingMap()[locationId];
+    if (year === 2026 && month === 11) return base;
+    const back = monthsBack(year, month);
+    return Math.max(0, Math.round(base * (1 - back * 0.01)));
+  }
+  function periodRange(period, asOf = FIN_AS_OF, custom) {
+    if (period === "last") return { id: "last", from: "2026-10-01", through: "2026-10-31", label: "October 2026" };
+    if (period === "ytd") return { id: "ytd", from: "2026-01-01", through: asOf, label: "2026 year to date" };
+    if (period === "custom") {
+      const from = (custom == null ? void 0 : custom.from) && /^\d{4}-\d{2}-\d{2}$/.test(custom.from) ? custom.from : "2026-11-01";
+      const through = (custom == null ? void 0 : custom.through) && /^\d{4}-\d{2}-\d{2}$/.test(custom.through) ? custom.through : asOf;
+      return { id: "custom", from, through: through < from ? from : through, label: "Custom range" };
+    }
+    return { id: "month", from: "2026-11-01", through: "2026-11-30", label: "November 2026" };
+  }
+  function monthKeys(from, through) {
+    const out = [];
+    let year = Number(from.slice(0, 4));
+    let month = Number(from.slice(5, 7));
+    const endY = Number(through.slice(0, 4));
+    const endM = Number(through.slice(5, 7));
+    while (year < endY || year === endY && month <= endM) {
+      out.push({ year, month, key: year + "-" + String(month).padStart(2, "0") });
+      month += 1;
+      if (month === 13) {
+        month = 1;
+        year += 1;
+      }
+    }
+    return out;
+  }
+  function snapshotSum(ids, year, month, kind) {
+    return ids.reduce((total, id) => total + snapshotCents(id, year, month, kind), 0);
+  }
+  function emptyGoals() {
+    return { neu: 0, upgrade: 0, renewal: 0, hold: 0, cancel: 0 };
+  }
+  function financialsSummary(query = {}) {
+    const asOf = query.asOf || FIN_AS_OF;
+    const scope = query.scope || "all";
+    const ids = schoolsInScope(scope);
+    const period = periodRange(query.period || "month", asOf, { from: query.from, through: query.through });
+    const compare = query.compare || "prev_month";
+    const namedMonth = period.id === "month";
+    const collectedRows = namedMonth || period.id === "custom" ? ledgerCharges(ids, period.from, period.through) : [];
+    let collectedCents = sumAmount(collectedRows);
+    if (period.id === "last") collectedCents = snapshotSum(ids, 2026, 10, "collected");
+    if (period.id === "ytd") {
+      collectedCents = snapshotSum(ids, 2026, 11, "collected");
+      for (let month = 1; month <= 10; month += 1) collectedCents += snapshotSum(ids, 2026, month, "collected");
+    }
+    const todayCents = namedMonth ? sumAmount(ledgerCharges(ids, asOf, asOf)) : 0;
+    const goalCents = ids.reduce((total, id) => total + (period.id === "ytd" ? SCHOOL_META[id].goalCents * 11 : SCHOOL_META[id].goalCents), 0);
+    const goalPct = pct(collectedCents, goalCents);
+    const expectedFrom = asOf > period.from ? asOf : period.from;
+    const expectedRows = expectedFrom <= period.through ? stillExpectedDrafts(ids, expectedFrom, period.through) : [];
+    const stillExpectedCents = sumAmount(expectedRows);
+    const pastDueRows = inScope(PAST_DUE, ids);
+    const pastDueMembershipCents = pastDueRows.reduce((total, row) => total + row.overdueCents, 0);
+    const pastDueOtherRows = SCHEDULED_OTHER.filter((row) => ids.includes(row.locationId) && row.pastDue);
+    const pastDueOtherCents = sumAmount(pastDueOtherRows);
+    const oldestDays = pastDueRows.reduce((max, row) => Math.max(max, daysBetween(row.dueOn, asOf)), 0);
+    const allowanceCents = Math.round(stillExpectedCents * FAILURE_ALLOWANCE_RATE);
+    const projectedCents = collectedCents + stillExpectedCents - allowanceCents;
+    const movementRows = (namedMonth ? MOVEMENTS : MOVEMENTS.filter((row) => row.on >= period.from && row.on <= period.through)).filter((row) => ids.includes(row.locationId));
+    const movementNet = netBilling(namedMonth || period.id === "custom" ? movementRows : []);
+    let net = movementNet;
+    if (period.id === "last") {
+      const netCents = snapshotSum(ids, 2026, 10, "net");
+      net = { gainCents: Math.max(0, netCents), lossCents: Math.max(0, -netCents), netCents, holdCents: 0 };
+    }
+    if (period.id === "ytd") {
+      let netCents = snapshotSum(ids, 2026, 11, "net");
+      for (let month = 1; month <= 10; month += 1) netCents += snapshotSum(ids, 2026, month, "net");
+      net = { gainCents: Math.max(0, netCents), lossCents: 0, netCents, holdCents: movementNet.holdCents };
+    }
+    const mrr = mrrFor(ids);
+    const armCents = mrr.paying ? Math.round(mrr.cents / mrr.paying) : null;
+    const stayCohort = MEMBERSHIPS.filter((member) => ids.includes(member.locationId) && (isBillingMember(member) || member.status === "cancelled"));
+    const stayMonths = stayCohort.map((member) => monthsBetween(member.startedOn, member.endedOn || asOf));
+    const stayRaw = stayMonths.length ? stayMonths.reduce((total, months) => total + months, 0) / stayMonths.length : 0;
+    const avgStayMonths = stayMonths.length ? Math.round(stayRaw * 10) / 10 : 0;
+    const ltvCents = armCents == null ? 0 : Math.round(armCents * stayRaw);
+    const goals = ids.reduce((total, id) => {
+      const goal = MOVEMENT_GOALS[id];
+      total.neu += goal.neu;
+      total.upgrade += goal.upgrade;
+      total.renewal += goal.renewal;
+      total.hold += goal.hold;
+      total.cancel += goal.cancel;
+      return total;
+    }, emptyGoals());
+    const countKind = (kinds) => movementRows.filter((row) => kinds.includes(row.kind)).length;
+    const cancels = namedMonth ? countKind(["cancel"]) : 0;
+    const attritionPct = namedMonth ? pct(cancels, mrr.paying + cancels) : null;
+    const expiring = [];
+    for (const member of MEMBERSHIPS) {
+      if (!ids.includes(member.locationId) || !isBillingMember(member)) continue;
+      const next = nextDraftOn(member, asOf);
+      if (next && cardExpiresBefore(member.cardExp, next)) expiring.push(member);
+    }
+    const recentDeclines = pastDueRows.filter((row) => daysBetween(row.lastAttempt, asOf) <= 2 && daysBetween(row.lastAttempt, asOf) >= 0);
+    const holds = MEMBERSHIPS.filter((member) => ids.includes(member.locationId) && member.status === "hold");
+    const sync = SYNC_ERRORS.filter((row) => ids.includes(row.locationId));
+    const alerts = [
+      holds.length ? { id: "holds", tone: "bad", title: holds.length + (holds.length === 1 ? " membership on hold, not billing" : " memberships on hold, not billing"), filter: "holds" } : null,
+      expiring.length ? { id: "expiring", tone: "bad", title: expiring.length + (expiring.length === 1 ? " card expires before its next draft" : " cards expire before their next draft"), filter: "expiring" } : null,
+      recentDeclines.length ? { id: "declines", tone: "bad", title: recentDeclines.length + (recentDeclines.length === 1 ? " declined draft in the last 48 hours" : " declined drafts in the last 48 hours"), filter: "declines" } : null,
+      ...sync.map((row) => ({ id: row.id, tone: "bad", title: row.message, filter: "sync" }))
+    ].filter((row) => !!row);
+    const schools = ids.map((id) => {
+      const collected = period.id === "month" || period.id === "custom" ? sumAmount(ledgerCharges([id], period.from, period.through)) : period.id === "last" ? snapshotCents(id, 2026, 10, "collected") : snapshotCents(id, 2026, 11, "collected") + Array.from({ length: 10 }, (_, i) => snapshotCents(id, 2026, i + 1, "collected")).reduce((a, b) => a + b, 0);
+      const expected = expectedRows.filter((row) => row.locationId === id).reduce((total, row) => total + row.amountCents, 0);
+      const past = inScope(PAST_DUE, [id]).reduce((total, row) => total + row.overdueCents, 0);
+      const schoolMrr = mrrFor([id]);
+      const schoolNet = namedMonth || period.id === "custom" ? netBilling(inScope(MOVEMENTS, [id]).filter((row) => row.on >= period.from && row.on <= period.through)).netCents : period.id === "last" ? snapshotCents(id, 2026, 10, "net") : snapshotCents(id, 2026, 11, "net") + Array.from({ length: 10 }, (_, i) => snapshotCents(id, 2026, i + 1, "net")).reduce((a, b) => a + b, 0);
+      const schoolCancels = namedMonth ? inScope(MOVEMENTS, [id]).filter((row) => row.kind === "cancel").length : 0;
+      const goal = period.id === "ytd" ? SCHOOL_META[id].goalCents * 11 : SCHOOL_META[id].goalCents;
+      return {
+        locationId: id,
+        name: SCHOOL_META[id].name,
+        brand: SCHOOL_META[id].brand,
+        merchant: SCHOOL_META[id].merchant,
+        collectedCents: collected,
+        goalCents: goal,
+        goalPct: pct(collected, goal),
+        tone: goalTone(pct(collected, goal)),
+        stillExpectedCents: expected,
+        pastDueCents: past + pastDueOtherRows.filter((row) => row.locationId === id).reduce((total, row) => total + row.amountCents, 0),
+        mrrCents: schoolMrr.cents,
+        paying: schoolMrr.paying,
+        armCents: schoolMrr.paying ? Math.round(schoolMrr.cents / schoolMrr.paying) : null,
+        netBillingCents: schoolNet,
+        attritionPct: namedMonth ? pct(schoolCancels, schoolMrr.paying + schoolCancels) : null
+      };
+    });
+    const merchants = Object.entries(MERCHANT_META).map(([key, meta]) => {
+      const rows = schools.filter((row) => meta.schools.includes(row.locationId));
+      if (!rows.length) return null;
+      return {
+        id: key,
+        name: meta.name,
+        schools: rows.map((row) => row.name),
+        collectedCents: rows.reduce((total, row) => total + row.collectedCents, 0),
+        pastDueCents: rows.reduce((total, row) => total + row.pastDueCents, 0),
+        mrrCents: rows.reduce((total, row) => total + row.mrrCents, 0)
+      };
+    }).filter((row) => !!row);
+    const batches = ledgerCharges(ids, period.id === "last" ? period.from : "2026-11-01", period.id === "last" ? period.through : "2026-11-30").reduce((acc, charge) => {
+      const merchant = SCHOOL_META[charge.locationId].merchant;
+      const key = charge.on + "|" + merchant;
+      if (!acc[key]) acc[key] = { on: charge.on, merchant, amountCents: 0, count: 0 };
+      acc[key].amountCents += charge.amountCents;
+      acc[key].count += 1;
+      return acc;
+    }, {});
+    const mrrTrend = monthKeys(addDaysIso("2025-12-01", 0), "2026-11-30").map((item) => ({
+      key: item.key,
+      mrrCents: snapshotSum(ids, item.year, item.month, "mrr"),
+      collectedCents: snapshotSum(ids, item.year, item.month, "collected")
+    }));
+    const yoy = Array.from({ length: 11 }, (_, index) => {
+      const month = index + 1;
+      return {
+        month,
+        label: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov"][index],
+        thisYearCents: snapshotSum(ids, 2026, month, "collected"),
+        lastYearCents: snapshotSum(ids, 2025, month, "collected")
+      };
+    });
+    const categoryMap = /* @__PURE__ */ new Map();
+    for (const charge of namedMonth ? ledgerCharges(ids, "2026-11-01", "2026-11-30") : collectedRows) {
+      categoryMap.set(charge.category, (categoryMap.get(charge.category) || 0) + charge.amountCents);
+    }
+    const categories = Object.keys(CATEGORY_LABEL).map((id) => ({
+      id,
+      label: CATEGORY_LABEL[id],
+      cents: categoryMap.get(id) || 0
+    })).filter((row) => row.cents !== 0);
+    const programMap = /* @__PURE__ */ new Map();
+    for (const charge of ledgerCharges(ids, "2026-11-01", "2026-11-30", (charge2) => countsAsCollected(charge2) && charge2.category === "tuition")) {
+      programMap.set(charge.plan, (programMap.get(charge.plan) || 0) + charge.amountCents);
+    }
+    const programs = [...programMap.entries()].map(([label, cents]) => ({ label, cents })).sort((a, b) => b.cents - a.cents);
+    const calendarFrom = "2026-11-22";
+    const calendarThrough = "2026-12-26";
+    const calendarDrafts = stillExpectedDrafts(ids, calendarFrom, calendarThrough);
+    const byDay = /* @__PURE__ */ new Map();
+    for (let cursor = calendarFrom; cursor <= calendarThrough; cursor = addDaysIso(cursor, 1)) {
+      byDay.set(cursor, { on: cursor, cents: 0, count: 0 });
+    }
+    for (const draft of calendarDrafts) {
+      const cell = byDay.get(draft.on);
+      if (!cell) continue;
+      cell.cents += draft.amountCents;
+      cell.count += 1;
+    }
+    const compareTo = compare === "none" ? null : compareTarget(period, compare);
+    const compareCollected = compareTo ? snapshotSum(ids, compareTo.year, compareTo.month, "collected") : null;
+    const compareMrr = compareTo ? snapshotSum(ids, compareTo.year, compareTo.month, "mrr") : null;
+    const compareNet = compareTo ? snapshotSum(ids, compareTo.year, compareTo.month, "net") : null;
+    const history = ["2026-10", "2026-09", "2026-08", "2025-11"].map((key) => {
+      const year = Number(key.slice(0, 4));
+      const month = Number(key.slice(5, 7));
+      return {
+        key,
+        label: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][month - 1] + " " + year,
+        collectedCents: snapshotSum(ids, year, month, "collected"),
+        mrrCents: snapshotSum(ids, year, month, "mrr"),
+        netBillingCents: snapshotSum(ids, year, month, "net"),
+        pastDueCents: snapshotSum(ids, year, month, "pastDue"),
+        paying: ids.reduce((total, id) => total + snapshotCount(id, year, month), 0)
+      };
+    });
+    return {
+      fixture: true,
+      live: false,
+      scope,
+      brand: scopeBrand(ids),
+      asOf,
+      period,
+      compare,
+      compareLabel: compareTo ? compareTo.label : "",
+      deltas: {
+        collectedCents: compareCollected == null ? null : collectedCents - compareCollected,
+        mrrCents: compareMrr == null ? null : mrr.cents - compareMrr,
+        netBillingCents: compareNet == null ? null : net.netCents - compareNet
+      },
+      alerts,
+      tiles: {
+        collected: { cents: collectedCents, todayCents, goalCents, goalPct, tone: goalTone(goalPct) },
+        stillExpected: { cents: stillExpectedCents, pastDueMembershipCents, pastDueOtherCents, rows: expectedRows },
+        pastDue: {
+          cents: pastDueMembershipCents + pastDueOtherCents,
+          membershipCents: pastDueMembershipCents,
+          otherCents: pastDueOtherCents,
+          families: pastDueRows.length + pastDueOtherRows.length,
+          retryScheduled: pastDueRows.filter((row) => row.nextRetry).length,
+          cardExpiring: expiring.length,
+          oldestDays,
+          rows: pastDueRows,
+          otherRows: pastDueOtherRows
+        },
+        projected: {
+          cents: projectedCents,
+          collectedCents,
+          expectedCents: stillExpectedCents,
+          allowanceCents,
+          failureRate: FAILURE_ALLOWANCE_RATE,
+          goalCents
+        },
+        netBilling: net,
+        mrr: { cents: mrr.cents },
+        arm: { cents: armCents },
+        paying: { count: mrr.paying },
+        stay: { months: avgStayMonths, ltvCents, cohort: stayCohort.length }
+      },
+      movement: {
+        named: namedMonth,
+        newDay1: countKind(["new_day1"]),
+        newLater: countKind(["new_later"]),
+        upgrades: countKind(["upgrade"]),
+        renewals: countKind(["renewal"]),
+        holds: countKind(["hold"]),
+        cancels,
+        downgrades: countKind(["downgrade"]),
+        attritionPct,
+        attritionGoalPct: 3,
+        attritionOnTrack: attritionPct == null ? true : attritionPct <= 3,
+        goals,
+        rows: movementRows
+      },
+      schools,
+      merchants,
+      batches: Object.values(batches).sort((a, b) => a.on.localeCompare(b.on) || a.merchant.localeCompare(b.merchant)),
+      series: { mrrTrend, yoy },
+      categories,
+      programs,
+      calendar: [...byDay.values()],
+      expiring: expiring.map((member) => ({
+        id: member.id,
+        name: member.name,
+        locationId: member.locationId,
+        plan: member.plan,
+        cardExp: member.cardExp,
+        nextDraft: nextDraftOn(member, asOf)
+      })),
+      holds: holds.map((member) => ({
+        id: member.id,
+        name: member.name,
+        locationId: member.locationId,
+        plan: member.plan,
+        holdStart: member.holdStart,
+        holdEnd: member.holdEnd,
+        monthlyCents: monthlyEquivalentCents(member.amountCents, member.cadence, member.prepaidMonths)
+      })),
+      history,
+      mrrRows: mrr.rows.map((member) => ({
+        id: member.id,
+        name: member.name,
+        locationId: member.locationId,
+        plan: member.plan,
+        program: member.program,
+        cadence: member.cadence,
+        amountCents: member.amountCents,
+        listCents: member.listCents,
+        discountPct: member.discountPct,
+        monthlyCents: monthlyEquivalentCents(member.amountCents, member.cadence, member.prepaidMonths),
+        status: member.status
+      })),
+      definitions: {
+        collected: "Successful charges captured or settled in the period, all methods, net of refunds, by the membership\u2019s school. Pre-tax. Counted on the charge date.",
+        stillExpected: "Scheduled drafts from today through the period end that have not been captured. A 4-week plan can appear twice in one month. Holds are skipped unless the hold ends before the draft.",
+        pastDue: "Open overdue membership balances plus past-due event schedules. Not added into Still Expected or Projected.",
+        projected: "Collected plus still expected, minus a 4% sandbox decline allowance on the still-expected amount.",
+        netBilling: "Gain minus loss in monthly-equivalent recurring. Monthly plans count once. 4-week plans count as price \xD7 13/12. Holds are separate. Downgrades are a loss.",
+        mrr: "Monthly-equivalent price of active and past-due memberships. Holds, trials, comps, and cancellations are zero.",
+        arm: "MRR divided by paying members (students, not families).",
+        stay: "Average whole months from the start date to cancel, or to today if still active. LTV is ARM times that average."
+      }
+    };
+  }
+  function compareTarget(period, compare) {
+    if (compare === "none") return null;
+    const year = Number(period.from.slice(0, 4));
+    const month = Number(period.from.slice(5, 7));
+    if (compare === "prev_year") {
+      const label2 = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][month - 1] + " " + (year - 1);
+      return { year: year - 1, month, label: label2 };
+    }
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const label = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][prevMonth - 1] + " " + prevYear;
+    return { year: prevYear, month: prevMonth, label };
+  }
+  function moneyCell(cents) {
+    return (cents / 100).toFixed(2);
+  }
+  function financialReport(id, query = {}) {
+    const found = REPORTS.find((report) => report.id === id);
+    if (!found) throw new Error("Unknown report " + id);
+    const summary = financialsSummary(query);
+    const ids = schoolsInScope(summary.scope);
+    const from = query.from || summary.period.from;
+    const through = query.through || summary.period.through;
+    const charges = ledgerCharges(ids, from, through, () => true).filter((charge) => charge.on >= from && charge.on <= through);
+    const collected = charges.filter(countsAsCollected);
+    if (id === "transactions" || id === "end-of-day") {
+      const source = id === "end-of-day" ? collected.filter((charge) => charge.on === summary.asOf) : collected;
+      const rows2 = source.map((charge) => [
+        charge.on,
+        charge.name,
+        SCHOOL_META[charge.locationId].name,
+        charge.plan,
+        charge.method,
+        charge.authStatus,
+        moneyCell(charge.amountCents)
+      ]);
+      const total = sumAmount(source);
+      if (id === "end-of-day") {
+        rows2.push(["MTD", "Collected in the open view", "", "", "", "", moneyCell(summary.tiles.collected.cents)]);
+      }
+      return {
+        ...found,
+        columns: ["Date", "Name", "School", "Plan", "Method", "Status", "Amount"],
+        rows: rows2,
+        totalLabel: "TOTAL",
+        totalCents: total
+      };
+    }
+    if (id === "by-category") {
+      const map = /* @__PURE__ */ new Map();
+      for (const charge of collected) map.set(CATEGORY_LABEL[charge.category], (map.get(CATEGORY_LABEL[charge.category]) || 0) + charge.amountCents);
+      const rows2 = [...map.entries()].map(([label, cents]) => [label, moneyCell(cents)]);
+      return { ...found, columns: ["Category", "Amount"], rows: rows2, totalLabel: "TOTAL", totalCents: sumAmount(collected) };
+    }
+    if (id === "by-membership") {
+      const map = /* @__PURE__ */ new Map();
+      const tuition = collected.filter((charge) => charge.category === "tuition");
+      for (const charge of tuition) map.set(charge.plan, (map.get(charge.plan) || 0) + charge.amountCents);
+      const rows2 = [...map.entries()].map(([label, cents]) => [label, moneyCell(cents)]);
+      return { ...found, columns: ["Plan", "Amount"], rows: rows2, totalLabel: "TOTAL", totalCents: sumAmount(tuition) };
+    }
+    if (id === "forecast") {
+      const drafts = stillExpectedDrafts(ids, from, through);
+      const rows2 = drafts.map((draft) => [draft.on, draft.name, SCHOOL_META[draft.locationId].name, draft.frequency, moneyCell(draft.amountCents)]);
+      return { ...found, columns: ["Date", "Name", "School", "Frequency", "Amount"], rows: rows2, totalLabel: "TOTAL", totalCents: sumAmount(drafts) };
+    }
+    if (id === "gross-history") {
+      const rows2 = summary.series.yoy.map((item) => [item.label, moneyCell(item.thisYearCents), moneyCell(item.lastYearCents), moneyCell(item.thisYearCents - item.lastYearCents)]);
+      const total = summary.series.yoy.reduce((sum, item) => sum + item.thisYearCents, 0);
+      return { ...found, columns: ["Month", "2026", "2025", "Change"], rows: rows2, totalLabel: "TOTAL 2026", totalCents: total };
+    }
+    if (id === "refunds" || id === "credits") {
+      const rows2 = collected.filter((charge) => charge.amountCents < 0).map((charge) => [
+        charge.on,
+        charge.name,
+        SCHOOL_META[charge.locationId].name,
+        charge.plan,
+        moneyCell(charge.amountCents)
+      ]);
+      const total = sumAmount(collected.filter((charge) => charge.amountCents < 0));
+      return { ...found, columns: ["Date", "Name", "School", "Plan", "Amount"], rows: rows2, totalLabel: "TOTAL", totalCents: total };
+    }
+    if (id === "autocharge") {
+      const fromCharges = charges.filter((charge) => charge.method === "card").map((charge) => ({
+        id: charge.id,
+        name: charge.name,
+        locationId: charge.locationId,
+        on: charge.on,
+        amountCents: charge.amountCents,
+        status: charge.status === "declined" ? "declined" : "approved",
+        reason: charge.status === "declined" ? "Declined" : "",
+        plan: charge.plan
+      }));
+      const extras = EXTRA_ATTEMPTS.filter((row) => ids.includes(row.locationId) && row.on >= from && row.on <= through);
+      const rows2 = [...fromCharges, ...extras].sort((a, b) => a.on.localeCompare(b.on) || a.name.localeCompare(b.name)).map((row) => [row.on, row.name, SCHOOL_META[row.locationId].name, row.plan, row.status, row.reason, moneyCell(row.amountCents)]);
+      return { ...found, columns: ["Date", "Name", "School", "Plan", "Status", "Reason", "Amount"], rows: rows2, totalLabel: "ATTEMPTS", totalCents: null };
+    }
+    if (id === "past-due") {
+      const rows2 = inScope(PAST_DUE, ids).map((row) => [
+        row.name,
+        SCHOOL_META[row.locationId].name,
+        row.plan,
+        String(row.attempts),
+        row.lastAttempt,
+        row.declineReason,
+        row.method + (row.last4 ? " \xB7\xB7\xB7\xB7 " + row.last4 : ""),
+        row.nextRetry || "\u2014",
+        moneyCell(row.overdueCents)
+      ]);
+      return {
+        ...found,
+        columns: ["Family", "School", "Plan", "Attempts", "Last attempt", "Decline reason", "Method", "Next retry", "Overdue"],
+        rows: rows2,
+        totalLabel: "TOTAL",
+        totalCents: inScope(PAST_DUE, ids).reduce((total, row) => total + row.overdueCents, 0)
+      };
+    }
+    if (id === "sales-tax") {
+      const taxed = collected.filter((charge) => charge.taxCents);
+      const rows2 = taxed.map((charge) => [charge.on, charge.name, SCHOOL_META[charge.locationId].name, moneyCell(charge.amountCents), moneyCell(charge.taxCents)]);
+      const total = taxed.reduce((sum, charge) => sum + charge.taxCents, 0);
+      return { ...found, columns: ["Date", "Name", "School", "Pre-tax", "Tax"], rows: rows2, totalLabel: "TAX", totalCents: total };
+    }
+    if (id === "down-payments") {
+      const rows2 = collected.filter((charge) => charge.firstCharge).map((charge) => [
+        charge.on,
+        charge.name,
+        SCHOOL_META[charge.locationId].name,
+        charge.plan,
+        moneyCell(charge.amountCents)
+      ]);
+      return { ...found, columns: ["Date", "Name", "School", "Plan", "Amount"], rows: rows2, totalLabel: "TOTAL", totalCents: sumAmount(collected.filter((charge) => charge.firstCharge)) };
+    }
+    if (id === "scheduled") {
+      const paid = collected.filter((charge) => charge.category === "events" || charge.category === "parties" || charge.category === "camps");
+      const unpaid = SCHEDULED_OTHER.filter((row) => ids.includes(row.locationId));
+      const rows2 = [
+        ...paid.map((charge) => [charge.on, charge.name, charge.plan, "Paid", moneyCell(charge.amountCents)]),
+        ...unpaid.map((row) => [row.on, row.name, row.label, row.pastDue ? "Unpaid" : "Unpaid", moneyCell(row.amountCents)])
+      ];
+      return { ...found, columns: ["Date", "Name", "Item", "Status", "Amount"], rows: rows2, totalLabel: "UNPAID", totalCents: sumAmount(unpaid) };
+    }
+    if (id === "items-sold") {
+      const rows2 = collected.filter((charge) => charge.category === "proshop" && charge.amountCents > 0).map((charge) => [
+        charge.on,
+        charge.name,
+        SCHOOL_META[charge.locationId].name,
+        charge.plan,
+        moneyCell(charge.amountCents)
+      ]);
+      return { ...found, columns: ["Date", "Name", "School", "Item", "Amount"], rows: rows2, totalLabel: "TOTAL", totalCents: sumAmount(collected.filter((charge) => charge.category === "proshop" && charge.amountCents > 0)) };
+    }
+    if (id === "ach") {
+      return { ...found, columns: ["School", "Status"], rows: [["All schools in this preview", "Card, cash, or check. No ACH."]], totalLabel: "TOTAL", totalCents: 0 };
+    }
+    const rows = summary.history.map((row) => [row.label, moneyCell(row.collectedCents), moneyCell(row.mrrCents), moneyCell(row.netBillingCents), moneyCell(row.pastDueCents), String(row.paying)]);
+    return { ...found, columns: ["Month", "Collected", "MRR", "Net billing", "Past due", "Paying"], rows, totalLabel: "SNAPSHOTS", totalCents: null };
+  }
+  function toCsv(columns, rows) {
+    const esc = (value) => {
+      const text = String(value);
+      if (/[",\n]/.test(text)) return '"' + text.replace(/"/g, '""') + '"';
+      return text;
+    };
+    return [columns, ...rows].map((row) => row.map(esc).join(",")).join("\n") + "\n";
+  }
+  function scopeAllowed(actor, scope) {
+    var _a;
+    if (actor.role === "admin") return true;
+    if (scope === "all" || scope === "lvlup" || scope === "goninja") return false;
+    return !!((_a = actor.locationIds) == null ? void 0 : _a.includes(scope));
+  }
+  return __toCommonJS(financials_exports);
+})();
+// FINANCIALS_BUNDLE_END
+</script>
+<script>
 /*  -  -  Core Values  -  -  */
 const CORE_VALUES = [
   { name:'HONORABLE', icon:'⭐', desc:'The warrior\'s code. You treat the mats, your teammates, and your opponents with a baseline of high-level respect and integrity.' },
@@ -16477,7 +17458,11 @@ function crmBootPreview() {
   var tabMatch = /(?:\?|&)crmTab=([a-z]+)/.exec(String(location.search || ''));
   var themeMatch = /(?:\?|&)crmTheme=(light|dark)/.exec(String(location.search || ''));
   state.crmTab = tabMatch ? tabMatch[1] : 'home';
+  if (state.crmTab === 'financials' && !crmCanFinance()) state.crmTab = 'home';
+  if (/(?:\?|&)crmMore=1(?:&|$)/.test(String(location.search || ''))) state.crmMore = true;
   state.crmTheme = themeMatch ? themeMatch[1] : (state.crmTheme || 'light');
+  var schoolMatch = /(?:\?|&)crmSchool=(all|lvlup|goninja|waunakee|eastmad|verona|deforest|goninjaW|goninjaV)(?:&|$)/.exec(String(location.search || ''));
+  if (schoolMatch) state.crmSchool = schoolMatch[1];
   state.crmChild = state.crmChild || 'avery';
   state.crmMember = state.crmMember || 'avery';
   state.crmSchool = state.crmSchool || 'all';
@@ -16489,6 +17474,17 @@ function crmBootPreview() {
   if (calMatch) state.crmCal = calMatch[1];
   render(true);
   crmMarkOffline();
+  var shotMatch = /(?:\?|&)crmShot=(bottom|charts|table)(?:&|$)/.exec(String(location.search || ''));
+  if (shotMatch) {
+    var shotBody = document.querySelector('.crm-body');
+    var shotEl = shotMatch[1] === 'charts' ? document.querySelector('.fin-charts')
+      : shotMatch[1] === 'table' ? document.querySelector('.fin-loc-table, .fin-cards')
+      : null;
+    if (shotBody && shotEl) {
+      var top = shotEl.getBoundingClientRect().top - shotBody.getBoundingClientRect().top + shotBody.scrollTop;
+      shotBody.scrollTop = Math.max(0, top - 8);
+    } else if (shotBody) shotBody.scrollTop = shotBody.scrollHeight;
+  }
 }
 function crmMarkOffline() {
   const conn = document.getElementById('connStatus');
@@ -16500,7 +17496,7 @@ function crmToggleMore() { state.crmMore = !state.crmMore; render(); }
 function crmPickChild(id) { state.crmChild = id; state.crmMember = id; state.crmTab = 'family'; render(); }
 function crmPickMember(id) { state.crmMember = id; render(); }
 function crmSetTheme(theme) { state.crmTheme = theme === 'dark' ? 'dark' : 'light'; render(); }
-function crmSetSchool(id) { state.crmSchool = id; render(); }
+function crmSetSchool(id) { state.crmSchool = id; state.crmFinDrawer = ''; render(); }
 function crmSearch(value) {
   state.crmQuery = String(value || '');
   render();
@@ -16696,6 +17692,122 @@ function crmEnsureCss() {
     '.crm-ring{box-shadow:0 0 0 3px var(--crm-accent-soft),var(--crm-shadow);}',
     '.crm-kpis.six{grid-template-columns:repeat(3,minmax(0,1fr));}',
     '.crm-inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}',
+    '.crm-textbtn{border:0;background:transparent;padding:0;color:var(--crm-accent);font:inherit;font-weight:750;cursor:pointer;text-align:left;}',
+    '.crm-textbtn:hover{text-decoration:underline;}',
+    '.crm-goal.bad span{background:#9f1239;}',
+    '.crm-app[data-theme="dark"] .crm-goal.bad span{background:#ff8f86;}',
+    '.fin-tools{display:flex;flex-direction:column;gap:10px;margin:0 0 12px;}',
+    '.fin-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}',
+    '.fin-actions label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:750;color:var(--crm-muted);}',
+    '.fin-actions button,.fin-text{border:1px solid var(--crm-line);background:var(--crm-surface);color:var(--crm-ink);border-radius:12px;padding:8px 12px;font-weight:730;cursor:pointer;min-height:40px;}',
+    '.fin-actions button:hover,.fin-text:hover,.fin-actions button[aria-pressed="true"]{background:var(--crm-surface-2);}',
+    '.fin-actions button[aria-pressed="true"]{background:var(--crm-accent-soft);color:var(--crm-accent);border-color:transparent;}',
+    '.fin-actions input,.fin-scope-select select{min-height:40px;}',
+    '.fin-scope-select{display:none;}',
+    '.fin-note{margin:0 0 12px;color:var(--crm-muted);font-size:13px;font-weight:650;}',
+    '.fin-sec{margin:18px 0 8px;font-size:12px;font-weight:780;letter-spacing:.06em;text-transform:uppercase;color:var(--crm-muted);}',
+    '.fin-headrow{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0 8px;}',
+    '.fin-headrow h3{margin:0;font-size:16px;}',
+    '.fin-alert{display:flex;gap:12px;align-items:center;background:var(--crm-danger-bg);color:var(--crm-danger);border-radius:12px;padding:10px 12px;margin:0 0 8px;font-size:14px;font-weight:700;}',
+    '.fin-alert-more{display:none;}',
+    '.fin-alert button{background:#9f1239;color:#fff;border:0;border-radius:10px;padding:8px 12px;font-weight:760;cursor:pointer;flex:none;}',
+    '.fin-money{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:4px;}',
+    '.fin-tile{background:var(--crm-surface);color:var(--crm-ink);border:1px solid var(--crm-line);border-left:4px solid var(--crm-accent);border-radius:14px;box-shadow:var(--crm-shadow);padding:12px 14px;min-height:132px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:4px;width:100%;}',
+    '.fin-tile:hover{box-shadow:0 10px 24px rgba(22,21,19,.08);}',
+    '.fin-tile .k{font-size:11px;font-weight:760;letter-spacing:.06em;text-transform:uppercase;color:var(--crm-muted);}',
+    '.fin-tile .n{font-size:clamp(20px,1.7vw,28px);font-weight:740;letter-spacing:-.03em;line-height:1.05;}',
+    '.fin-tile .sub,.fin-chart .sub,.fin-card .sub{font-size:12px;color:var(--crm-muted);font-weight:650;line-height:1.35;}',
+    '.fin-tile .rule{height:1px;background:var(--crm-line);margin:4px 0;}',
+    '.fin-tile.bad{border-left-color:#9f1239;}',
+    '.fin-tile.bad .n,.bad-num{color:#9f1239;font-weight:750;}',
+    '.crm-app[data-theme="dark"] .fin-tile.bad .n,.crm-app[data-theme="dark"] .bad-num{color:#ffb4ae;}',
+    '.fin-tile.ok{border-left-color:var(--crm-ok);}',
+    '.fin-stack{display:flex;height:12px;border-radius:99px;overflow:hidden;background:var(--crm-line);margin:8px 0;}',
+    '.fin-stack i{display:block;height:100%;background:var(--crm-accent);}',
+    '.fin-stack i.hatched{background:#7dd3fc;}',
+    '.crm-app[data-theme="dark"] .fin-stack i.hatched{background:#bae6fd;}',
+    '.fin-tile .crm-goal,.fin-card .crm-goal{height:8px;margin-top:6px;}',
+    '.fin-tile .crm-goal span,.fin-card .crm-goal span{background:#047857;}',
+    '.fin-tile .crm-goal.warn span,.fin-card .crm-goal.warn span{background:#c2410c;}',
+    '.fin-tile .crm-goal.bad span,.fin-card .crm-goal.bad span{background:#9f1239;}',
+    '.crm-app[data-theme="dark"] .fin-tile .crm-goal span,.crm-app[data-theme="dark"] .fin-card .crm-goal span{background:#6ee7b7;}',
+    '.crm-app[data-theme="dark"] .fin-tile .crm-goal.warn span,.crm-app[data-theme="dark"] .fin-card .crm-goal.warn span{background:#fdba74;}',
+    '.crm-app[data-theme="dark"] .fin-tile .crm-goal.bad span,.crm-app[data-theme="dark"] .fin-card .crm-goal.bad span{background:#fda4af;}',
+    '.fin-health{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}',
+    '.fin-color{border:0;border-radius:14px;padding:14px 16px;color:#fff;text-align:left;cursor:pointer;min-height:118px;box-shadow:var(--crm-shadow);display:flex;flex-direction:column;gap:6px;}',
+    '.fin-color .k{font-size:11px;font-weight:760;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.92);}',
+    '.fin-color .n{font-size:clamp(22px,1.8vw,30px);font-weight:740;letter-spacing:-.03em;color:#fff;}',
+    '.fin-color .sub{font-size:12px;font-weight:650;color:rgba(255,255,255,.92);}',
+    '.fin-color.c1{background:#1d4ed8;}',
+    '.fin-color.c2{background:#0369a1;}',
+    '.fin-color.c3{background:#6d28d9;}',
+    '.fin-color.c4{background:#be123c;}',
+    '.fin-move{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}',
+    '.fin-move .k,.fin-move .n{display:block;}',
+    '.fin-move .n{margin-top:2px;}',
+    '.fin-move-top{display:flex;justify-content:space-between;gap:8px;align-items:center;}',
+    '.fin-ring{display:flex;flex-direction:column;align-items:center;min-width:58px;font-size:12px;font-weight:760;line-height:1.1;}',
+    '.fin-ring small{display:block;margin-top:2px;color:var(--crm-muted);font-weight:700;white-space:nowrap;}',
+    '.fin-delta-row{margin:6px 0 0;}',
+    '.fin-table{min-width:920px;}',
+    '.fin-bar-cell{min-width:92px;}',
+    '.fin-brand td{font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:12px;}',
+    '.fin-brand.lvlup td{background:#e8efff;color:#1e3a8a;}',
+    '.fin-brand.ninja td{background:#fdeceb;color:#9f1239;}',
+    '.crm-app[data-theme="dark"] .fin-brand.lvlup td{background:#1c2744;color:#dbe4ff;}',
+    '.crm-app[data-theme="dark"] .fin-brand.ninja td{background:#3a1816;color:#ffd0cb;}',
+    '.fin-total td{font-weight:800;background:var(--crm-surface-2);}',
+    '.fin-cards{display:none;}',
+    '.fin-card{display:block;width:100%;text-align:left;background:var(--crm-surface);color:var(--crm-ink);border:1px solid var(--crm-line);border-left:4px solid #1d4ed8;border-radius:14px;padding:12px 14px;box-shadow:var(--crm-shadow);cursor:pointer;}',
+    '.fin-card-num{font-size:22px;font-weight:740;margin:4px 0;color:var(--crm-ink);}',
+    '.fin-svg{width:100%;height:auto;display:block;}',
+    '.fin-svg .grid{stroke:var(--crm-line);stroke-width:1;}',
+    '.fin-svg .ink{fill:var(--crm-muted);font-size:12px;font-family:inherit;}',
+    '.fin-svg .line{fill:none;stroke:var(--crm-accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round;}',
+    '.fin-svg .bar{fill:var(--crm-accent);}',
+    '.fin-svg .bar.ly{fill:var(--crm-faint);}',
+    '.fin-charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;}',
+    '.fin-chart{padding:14px 16px 16px;}',
+    '.fin-chart h3{margin:0 0 4px;}',
+    '.fin-donut{display:flex;gap:16px;align-items:center;flex-wrap:wrap;}',
+    '.fin-donut svg{width:160px;height:160px;flex:none;}',
+    '.fin-donut .hole{fill:var(--crm-surface);}',
+    '.fin-donut ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;flex:1;min-width:180px;}',
+    '.fin-donut li{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:650;}',
+    '.fin-donut li span{flex:1;color:var(--crm-ink);}',
+    '.fin-donut i{width:10px;height:10px;border-radius:3px;flex:none;}',
+    '.fin-hbars{display:grid;gap:8px;}',
+    '.fin-hbar{display:grid;grid-template-columns:minmax(90px,1.1fr) minmax(80px,1.4fr) auto;gap:8px;align-items:center;font-size:13px;font-weight:650;color:var(--crm-ink);}',
+    '.fin-hbar .track{height:10px;border-radius:99px;background:var(--crm-line);overflow:hidden;}',
+    '.fin-hbar .track i{display:block;height:100%;background:var(--crm-accent);}',
+    '.fin-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}',
+    '.fin-dow{font-size:11px;font-weight:760;color:var(--crm-muted);text-align:center;}',
+    '.fin-day{border:1px solid var(--crm-line);background:var(--crm-surface);color:var(--crm-ink);border-radius:10px;min-height:64px;padding:6px;text-align:left;cursor:pointer;font-size:12px;font-weight:650;}',
+    '.fin-day b{display:block;font-size:12px;color:var(--crm-ink);}',
+    '.fin-day.has{background:var(--crm-accent-soft);border-color:transparent;}',
+    '.fin-day.today{box-shadow:inset 0 0 0 2px var(--crm-accent);}',
+    '.fin-day .amt{display:block;font-weight:780;margin-top:4px;color:var(--crm-ink);}',
+    '.fin-strip{display:none;}',
+    '.fin-report-list{display:flex;flex-direction:column;}',
+    '.fin-report-list button{display:flex;justify-content:space-between;gap:12px;align-items:center;width:100%;text-align:left;background:transparent;color:var(--crm-ink);border:0;border-bottom:1px solid var(--crm-line);padding:12px 14px;cursor:pointer;}',
+    '.fin-report-list button:hover{background:var(--crm-surface-2);}',
+    '.fin-report-list b{display:block;color:var(--crm-accent);font-size:15px;}',
+    '.fin-report-list button span span{display:block;color:var(--crm-muted);font-size:13px;font-weight:600;margin-top:2px;}',
+    '.fin-report{padding:16px;}',
+    '.fin-about{background:var(--crm-accent-soft);color:var(--crm-ink);border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600;}',
+    '.fin-due-mobile{display:none;}',
+    '.fin-due{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--crm-line);align-items:flex-start;}',
+    '.fin-more-btn{display:none;}',
+    '.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 8px;}',
+    '.swatch.bar{background:var(--crm-accent);}',
+    '.swatch.ly{background:var(--crm-faint);}',
+    '.fin-drawer h2{margin:12px 0;font-size:22px;}',
+    '.fin-drawer .fin-actions{margin-top:8px;}',
+    '@media print{',
+    '.crm-side,.crm-top,.crm-bottom,.crm-more,.fin-actions,.fin-scope-chips,.crm-drawer{display:none !important;}',
+    '.crm-app{position:static !important;display:block !important;background:#fff !important;color:#111 !important;}',
+    '.crm-body{overflow:visible !important;padding:0 !important;}',
+    '}',
     '@media (max-width:860px){',
     '.crm-app{grid-template-columns:1fr;}',
     '.crm-side{display:none;}',
@@ -16724,6 +17836,34 @@ function crmEnsureCss() {
     '.crm-more button{display:flex;align-items:center;gap:8px;border:0;background:var(--crm-surface-2);color:var(--crm-ink);border-radius:12px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;text-align:left;}',
     '.crm-more button[aria-current="page"]{background:var(--crm-accent-soft);color:var(--crm-accent);}',
     '.crm-more button svg{width:18px;height:18px;flex:none;}',
+    '.fin-scope-chips{display:none;}',
+    '.fin-scope-select{display:block;width:100%;}',
+    '.fin-scope-select select{width:100%;min-height:42px;}',
+    '.fin-money{grid-template-columns:1fr 1fr;}',
+    '.fin-money .net{grid-column:1 / -1;}',
+    '.fin-health,.fin-move{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;padding-bottom:6px;-webkit-overflow-scrolling:touch;}',
+    '.fin-health .fin-color,.fin-move .fin-tile{min-width:78%;scroll-snap-align:start;flex:none;}',
+    '.fin-loc-table{display:none;}',
+    '.fin-cards{display:grid;gap:10px;}',
+    '.fin-charts{grid-template-columns:1fr;}',
+    '.fin-charts .fin-chart.extra{display:none;}',
+    '.fin-charts.more .fin-chart.extra{display:block;}',
+    '.fin-cal-wrap{display:none;}',
+    '.fin-strip{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px;}',
+    '.fin-strip .fin-day{min-width:96px;scroll-snap-align:start;flex:none;}',
+    '.fin-alerts:not(.open) .fin-alert:not(:first-child){display:none;}',
+    '.fin-alert-more{display:inline-flex;align-items:center;margin:0 0 8px;border:0;background:transparent;color:var(--crm-danger);font-weight:750;cursor:pointer;padding:0;}',
+    '.fin-alert{padding:8px 10px;margin:0 0 6px;font-size:13px;}',
+    '.fin-alert button{padding:6px 10px;}',
+    '.fin-tile{min-height:0;padding:10px 12px;}',
+    '.fin-sec{margin:10px 0 6px;}',
+    '.crm-pagehead{margin-bottom:8px;}',
+    '.fin-due-mobile{display:block;}',
+    '.fin-more-btn{display:inline-flex;align-items:center;}',
+    '.crm-table.fin-table th,.crm-table.fin-table td{display:table-cell;}',
+    '.fin-hbar{grid-template-columns:1fr auto;}',
+    '.fin-report-list b{font-size:14px;}',
+    '.fin-tile .n,.fin-color .n{font-size:24px;}',
     '}'
   ].join('');
   var tag = document.createElement('style');
@@ -16744,7 +17884,8 @@ function crmIcon(name) {
     flag: '<path d="M5 21V4"/><path d="M5 4h11l-1.5 4L16 12H5"/>',
     clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l2.5 1.5"/>',
     book: '<path d="M5 4.5h9.5A2.5 2.5 0 0 1 17 7v13H7.5A2.5 2.5 0 0 0 5 22.5V4.5Z"/><path d="M5 17.5h12"/>',
-    more: '<circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/>'
+    more: '<circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/>',
+    dollar: '<path d="M12 3v18"/><path d="M16.2 7.4c-.5-1.5-2-2.5-4.2-2.5-2.4 0-4 1.2-4 2.9 0 3.6 8.4 2 8.4 5.8 0 1.8-1.7 3.1-4.4 3.1-2.3 0-4-1-4.6-2.6"/>'
   };
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (p[name] || '') + '</svg>';
 }
@@ -16850,7 +17991,7 @@ function crmQuoteModel() {
   return { title: 'Saturday clinic · Waunakee', buyer: 'Current member', lines: [{ label: 'Clinic', cents: list }, { label: 'CLINIC10 · 10%', cents: -500, disc: true }], due: 4500, error: '' };
 }
 function crmNavItems() {
-  return [
+  var items = [
     ['home', 'Home', 'home'],
     ['members', 'Members', 'users'],
     ['calendar', 'Calendar', 'cal'],
@@ -16862,6 +18003,8 @@ function crmNavItems() {
     ['promos', 'Promos', 'tag'],
     ['import', 'Import', 'box']
   ];
+  if (crmCanFinance()) items.splice(1, 0, ['financials', 'Financials', 'dollar']);
+  return items;
 }
 function crmNavButton(it, which) {
   var on = which === it[0];
@@ -16881,6 +18024,7 @@ function crmNav(which, mobile) {
 function crmMoreSheet(which) {
   if (!state.crmMore) return '';
   var extra = ['events', 'family', 'ops', 'payroll', 'promos', 'import'];
+  if (crmCanFinance()) extra.unshift('financials');
   var h = '<div class="crm-more" role="menu" aria-label="More">';
   crmNavItems().filter(function (it) { return extra.indexOf(it[0]) >= 0; }).forEach(function (it) {
     h += crmNavButton(it, which);
@@ -17504,14 +18648,15 @@ function crmHomeView() {
       ['Payments this month', crmMoney(s.collected), 'Collected']
     ];
     gnCards.forEach(function (card) {
-      h += '<article class="crm-kpi"><div class="lbl">' + esc(card[0]) + '</div><div class="num">' + esc(card[1]) + '</div><div class="row"><span class="crm-quiet">' + esc(card[2]) + '</span></div></article>';
+      var fin = card[0] === 'Payments this month' && crmCanFinance() ? '<button type="button" class="crm-textbtn" onclick="crmOpenFinancials()">Open Financials</button>' : '';
+      h += '<article class="crm-kpi"><div class="lbl">' + esc(card[0]) + '</div><div class="num">' + esc(card[1]) + '</div><div class="row"><span class="crm-quiet">' + esc(card[2]) + '</span>' + fin + '</div></article>';
     });
     h += '</section>';
     h += '<p class="crm-quiet" style="margin:-2px 4px 14px;font-size:13px">Scheduled ' + crmMoney(s.scheduled) + ' · <button type="button" onclick="crmFocus(\'overdue\')" style="border:0;background:transparent;padding:0;font:inherit;font-weight:760;color:var(--crm-danger);cursor:pointer">Overdue ' + crmMoney(s.overdue) + '</button> · Goal ' + (s.goalPct == null ? '—' : s.goalPct + '%') + '</p>';
   } else {
     h += '<section class="crm-kpis" aria-label="Summary">';
     h += '<article class="crm-kpi"><div class="lbl">Active members</div><div class="num">' + s.active + '</div><div class="row"><span class="crm-delta ' + (s.net >= 0 ? 'up' : 'down') + '">' + (s.net >= 0 ? '+' : '') + s.net + ' net</span><span style="color:var(--crm-ok)">' + crmSpark([s.active - 6, s.active - 4, s.active - 3, s.active - 1, s.active]) + '</span></div><div class="split"><span class="crm-pill ' + (s.onTrack ? 'ok' : 'warn') + '">Attrition ' + s.attrition + '% · goal ≤ 3%</span></div></article>';
-    h += '<article class="crm-kpi' + (state.crmHomeFocus === 'overdue' ? ' crm-ring' : '') + '"><div class="lbl">Payments this month</div><div class="num">' + crmMoney(s.collected) + '</div><div class="split"><span>Scheduled ' + crmMoney(s.scheduled) + '</span><button type="button" onclick="crmFocus(\'overdue\')">Overdue ' + crmMoney(s.overdue) + '</button></div><div class="goal' + ((s.goalPct || 0) < 80 ? ' warn' : '') + ' crm-goal"><span style="width:' + Math.min(100, s.goalPct || 0) + '%"></span></div><div class="split"><span>MTD vs goal ' + s.goalPct + '%</span><span>ARM ' + crmMoney(s.arm) + '</span></div></article>';
+    h += '<article class="crm-kpi' + (state.crmHomeFocus === 'overdue' ? ' crm-ring' : '') + '"><div class="lbl">Payments this month</div><div class="num">' + crmMoney(s.collected) + '</div><div class="split"><span>Scheduled ' + crmMoney(s.scheduled) + '</span><button type="button" onclick="crmFocus(\'overdue\')">Overdue ' + crmMoney(s.overdue) + '</button></div><div class="goal' + ((s.goalPct || 0) < 80 ? ' warn' : '') + ' crm-goal"><span style="width:' + Math.min(100, s.goalPct || 0) + '%"></span></div><div class="split"><span>MTD vs goal ' + s.goalPct + '%</span><span>ARM ' + crmMoney(s.arm) + '</span></div>' + (crmCanFinance() ? '<button type="button" class="crm-textbtn" onclick="crmOpenFinancials()">Open Financials</button>' : '') + '</article>';
     h += '<article class="crm-kpi"><div class="lbl">Leads and trials</div><div class="num">' + s.day1Pct + '%</div><div class="split"><span>' + s.leads + ' leads</span><span>' + s.booked + ' booked</span><span>' + s.shown + ' shown</span></div><div class="row"><span class="crm-delta up">Day-1 close</span></div></article>';
     h += '<article class="crm-kpi"><div class="lbl">7-day attendance</div><div class="num">' + s.checks + '</div><div class="row">' + crmBars(s.bars) + '<span class="crm-delta up">Today</span></div><button type="button" class="crm-primary" style="margin-top:8px" onclick="crmLaunchCheckin()">Launch check-in</button></article>';
     h += '<article class="crm-kpi' + (state.crmHomeFocus === 'holds' ? ' crm-ring' : '') + '"><div class="lbl">Holds and cancellations</div><div class="num">' + s.holds + '</div><div class="row"><span class="crm-delta ' + (s.holds ? 'down' : 'up') + '">' + (s.holds ? 'Pending review' : 'Queue clear') + '</span></div><button type="button" class="crm-primary" style="margin-top:8px" onclick="crmFocus(\'holds\')">Review queue</button></article>';
@@ -17635,6 +18780,626 @@ function crmCurriculumView() {
   h += '</section>';
   return h;
 }
+function crmCanFinance() {
+  return !!(dashAuth && (dashAuth.canFinance || dashAuth.isAdmin));
+}
+function crmFinScope() {
+  var choices = crmFinScopes().map(function (row) { return row[0]; });
+  var current = state.crmSchool || 'all';
+  if (choices.indexOf(current) >= 0) return current;
+  return choices[0] || 'waunakee';
+}
+function crmFinScopes() {
+  var all = [
+    ['all', 'All schools'],
+    ['lvlup', 'LVLUP'],
+    ['goninja', 'Go Ninja'],
+    ['waunakee', 'Waunakee'],
+    ['verona', 'Verona'],
+    ['eastmad', 'East Madison'],
+    ['deforest', 'DeForest'],
+    ['goninjaW', 'Go Ninja Waunakee'],
+    ['goninjaV', 'Go Ninja Verona']
+  ];
+  if (dashAuth && dashAuth.isAdmin) return all;
+  var mine = (dashAuth && dashAuth.schools) || [];
+  var rows = all.filter(function (row) { return mine.indexOf(row[0]) >= 0; });
+  return rows.length ? rows : [['waunakee', 'Waunakee']];
+}
+function crmFinQuery() {
+  return {
+    scope: crmFinScope(),
+    period: state.crmFinPeriod || 'month',
+    asOf: '2026-11-24',
+    compare: state.crmFinCompare || 'prev_month',
+    from: state.crmFinFrom || '',
+    through: state.crmFinThrough || ''
+  };
+}
+function crmFinModel() {
+  return LVLUPFin.financialsSummary(crmFinQuery());
+}
+function crmFinSchoolName(id) {
+  var meta = LVLUPFin.SCHOOL_META[id];
+  return meta ? meta.name : id;
+}
+function crmFinSet(key, value) {
+  if (key === 'period') state.crmFinPeriod = value;
+  if (key === 'compare') state.crmFinCompare = value;
+  if (key === 'from') state.crmFinFrom = value;
+  if (key === 'through') state.crmFinThrough = value;
+  if (key === 'group') state.crmFinGroup = value;
+  state.crmFinDrawer = '';
+  render();
+}
+function crmFinToggle(key) {
+  if (key === 'hide') state.crmFinHide = !state.crmFinHide;
+  if (key === 'history') state.crmFinHistory = !state.crmFinHistory;
+  if (key === 'charts') state.crmFinCharts = !state.crmFinCharts;
+  if (key === 'details') state.crmFinDetails = !state.crmFinDetails;
+  if (key === 'alerts') state.crmFinAlertsOpen = !state.crmFinAlertsOpen;
+  render();
+}
+function crmFinOpen(kind, id) {
+  state.crmFinDrawer = kind;
+  state.crmFinDrawerId = id || '';
+  render();
+}
+function crmFinClose() {
+  state.crmFinDrawer = '';
+  state.crmFinNote = '';
+  render();
+}
+function crmFinOpenReport(id) {
+  state.crmFinReport = id;
+  state.crmFinDrawer = '';
+  if (id === 'forecast') {
+    state.crmFinRepFrom = '2026-11-24';
+    state.crmFinRepThrough = '2026-12-31';
+  } else {
+    var model = crmFinModel();
+    state.crmFinRepFrom = model.period.from;
+    state.crmFinRepThrough = model.period.through;
+  }
+  render();
+}
+function crmFinCloseReport() {
+  state.crmFinReport = '';
+  render();
+}
+function crmFinRepDate(which, value) {
+  if (which === 'from') state.crmFinRepFrom = value;
+  else state.crmFinRepThrough = value;
+  render();
+}
+function crmFinAction(kind, id) {
+  state.crmFinNote = kind === 'retry'
+    ? 'Retry drafted for approval. No charge was sent.'
+    : 'Card-update link drafted for approval. Nothing was sent.';
+  state.crmFinDrawer = 'pastdue';
+  state.crmFinDrawerId = id || '';
+  render();
+}
+function crmFinDownload(name, csv) {
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 800);
+}
+function crmFinExport() {
+  var model = crmFinModel();
+  var csv;
+  var name = 'financials-' + model.scope + '.csv';
+  if (state.crmFinReport) {
+    var report = LVLUPFin.financialReport(state.crmFinReport, {
+      scope: model.scope, period: 'custom', asOf: model.asOf,
+      from: state.crmFinRepFrom, through: state.crmFinRepThrough
+    });
+    var data = report.rows.slice();
+    if (report.totalCents != null) data.push([report.totalLabel].concat(Array(Math.max(0, report.columns.length - 2)).fill('')).concat([ (report.totalCents / 100).toFixed(2) ]));
+    csv = LVLUPFin.toCsv(report.columns, data);
+    name = report.id + '.csv';
+  } else if (state.crmFinGroup === 'merchant') {
+    csv = LVLUPFin.toCsv(['Account', 'Schools', 'Collected', 'Past due', 'MRR'], model.merchants.map(function (row) {
+      return [row.name, row.schools.join('; '), (row.collectedCents / 100).toFixed(2), (row.pastDueCents / 100).toFixed(2), (row.mrrCents / 100).toFixed(2)];
+    }));
+  } else {
+    csv = LVLUPFin.toCsv(
+      ['School', 'Collected', 'Goal', 'Still expected', 'Past due', 'MRR', 'Paying', 'ARM', 'Net billing', 'Attrition %'],
+      model.schools.map(function (row) {
+        return [row.name, (row.collectedCents / 100).toFixed(2), (row.goalCents / 100).toFixed(2), (row.stillExpectedCents / 100).toFixed(2), (row.pastDueCents / 100).toFixed(2), (row.mrrCents / 100).toFixed(2), row.paying, row.armCents == null ? '' : (row.armCents / 100).toFixed(2), (row.netBillingCents / 100).toFixed(2), row.attritionPct == null ? '' : row.attritionPct];
+      })
+    );
+  }
+  crmFinDownload(name, csv);
+}
+function crmFinPrint() { window.print(); }
+function crmFinRun() { render(); }
+function crmFinDelta(cents, label) {
+  if (cents == null || !label) return '';
+  var cls = cents > 0 ? 'up' : cents < 0 ? 'down' : 'flat';
+  var sign = cents > 0 ? '+' : '';
+  return '<div class="crm-delta ' + cls + '">' + sign + crmMoney(cents) + ' vs ' + esc(label) + '</div>';
+}
+function crmFinRing(count, goal, lowerIsBetter) {
+  var pct = goal ? Math.max(0, Math.min(100, Math.round(count / goal * 100))) : 0;
+  var color = 'var(--crm-danger)';
+  if (lowerIsBetter) color = count <= goal ? 'var(--crm-ok)' : 'var(--crm-danger)';
+  else if (pct >= 100) color = 'var(--crm-ok)';
+  else if (pct >= 50) color = 'var(--crm-warn)';
+  var label = goal ? pct + '%' : '—';
+  return '<span class="fin-ring" style="color:' + color + '"><svg viewBox="0 0 36 36" width="46" height="46" aria-hidden="true"><circle cx="18" cy="18" r="14" fill="none" stroke="var(--crm-line)" stroke-width="4"/><circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + pct + ' 100" pathLength="100" transform="rotate(-90 18 18)"/></svg><b>' + label + '</b><small>Goal ' + goal + '</small></span>';
+}
+function crmFinGoalBar(pct, tone) {
+  var width = Math.max(0, Math.min(100, pct || 0));
+  return '<div class="crm-goal ' + (tone || '') + '" aria-hidden="true"><span style="width:' + width + '%"></span></div>';
+}
+function crmFinToolbar(model) {
+  var scope = crmFinScope();
+  var chips = '<div class="fin-scope-chips crm-chips" role="tablist" aria-label="Scope">';
+  crmFinScopes().forEach(function (row) {
+    chips += '<button type="button" role="tab" aria-selected="' + (scope === row[0]) + '" onclick="crmSetSchool(\'' + row[0] + '\')">' + esc(row[1]) + '</button>';
+  });
+  chips += '</div><label class="fin-scope-select">Scope<select aria-label="Scope" onchange="crmSetSchool(this.value)">';
+  crmFinScopes().forEach(function (row) {
+    chips += '<option value="' + row[0] + '"' + (scope === row[0] ? ' selected' : '') + '>' + esc(row[1]) + '</option>';
+  });
+  chips += '</select></label>';
+  var period = state.crmFinPeriod || 'month';
+  var compare = state.crmFinCompare || 'prev_month';
+  var actions = '<div class="fin-actions">';
+  actions += '<label>Period<select aria-label="Period" onchange="crmFinSet(\'period\', this.value)">';
+  [['month', 'This month'], ['last', 'Last month'], ['ytd', 'Year to date'], ['custom', 'Custom range']].forEach(function (row) {
+    actions += '<option value="' + row[0] + '"' + (period === row[0] ? ' selected' : '') + '>' + row[1] + '</option>';
+  });
+  actions += '</select></label>';
+  actions += '<label>Compare<select aria-label="Compare" onchange="crmFinSet(\'compare\', this.value)">';
+  [['prev_month', 'Previous month'], ['prev_year', 'Same month last year'], ['none', 'No comparison']].forEach(function (row) {
+    actions += '<option value="' + row[0] + '"' + (compare === row[0] ? ' selected' : '') + '>' + row[1] + '</option>';
+  });
+  actions += '</select></label>';
+  if (period === 'custom') {
+    actions += '<label>From<input type="date" aria-label="From" value="' + esc(state.crmFinFrom || model.period.from) + '" onchange="crmFinSet(\'from\', this.value)"></label>';
+    actions += '<label>Through<input type="date" aria-label="Through" value="' + esc(state.crmFinThrough || model.period.through) + '" onchange="crmFinSet(\'through\', this.value)"></label>';
+  }
+  actions += '<button type="button" aria-pressed="' + (state.crmFinHide ? 'true' : 'false') + '" onclick="crmFinToggle(\'hide\')">' + (state.crmFinHide ? 'Show stats' : 'Hide stats') + '</button>';
+  actions += '<button type="button" aria-pressed="' + (state.crmFinHistory ? 'true' : 'false') + '" onclick="crmFinToggle(\'history\')">Stats history</button>';
+  actions += '<button type="button" onclick="crmFinExport()">Export</button>';
+  actions += '</div>';
+  var note = '';
+  if ((state.crmSchool || 'all') !== scope) note = '<p class="fin-note">All schools and brand rollups are an admin view. Showing ' + esc(crmFinSchoolName(scope)) + '.</p>';
+  else if (model.period.id === 'last' || model.period.id === 'ytd') note = '<p class="fin-note">Collected for this period is a stored snapshot. November’s named families stay on This month.</p>';
+  else if (model.period.id === 'custom') note = '<p class="fin-note">A custom range sums named charges between these dates. Earlier months are snapshots on the chart.</p>';
+  return '<div class="fin-tools">' + chips + actions + '</div>' + note;
+}
+function crmFinAlerts(model) {
+  if (!model.alerts.length) return '';
+  var open = !!state.crmFinAlertsOpen;
+  var rows = model.alerts.map(function (alert) {
+    return '<div class="fin-alert" role="status"><button type="button" onclick="crmFinOpen(\'' + alert.filter + '\')">View now</button><span>' + esc(alert.title) + '</span></div>';
+  }).join('');
+  var more = model.alerts.length > 1
+    ? '<button type="button" class="fin-alert-more" onclick="crmFinToggle(\'alerts\')">' + (open ? 'Hide alerts' : 'Show ' + (model.alerts.length - 1) + ' more alerts') + '</button>'
+    : '';
+  return '<div class="fin-alerts' + (open ? ' open' : '') + '">' + rows + more + '</div>';
+}
+function crmFinTile(cls, label, value, body, kind) {
+  return '<button type="button" class="fin-tile ' + cls + '" onclick="crmFinOpen(\'' + kind + '\')"><span class="k">' + esc(label) + '</span><span class="n">' + value + '</span><span class="rule"></span>' + body + '</button>';
+}
+function crmFinMoney(model) {
+  var c = model.tiles.collected;
+  var e = model.tiles.stillExpected;
+  var p = model.tiles.pastDue;
+  var j = model.tiles.projected;
+  var net = model.tiles.netBilling;
+  var collectedLabel = model.period.id === 'ytd' ? 'Collected YTD' : model.period.id === 'month' ? 'Collected MTD' : 'Collected';
+  var today = model.period.id === 'month' ? '<div class="sub">Today: ' + crmMoney(c.todayCents) + '</div>' : '';
+  var goal = '<div class="sub">Goal ' + crmMoney(c.goalCents) + (c.goalPct == null ? '' : ' (' + c.goalPct + '%)') + '</div>' + crmFinGoalBar(c.goalPct, c.tone) + crmFinDelta(model.deltas.collectedCents, model.compareLabel);
+  var scale = Math.max(j.goalCents, c.cents + e.cents, 1);
+  var stack = '<div class="fin-stack" aria-hidden="true"><i style="width:' + (c.cents / scale * 100) + '%"></i><i class="hatched" style="width:' + (e.cents / scale * 100) + '%"></i></div>';
+  var h = '<section class="fin-money" aria-label="Money this month">';
+  h += crmFinTile('', collectedLabel, crmMoney(c.cents), today + goal, 'collected');
+  h += crmFinTile('', 'Still expected', crmMoney(e.cents), '<div class="sub">Past due memberships: ' + crmMoney(e.pastDueMembershipCents) + '</div><div class="sub">Past due other: ' + crmMoney(e.pastDueOtherCents) + '</div>', 'expected');
+  h += crmFinTile('bad', 'Past due / failed', crmMoney(p.cents), '<div class="sub">' + p.families + ' families · oldest ' + p.oldestDays + ' days</div><div class="sub">Retry scheduled: ' + p.retryScheduled + '</div><div class="sub">Cards expiring: ' + p.cardExpiring + '</div>', 'pastdue');
+  h += crmFinTile(j.cents >= j.goalCents ? 'ok' : '', 'Projected month-end', crmMoney(j.cents), stack + '<div class="sub">After ' + Math.round(j.failureRate * 100) + '% decline allowance (' + crmMoney(j.allowanceCents) + ')</div>', 'projected');
+  h += crmFinTile('net', 'Net billing', crmMoney(net.netCents), '<div class="sub">Gain: ' + crmMoney(net.gainCents) + ' · Loss: ' + crmMoney(net.lossCents) + '</div><div class="sub">Holds, separate: ' + crmMoney(net.holdCents) + '</div>' + crmFinDelta(model.deltas.netBillingCents, model.compareLabel), 'net');
+  return h + '</section>';
+}
+function crmFinHealth(model) {
+  var cards = [
+    ['c1', 'MRR', crmMoney(model.tiles.mrr.cents), 'Active and past due, holds at zero', 'mrr'],
+    ['c2', 'ARM', model.tiles.arm.cents == null ? '—' : crmMoney(model.tiles.arm.cents), 'MRR ÷ paying members', 'arm'],
+    ['c3', 'Paying members', String(model.tiles.paying.count), 'Excludes trials, comps, and holds', 'paying'],
+    ['c4', 'Length of stay', model.tiles.stay.months.toFixed(1) + ' mo', 'LTV ' + crmMoney(model.tiles.stay.ltvCents), 'stay']
+  ];
+  var h = '<section class="fin-health" aria-label="Recurring health">';
+  cards.forEach(function (card) {
+    h += '<button type="button" class="fin-color ' + card[0] + '" onclick="crmFinOpen(\'' + card[4] + '\')"><span class="k">' + esc(card[1]) + '</span><span class="n">' + card[2] + '</span><span class="sub">' + esc(card[3]) + '</span></button>';
+  });
+  if (model.deltas.mrrCents != null && model.compareLabel) {
+    h += '</section><div class="fin-delta-row">' + crmFinDelta(model.deltas.mrrCents, model.compareLabel + ' MRR') + '</div>';
+    return h;
+  }
+  return h + '</section>';
+}
+function crmFinMovement(model) {
+  var source = model.period.id === 'month' ? model : LVLUPFin.financialsSummary({ scope: model.scope, period: 'month', asOf: model.asOf, compare: 'none' });
+  var m = source.movement;
+  var tiles = [
+    ['New enrollments', String(m.newDay1 + m.newLater), 'Day-one ' + m.newDay1 + ' · Later ' + m.newLater, m.newDay1 + m.newLater, m.goals.neu, false, 'new'],
+    ['Upgrades', String(m.upgrades), 'Leadership and plan changes', m.upgrades, m.goals.upgrade, false, 'upgrade'],
+    ['Renewals', String(m.renewals), 'Memberships that renewed', m.renewals, m.goals.renewal, false, 'renewal'],
+    ['Holds started', String(m.holds), 'Not counted in net billing', m.holds, m.goals.hold, true, 'hold'],
+    ['Cancellations', String(m.cancels), 'Attrition ' + (m.attritionPct == null ? '—' : m.attritionPct + '%') + ' · target ≤ 3%', m.cancels, m.goals.cancel, true, 'cancel']
+  ];
+  var h = '<section class="fin-move" aria-label="Membership movement">';
+  tiles.forEach(function (tile) {
+    var bad = tile[6] === 'cancel' && m.attritionOnTrack === false;
+    h += '<button type="button" class="fin-tile move' + (bad ? ' bad' : '') + '" onclick="crmFinOpen(\'' + tile[6] + '\')"><span class="fin-move-top"><span><span class="k">' + esc(tile[0]) + '</span><span class="n">' + tile[1] + '</span></span>' + crmFinRing(tile[3], tile[4], tile[5]) + '</span><span class="sub">' + esc(tile[2]) + '</span></button>';
+  });
+  h += '</section>';
+  if (model.period.id !== 'month') h += '<p class="fin-note">Movement rings stay on the November ledger.</p>';
+  return h;
+}
+function crmFinSum(rows, key) {
+  return rows.reduce(function (total, row) { return total + (row[key] || 0); }, 0);
+}
+function crmFinSubtotal(label, rows) {
+  var collected = crmFinSum(rows, 'collectedCents');
+  var goal = crmFinSum(rows, 'goalCents');
+  var pct = goal ? Math.round(collected / goal * 1000) / 10 : null;
+  return '<tr class="fin-total"><td>' + esc(label) + '</td><td>' + crmMoney(collected) + '</td><td>' + crmMoney(goal) + '</td><td>' + (pct == null ? '—' : pct + '%') + '</td><td>' + crmMoney(crmFinSum(rows, 'stillExpectedCents')) + '</td><td>' + crmMoney(crmFinSum(rows, 'pastDueCents')) + '</td><td>' + crmMoney(crmFinSum(rows, 'mrrCents')) + '</td><td>' + crmFinSum(rows, 'paying') + '</td><td>—</td><td>' + crmMoney(crmFinSum(rows, 'netBillingCents')) + '</td><td></td></tr>';
+}
+function crmFinSchoolRow(row) {
+  var attr = row.attritionPct == null ? '—' : row.attritionPct + '%';
+  var attrCls = row.attritionPct != null && row.attritionPct > 3 ? ' class="bad-num"' : '';
+  var dueCls = row.pastDueCents > 0 ? ' class="bad-num"' : '';
+  return '<tr><td><button type="button" class="crm-textbtn" onclick="crmSetSchool(\'' + row.locationId + '\')">' + esc(row.name) + '</button></td><td>' + crmMoney(row.collectedCents) + '</td><td>' + crmMoney(row.goalCents) + '</td><td class="fin-bar-cell">' + crmFinGoalBar(row.goalPct, row.tone) + '<span class="sub">' + (row.goalPct == null ? '—' : row.goalPct + '%') + '</span></td><td>' + crmMoney(row.stillExpectedCents) + '</td><td' + dueCls + '>' + crmMoney(row.pastDueCents) + '</td><td>' + crmMoney(row.mrrCents) + '</td><td>' + row.paying + '</td><td>' + (row.armCents == null ? '—' : crmMoney(row.armCents)) + '</td><td>' + crmMoney(row.netBillingCents) + '</td><td' + attrCls + '>' + attr + '</td></tr>';
+}
+function crmFinLocations(model) {
+  var group = state.crmFinGroup === 'merchant' ? 'merchant' : 'school';
+  var h = '<div class="fin-headrow"><h3>' + (group === 'merchant' ? 'By merchant account' : 'By location') + '</h3><div class="crm-chips" role="group" aria-label="Grouping"><button type="button" aria-pressed="' + (group === 'school') + '" onclick="crmFinSet(\'group\',\'school\')">By school</button><button type="button" aria-pressed="' + (group === 'merchant') + '" onclick="crmFinSet(\'group\',\'merchant\')">By merchant account</button></div></div>';
+  if (group === 'merchant') {
+    h += '<div class="fin-loc-table crm-table-wrap"><table class="crm-table fin-table"><thead><tr><th>Account</th><th>Schools</th><th>Collected</th><th>Past due</th><th>MRR</th></tr></thead><tbody>';
+    model.merchants.forEach(function (row) {
+      var dueCls = row.pastDueCents > 0 ? ' class="bad-num"' : '';
+      h += '<tr><td><b>' + esc(row.name) + '</b></td><td>' + esc(row.schools.join(', ')) + '</td><td>' + crmMoney(row.collectedCents) + '</td><td' + dueCls + '>' + crmMoney(row.pastDueCents) + '</td><td>' + crmMoney(row.mrrCents) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<h3 class="fin-sec">Daily batches</h3><div class="crm-table-wrap"><table class="crm-table fin-table"><thead><tr><th>Date</th><th>Account</th><th>Charges</th><th>Amount</th></tr></thead><tbody>';
+    if (!model.batches.length) h += '<tr><td colspan="4">No named charges in this batch window.</td></tr>';
+    model.batches.forEach(function (row) {
+      var label = (LVLUPFin.MERCHANT_META[row.merchant] || {}).name || row.merchant;
+      h += '<tr><td>' + esc(row.on) + '</td><td>' + esc(label) + '</td><td>' + row.count + '</td><td>' + crmMoney(row.amountCents) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<div class="fin-cards">';
+    model.merchants.forEach(function (row) {
+      h += '<article class="fin-card" style="border-left-color:#1d4ed8"><b>' + esc(row.name) + '</b><div class="sub">' + esc(row.schools.join(', ')) + '</div><div class="fin-card-num">' + crmMoney(row.collectedCents) + '</div><div class="sub">Past due ' + crmMoney(row.pastDueCents) + ' · MRR ' + crmMoney(row.mrrCents) + '</div></article>';
+    });
+    return h + '</div>';
+  }
+  h += '<div class="fin-loc-table crm-table-wrap"><table class="crm-table fin-table"><thead><tr><th>School</th><th>Collected</th><th>Goal</th><th></th><th>Still expected</th><th>Past due</th><th>MRR</th><th>Paying</th><th>ARM</th><th>Net billing</th><th>Attrition</th></tr></thead><tbody>';
+  [['lvlup', 'LVLUP'], ['goninja', 'Go Ninja']].forEach(function (groupRow) {
+    var rows = model.schools.filter(function (row) { return row.brand === groupRow[0]; });
+    if (!rows.length) return;
+    h += '<tr class="fin-brand ' + (groupRow[0] === 'goninja' ? 'ninja' : 'lvlup') + '"><td colspan="11">' + groupRow[1] + '</td></tr>';
+    rows.forEach(function (row) { h += crmFinSchoolRow(row); });
+    h += crmFinSubtotal(groupRow[1] + ' total', rows);
+  });
+  if (model.schools.length > 1) h += crmFinSubtotal('All schools', model.schools);
+  h += '</tbody></table></div><div class="fin-cards">';
+  model.schools.forEach(function (row) {
+    var edge = row.brand === 'goninja' ? '#b42318' : '#1d4ed8';
+    var due = row.pastDueCents > 0 ? '<span class="bad-num">Past due ' + crmMoney(row.pastDueCents) + '</span>' : 'Past due ' + crmMoney(row.pastDueCents);
+    h += '<button type="button" class="fin-card" style="border-left-color:' + edge + '" onclick="crmSetSchool(\'' + row.locationId + '\')"><b>' + esc(row.name) + '</b><div class="fin-card-num">' + crmMoney(row.collectedCents) + '</div>' + crmFinGoalBar(row.goalPct, row.tone) + '<div class="sub">Goal ' + crmMoney(row.goalCents) + (row.goalPct == null ? '' : ' · ' + row.goalPct + '%') + '</div><div class="sub">' + due + ' · MRR ' + crmMoney(row.mrrCents) + '</div></button>';
+  });
+  return h + '</div>';
+}
+function crmFinSvgFrame(inner, label) {
+  return '<svg class="fin-svg" viewBox="0 0 640 250" role="img" aria-label="' + esc(label) + '">' + inner + '</svg>';
+}
+function crmFinTrend(series) {
+  var max = 1;
+  series.forEach(function (point) { max = Math.max(max, point.mrrCents, point.collectedCents); });
+  var plotMax = max * 1.18;
+  var left = 58, top = 14, w = 560, h = 176;
+  var n = series.length || 1;
+  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function x(i) { return left + (n === 1 ? w / 2 : i * w / (n - 1)); }
+  function y(v) { return top + h - (v / plotMax) * h; }
+  var grid = '';
+  for (var g = 0; g <= 4; g++) {
+    var value = plotMax * g / 4;
+    var yy = y(value);
+    grid += '<line class="grid" x1="' + left + '" y1="' + yy.toFixed(1) + '" x2="' + (left + w) + '" y2="' + yy.toFixed(1) + '"/>';
+    grid += '<text class="ink" x="' + (left - 6) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end">$' + Math.round(value / 100) + '</text>';
+  }
+  var bars = series.map(function (point, i) {
+    var bh = Math.max(0, (point.collectedCents / plotMax) * h);
+    return '<rect class="bar" x="' + (x(i) - 7) + '" y="' + y(point.collectedCents).toFixed(1) + '" width="14" height="' + bh.toFixed(1) + '" rx="2"><title>' + point.key + ' collected ' + crmMoney(point.collectedCents) + '</title></rect>';
+  }).join('');
+  var d = series.map(function (point, i) {
+    return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(point.mrrCents).toFixed(1);
+  }).join(' ');
+  var labels = series.map(function (point, i) {
+    var name = months[Number(point.key.slice(5)) - 1] || point.key;
+    return '<text class="ink" x="' + x(i).toFixed(1) + '" y="' + (top + h + 18) + '" text-anchor="middle">' + name + '</text>';
+  }).join('');
+  return crmFinSvgFrame(grid + bars + '<path class="line" d="' + d + '"/>' + labels, 'Monthly recurring revenue line and collected bars');
+}
+function crmFinYoy(rows) {
+  var max = 1;
+  rows.forEach(function (row) { max = Math.max(max, row.thisYearCents, row.lastYearCents); });
+  max = max * 1.12;
+  var left = 28, top = 12, w = 590, h = 180;
+  var slot = w / rows.length;
+  var grid = '';
+  for (var g = 0; g <= 4; g++) {
+    var yy = top + h - (g / 4) * h;
+    grid += '<line class="grid" x1="' + left + '" y1="' + yy.toFixed(1) + '" x2="' + (left + w) + '" y2="' + yy.toFixed(1) + '"/>';
+  }
+  var bars = rows.map(function (row, i) {
+    var x = left + i * slot;
+    var h1 = (row.thisYearCents / max) * h;
+    var h2 = (row.lastYearCents / max) * h;
+    return '<rect class="bar" x="' + (x + 4) + '" y="' + (top + h - h1) + '" width="14" height="' + h1 + '" rx="2"><title>' + row.label + ' 2026 ' + crmMoney(row.thisYearCents) + '</title></rect><rect class="bar ly" x="' + (x + 20) + '" y="' + (top + h - h2) + '" width="14" height="' + h2 + '" rx="2"><title>' + row.label + ' 2025 ' + crmMoney(row.lastYearCents) + '</title></rect><text class="ink" x="' + (x + slot / 2) + '" y="' + (top + h + 18) + '" text-anchor="middle">' + row.label + '</text>';
+  }).join('');
+  return crmFinSvgFrame(grid + bars, 'Gross revenue this year beside last year');
+}
+function crmFinDonut(cats) {
+  var total = cats.reduce(function (sum, cat) { return sum + Math.max(0, cat.cents); }, 0);
+  if (!total) return '<p class="crm-quiet">No category dollars in this view.</p>';
+  var colors = ['#1d4ed8', '#0369a1', '#6d28d9', '#be185d', '#047857', '#c2410c', '#475569'];
+  var angle = -Math.PI / 2;
+  var paths = cats.map(function (cat, i) {
+    var frac = Math.max(0, cat.cents) / total;
+    if (frac <= 0) return '';
+    if (frac >= 0.999) return '<circle cx="80" cy="80" r="62" fill="' + colors[i % colors.length] + '"/>';
+    var next = angle + frac * Math.PI * 2;
+    var x1 = 80 + Math.cos(angle) * 62;
+    var y1 = 80 + Math.sin(angle) * 62;
+    var x2 = 80 + Math.cos(next) * 62;
+    var y2 = 80 + Math.sin(next) * 62;
+    var large = frac > 0.5 ? 1 : 0;
+    angle = next;
+    return '<path d="M80 80 L' + x1.toFixed(2) + ' ' + y1.toFixed(2) + ' A62 62 0 ' + large + ' 1 ' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' Z" fill="' + colors[i % colors.length] + '"/>';
+  }).join('');
+  var legend = cats.map(function (cat, i) {
+    return '<li><i style="background:' + colors[i % colors.length] + '"></i><span>' + esc(cat.label) + '</span><b>' + crmMoney(cat.cents) + '</b></li>';
+  }).join('');
+  return '<div class="fin-donut"><svg viewBox="0 0 160 160" role="img" aria-label="Revenue by category">' + paths + '<circle class="hole" cx="80" cy="80" r="36"/></svg><ul>' + legend + '</ul></div>';
+}
+function crmFinHbars(rows) {
+  if (!rows.length) return '<p class="crm-quiet">No tuition in this view.</p>';
+  var max = 1;
+  rows.forEach(function (row) { if (row.cents > max) max = row.cents; });
+  return '<div class="fin-hbars">' + rows.map(function (row) {
+    return '<div class="fin-hbar"><span>' + esc(row.label) + '</span><span class="track"><i style="width:' + Math.max(2, Math.round(row.cents / max * 100)) + '%"></i></span><b>' + crmMoney(row.cents) + '</b></div>';
+  }).join('') + '</div>';
+}
+function crmFinCharts(model) {
+  var more = state.crmFinCharts ? ' more' : '';
+  var h = '<div class="fin-headrow"><h3>Charts</h3><button type="button" class="fin-text" onclick="crmFinToggle(\'details\')">' + (state.crmFinDetails ? 'Hide chart details' : 'Show chart details') + '</button><button type="button" class="fin-more-btn" onclick="crmFinToggle(\'charts\')">' + (state.crmFinCharts ? 'Fewer charts' : 'More charts') + '</button></div>';
+  h += '<div class="fin-charts' + more + '">';
+  h += '<article class="crm-card fin-chart"><h3>MRR trend</h3><p class="sub">Line is MRR. Bars are collected. November matches this ledger.</p>' + crmFinTrend(model.series.mrrTrend);
+  if (state.crmFinDetails) {
+    h += '<div class="crm-table-wrap"><table class="crm-table fin-table"><thead><tr><th>Month</th><th>MRR</th><th>Collected</th></tr></thead><tbody>';
+    model.series.mrrTrend.forEach(function (point) {
+      h += '<tr><td>' + esc(point.key) + '</td><td>' + crmMoney(point.mrrCents) + '</td><td>' + crmMoney(point.collectedCents) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</article>';
+  h += '<article class="crm-card fin-chart extra"><h3>This year vs last year</h3><p class="sub"><i class="swatch bar"></i> 2026 <i class="swatch ly"></i> 2025</p>' + crmFinYoy(model.series.yoy) + '</article>';
+  h += '<article class="crm-card fin-chart extra"><h3>Revenue by category</h3>' + crmFinDonut(model.categories) + '</article>';
+  h += '<article class="crm-card fin-chart extra"><h3>Revenue by program</h3>' + crmFinHbars(model.programs) + '</article>';
+  return h + '</div>';
+}
+function crmFinCalendar(model) {
+  var heads = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(function (day) {
+    return '<div class="fin-dow">' + day + '</div>';
+  }).join('');
+  function cell(day) {
+    var has = day.count > 0;
+    return '<button type="button" class="fin-day' + (has ? ' has' : '') + (day.on === '2026-11-24' ? ' today' : '') + '" onclick="crmFinOpen(\'day\',\'' + day.on + '\')"><b>' + Number(day.on.slice(8)) + '</b>' + (has ? '<span class="amt">' + crmMoney(day.cents) + '</span><span>' + day.count + '</span>' : '<span class="sub"> </span>') + '</button>';
+  }
+  var cells = model.calendar.map(cell).join('');
+  var strip = model.calendar.filter(function (day) { return day.on >= '2026-11-24' && day.on <= '2026-12-07'; }).map(cell).join('');
+  return '<h3 class="fin-sec">Upcoming drafts</h3><p class="sub fin-cal-note">Nov 22–Dec 26. A second draft in the same month stays visible. On a phone this is the next 14 days.</p><div class="fin-cal-wrap"><div class="fin-cal">' + heads + cells + '</div></div><div class="fin-strip" aria-label="Next 14 days">' + strip + '</div>';
+}
+function crmFinReports() {
+  var h = '<h3 class="fin-sec">Reports</h3><div class="crm-card fin-report-list">';
+  LVLUPFin.REPORTS.forEach(function (report) {
+    h += '<button type="button" onclick="crmFinOpenReport(\'' + report.id + '\')"><span><b>' + esc(report.title) + '</b><span>' + esc(report.about) + '</span></span><span aria-hidden="true">›</span></button>';
+  });
+  return h + '</div>';
+}
+function crmFinReportView() {
+  var report = LVLUPFin.financialReport(state.crmFinReport, {
+    scope: crmFinScope(), period: 'custom', asOf: '2026-11-24',
+    from: state.crmFinRepFrom, through: state.crmFinRepThrough
+  });
+  var h = '<div class="fin-headrow"><button type="button" class="crm-textbtn" onclick="crmFinCloseReport()">Back to Financials</button><div class="fin-actions"><button type="button" onclick="crmFinPrint()">Print</button><button type="button" onclick="crmFinExport()">Export CSV</button></div></div>';
+  h += '<section class="crm-card fin-report"><h3>' + esc(report.title) + '</h3><p class="fin-about"><b>About this report.</b> ' + esc(report.about) + '</p>';
+  h += '<div class="fin-actions"><label>From<input type="date" aria-label="Report from" value="' + esc(state.crmFinRepFrom || '') + '" onchange="crmFinRepDate(\'from\', this.value)"></label>';
+  h += '<label>Through<input type="date" aria-label="Report through" value="' + esc(state.crmFinRepThrough || '') + '" onchange="crmFinRepDate(\'through\', this.value)"></label>';
+  h += '<button type="button" class="crm-primary" onclick="crmFinRun()">Run report</button></div>';
+  if (!report.rows.length) h += '<p class="crm-empty"><b>No rows in this range</b>Try a wider date range. This preview only has the sandbox ledger.</p>';
+  else {
+    h += '<div class="crm-table-wrap"><table class="crm-table fin-table"><thead><tr>';
+    report.columns.forEach(function (col) { h += '<th>' + esc(col) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    report.rows.forEach(function (row) {
+      h += '<tr>';
+      row.forEach(function (cell) { h += '<td>' + esc(cell) + '</td>'; });
+      h += '</tr>';
+    });
+    if (report.totalCents != null) {
+      h += '<tr class="fin-total"><td colspan="' + Math.max(1, report.columns.length - 1) + '">' + esc(report.totalLabel) + '</td><td>' + (report.totalCents / 100).toFixed(2) + '</td></tr>';
+    }
+    h += '</tbody></table></div>';
+  }
+  return h + '</section>';
+}
+function crmFinHistory(model) {
+  if (!state.crmFinHistory) return '';
+  var h = '<section class="crm-card fin-report"><h3>Stats history</h3><p class="fin-about">Stored month-end snapshots for this scope. They are not recomputed from today’s ledger.</p><div class="crm-table-wrap"><table class="crm-table fin-table"><thead><tr><th>Month</th><th>Collected</th><th>MRR</th><th>Net billing</th><th>Past due</th><th>Paying</th></tr></thead><tbody>';
+  model.history.forEach(function (row) {
+    h += '<tr><td>' + esc(row.label) + '</td><td>' + crmMoney(row.collectedCents) + '</td><td>' + crmMoney(row.mrrCents) + '</td><td>' + crmMoney(row.netBillingCents) + '</td><td>' + crmMoney(row.pastDueCents) + '</td><td>' + row.paying + '</td></tr>';
+  });
+  return h + '</tbody></table></div></section>';
+}
+function crmFinPastDueList(model) {
+  var rows = model.tiles.pastDue.rows.concat(model.tiles.pastDue.otherRows.map(function (row) {
+    return { id: row.id, name: row.name, locationId: row.locationId, plan: row.label, attempts: 0, lastAttempt: row.on, declineReason: 'Scheduled and unpaid', overdueCents: row.amountCents, last4: '', method: '', nextRetry: null, other: true };
+  }));
+  if (!rows.length) return '<p class="crm-quiet">No past-due families in this scope.</p>';
+  return rows.map(function (row) {
+    var actions = row.other ? '' : '<div class="fin-actions"><button type="button" onclick="crmFinAction(\'retry\',\'' + row.id + '\')">Retry now</button><button type="button" onclick="crmFinAction(\'card\',\'' + row.id + '\')">Send card-update link</button></div>';
+    return '<article class="fin-due"><div><b>' + esc(row.name) + '</b><div class="sub">' + esc(crmFinSchoolName(row.locationId)) + ' · ' + esc(row.plan) + '</div><div class="sub">Attempts ' + row.attempts + ' · Last ' + esc(row.lastAttempt) + ' · ' + esc(row.declineReason) + '</div>' + (row.last4 ? '<div class="sub">' + esc(row.method) + ' ···· ' + esc(row.last4) + (row.nextRetry ? ' · Retry ' + esc(row.nextRetry) : '') + '</div>' : '') + actions + '</div><b class="bad-num">' + crmMoney(row.overdueCents) + '</b></article>';
+  }).join('');
+}
+function crmFinDrawer(model) {
+  var kind = state.crmFinDrawer;
+  if (!kind) return '';
+  var title = 'Details';
+  var body = '';
+  if (kind === 'collected') {
+    title = 'Collected';
+    body = '<p>' + esc(model.definitions.collected) + '</p>';
+    if (model.period.id === 'month' || model.period.id === 'custom') {
+      var charges = LVLUPFin.CHARGES.filter(function (charge) {
+        return crmFinScopeIds().indexOf(charge.locationId) >= 0 && charge.on >= model.period.from && charge.on <= model.period.through && LVLUPFin.countsAsCollected(charge);
+      });
+      body += crmFinMiniTable(['Date', 'Family', 'School', 'Plan', 'Method', 'Amount'], charges.map(function (charge) {
+        return [charge.on, charge.name, crmFinSchoolName(charge.locationId), charge.plan, charge.method, crmMoney(charge.amountCents)];
+      }));
+    } else {
+      body += '<p>This period is a snapshot, split by school.</p>';
+      body += crmFinMiniTable(['School', 'Collected'], model.schools.map(function (row) { return [row.name, crmMoney(row.collectedCents)]; }));
+    }
+  } else if (kind === 'expected') {
+    title = 'Still expected';
+    body = '<p>' + esc(model.definitions.stillExpected) + '</p>';
+    body += crmFinMiniTable(['Date', 'Family', 'School', 'Frequency', 'Amount'], model.tiles.stillExpected.rows.map(function (row) {
+      return [row.on, row.name, crmFinSchoolName(row.locationId), row.frequency, crmMoney(row.amountCents)];
+    }));
+  } else if (kind === 'pastdue' || kind === 'declines') {
+    title = kind === 'declines' ? 'Declines in the last 48 hours' : 'Past due / failed';
+    body = '<p>' + esc(model.definitions.pastDue) + '</p>';
+    var dueRows = model.tiles.pastDue.rows.filter(function (row) {
+      if (kind !== 'declines') return true;
+      return row.lastAttempt >= '2026-11-22';
+    });
+    body += crmFinPastDueList({ tiles: { pastDue: { rows: dueRows, otherRows: kind === 'declines' ? [] : model.tiles.pastDue.otherRows } } });
+  } else if (kind === 'projected') {
+    title = 'Projected month-end';
+    body = '<p>' + esc(model.definitions.projected) + '</p><p>Collected ' + crmMoney(model.tiles.projected.collectedCents) + ' + still expected ' + crmMoney(model.tiles.projected.expectedCents) + ' − allowance ' + crmMoney(model.tiles.projected.allowanceCents) + '.</p>';
+    body += '<p>Goal ' + crmMoney(model.tiles.projected.goalCents) + '.</p>';
+  } else if (kind === 'net' || kind === 'new' || kind === 'upgrade' || kind === 'renewal' || kind === 'hold' || kind === 'cancel') {
+    var source = model.period.id === 'month' ? model : LVLUPFin.financialsSummary({ scope: model.scope, period: 'month', asOf: model.asOf, compare: 'none' });
+    var kinds = kind === 'net' ? null : (kind === 'new' ? ['new_day1', 'new_later'] : [kind === 'upgrade' ? 'upgrade' : kind === 'renewal' ? 'renewal' : kind === 'hold' ? 'hold' : 'cancel']);
+    if (kind === 'cancel') kinds = ['cancel', 'downgrade'];
+    title = kind === 'net' ? 'Net billing' : kind === 'new' ? 'New enrollments' : kind === 'upgrade' ? 'Upgrades' : kind === 'renewal' ? 'Renewals' : kind === 'hold' ? 'Holds' : 'Cancellations';
+    body = '<p>' + esc(source.definitions.netBilling) + '</p>';
+    var groups = [['new_day1', 'New'], ['new_later', 'New, later'], ['upgrade', 'Upgraded'], ['renewal', 'Renewal'], ['cancel', 'Cancelled'], ['downgrade', 'Downgraded'], ['hold', 'Holds, not in the net']];
+    groups.forEach(function (group) {
+      if (kinds && kinds.indexOf(group[0]) < 0) return;
+      var rows = source.movement.rows.filter(function (row) { return row.kind === group[0]; });
+      if (!rows.length && kinds) return;
+      if (!rows.length) return;
+      body += '<h3>' + group[1] + '</h3>';
+      body += crmFinMiniTable(['Family', 'School', 'Plan', 'Frequency', 'Charged', 'Monthly'], rows.map(function (row) {
+        return [row.name, crmFinSchoolName(row.locationId), row.plan, row.frequency, crmMoney(row.chargedCents), crmMoney(row.monthlyCents)];
+      }));
+    });
+  } else if (kind === 'mrr' || kind === 'paying' || kind === 'arm') {
+    title = kind === 'arm' ? 'ARM' : kind === 'paying' ? 'Paying members' : 'MRR';
+    body = '<p>' + esc(kind === 'arm' ? model.definitions.arm : model.definitions.mrr) + '</p>';
+    body += crmFinMiniTable(['Family', 'School', 'Plan', 'Draft', 'Monthly'], model.mrrRows.map(function (row) {
+      var price = row.discountPct ? crmMoney(row.amountCents) + ' after ' + row.discountPct + '%' : crmMoney(row.amountCents);
+      return [row.name, crmFinSchoolName(row.locationId), row.plan, price, crmMoney(row.monthlyCents)];
+    }));
+  } else if (kind === 'stay') {
+    title = 'Length of stay and LTV';
+    body = '<p>' + esc(model.definitions.stay) + '</p><p>Average ' + model.tiles.stay.months.toFixed(1) + ' months across ' + model.tiles.stay.cohort + ' members. LTV ' + crmMoney(model.tiles.stay.ltvCents) + '.</p>';
+    var cohort = LVLUPFin.MEMBERSHIPS.filter(function (member) {
+      return crmFinScopeIds().indexOf(member.locationId) >= 0 && (member.status === 'active' || member.status === 'past_due' || member.status === 'cancelled');
+    });
+    body += crmFinMiniTable(['Family', 'Started', 'Through', 'Months', 'Status'], cohort.map(function (member) {
+      var through = member.endedOn || model.asOf;
+      return [member.name, member.startedOn, through, String(LVLUPFin.monthsBetween(member.startedOn, through)), member.status];
+    }));
+  } else if (kind === 'day') {
+    title = 'Drafts on ' + (state.crmFinDrawerId || '');
+    var day = state.crmFinDrawerId || model.asOf;
+    var drafts = LVLUPFin.stillExpectedDrafts(crmFinScopeIds(), day, day);
+    body = drafts.length ? crmFinMiniTable(['Family', 'School', 'Plan', 'Amount'], drafts.map(function (row) {
+      return [row.name, crmFinSchoolName(row.locationId), row.label, crmMoney(row.amountCents)];
+    })) : '<p>No drafts that day.</p>';
+  } else if (kind === 'holds') {
+    title = 'On hold, not billing';
+    body = crmFinMiniTable(['Family', 'School', 'Plan', 'Hold', 'Monthly'], model.holds.map(function (row) {
+      return [row.name, crmFinSchoolName(row.locationId), row.plan, (row.holdStart || '') + ' – ' + (row.holdEnd || ''), crmMoney(row.monthlyCents)];
+    }));
+  } else if (kind === 'expiring') {
+    title = 'Cards expiring before the next draft';
+    body = crmFinMiniTable(['Family', 'School', 'Plan', 'Card exp', 'Next draft'], model.expiring.map(function (row) {
+      return [row.name, crmFinSchoolName(row.locationId), row.plan, row.cardExp, row.nextDraft || '—'];
+    }));
+  } else if (kind === 'sync') {
+    title = 'Sync error';
+    body = '<p>Sandbox flag only. No Authorize.net account was contacted.</p><p>' + esc(model.alerts.filter(function (alert) { return alert.filter === 'sync'; }).map(function (alert) { return alert.title; }).join(' ')) + '</p>';
+  }
+  if (state.crmFinNote) body += '<p class="crm-note">' + esc(state.crmFinNote) + '</p>';
+  return '<aside class="crm-drawer fin-drawer" role="dialog" aria-label="' + esc(title) + '"><button type="button" class="crm-iconbtn" onclick="crmFinClose()" aria-label="Close">×</button><h2>' + esc(title) + '</h2>' + body + '</aside>';
+}
+function crmFinScopeIds() {
+  return LVLUPFin.schoolsInScope(crmFinScope());
+}
+function crmFinMiniTable(columns, rows) {
+  if (!rows.length) return '<p class="crm-quiet">Nothing in this list.</p>';
+  var h = '<div class="crm-table-wrap"><table class="crm-table fin-table"><thead><tr>';
+  columns.forEach(function (col) { h += '<th>' + esc(col) + '</th>'; });
+  h += '</tr></thead><tbody>';
+  rows.forEach(function (row) {
+    h += '<tr>';
+    row.forEach(function (cell) { h += '<td>' + esc(cell) + '</td>'; });
+    h += '</tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+function crmFinancialsView() {
+  if (!crmCanFinance()) {
+    return '<div class="crm-empty"><b>Financials stays with finance and admin</b>Dollar totals are hidden without that access.</div>';
+  }
+  if (typeof LVLUPFin === 'undefined' || !LVLUPFin.financialsSummary) {
+    return '<div class="crm-empty"><b>Financials preview is unavailable</b>The sandbox bundle did not load.</div>';
+  }
+  var model = crmFinModel();
+  if (state.crmFinReport) return crmFinToolbar(model) + crmFinReportView() + crmFinDrawer(model);
+  var h = crmFinToolbar(model) + crmFinAlerts(model) + crmFinHistory(model);
+  if (!state.crmFinHide) {
+    h += '<h3 class="fin-sec">Money this month</h3>' + crmFinMoney(model);
+    h += '<h3 class="fin-sec">Recurring health</h3>' + crmFinHealth(model);
+    h += '<h3 class="fin-sec">Membership movement</h3>' + crmFinMovement(model);
+  } else {
+    h += '<p class="fin-note">Stats are hidden. Charts, drafts, and reports stay up.</p>';
+  }
+  h += crmFinLocations(model);
+  h += crmFinCharts(model);
+  h += crmFinCalendar(model);
+  h += '<section class="fin-due-mobile"><h3 class="fin-sec">Past due</h3>' + crmFinPastDueList(model) + '</section>';
+  h += crmFinReports();
+  h += crmFinDrawer(model);
+  return h;
+}
 function crmRenderPage() {
   var tab = state.crmTab || 'home';
   var titles = {
@@ -17647,7 +19412,8 @@ function crmRenderPage() {
     ops: ['Task sheets', 'Daily, weekly, monthly, and cycle. The live sheet is unchanged.'],
     payroll: ['Payroll hours', 'Punched time is the paycheck. Shifts are the comparison.'],
     events: ['Events', 'Belt tests, clinics, tournaments, parties, and camps. Mock only.'],
-    calendar: ['Class calendar', 'Week of Nov 16. Instructors come from the staff schedule.']
+    calendar: ['Class calendar', 'Week of Nov 16. Instructors come from the staff schedule.'],
+    financials: ['Financials', 'Sandbox ledger for the named Sample families. Not the Home rollup, and nothing here bills.']
   };
   var pair = titles[tab] || titles.home;
   var body = tab === 'home' ? crmHomeView()
@@ -17659,6 +19425,7 @@ function crmRenderPage() {
     : tab === 'payroll' ? crmPayrollView()
     : tab === 'events' ? crmEventsView()
     : tab === 'calendar' ? crmCalendarView()
+    : tab === 'financials' ? crmFinancialsView()
     : crmMembersView();
   return crmShell(pair[0], pair[1], body);
 }

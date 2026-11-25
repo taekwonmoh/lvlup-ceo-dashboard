@@ -19,6 +19,7 @@ Mike Moh wants to replace GymDesk with a CRM and member platform that the staff 
 | [STAFF-OPS.md](STAFF-OPS.md) | How task sheets and the staff scheduler work today, and how they move into this model without a cutover. |
 | [`crm/`](../../crm/) | The runnable backbone: migrations, API, fixtures, and tests. |
 | [GYMDESK-PARITY.md](GYMDESK-PARITY.md) | Gus’s GymDesk inventory as a built / planned checklist. Unverified items stay marked. |
+| [FINANCIALS.md](FINANCIALS.md) | Spark-style Financials screen: metric definitions, LVLUP additions, and the open questions. |
 
 ## Decision in one paragraph
 
