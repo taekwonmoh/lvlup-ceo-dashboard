@@ -1332,7 +1332,7 @@ const WALL_TYPES = [
 /*  -  -  Task Definitions  -  -  */
 // ── Shared task building blocks ────────────────────────────────────────────
 const TASK_STOPLIGHT = {id:'stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'students', autoOnly:true, playbook:'student_outreach', proof:{kind:'stoplight', min:2}, text:'Reach 2 students on the stoplight: Log each student on the Students page with a method and your initials. This completes from those names. A number by itself does not.'};
-const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', hasNotes:true, proof:{kind:'note', placeholder:'Class counts, then new or trial first names — or no new / no trials'}, text:'Check today rosters: Class counts for the day (Tigers 7, Kids 11, Teens 5) and first names of any new or trial students, or no new / no trials.'};
+const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', text:'Check today rosters: Class counts for the day (Tigers 7, Kids 11, Teens 5) and first names of any new or trial students, or no new / no trials.'};
 // Wrap-up lives on the dashboard. Old Slack EOS ids (eos, j_eos, eos_report) still satisfy this via TASK_ALIASES.
 const TASK_CLOSING   = {id:'closing', cat:'Closing', proof:{kind:'scorecard', noteOptional:true, notePlaceholder:'One-line note if something is still outstanding (optional)'}, text:'Close the school: Log trials and enrollments today (0 is fine). Add a one-line note if something is outstanding. The floor photo covers straightening the floor.'};
 // Bathroom verification photo. `days` is 0=Sun … 6=Sat. Leads are Monday only.
@@ -1375,7 +1375,7 @@ const JOEY_DAILY = [
   TASK_STOPLIGHT,
   TASK_ROSTERS,
   {id:'j_wetmop', cat:'Pre-Class Admin', days:[1], proof:{kind:'linked', via:'ph_floor'}, text:'Wet-mop the floor (Monday): Covered by the Monday training-floor photo when that photo is marked wet-mopped. No second photo.'},
-  {id:'j_greenmachine', cat:'Pre-Class Admin', days:[4], photo:true, priorPhoto:true, icon:'📸', text:'Run the green machine on the training floors, then snap a photo.'},
+  {id:'j_greenmachine', cat:'Pre-Class Admin', days:[4], text:'Run the green machine on the training floors.'},
   bathroomPhoto([1]),
   TASK_PH_FLOOR,
   {id:'j_spray', cat:'Closing', proof:{kind:'linked', via:'ph_floor'}, text:'Spray-mop the floor: Covered by the training-floor photo when that photo is marked spray-mopped. It stays off Saturday.'},
@@ -1393,25 +1393,25 @@ const MIRANDA_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', photo:true, icon:'📸', text:'Open Go Ninja: One prep photo of the floor and the front, ready for the day.'},
   bathroomPhoto([1]),
   {id:'ph_floor', cat:'Facility Refresh', photo:true, priorPhoto:true, icon:'📸', text:'Gym Floor: wide photo of the obstacle / training area showing a clean, professional look.'},
-  {id:'closing', cat:'Closing', photo:true, icon:'📸', hasNotes:true, proof:{kind:'photoNote', placeholder:'What is left for the next day, or All clear'}, text:'Close Go Ninja: Closing photo of the front desk and lobby, plus a one-line note if anything is left, or All clear. The bathroom photo stays Monday only.'},
+  {id:'closing', cat:'Closing', photo:true, icon:'📸', proof:{kind:'photo', noteOptional:true, notePlaceholder:'What is left for the next day (optional)'}, text:'Close Go Ninja: Closing photo of the front desk and lobby. Add a one-line note if anything is left. The note is optional. The bathroom photo stays Monday only.'},
 ];
 // ── Per-employee weekly task lists ─────────────────────────────────────────
 function lvlupWeekly(board){ return [
-  {id:'schedule', hasNotes:true, proof:{kind:'note', none:'Coverage is set', placeholder:'Holes and who is covering'}, text:'Confirm this week coverage: Coverage is set, or note the holes and who is covering.'},
+  {id:'schedule', text:'Confirm this week coverage: Coverage is set, or note the holes and who is covering.'},
   ...weeklyPhotos(board),
   {id:'mop_mats', photo:true, icon:'📸', text:'Wet-mop the mats: Photo of the mopped floor.'},
-  {id:'dots', photo:true, proof:{kind:'photoOrNone', none:'All good — none needed', placeholder:'Replaced N dots'}, text:'Inspect floor dots: Replaced N dots (with a photo), or All good — none needed.'},
-  {id:'supplies', proof:{kind:'choice', none:'No restock needed', placeholder:'What you logged in Ops → Inventory'}, text:'Check supplies and log restocks: Completes when a restock is logged in Ops → Inventory, or you choose No restock needed.'},
+  {id:'dots', text:'Inspect floor dots: Replaced N dots, or all good — none needed.'},
+  {id:'supplies', text:'Check supplies and log restocks: Completes when a restock is logged in Ops → Inventory, or check it off if no restock is needed.'},
   {id:'ad_invites', hasNotes:true, proof:{kind:'lines', min:2, placeholder:'One student name per line. Talked to parents, not yet scheduled is ok.'}, text:'Invite 2 students to AD: Two student names. Talked to parents, not yet scheduled is ok — names are still required.'},
-  {id:'lifelinks', hasNotes:true, proof:{kind:'lines', min:1, none:'None due this week', placeholder:'One student name per line'}, text:'Award LifeLink clips: Names of students who received clips, or None due this week.'},
-  {id:'bday_report', proof:{kind:'invites', none:'No eligible birthdays this week', noneNeedsNote:true}, text:'Invite birthday families: For each family, log the child, the parent or family, how you reached them, and the birthday month. No eligible birthdays this week is allowed with a one-line note. A party you book can be logged here too.'},
-  {id:'events_promote', hasNotes:true, proof:{kind:'note', none:'No upcoming events this week', placeholder:'Event names and which classes you told'}, text:'Promote this week events in class: Event names and which classes you told, or No upcoming events this week.'},
+  {id:'lifelinks', text:'Award LifeLink clips: Names of students who received clips, or none due this week.'},
+  {id:'bday_report', text:'Invite birthday families: Check it off when eligible families have been invited, or there were no eligible birthdays this week. A party you book can be logged on Book a party.'},
+  {id:'events_promote', text:'Promote this week events in class: Event names and which classes you told, or no upcoming events this week.'},
   {id:'mia_report', proof:{kind:'rows', min:1, store:'rows', none:'No at-risk students this week', noneNeedsNote:true, fields:[{key:'name',label:'Student'},{key:'date',label:'Booster date',type:'date'}]}, text:'Book booster lessons for at-risk students: Student name and the booster date, or No at-risk students this week with a one-line note.'},
-  {id:'lead_audit', hasNotes:true, proof:{kind:'note', none:'All leads contacted', placeholder:'Names still open and the next action'}, text:'Clear leads older than 48 hours: All leads contacted, or the names still open and the next action.'},
+  {id:'lead_audit', text:'Clear leads older than 48 hours: All leads contacted, or the names still open and the next action.'},
   {id:'new_checkin', proof:{kind:'rows', min:1, store:'rows', none:'No one at day 30 this week', fields:[{key:'name',label:'Student'},{key:'date',label:'Date called',type:'date'},{key:'result',label:'Result (3–5 words)'}]}, text:'Call this week 30-day students: Student name, date called, and a short result, or No one at day 30 this week.'},
-  {id:'social_plan', hasNotes:true, proof:{kind:'lines', min:3, none:'See this week Capture Content uploads', placeholder:'One post idea per line: topic and pillar'}, text:'Plan next week social posts: Three short post ideas (topic and pillar), or point at the Capture Content uploads already in the dashboard.'},
-  {id:'pto_review', hasNotes:true, proof:{kind:'note', none:'No pending requests', placeholder:'Who you approved or declined'}, text:'Action pending time-off: No pending requests, or note each request you approved or declined.'},
-  {id:'post_schedule', hasNotes:true, proof:{kind:'note', none:'Next week is published', placeholder:'Coverage note if something is still open'}, text:'Publish next week schedule: Next week is published on the dashboard, or note what is still open.'},
+  {id:'social_plan', text:'Plan next week social posts: Three short post ideas (topic and pillar), or point at the Capture Content uploads already in the dashboard.'},
+  {id:'pto_review', text:'Action pending time-off: Completes when this school has no pending requests, or check it off after you have actioned them.'},
+  {id:'post_schedule', text:'Publish next week schedule: Completes when next week is published on the dashboard, or check it off and note what is still open with your team.'},
   // About every 2 months: first the week of Mon Nov 9, 2026 (2026-W46), then every 8 weeks.
   // `every` / `from` are optional — items without them still show every week. LVLUP instructors only.
   {id:'dust_displays', every:8, from:'2026-W46', photo:true, icon:'📸', text:'Display Dusting: Dust the belt displays and the hooks and wood strips that hang the equipment (about every 2 months), then snap a photo.', subs:[
@@ -1436,7 +1436,7 @@ const MIRANDA_WEEKLY = [
   {id:'m_mop_mats',       photo:true, priorPhoto:true, icon:'📸', text:'Mat Maintenance: Mop mats and sanitize obstacles, then snap a photo.'},
   {id:'ph_station',  photo:true, priorPhoto:true, icon:'📸', text:'Front Desk / Instructor Station: clean and organize it, then snap a photo.'},
   {id:'ph_signage',  photo:true, priorPhoto:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
-  {id:'m_party_supplies', proof:{kind:'choice', none:'No restock needed', placeholder:'What you logged in Ops → Inventory'}, text:'Check party supplies: Log anything low in Ops → Inventory, or No restock needed.'},
+  {id:'m_party_supplies', text:'Check party supplies: Completes when a restock is logged in Ops → Inventory, or check it off if no restock is needed.'},
   TASK_BUFFER,
 ];
 const EMP_DAILY  = {bryanG:BRYAN_DAILY, ash:ASH_DAILY, joeyZ:JOEY_DAILY, mirandaS:MIRANDA_DAILY, tarikM:TARIK_DAILY};
@@ -1580,8 +1580,9 @@ function taskPostsFilled(task, rec){
   return n;
 }
 // Legacy records (no proofV) count whenever the record exists — the same rule as
-// taskDone — so past bonus math does not move. New saves set proofV and count
-// only when the proof is filled and an unconfirmed burst is not sitting on them.
+// taskDone — so past bonus math does not move. New saves set proofV. A checkoff
+// counts on that click. A task that still asks for proof counts only when the
+// proof is filled. An unconfirmed burst still holds the task out.
 function taskBonusComplete(task, rec){
   if(!rec||typeof rec!=='object') return false;
   if(!rec.proofV) return true;
@@ -1623,6 +1624,10 @@ function taskBurstIds(entries){
   }
   return Object.keys(flagged);
 }
+function taskHasOptionalNote(task){
+  const kind=proofKindOf(task);
+  return !!(task&&task.proof&&task.proof.noteOptional&&(kind==='check'||kind==='photo'));
+}
 function proofIsPhotoSave(task, payload){
   if(!payload) return false;
   const kind=proofKindOf(task);
@@ -1653,9 +1658,15 @@ function taskBucket(empId, section, sKey){
   const emp=state.tasksData[empId]||{};
   return {sPath, bucket:((emp[sPath]||{})[sKey])||{}};
 }
+// Photos and plain checkoffs (including a checkoff with an optional note) do not
+// count toward the quick-click review. Proof that still asks for input does.
+function burstSkip(task, payload){
+  if(proofKindOf(task)==='check') return true;
+  return proofIsPhotoSave(task, payload);
+}
 function attachBurst(section, taskId, payload){
   const task=resolveTask(section, taskId);
-  if(proofIsPhotoSave(task, payload)) return payload;
+  if(burstSkip(task, payload)) return payload;
   const info=taskPathFor(section);
   const {bucket}=taskBucket(state.tasksLoc, section, info.sKey);
   const entries=[];
@@ -1664,7 +1675,7 @@ function attachBurst(section, taskId, payload){
     const rec=bucket[id];
     if(!rec||!rec.ts) return;
     const t=resolveTask(section, id);
-    entries.push({id, ts:rec.ts, photo:proofIsPhotoSave(t, rec)});
+    entries.push({id, ts:rec.ts, photo:burstSkip(t, rec)});
   });
   entries.push({id:taskId, ts:payload.ts, photo:false});
   const flagged=taskBurstIds(entries);
@@ -2015,19 +2026,19 @@ const LVLUP_WEEKLY_REC = BRYAN_WEEKLY;
 const GONINJA_DAILY = MIRANDA_DAILY;
 const GONINJA_WEEKLY_REC = MIRANDA_WEEKLY;
 const LVLUP_MONTHLY = [
-  {id:'lm_reviews', hasNotes:true, proof:{kind:'lines', min:2, none:'Asked, they declined', placeholder:'One family name per line'}, text:'Google Reviews: Ask 2 happy families for a review. List the family names, or Asked, they declined.'},
-  {id:'lm_checkin', proof:{kind:'rows', min:1, store:'rows', fields:[{key:'name',label:'Assistant'},{key:'date',label:'Date',type:'date'}]}, text:'Team Check-in: 1:1 with your assistant instructors — name and date.'},
+  {id:'lm_reviews', text:'Google Reviews: Ask 2 happy families for a review. List the family names, or asked, they declined.'},
+  {id:'lm_checkin', text:'Team Check-in: 1:1 with your assistant instructors — name and date.'},
   {id:'lm_sanitize', photo:true, icon:'📸', text:'Deep Sanitize: Monthly deep-sanitize of all mats and high-touch surfaces, then snap a photo.'},
 ];
 // Front desk staff (Waunakee, Verona)
 // fd_questions is not a scored task from FD_QUESTIONS_SCORED_BEFORE forward.
 // Days before that cutoff still include it so older completion totals stay put.
 const FRONTDESK_DAILY = [
-  {id:'fd_messages', hasNotes:true, proof:{kind:'note', none:'None today', placeholder:'How many you handled. Name any family that needs a follow-up.'}, text:'Clear today inbox: How many messages or calls you handled, or None today. If someone needs a follow-up, name the family.'},
-  {id:'fd_followups', hasNotes:true, proof:{kind:'note', none:'None today', placeholder:'Family and what to do, one per line'}, text:'Log follow-ups: Family and what to do, or None today.'},
-  {id:'fd_notify_msk', hasNotes:true, proof:{kind:'note', none:'None today', placeholder:'Family, the issue, and that the lead was told'}, text:'Flag membership issues for the lead: Family name, the issue, and that the lead was told, or None today.'},
-  {id:'fd_retail', hasNotes:true, proof:{kind:'note', none:'0 pending', placeholder:'How many you fulfilled and the member names'}, text:'Fulfill pending retail orders: How many you fulfilled and the member names, or 0 pending.'},
-  {id:'fd_gear', hasNotes:true, proof:{kind:'note', none:'None today', placeholder:'Names of members you helped'}, text:'Help with gear and retail: Names of members you helped, or None today.'},
+  {id:'fd_messages', text:'Clear today inbox: Messages and calls for this shift are handled. If someone needs a follow-up, log it on the next task.'},
+  {id:'fd_followups', proof:{kind:'check', noteOptional:true, notePlaceholder:'Family and what to do (optional)'}, text:'Log follow-ups: Check it off when follow-ups are logged, or there were none. A note is optional.'},
+  {id:'fd_notify_msk', text:'Flag membership issues for the lead: Family name and the issue are passed to the lead, or there was nothing to flag.'},
+  {id:'fd_retail', text:'Fulfill pending retail orders: Pending orders are fulfilled, or there were none.'},
+  {id:'fd_gear', text:'Help with gear and retail: Gear and retail help for this shift is done.'},
   {id:'fd_lobby', photo:true, icon:'📸', text:'Reset the lobby: One lobby or front-desk photo during the shift.', subs:[
     'Straighten lobby and retail displays',
     'Clean front entrance doors',
@@ -2037,7 +2048,7 @@ const FRONTDESK_DAILY = [
     'Refill restroom supplies as needed',
   ]},
   // Bathroom photo is added per school in getDailyTasks (Tue–Sat, open days only). Tidying above still happens every shift.
-  {id:'fd_next_shift', hasNotes:true, proof:{kind:'note', none:'All clear', placeholder:'What is left for the next shift'}, text:'Write the shift handoff: What is left for the next shift, or All clear. A blank note cannot complete this.'},
+  {id:'fd_next_shift', proof:{kind:'check', noteOptional:true, notePlaceholder:'What is left for the next shift (optional)'}, text:'Write the shift handoff: Check it off at the end of the shift. Add a note if something is left for the next person. A note is not required.'},
 ];
 // Waunakee front desk only (sueK — Ms K's seat). Other schools stay on FRONTDESK_DAILY.
 // Days before this stay on the previous list so older completion totals do not move.
@@ -2048,25 +2059,25 @@ const SUE_DAILY_CLEANING = [
   {id:'fd_lobby_windows', icon:'🧹', text:'Clean the lobby windows'},
 ];
 const FRONTDESK_WEEKLY = [
-  {id:'fdw_inventory', hasNotes:true, proof:{kind:'note', none:'Par levels look fine', placeholder:'What is running low'}, text:'Count the front-desk retail: A short count of anything low, or Par levels look fine.'},
-  {id:'fdw_restock', photo:true, proof:{kind:'photoOrNone', none:'Nothing to restock'}, text:'Restock the floor: Photo of the restocked display, or Nothing to restock.'},
-  {id:'fdw_lowstock', proof:{kind:'choice', none:'No restock needed', placeholder:'What you logged in Ops → Inventory'}, text:'Log low stock: An inventory request this week, or No restock needed.'},
-  {id:'fdw_displays', photo:true, icon:'📸', text:'Reset retail displays: One photo of the displays.'},
-  {id:'fdw_signage', photo:true, proof:{kind:'photoOrNone', none:'No new signage this week'}, text:'Update front-desk signage: Photo of the current signage, or No new signage this week.', subs:[
+  {id:'fdw_inventory', text:'Count the front-desk retail: A short count of anything low, or par levels look fine.'},
+  {id:'fdw_restock', text:'Restock the floor: The display is restocked, or there was nothing to restock.'},
+  {id:'fdw_lowstock', text:'Log low stock: Completes when an inventory request is logged this week, or check it off if no restock is needed.'},
+  {id:'fdw_displays', text:'Reset retail displays: Displays are straightened and current.'},
+  {id:'fdw_signage', text:'Update front-desk signage: Current signage is up, or there was no new signage this week.', subs:[
     'Retail products',
     'Seasonal promotions',
     'Front desk displays',
     'Upcoming events',
   ]},
-  {id:'fdw_backup', hasNotes:true, proof:{kind:'note', none:'Backup saved this week', placeholder:'Where the backup file was saved'}, text:'Data Backup: Back up the dashboard data. Backup saved this week, or note where the file was saved.'},
-  {id:'fdw_lead_audit', hasNotes:true, proof:{kind:'note', none:'All leads contacted', placeholder:'Names still open and the next action'}, text:'Clear leads older than 48 hours: All leads contacted, or the names still open and the next action.'},
+  {id:'fdw_backup', text:'Data Backup: Back up the dashboard data. Backup saved this week.'},
+  {id:'fdw_lead_audit', text:'Clear leads older than 48 hours: All leads contacted, or the names still open and the next action.'},
   {id:'fdw_new_checkin', proof:{kind:'rows', min:1, store:'rows', none:'No one at day 30 this week', fields:[{key:'name',label:'Student'},{key:'date',label:'Date called',type:'date'},{key:'result',label:'Result (3–5 words)'}]}, text:'Call this week 30-day students: Student name, date called, and a short result, or No one at day 30 this week.'},
-  {id:'fdw_payroll', hasNotes:true, proof:{kind:'note', none:'Approved', placeholder:'Missing punches, long shifts, or issues sent to Mike'}, text:'Review timesheets: Approved, plus any flags, or the list of issues sent to Mike.'},
+  {id:'fdw_payroll', text:'Review timesheets: Approved, plus any flags, or the list of issues sent to Mike.'},
 ];
 const FRONTDESK_MONTHLY = [
-  {id:'fm_reviews', hasNotes:true, proof:{kind:'lines', min:2, none:'Asked, they declined', placeholder:'One family name per line'}, text:'Google Reviews: Ask 2 happy families for a review. List the family names, or Asked, they declined.'},
-  {id:'fm_gbp', photo:true, proof:{kind:'photoOrNone', none:'No change needed'}, text:'Google Business Profile: Photo of the live profile, or No change needed.'},
-  {id:'fm_par', proof:{kind:'choice', none:'Par is fine', placeholder:'What you reordered'}, text:'Retail Par-Levels: Log the reorder, or Par is fine.'},
+  {id:'fm_reviews', text:'Google Reviews: Ask 2 happy families for a review.'},
+  {id:'fm_gbp', text:'Google Business Profile: The live profile is current, or no change was needed.'},
+  {id:'fm_par', text:'Retail Par-Levels: The reorder is logged, or par is fine.'},
 ];
 // ── "As needed" reference lists — not tracked / no sign-off, shown for context ──
 const LVLUP_ASNEEDED = [
@@ -2175,26 +2186,26 @@ const LVLUP_CYCLE = {
 };
 const GONINJA_CYCLE = {
   1:{name:'Cycle Launch',tasks:[
-    {id:'w1a1',cat:'Admin',text:'Announce new cycle theme'},
+    {id:'w1a1',cat:'Admin',proof:{kind:'check'},text:'Announce new cycle theme'},
     {id:'w1a2',cat:'Admin',text:'Update class schedules/calendar'},
-    {id:'w1s1',cat:'Student Mgmt',text:'Check enrollment numbers'},
+    {id:'w1s1',cat:'Student Mgmt',proof:{kind:'check'},text:'Check enrollment numbers'},
     {id:'w1c1',cat:'Cleaning',text:'Deep clean mats & equipment'},
   ]},
   2:{name:'Engagement Push',tasks:[
-    {id:'w2a1',cat:'Admin',text:'Update signage for new cycle'},
+    {id:'w2a1',cat:'Admin',proof:{kind:'check'},text:'Update signage for new cycle'},
     {id:'w2a2',cat:'Admin',text:'Plan community engagement event'},
     {id:'w2s1',cat:'Student Mgmt',text:'Follow up with absent students'},
     {id:'w2c1',cat:'Cleaning',text:'Deep clean front desk & lobby'},
   ]},
   3:{name:'Momentum Building',tasks:[
     {id:'w3a1',cat:'Admin',text:'Launch promo or special event'},
-    {id:'w3s1',cat:'Student Mgmt',text:'Run attendance report'},
-    {id:'w3s2',cat:'Student Mgmt',text:'Reach out to at-risk students'},
+    {id:'w3s1',cat:'Student Mgmt',proof:{kind:'check'},text:'Run attendance report'},
+    {id:'w3s2',cat:'Student Mgmt',proof:{kind:'check'},text:'Reach out to at-risk students'},
     {id:'w3c1',cat:'Cleaning',text:'Deep clean lobby & retail area'},
   ]},
   4:{name:'Mid-Cycle Check',tasks:[
     {id:'w4a1',cat:'Admin',text:'Review event calendar for next month'},
-    {id:'w4s1',cat:'Student Mgmt',text:'Attendance follow-up'},
+    {id:'w4s1',cat:'Student Mgmt',proof:{kind:'check'},text:'Attendance follow-up'},
     {id:'w4c1',cat:'Cleaning',text:'Deep clean storage rooms'},
   ]},
   5:{name:'Event Prep',tasks:[
@@ -2203,18 +2214,18 @@ const GONINJA_CYCLE = {
     {id:'w5c1',cat:'Cleaning',text:'General cleaning & organization'},
   ]},
   6:{name:'Growth Push',tasks:[
-    {id:'w6a1',cat:'Admin',text:'Push enrollment & referral campaign'},
+    {id:'w6a1',cat:'Admin',proof:{kind:'check'},text:'Push enrollment & referral campaign'},
     {id:'w6s1',cat:'Student Mgmt',text:'Follow up with trial attendees'},
     {id:'w6c1',cat:'Cleaning',text:'Deep clean front desk & lobby'},
   ]},
   7:{name:'Wrap-Up Prep',tasks:[
     {id:'w7a1',cat:'Admin',text:'Prepare end-of-cycle communications'},
-    {id:'w7s1',cat:'Student Mgmt',text:'Final attendance check'},
+    {id:'w7s1',cat:'Student Mgmt',proof:{kind:'check'},text:'Final attendance check'},
     {id:'w7c1',cat:'Cleaning',text:'Deep clean - full facility'},
   ]},
   8:{name:'Cycle Close',tasks:[
-    {id:'w8a1',cat:'Admin',text:'Send cycle recap to families'},
-    {id:'w8b2',cat:'Admin',text:'Collect parent feedback'},
+    {id:'w8a1',cat:'Admin',proof:{kind:'check'},text:'Send cycle recap to families'},
+    {id:'w8b2',cat:'Admin',proof:{kind:'check'},text:'Collect parent feedback'},
     {id:'w8s1',cat:'Student Mgmt',text:'Celebrate student achievements'},
     {id:'w8c1',cat:'Cleaning',text:'Full facility reset'},
     {id:'w8r1',cat:'Reporting',text:'Cycle summary report'},
@@ -2224,38 +2235,38 @@ const GONINJA_CYCLE = {
 // LVLUP instructor cycle checklist — one list per cycle, grouped by week
 const LVLUP_CYCLE_CHECKLIST = [
   // ── Week 1 — Cycle Launch ──
-  {id:'cc_w1_announce', week:1, hasNotes:true, proof:{kind:'note', placeholder:'What you announced'}, text:'Announce the new cycle theme and life skill to all classes: One line on what you announced.'},
-  {id:'cc_w1_stoplight',week:1, proof:{kind:'scorecard', fields:[{key:'red',label:'Red'},{key:'yellow',label:'Yellow'},{key:'green',label:'Green'}]}, text:'Publish the cycle baseline stoplight: Counts for red, yellow, and green at the start of the cycle.'},
+  {id:'cc_w1_announce', week:1, text:'Announce the new cycle theme and life skill to all classes.'},
+  {id:'cc_w1_stoplight',week:1, text:'Publish the cycle baseline stoplight: Counts for red, yellow, and green at the start of the cycle.'},
   {id:'cc_w1_outreach', week:1, autoOnly:true, min:1, proof:{kind:'stoplight', min:1}, playbook:'student_outreach', text:'Reach students who did not test: Log them on the Students page (method and initials). This completes from those names.'},
-  {id:'cc_w1_bbt',      week:1, hasNotes:true, proof:{kind:'note', none:'No one on track', placeholder:'Who you sent requirements to'}, text:'Send black belt testing requirements to any students on track: Names, or No one on track.'},
+  {id:'cc_w1_bbt',      week:1, text:'Send black belt testing requirements to any students on track, or there is no one on track.'},
   // ── Week 2 ──
-  {id:'cc_w2_retain',   week:2, hasNotes:true, proof:{kind:'note', placeholder:'Event name and where you posted it'}, text:'Plan and post a retention event: Event name and where you posted it.'},
+  {id:'cc_w2_retain',   week:2, text:'Plan and post a retention event.'},
   {id:'cc_w3_attn',     week:3, proof:{kind:'rows', min:1, store:'rows', none:'No one to follow up', fields:[{key:'name',label:'Student'},{key:'did',label:'What you did'}]}, text:'Follow up with low-attendance or missing-stripe students: Names and what you did (text, booster, Loom).'},
-  {id:'cc_w4_revenue',  week:4, hasNotes:true, proof:{kind:'note', placeholder:'Event name and where you posted it'}, text:'Plan and post a revenue / new members event: Event name and where you posted it.'},
+  {id:'cc_w4_revenue',  week:4, text:'Plan and post a revenue / new members event.'},
   {id:'cc_w5_attn',     week:5, proof:{kind:'rows', min:1, store:'rows', none:'No one to follow up', fields:[{key:'name',label:'Student'},{key:'did',label:'What you did'}]}, text:'Follow up with low-attendance or missing-stripe students: Names and what you did (text, booster, Loom).'},
-  {id:'cc_w6_tigers',   week:6, hasNotes:true, proof:{kind:'lines', min:1, none:'No Tigers ready', placeholder:'One student name per line'}, text:'Invite ready Tigers up: Names you contacted, or No Tigers ready.'},
-  {id:'cc_w6_sparring', week:6, hasNotes:true, proof:{kind:'lines', min:1, none:'No new yellow belts', placeholder:'One student name per line'}, text:'Contact new yellow belts about gear: Names you contacted, or No new yellow belts.'},
-  {id:'cc_w8_sotc',     week:8, hasNotes:true, proof:{kind:'note', placeholder:'Student name'}, text:'Name Student of the Cycle: The student name.'},
+  {id:'cc_w6_tigers',   week:6, text:'Invite ready Tigers up, or there are no Tigers ready.'},
+  {id:'cc_w6_sparring', week:6, text:'Contact new yellow belts about gear, or there are no new yellow belts.'},
+  {id:'cc_w8_sotc',     week:8, text:'Name Student of the Cycle.'},
   {id:'cc_bday',        week:0, proof:{kind:'bookings', min:2}, playbook:'birthday_party', text:'Book a party: 2 birthday parties this cycle. Child name, family or guardian, and party date for each.'},
   {id:'cc_upgrades',    week:0, hasNotes:true, proof:{kind:'lines', min:2, placeholder:'One student name per line'}, text:'Upgrade 2 students to AD or Legacy: List their names.'},
-  {id:'cc_belts',       week:0, hasNotes:true, proof:{kind:'note', none:'In stock', placeholder:'Belts, stripes, patches, certificates — what you checked'}, text:'Confirm testing inventory: What is in stock (belts, stripes, patches, certificates), or In stock.'},
-  {id:'cc_survey',      week:8, hasNotes:true, proof:{kind:'note', placeholder:'Date sent and how (email or link)'}, text:'Send the parent survey: Date sent and how (email or link).'},
+  {id:'cc_belts',       week:0, text:'Confirm testing inventory: Belts, stripes, patches, and certificates are in stock, or the order is placed.'},
+  {id:'cc_survey',      week:8, text:'Send the parent survey.'},
 ];
 const FRONTDESK_CYCLE_CHECKLIST = [
   // ── Ongoing (any time this cycle) ──
   {id:'fd_cc_parties',   week:0, proof:{kind:'bookings', min:2}, playbook:'birthday_party', text:'Book a party: 2 birthday parties this cycle. Child name, family or guardian, and party date for each.'},
-  {id:'fd_cc_events',    week:0, hasNotes:true, proof:{kind:'note', placeholder:'Event names now on the dashboard'}, text:'Add all upcoming cycle events to the dashboard so they display on the members site: List the event names you added.', playbook:'add_dashboard_event'},
+  {id:'fd_cc_events',    week:0, text:'Add all upcoming cycle events to the dashboard so they display on the members site.', playbook:'add_dashboard_event'},
   // ── Week 1 ──
-  {id:'fd_cc_signage',   week:1, hasNotes:true, proof:{kind:'note', placeholder:'What you printed and who you handed it to'}, text:'Prep and print all new cycle signage — life skill, promotions, and upcoming events. Note what you printed and who you handed it to.'},
-  {id:'fd_cc_bday_blast', week:1, hasNotes:true, proof:{kind:'lines', min:1, placeholder:'One family or child name per line. Put the email count on the first line.'}, text:'Send the cycle birthday invitations: How many emails you sent, and the family or child names (paste from the report is fine).', playbook:'birthday_party'},
+  {id:'fd_cc_signage',   week:1, text:'Prep and print all new cycle signage — life skill, promotions, and upcoming events, and hand it to the person who hangs it.'},
+  {id:'fd_cc_bday_blast', week:1, text:'Send the cycle birthday invitations.', playbook:'birthday_party'},
   // ── Week 4 ──
-  {id:'fd_cc_tigers',    week:4, hasNotes:true, proof:{kind:'lines', min:1, none:'No Tigers ready', placeholder:'One student name per line'}, text:'Review Tiger class — send move-up emails for students the instructor confirmed. List the names, or No Tigers ready.', playbook:'email_tigers'},
+  {id:'fd_cc_tigers',    week:4, text:'Review Tiger class — send move-up emails for students the instructor confirmed, or there are no Tigers ready.', playbook:'email_tigers'},
   // ── Week 6 ──
-  {id:'fd_cc_yb',        week:6, hasNotes:true, proof:{kind:'lines', min:1, none:'No new yellow belts', placeholder:'One student name per line'}, text:'Review Yellow Belt students — send gear and program emails for new yellow belts. List the names, or No new yellow belts.', playbook:'email_yellow_belt'},
+  {id:'fd_cc_yb',        week:6, text:'Review Yellow Belt students — send gear and program emails for new yellow belts, or there are no new yellow belts.', playbook:'email_yellow_belt'},
   // ── Week 8 ──
-  {id:'fd_cc_sotc_input', week:8, hasNotes:true, proof:{kind:'lines', min:1, placeholder:'One student name per line'}, text:'Share Student of the Cycle input with the lead instructor: Student names who stood out.'},
-  {id:'fd_cc_belts',  week:0, hasNotes:true, proof:{kind:'note', none:'In stock', placeholder:'What you ordered or confirmed in stock'}, text:'Pro-shop testing prep — order and stock belts, patches, and certificates. Note what you confirmed, or In stock.'},
-  {id:'fd_cc_photog', week:6, proof:{kind:'rows', min:1, store:'rows', fields:[{key:'name',label:'Photographer'},{key:'date',label:'Date booked',type:'date'}]}, text:'Book photographer for testing and graduation: Photographer name and the date booked.'},
+  {id:'fd_cc_sotc_input', week:8, text:'Share Student of the Cycle input with the lead instructor.'},
+  {id:'fd_cc_belts',  week:0, text:'Pro-shop testing prep — order and stock belts, patches, and certificates.'},
+  {id:'fd_cc_photog', week:6, text:'Book photographer for testing and graduation.'},
 ];
 
 /* ── Mat Chat Scripts (ATA Legacy Pro) ── */
@@ -11574,6 +11585,10 @@ function saveTaskField(el, opts){
   if(!section||!taskId) return;
   const task=resolveTask(section, taskId);
   const kind=proofKindOf(task);
+  if(taskHasOptionalNote(task)){
+    saveOptionalTaskNote(section, taskId, opts);
+    return;
+  }
   if(kind==='note'||kind==='lines'||kind==='photoNote'||kind==='photoOrNone'){
     const box=document.getElementById('notes_'+section+'_'+taskId);
     let notes=box?String(box.value||'').trim():'';
@@ -11615,6 +11630,58 @@ function proofFieldInput(id, label, type, value, options, section, taskId){
     control='<input id="'+id+'" type="'+(type||'text')+'" value="'+escAttr(value||'')+'" placeholder="'+esc(label)+'"'+attrs+' style="flex:1;min-width:110px;font-size:12px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;">';
   }
   return control;
+}
+function saveOptionalTaskNote(section, taskId, opts){
+  opts=opts||{};
+  const task=resolveTask(section, taskId);
+  const el=document.getElementById('notes_'+section+'_'+taskId);
+  let notes=el?String(el.value||'').trim():'';
+  if(!notes){
+    const drafted=taskDraftValue('notes_'+section+'_'+taskId);
+    if(drafted!=null&&String(drafted).trim()) notes=String(drafted).trim();
+  }
+  const prev=Object.assign({}, taskDoneRec(section, taskId)||{});
+  const hadRecord=!!(prev.proofV||prev.ts);
+  if(!notes){
+    if(!hadRecord||!prev.notes){
+      taskProofStatus(section, taskId, '', '');
+      return;
+    }
+    delete prev.notes;
+    prev.proofV=1;
+    prev.ts=prev.ts||Date.now();
+    if(!commitTask(section, taskId, prev)){
+      taskProofStatus(section, taskId, 'error', 'Could not save this note. Try again.');
+      return;
+    }
+    taskProofStatus(section, taskId, 'saved', taskSavedLabel(prev.ts));
+    render(true);
+    return;
+  }
+  delete prev.burst; delete prev.burstOk; delete prev.burstOkAt; delete prev.burstOkBy;
+  const payload=Object.assign(prev, {ts:Date.now(), proofV:1, notes:notes});
+  if(!commitTask(section, taskId, payload)){
+    taskProofStatus(section, taskId, 'error', 'Could not save this note. Try again.');
+    if(el) el.style.borderColor='var(--red)';
+    return;
+  }
+  taskProofStatus(section, taskId, 'saved', proofFieldsOk(task, payload)?taskSavedLabel(payload.ts):'Note saved');
+  render(true);
+}
+function renderOptionalNote(section, task, rec, locked){
+  rec=rec||{};
+  const noteId='notes_'+section+'_'+task.id;
+  const ph=(task.proof&&task.proof.notePlaceholder)||'Optional note';
+  const drafted=taskDraftValue(noteId);
+  const shown=drafted==null?String(rec.notes||''):drafted;
+  const saved=String(rec.notes||'').trim();
+  if(locked) return saved?'<div class="proof-saved" data-proof-saved="1" data-optional-note="1">'+esc(saved)+'</div>':'';
+  const hooks=taskDraftMark(noteId, section, task.id)+taskDraftHooks(section, task.id);
+  let h='<div class="proof-box" data-optional-note="1"'+(saved?' data-proof-saved="1"':'')+' style="margin-left:34px">';
+  h+='<input id="'+noteId+'"'+hooks+' type="text" value="'+escAttr(shown)+'" placeholder="'+esc(ph)+'" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;">';
+  h+=taskProofStatusHtml(section, task.id);
+  h+='</div>';
+  return h;
 }
 function renderProofEditor(section, task, rec, locked){
   const kind=proofKindOf(task);
@@ -12077,7 +12144,7 @@ function renderHistoryProofPanel(){
     html+='<div style="margin-top:10px;font-size:13px;color:#64748b;">Loading this day…</div></div>';
     return html;
   }
-  if(info.needsReview) html+='<div data-day-needs-review="1" style="margin-top:10px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;">Needs review — 4 or more non-photo tasks were checked within 60 seconds. Those items do not count toward the bonus until a manager confirms them.</div>';
+  if(info.needsReview) html+='<div data-day-needs-review="1" style="margin-top:10px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;">Needs review — 4 or more proof tasks were saved within 60 seconds. Checkoffs are not part of that. Those items do not count toward the bonus until a manager confirms them.</div>';
   html+='<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">';
   (info.items||[]).forEach(item=>{
     const rec=item.rec||{};
@@ -12272,7 +12339,7 @@ function renderTasksPage(){
       }
     }
     html+='</div>';
-    html+='<div style="margin-top:10px;padding:8px 12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500);">The bonus (1–5%, and up to 6% for Bryan and Miranda) counts a task only when its proof is filled and it is not still flagged Needs review. Hours, revenue, and student metrics are still part of the leadership review. Older checkmarks from before this proof step still count.</div>';
+    html+='<div style="margin-top:10px;padding:8px 12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500);">The bonus (1–5%, and up to 6% for Bryan and Miranda) counts a checkoff task when it is checked, and counts a proof task only when its proof is filled. A task flagged Needs review does not count until a manager confirms it. Hours, revenue, and student metrics are still part of the leadership review. Older checkmarks from before this proof step still count.</div>';
     html+='</div>';
   } else if(!isFrontDesk(loc)){
     html+='<div style="margin-top:4px;margin-bottom:4px;padding:12px 16px;background:var(--gray-50);border-radius:12px;border:1.5px dashed var(--gray-200);font-size:13px;color:var(--gray-500);font-weight:600;">⏸ Part-time</div>';
@@ -13035,7 +13102,8 @@ function renderContentPillarsBlock(active){
 function renderTaskItem(section,task,doneData,isCustom,locked){
   task=taskForProof(section, task);
   const proofKind=proofKindOf(task);
-  const useProof=!!(task.proof||task.autoOnly);
+  const optionalNote=taskHasOptionalNote(task);
+  const useProof=!!((task.proof&&proofKind!=='check')||task.autoOnly);
   const hasNotes=!!task.hasNotes;
   const isCount=!!task.count&&!task.autoOnly&&proofKind!=='stoplight';
   const isPhoto=!!task.photo||proofKind==='photo'||proofKind==='photoNote'||proofKind==='photoOrNone';
@@ -13051,7 +13119,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
   const hasPlaybook=!!pb;
   let cls='task-item'+(isDone?' done':'')+(needsReview?' needs-review':'')+(locked?' locked':'');
   const showProofChrome=!!(needsReview||useProof||(doneData&&doneData.proofV));
-  const blockStyle=(hasNotes||isCount||isPhoto||isPosts||showProofChrome||task.contentPillars||(task.subs&&task.subs.length))?'flex-direction:column;align-items:stretch;gap:8px':'';
+  const blockStyle=(hasNotes||optionalNote||isCount||isPhoto||isPosts||showProofChrome||task.contentPillars||(task.subs&&task.subs.length))?'flex-direction:column;align-items:stretch;gap:8px':'';
   let html='<div class="'+cls+'" data-task-id="'+task.id+'" data-proof-kind="'+esc(proofKind)+'"'+(needsReview?' data-needs-review="1"':'')+(blockStyle?(' style="'+blockStyle+'"'):'')+'>';
   // Top row: drag handle + checkbox + text + extras
   html+='<div style="display:flex;align-items:flex-start;gap:10px">';
@@ -13066,6 +13134,7 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     else if(isPhoto&&proofKind!=='photoOrNone'&&proofKind!=='photoNote') completeFn='document.getElementById(\'ph_'+section+'_'+task.id+'\').click()';
     else if(isPosts) completeFn='';
     else if(isCount) completeFn='completeTaskCount(\''+section+'\',\''+task.id+'\')';
+    else if(proofKind==='check') completeFn='completeTask(\''+section+'\',\''+task.id+'\')';
     else if(useProof) completeFn='';
     else if(hasNotes) completeFn='completeTaskWithNotes(\''+section+'\',\''+task.id+'\')';
     else completeFn='completeTask(\''+section+'\',\''+task.id+'\')';
@@ -13124,6 +13193,10 @@ function renderTaskItem(section,task,doneData,isCustom,locked){
     html+='</div>';
   }
   // Notes field / saved notes. Proof-form tasks render their own fields.
+  if(optionalNote) html+=renderOptionalNote(section, task, doneData, locked);
+  if(proofKind==='check'&&!optionalNote&&doneData&&doneData.notes){
+    html+='<div class="proof-saved" data-proof-saved="1">'+esc(String(doneData.notes))+'</div>';
+  }
   if(hasNotes&&!useProof){
     if((isDone||needsReview)&&doneData.notes){
       html+='<div class="proof-saved">'+esc(doneData.notes)+'</div>';
