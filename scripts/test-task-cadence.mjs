@@ -408,10 +408,13 @@ joeyOld.eos = { ts: 1 };
 const joeyAlias = scoreBoth('joeyZ', joeyMon, joeyOld);
 check(taskDone(joeyOld, 'closing') && joeyAlias.oldDone === joeyAlias.newDone && joeyAlias.newDone === joeyAlias.total, 'eos alias still completes closing and the day still scores the same');
 
+const proofKindOf = grab('proofKindOf');
+const taskForProof = grab('taskForProof');
 const rosters = dailyTasksForDate('ash', '2026-11-16').find(t => t.id === 'rosters');
+check(proofKindOf(rosters) === 'check', 'rosters is a plain checkoff');
 check(taskBonusComplete(rosters, { ts: 1 }), 'a pre-proof roster check still counts');
-check(!taskBonusComplete(rosters, { ts: 2, proofV: 1, notes: '   ' }), 'a new roster check with a blank note does not count');
-check(taskBonusComplete(rosters, { ts: 3, proofV: 1, notes: 'Tigers 7, Kids 11. No new / no trials' }), 'roster notes count');
+check(taskBonusComplete(rosters, { ts: 2, proofV: 1 }), 'a roster checkoff counts with one click and no note');
+check(taskBonusComplete(rosters, { ts: 3, proofV: 1, notes: '   ' }), 'a blank roster note does not block the checkoff');
 
 const stoplight = dailyTasksForDate('ash', '2026-11-16').find(t => t.id === 'stoplight');
 check(taskBonusComplete(stoplight, { ts: 1, count: 2 }), 'an old stoplight count of 2 still counts');
@@ -444,19 +447,32 @@ check(!taskBonusComplete(burstTask, { ts: 1, proofV: 1, burst: true }), 'an unco
 check(taskBonusComplete(burstTask, { ts: 1, proofV: 1, burst: true, burstOk: true }), 'a manager confirm puts the task back in the bonus');
 check(taskBonusComplete(burstTask, { ts: 1, burst: true }), 'a legacy record is not retroactively removed by a burst flag');
 
-state.tasksLoc = 'joeyZ';
+state.tasksLoc = 'ash';
 state.tasksDate = '2026-11-16';
 state._proofNow = '2026-11-16T18:00:00Z';
-state.tasksData.joeyZ = { daily: { '2026-11-16': {} } };
+state.tasksData.ash = state.tasksData.ash || {};
+state.tasksData.ash.weekly = {};
 sandbox.__writes.length = 0;
-['c1', 'c2', 'c3', 'c4'].forEach(id => completeTask('daily', id));
-const burstWrites = sandbox.__writes.filter(w => String(w.path).indexOf('/daily/2026-11-16/') >= 0);
-check(burstWrites.length >= 4, 'burst test wrote only through the local stub');
-check(sandbox.__writes.every(w => String(w.path).indexOf('tasks/emp/') === 0 || String(w.path).indexOf('tasks/emp/') > 0), 'burst writes stay on task paths');
-const live = state.tasksData.joeyZ.daily['2026-11-16'];
-check(['c1', 'c2', 'c3', 'c4'].every(id => live[id] && live[id].burst && !taskBonusComplete({ id }, live[id])), 'four rapid checks are marked needs-review in memory');
-live.c1.burstOk = true;
-check(taskBonusComplete({ id: 'c1' }, live.c1), 'confirming one burst item counts that item');
+['schedule', 'dots', 'lifelinks', 'bday_report', 'events_promote'].forEach(id => completeTask('weekly', id));
+const checkWeek = getTaskWeekKey('2026-11-16');
+const checkLive = (state.tasksData.ash.weekly || {})[checkWeek] || {};
+check(['schedule', 'dots', 'lifelinks', 'bday_report', 'events_promote'].every(id => checkLive[id] && checkLive[id].proofV === 1 && !checkLive[id].burst && taskBonusComplete(weeklyTasksFor('ash', checkWeek).find(t => t.id === id), checkLive[id])), 'five checkoffs inside 60 seconds are not flagged and each one counts');
+check(sandbox.__writes.every(w => String(w.path).indexOf('/burst') < 0 && String(w.path).indexOf('needsReview') < 0), 'checkoff clicks do not write a burst flag');
+
+state.tasksData.ash.cycle_checklist = {};
+const commitTask = grab('commitTask');
+['cc_upgrades', 'cc_w3_attn', 'cc_w5_attn', 'cc_bday'].forEach(id => commitTask('cycle_checklist', id, { ts: Date.now(), proofV: 1, notes: 'Sam\nRiley' }));
+const cycleKey = grab('getCycleChecklistKey')();
+const cycleLive = state.tasksData.ash.cycle_checklist[cycleKey];
+check(['cc_upgrades', 'cc_w3_attn', 'cc_w5_attn', 'cc_bday'].every(id => cycleLive[id] && cycleLive[id].burst), 'four proof saves inside 60 seconds are still flagged');
+check(!taskBonusComplete(grab('getCycleChecklist')('ash').find(t => t.id === 'cc_upgrades'), cycleLive.cc_upgrades), 'an unconfirmed proof burst does not count');
+cycleLive.cc_upgrades.burstOk = true;
+check(taskBonusComplete(grab('getCycleChecklist')('ash').find(t => t.id === 'cc_upgrades'), cycleLive.cc_upgrades), 'confirming one burst item counts that item');
+check(sandbox.__writes.every(w => String(w.path).indexOf('tasks/emp/') >= 0), 'burst writes stay on task paths');
+state.tasksData.joeyZ = state.tasksData.joeyZ || { daily: {} };
+state.tasksData.joeyZ.daily = state.tasksData.joeyZ.daily || {};
+state.tasksData.joeyZ.daily['2026-11-16'] = state.tasksData.joeyZ.daily['2026-11-16'] || {};
+state.tasksLoc = 'joeyZ';
 state._proofNow = null;
 
 clearEls();
@@ -481,11 +497,34 @@ state.tasksLoc = 'sueK';
 state.tasksDate = '2026-11-17';
 state._proofNow = '2026-11-17T18:00:00Z';
 if (!state.tasksData.sueK) state.tasksData.sueK = {};
-setEl('notes_daily_fd_messages', '');
-const beforeNone = sandbox.__writes.length;
-grab('proofUseNone')('daily', 'fd_messages');
-const noneWrite = sandbox.__writes[sandbox.__writes.length - 1];
-check(sandbox.__writes.length > beforeNone && noneWrite.val && noneWrite.val.none && noneWrite.val.notes === 'None today', 'None today completes the inbox task');
+state.tasksData.sueK.daily = { '2026-11-17': {} };
+const beforeClick = sandbox.__writes.length;
+completeTask('daily', 'fd_messages');
+const clickWrite = sandbox.__writes[sandbox.__writes.length - 1];
+const inboxTask = dailyTasksForDate('sueK', '2026-11-17').find(t => t.id === 'fd_messages');
+check(sandbox.__writes.length > beforeClick && clickWrite.val && clickWrite.val.proofV === 1 && !clickWrite.val.notes, 'one click completes the inbox checkoff');
+check(taskBonusComplete(inboxTask, clickWrite.val), 'the inbox checkoff counts toward the bonus');
+const followTask = dailyTasksForDate('sueK', '2026-11-17').find(t => t.id === 'fd_followups');
+completeTask('daily', 'fd_followups');
+const followRec = state.tasksData.sueK.daily['2026-11-17'].fd_followups;
+check(followRec && followRec.proofV === 1 && !followRec.notes && !followRec.burst && taskBonusComplete(followTask, followRec), 'follow-ups complete with one click and an empty note does not block them');
+completeTaskWithNotes('daily', 'fd_followups', 'Nguyen family — call about a belt');
+const followNoted = state.tasksData.sueK.daily['2026-11-17'].fd_followups;
+check(followNoted && followNoted.notes === 'Nguyen family — call about a belt' && taskBonusComplete(followTask, followNoted), 'an optional follow-up note saves and the task stays complete');
+const lobby = dailyTasksForDate('sueK', '2026-11-17').find(t => t.id === 'fd_lobby');
+check(!taskBonusComplete(lobby, { ts: 1, proofV: 1 }), 'the lobby photo still requires a photo');
+check(taskBonusComplete(lobby, { ts: 1, proofV: 1, photos: ['http://example.test/lobby.jpg'] }), 'a lobby photo completes the reset');
+const closingKept = dailyTasksForDate('ash', '2026-11-16').find(t => t.id === 'closing');
+check(!taskBonusComplete(closingKept, { ts: 1, proofV: 1, notes: 'all set' }), 'closing still needs trials and enrollments');
+check(taskBonusComplete(closingKept, { ts: 1, proofV: 1, trials: 0, enrollments: 0 }), 'closing counts when both numbers are saved, including zero');
+const gnClose = dailyTasksForDate('mirandaS', '2026-11-16').find(t => t.id === 'closing');
+check(proofKindOf(gnClose) === 'photo' && taskBonusComplete(gnClose, { ts: 1, proofV: 1, photos: ['u'] }) && !taskBonusComplete(gnClose, { ts: 1, proofV: 1, notes: 'All clear' }), 'Go Ninja closing keeps the photo and the note is optional');
+const gnWeek = grab('getCycleTasks')('mirandaS');
+const gnAnnounce = taskForProof('cycle', gnWeek[1].tasks.find(t => t.id === 'w1a1'));
+const gnSign = taskForProof('cycle', gnWeek[2].tasks.find(t => t.id === 'w2a1'));
+const gnClean = taskForProof('cycle', gnWeek[1].tasks.find(t => t.id === 'w1c1'));
+check(proofKindOf(gnAnnounce) === 'check' && proofKindOf(gnSign) === 'check', 'Go Ninja cycle rows that used to guess a note are explicit checkoffs');
+check(proofKindOf(gnClean) === 'photo', 'Go Ninja cleaning cycle rows still ask for a photo');
 state._proofNow = null;
 
 state.tasksLoc = 'ash';
@@ -506,9 +545,15 @@ state._proofNow = '2026-11-18T18:00:00Z';
 const monProof = sheet('ash', '2026-11-16');
 check(monProof.indexOf('How many today') < 0, 'the stoplight sheet has no manual count box');
 check(monProof.indexOf('Students page') >= 0, 'stoplight tells staff to use the Students page');
-check(monProof.indexOf('data-proof-form="note"') >= 0, 'roster proof field is on the sheet');
-check(monProof.indexOf('Invite birthday families') >= 0, 'weekly birthday task was renamed');
-check(monProof.indexOf('data-proof-form="invites"') >= 0, 'birthday invite fields are on the sheet');
+const rosterAt = monProof.indexOf('data-task-id="rosters"');
+check(rosterAt >= 0 && monProof.slice(rosterAt, rosterAt + 80).indexOf('data-proof-kind="check"') >= 0, 'rosters is a one-click checkoff on the sheet');
+const inviteAt = monProof.indexOf('data-task-id="ad_invites"');
+check(inviteAt >= 0 && monProof.slice(inviteAt, inviteAt + 120).indexOf('data-proof-kind="lines"') >= 0, 'AD invites still require the two names');
+check(monProof.indexOf('data-proof-form="note"') >= 0, 'a kept note task still has its proof field');
+check(monProof.indexOf('counts a checkoff task when it is checked') >= 0, 'the bonus note says a checkoff counts when it is checked');
+check(monProof.indexOf('Invite birthday families') >= 0, 'weekly birthday task stays on the sheet');
+const bdayAt = monProof.indexOf('data-task-id="bday_report"');
+check(bdayAt >= 0 && monProof.slice(bdayAt, bdayAt + 90).indexOf('data-proof-kind="check"') >= 0, 'birthday invites are a checkoff');
 check(monProof.indexOf('Book a party') >= 0 && monProof.indexOf('Ava') >= 0, 'a saved party booking shows the child name');
 const bryanProof = sheet('bryanG', '2026-11-16');
 check(bryanProof.indexOf('data-proof-form="bookings"') >= 0, 'cycle party booking fields are on the sheet');
@@ -517,7 +562,10 @@ check(monProof.indexOf('data-task-id="ph_floor"') >= 0, 'training floor photo is
 
 const deskNew = sheet('sueK', '2026-11-17');
 check(deskNew.indexOf('data-task-id="fd_questions"') < 0, 'front desk sheet no longer lists the question checkbox');
-check(deskNew.indexOf('None today') >= 0, 'front desk message task offers None today');
+const msgAt = deskNew.indexOf('data-task-id="fd_messages"');
+check(msgAt >= 0 && deskNew.slice(msgAt, msgAt + 90).indexOf('data-proof-kind="check"') >= 0, 'the inbox task is a one-click checkoff');
+check(deskNew.indexOf('data-optional-note="1"') >= 0, 'follow-ups and the shift handoff show an optional note');
+check(deskNew.indexOf('Nguyen family — call about a belt') >= 0, 'a saved follow-up note shows on the card');
 check(deskNew.indexOf('data-task-id="ph_bathroom"') >= 0, 'Tuesday front desk still has the bathroom photo');
 check(deskNew.indexOf('Check and refresh customer bathrooms') >= 0, 'lobby tidying still mentions bathrooms');
 check(deskNew.indexOf('data-task-id="fd_lobby"') >= 0, 'lobby reset is still a task');
@@ -546,6 +594,17 @@ check(proofView.indexOf('data-manager-proof="1"') >= 0, 'history shows the manag
 check(proofView.indexOf('Auto from Students') >= 0, 'manager proof shows the Students-page source');
 check(proofView.indexOf('data-day-needs-review="1"') >= 0, 'manager proof shows the needs-review day');
 check(proofView.indexOf('Bonnie Templeton') >= 0, 'manager proof shows the named outreach');
+state.historyFocus = { empId: 'sueK', dateKey: '2026-11-17' };
+state.historyData['sueK|2026-11-17'] = {
+  done: 1,
+  total: 1,
+  dayOff: false,
+  needsReview: false,
+  items: [
+    { id: 'fd_followups', text: 'Log follow-ups', verified: true, rec: { ts: Date.now(), proofV: 1, notes: 'Nguyen family — call about a belt' } },
+  ],
+};
+check(renderTasksPage().indexOf('Nguyen family — call about a belt') >= 0, 'history shows the optional follow-up note');
 state.tasksTab = 'sheets';
 state.historyFocus = null;
 
@@ -701,41 +760,41 @@ state._proofNow = '2026-11-18T18:00:00Z';
 if (!state.tasksData.ash) state.tasksData.ash = {};
 state.tasksData.ash.weekly = state.tasksData.ash.weekly || {};
 const ashWeekKey = getTaskWeekKey('2026-11-18');
-const noteScope = taskFieldScope('notes_weekly_events_promote');
-state.taskInputDrafts.notes_weekly_events_promote = { scope: noteScope, value: 'Told Tigers and Kids about the tournament' };
+const noteScope = taskFieldScope('notes_weekly_ad_invites');
+state.taskInputDrafts.notes_weekly_ad_invites = { scope: noteScope, value: 'Sam\nRiley' };
 const draftedSheet = sheet('ash', '2026-11-18');
 const draftedWeekly = section(draftedSheet, 'Weekly Recurring');
-check(draftedWeekly.indexOf('data-task-id="events_promote"') >= 0 && draftedWeekly.indexOf('data-task-draft="1"') >= 0, 'Ash weekly note fields keep a draft across a redraw');
-check(draftedWeekly.indexOf('Told Tigers and Kids about the tournament') >= 0, 'Ash weekly event note is still on the sheet after a redraw');
+check(draftedWeekly.indexOf('data-task-id="ad_invites"') >= 0 && draftedWeekly.indexOf('data-task-draft="1"') >= 0, 'Ash weekly note fields keep a draft across a redraw');
+check(draftedWeekly.indexOf('Sam') >= 0 && draftedWeekly.indexOf('Riley') >= 0, 'Ash weekly invite note is still on the sheet after a redraw');
 check(draftedWeekly.indexOf('data-task-id="mia_report"') >= 0 && draftedWeekly.indexOf('Booster date') >= 0, 'the booster lesson row is one of the weekly fields');
-check(draftedWeekly.indexOf('data-task-id="ad_invites"') >= 0, 'the multi-line weekly invite note uses the same field');
-const rosterScope = taskFieldScope('notes_daily_rosters');
-state.taskInputDrafts.notes_daily_rosters = { scope: rosterScope, value: 'Tigers 6, Kids 10. Trial: Maya' };
+check(draftedWeekly.indexOf('data-proof-kind="check"') >= 0 && draftedWeekly.indexOf('data-task-id="events_promote"') >= 0, 'event promotion is a checkoff on the weekly sheet');
+const closeScope = taskFieldScope('notes_daily_closing');
+state.taskInputDrafts.notes_daily_closing = { scope: closeScope, value: 'Parent asked about testing' };
 const dailyDraft = section(sheet('ash', '2026-11-18'), 'Daily Checklist');
-check(dailyDraft.indexOf('Trial: Maya') >= 0 && dailyDraft.indexOf('data-task-id="rosters"') >= 0, 'a daily note uses the same draft so a redraw does not clear it');
+check(dailyDraft.indexOf('Parent asked about testing') >= 0 && dailyDraft.indexOf('data-task-id="closing"') >= 0, 'the closing optional note uses the same draft so a redraw does not clear it');
 
 state.tasksLoc = 'bryanG';
 state.tasksDate = '2026-11-18';
 if (!state.tasksData.bryanG) state.tasksData.bryanG = {};
-const bryanScope = taskFieldScope('notes_weekly_lead_audit');
-state.taskInputDrafts.notes_weekly_lead_audit = { scope: bryanScope, value: 'Sam still open, call Thursday' };
+const bryanScope = taskFieldScope('notes_weekly_ad_invites');
+state.taskInputDrafts.notes_weekly_ad_invites = { scope: bryanScope, value: 'Sam\nRiley' };
 const bryanDraft = section(sheet('bryanG', '2026-11-18'), 'Weekly Recurring');
-check(bryanDraft.indexOf('Sam still open, call Thursday') >= 0, 'another instructor’s weekly note survives the same redraw');
+check(bryanDraft.indexOf('Sam') >= 0 && bryanDraft.indexOf('Riley') >= 0, 'another instructor’s weekly note survives the same redraw');
 
 state.tasksLoc = 'ash';
 state.tasksDate = '2026-11-18';
 const typing = {
-  id: 'notes_weekly_lead_audit',
-  value: 'All leads contacted',
-  tagName: 'INPUT',
+  id: 'notes_weekly_ad_invites',
+  value: 'Sam\nRiley',
+  tagName: 'TEXTAREA',
   style: {},
   selectionStart: 4,
   selectionEnd: 4,
   getAttribute(name) {
     if (name === 'data-task-draft') return '1';
     if (name === 'data-task-section') return 'weekly';
-    if (name === 'data-task-id') return 'lead_audit';
-    if (name === 'data-task-scope') return taskFieldScope('notes_weekly_lead_audit');
+    if (name === 'data-task-id') return 'ad_invites';
+    if (name === 'data-task-scope') return taskFieldScope('notes_weekly_ad_invites');
     return null;
   },
   focus() { sandbox.document.activeElement = typing; },
@@ -759,21 +818,20 @@ sandbox.document.querySelectorAll = function (sel) {
 const writesBeforeReplay = sandbox.__writes.length;
 render();
 check(sandbox.document.__app.innerHTML === 'MARKER', 'a live update does not redraw the page while a weekly note is focused');
-check(typing.value === 'All leads contacted', 'the focused weekly note is not cleared by that update');
-check(taskDraftValue('notes_weekly_lead_audit') === 'All leads contacted', 'the focused note is stored before the redraw is skipped');
+check(typing.value === 'Sam\nRiley', 'the focused weekly note is not cleared by that update');
+check(taskDraftValue('notes_weekly_ad_invites') === 'Sam\nRiley', 'the focused note is stored before the redraw is skipped');
 check(sandbox.__writes.length === writesBeforeReplay, 'skipping the redraw does not write the unfinished note');
 sandbox.document.activeElement = null;
 const writesBeforeLeave = sandbox.__writes.length;
 leaveTaskField(typing);
-const leadWrite = sandbox.__writes.slice(writesBeforeLeave).filter(w => String(w.path).indexOf('/weekly/') >= 0 && String(w.path).indexOf('lead_audit') >= 0).pop();
-check(leadWrite && leadWrite.val && leadWrite.val.notes === 'All leads contacted' && leadWrite.val.proofV === 1, 'leaving the weekly note saves it');
-check(String(leadWrite.path).indexOf('tasks/emp/ash/weekly/' + ashWeekKey + '/lead_audit') >= 0, 'Ash’s weekly note saves on her seat for this week');
+const leadWrite = sandbox.__writes.slice(writesBeforeLeave).filter(w => String(w.path).indexOf('/weekly/') >= 0 && String(w.path).indexOf('ad_invites') >= 0).pop();
+check(leadWrite && leadWrite.val && leadWrite.val.notes === 'Sam\nRiley' && leadWrite.val.proofV === 1, 'leaving the weekly note saves it');
+check(String(leadWrite.path).indexOf('tasks/emp/ash/weekly/' + ashWeekKey + '/ad_invites') >= 0, 'Ash’s weekly note saves on her seat for this week');
 const savedSheet = section(sheet('ash', '2026-11-18'), 'Weekly Recurring');
-check(savedSheet.indexOf('data-proof-saved="1"') >= 0 && savedSheet.indexOf('All leads contacted') >= 0 && savedSheet.indexOf('data-proof-status="saved"') >= 0, 'the saved weekly note stays visible after the next redraw');
+check(savedSheet.indexOf('data-proof-saved="1"') >= 0 && savedSheet.indexOf('Riley') >= 0 && savedSheet.indexOf('data-proof-status="saved"') >= 0, 'the saved weekly note stays visible after the next redraw');
 
-setEl('notes_weekly_ad_invites', 'Only Sam');
-sandbox.document.__els.notes_weekly_ad_invites.value = 'Only Sam';
-sandbox.document.__els.notes_weekly_ad_invites.getAttribute = function () { return null; };
+grab('undoTask')('weekly', 'ad_invites');
+typing.value = 'Only Sam';
 const beforeShort = sandbox.__writes.length;
 completeTaskWithNotes('weekly', 'ad_invites');
 check(sandbox.__writes.length === beforeShort, 'one name still does not save the two-name weekly invite');
@@ -803,26 +861,27 @@ sandbox.document.activeElement = null;
 sandbox.document.getElementById = prevGet;
 sandbox.document.querySelectorAll = prevQuery;
 
-// Daily checklist text: a live refresh must not drop what is being typed, and
-// Save must send that text. A day snapshot that does not contain the write yet
-// must not erase it, and a rejected write must say so.
+// Optional follow-up note: a live refresh must not drop what is being typed, and
+// leaving the box must send that text. A day snapshot that does not contain the
+// write yet must not erase it, and a rejected write must say so. Rosters is a
+// checkoff now, so this coverage sits on the front-desk optional note.
 const applyTaskSnap = grab('applyTaskSnap');
 const taskFieldKey = grab('taskFieldKey');
 const rememberTaskDraft = grab('rememberTaskDraft');
 const undoTask = grab('undoTask');
 vm.runInContext('__fbSetRestore = fbSet;', sandbox);
-state.tasksLoc = 'ash';
+state.tasksLoc = 'sueK';
 state.tasksDate = '2026-11-18';
 state._proofNow = '2026-11-18T18:00:00Z';
 state.taskInputDrafts = {};
 state.taskSaveStatus = {};
 state.taskPendingWrites = {};
-if (!state.tasksData.ash) state.tasksData.ash = {};
-state.tasksData.ash.daily = state.tasksData.ash.daily || {};
-state.tasksData.ash.daily['2026-11-18'] = { opening: { ts: 1, proofV: 1, photos: ['http://example.test/open.jpg'] } };
+if (!state.tasksData.sueK) state.tasksData.sueK = {};
+state.tasksData.sueK.daily = state.tasksData.sueK.daily || {};
+state.tasksData.sueK.daily['2026-11-18'] = { fd_messages: { ts: 1, proofV: 1 } };
 const roster = {
-  id: 'notes_daily_rosters',
-  value: 'Tigers 7, Kids 11. Trial: Maya',
+  id: 'notes_daily_fd_followups',
+  value: 'Nguyen family — call about a belt',
   tagName: 'INPUT',
   style: {},
   selectionStart: 8,
@@ -830,8 +889,8 @@ const roster = {
   getAttribute(name) {
     if (name === 'data-task-draft') return '1';
     if (name === 'data-task-section') return 'daily';
-    if (name === 'data-task-id') return 'rosters';
-    if (name === 'data-task-scope') return taskFieldScope('notes_daily_rosters');
+    if (name === 'data-task-id') return 'fd_followups';
+    if (name === 'data-task-scope') return taskFieldScope('notes_daily_fd_followups');
     return null;
   },
   focus() { sandbox.document.activeElement = roster; },
@@ -855,29 +914,29 @@ sandbox.document.querySelectorAll = function (sel) {
 const writesBeforeRoster = sandbox.__writes.length;
 render();
 check(sandbox.document.__app.innerHTML === 'DAILY-MARKER', 'a live update does not redraw the daily checklist while a proof box is focused');
-check(roster.value === 'Tigers 7, Kids 11. Trial: Maya', 'the focused roster note is not cleared by that update');
-check(taskDraftValue('notes_daily_rosters') === 'Tigers 7, Kids 11. Trial: Maya', 'the roster note is stored before the redraw is skipped');
+check(roster.value === 'Nguyen family — call about a belt', 'the focused follow-up note is not cleared by that update');
+check(taskDraftValue('notes_daily_fd_followups') === 'Nguyen family — call about a belt', 'the follow-up note is stored before the redraw is skipped');
 check(sandbox.__writes.length === writesBeforeRoster, 'skipping the daily redraw does not write the unfinished note');
-applyTaskSnap('ash', 'daily', '2026-11-18', { opening: { ts: 2, proofV: 1, photos: ['http://example.test/open.jpg'] } });
+applyTaskSnap('sueK', 'daily', '2026-11-18', { fd_messages: { ts: 2, proofV: 1 } });
 render();
-check(roster.value === 'Tigers 7, Kids 11. Trial: Maya' && sandbox.document.activeElement === roster, 'a day snapshot during typing leaves the roster text and focus alone');
+check(roster.value === 'Nguyen family — call about a belt' && sandbox.document.activeElement === roster, 'a day snapshot during typing leaves the follow-up text and focus alone');
 
 // Blur can report an empty box after the letters were already stored.
 roster.value = '';
 const writesBeforeEmptyBlur = sandbox.__writes.length;
 leaveTaskField(roster);
-const emptyBlurWrite = sandbox.__writes.slice(writesBeforeEmptyBlur).filter(w => String(w.path).indexOf('/rosters') >= 0).pop();
-check(emptyBlurWrite && emptyBlurWrite.val && emptyBlurWrite.val.notes === 'Tigers 7, Kids 11. Trial: Maya' && emptyBlurWrite.val.proofV === 1, 'leaving the roster box saves the typed text when the blur value is empty');
-check(String(emptyBlurWrite.path) === 'tasks/emp/ash/daily/2026-11-18/rosters', 'the roster note is saved on today\'s daily record');
+const emptyBlurWrite = sandbox.__writes.slice(writesBeforeEmptyBlur).filter(w => String(w.path).indexOf('/fd_followups') >= 0).pop();
+check(emptyBlurWrite && emptyBlurWrite.val && emptyBlurWrite.val.notes === 'Nguyen family — call about a belt' && emptyBlurWrite.val.proofV === 1, 'leaving the follow-up box saves the typed text when the blur value is empty');
+check(String(emptyBlurWrite.path) === 'tasks/emp/sueK/daily/2026-11-18/fd_followups', 'the follow-up note is saved on today\'s daily record');
 
 // Hold the write open the way Firebase does, then deliver an older day snapshot.
-undoTask('daily', 'rosters');
-state.tasksData.ash.daily['2026-11-18'] = { opening: { ts: 1, proofV: 1, photos: ['http://example.test/open.jpg'] } };
+undoTask('daily', 'fd_followups');
+state.tasksData.sueK.daily['2026-11-18'] = { fd_messages: { ts: 1, proofV: 1 } };
 state.taskPendingWrites = {};
 state.taskInputDrafts = {};
 state.taskSaveStatus = {};
-roster.value = 'No new / no trials';
-sandbox.document.__els.notes_daily_rosters = roster;
+roster.value = 'Patel family — gear question';
+sandbox.document.__els.notes_daily_fd_followups = roster;
 let releaseSave;
 const held = new Promise(function (resolve) { releaseSave = resolve; });
 const fbSetNow = grab('fbSet');
@@ -886,15 +945,15 @@ sandbox.__held = { then(ok) { held.then(ok); } };
 const writesBeforeEnter = sandbox.__writes.length;
 const enterEvent = { key: 'Enter', defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
 taskFieldKey(enterEvent, roster);
-const enterWrite = sandbox.__writes.slice(writesBeforeEnter).filter(w => String(w.path).indexOf('/rosters') >= 0).pop();
-check(enterEvent.defaultPrevented, 'Enter in a roster box does not submit the page');
-check(enterWrite && enterWrite.val && enterWrite.val.notes === 'No new / no trials', 'Enter saves the roster text');
-applyTaskSnap('ash', 'daily', '2026-11-18', { opening: { ts: 3, proofV: 1, photos: ['http://example.test/open.jpg'] } });
-const heldRec = state.tasksData.ash.daily['2026-11-18'].rosters;
-check(heldRec && heldRec.notes === 'No new / no trials' && heldRec.proofV === 1, 'a day snapshot without the new proof does not drop it');
-const heldSheet = section(sheet('ash', '2026-11-18'), 'Daily Checklist');
-check(heldSheet.indexOf('data-proof-saved="1"') >= 0 && heldSheet.indexOf('No new / no trials') >= 0 && heldSheet.indexOf('data-proof-status="saved"') >= 0, 'the roster card stays saved, with the typed text, after that snapshot');
-check(heldSheet.indexOf('Saved ·') >= 0, 'the saved roster proof shows a timestamp');
+const enterWrite = sandbox.__writes.slice(writesBeforeEnter).filter(w => String(w.path).indexOf('/fd_followups') >= 0).pop();
+check(enterEvent.defaultPrevented, 'Enter in a follow-up box does not submit the page');
+check(enterWrite && enterWrite.val && enterWrite.val.notes === 'Patel family — gear question', 'Enter saves the optional follow-up note');
+applyTaskSnap('sueK', 'daily', '2026-11-18', { fd_messages: { ts: 3, proofV: 1 } });
+const heldRec = state.tasksData.sueK.daily['2026-11-18'].fd_followups;
+check(heldRec && heldRec.notes === 'Patel family — gear question' && heldRec.proofV === 1, 'a day snapshot without the new note does not drop it');
+const heldSheet = section(sheet('sueK', '2026-11-18'), 'Daily Responsibilities');
+check(heldSheet.indexOf('data-proof-saved="1"') >= 0 && heldSheet.indexOf('Patel family — gear question') >= 0 && heldSheet.indexOf('data-proof-status="saved"') >= 0, 'the follow-up card stays saved, with the typed text, after that snapshot');
+check(heldSheet.indexOf('Saved ·') >= 0, 'the saved follow-up note shows a timestamp');
 releaseSave();
 await held;
 vm.runInContext('fbSet = __fbSetRestore;', sandbox);
@@ -902,19 +961,19 @@ vm.runInContext('fbSet = __fbSetRestore;', sandbox);
 // Rejected write: the text stays on the card and the error is visible.
 state.taskPendingWrites = {};
 state.taskSaveStatus = {};
-undoTask('daily', 'rosters');
-state.tasksData.ash.daily['2026-11-18'] = {};
+undoTask('daily', 'fd_followups');
+state.tasksData.sueK.daily['2026-11-18'] = {};
 roster.value = 'Teens 4';
 state.taskInputDrafts = {};
 rememberTaskDraft(roster);
 vm.runInContext('fbSet = function(){ return { then: function(ok, bad){ Promise.resolve().then(function(){ bad(new Error("permission_denied")); }); } }; };', sandbox);
 const writesBeforeReject = sandbox.__writes.length;
-completeTaskWithNotes('daily', 'rosters', 'Teens 4');
+completeTaskWithNotes('daily', 'fd_followups', 'Teens 4');
 await Promise.resolve();
-check(sandbox.__writes.length === writesBeforeReject, 'a rejected roster save does not count as a stored write');
-check(state.taskSaveStatus['daily|rosters'] && state.taskSaveStatus['daily|rosters'].kind === 'error' && /could not save/i.test(state.taskSaveStatus['daily|rosters'].text), 'a rejected roster save shows an error');
-const rejectedSheet = section(sheet('ash', '2026-11-18'), 'Daily Checklist');
-check(rejectedSheet.indexOf('Teens 4') >= 0 && rejectedSheet.indexOf('data-proof-saved="1"') < 0, 'the rejected roster text stays in the box');
+check(sandbox.__writes.length === writesBeforeReject, 'a rejected follow-up save does not count as a stored write');
+check(state.taskSaveStatus['daily|fd_followups'] && state.taskSaveStatus['daily|fd_followups'].kind === 'error' && /could not save/i.test(state.taskSaveStatus['daily|fd_followups'].text), 'a rejected follow-up save shows an error');
+const rejectedSheet = section(sheet('sueK', '2026-11-18'), 'Daily Responsibilities');
+check(rejectedSheet.indexOf('Teens 4') >= 0 && rejectedSheet.indexOf('data-proof-saved="1"') < 0, 'the rejected follow-up text stays in the box');
 vm.runInContext('fbSet = __fbSetRestore;', sandbox);
 sandbox.document.getElementById = prevGet;
 sandbox.document.querySelectorAll = prevQuery;
@@ -977,11 +1036,19 @@ document.querySelectorAll('[data-sheet]').forEach(root => {
     sheet('bryanG', '2026-11-16'),
     true
   ));
-  state.tasksData.sueK = {};
+  state._proofNow = '2026-11-17T18:00:00Z';
+  state.taskSaveStatus = {};
+  state.taskInputDrafts = {};
+  state.tasksData.sueK = { daily: { '2026-11-17': {
+    fd_messages: { ts: Date.now() - 60000, proofV: 1 },
+    fd_followups: { ts: Date.now() - 30000, proofV: 1, notes: 'Nguyen family — call about a belt' },
+    fd_gear: { ts: Date.now() - 20000, proofV: 1 },
+  } } };
   fs.writeFileSync(path.join(previewDir, 'proof-frontdesk.html'), page(
-    'Waunakee front desk — Tuesday, November 17, 2026 — None today',
+    'Waunakee front desk — Tuesday, November 17, 2026 — checkoffs and optional notes',
     sheet('sueK', '2026-11-17')
   ));
+  state._proofNow = null;
   state.tasksData.tarikM = {};
   fs.writeFileSync(path.join(previewDir, 'tarik-garbage.html'), page(
     'Waunakee (Tarik) — Tuesday, November 17, 2026 — weekly garbage',
