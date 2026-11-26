@@ -24,22 +24,44 @@ supabase db reset
 
 That needs Docker. This repo does not run `supabase link` and does not create a cloud project.
 
-Worker, still local, still not deployed:
+Worker `lvlup-crm-api` serves the same `/v1` routes as the Node server. SQL, validators, and billing rules stay in `crm/src`. `crm/worker/src/routes.ts` is the shared dispatcher, so the two hosts do not keep two copies of the route logic. This repo still does not deploy the Worker.
 
 ```bash
 cd crm
+npm install
+npm test
+npm run typecheck
+npm run worker:dry-run
 npx wrangler dev --config worker/wrangler.jsonc --port 8788 --local
 ```
 
-`GET /v1/health` does not need a database. Other routes need `DATABASE_URL` in `worker/.dev.vars` (gitignored) pointed at the local database. Intended hostname later: `api.lvlupma.com`. The Wrangler config does not bind that hostname.
+`npm run worker:dry-run` builds the Worker. It does not deploy and it does not attach a hostname.
+
+Database, in order:
+
+- `env.HYPERDRIVE.connectionString` when the Hyperdrive binding is present.
+- `env.DATABASE_URL` when it is not (local `worker/.dev.vars`, gitignored).
+- Neither value is logged, returned, or written into a health payload.
+
+`GET /v1/health` is `200` with `ok: true`, sandbox and dry-run flags (`charges` and `qbo` false, delivery flags `0`), and `db: { configured, via, connected }`. `via` is `hyperdrive`, `database_url`, or `none`. When a database is configured, health runs `SELECT 1`. A connection failure sets `connected` to false and does not include the URL. Routes that read Postgres return 503 until one of those sources is set. Rank, cycle, curriculum, home, and financial routes do not need a connection.
+
+`crm/worker/wrangler.jsonc`:
+
+- `nodejs_compat` is on so `pg` can use the Hyperdrive connection string. `pg` is `^8.16.3`, the minimum Hyperdrive accepts.
+- `workers_dev` is true so a later sandbox deploy can use the workers.dev subdomain. There is no `routes` entry and no custom domain. `api.lvlupma.com` is not attached.
+- The `hyperdrive` block is commented out until the live Hyperdrive configuration id is filled in. An empty id makes `wrangler deploy` fail, so the file builds as-is. Uncomment it and set `id` from the Cloudflare dashboard (Storage & databases → Hyperdrive) only after Mike approves the new Supabase project. Do not point Hyperdrive at `xxyndswrierztzdbjvrd`.
+
+Safety vars in that file stay sandbox / off: `AUTHORIZENET_MODE=sandbox`, `BILLING_CHARGES_ENABLED=0`, `QBO_ENABLED=0`, `AUTOMATION_DELIVERY_ENABLED=0`, `PUSH_DELIVERY_ENABLED=0`, `WEBHOOK_DELIVERY_ENABLED=0`, `CRM_ALLOW_LOCAL_TOKENS=0`, `FIREBASE_PROJECT_ID=lvlup-members-app`.
+
+`CRM_ALLOW_LOCAL_TOKENS=0` means the Worker rejects the local HMAC tokens the tests use. The Node server still accepts those tokens when the variable is unset, which is how `npm test` signs in. For `wrangler dev` only, set `CRM_ALLOW_LOCAL_TOKENS=1` and `CRM_TOKEN_SECRET` in `worker/.dev.vars`. The Worker does not fall back to a built-in signing secret. Do not set the flag on a deployed Worker.
 
 ## What Mike has to approve before anything is created
 
 1. Create a **new** Supabase project (Postgres 15+, `us-east` or `us-west-2`). Do not reuse `xxyndswrierztzdbjvrd`.
 2. Apply `crm/supabase/migrations/` to that project only. Seed is fixture data (`example.test`), not a roster.
-3. Create the Cloudflare Worker. Do not attach a route yet.
+3. Create the Cloudflare Worker. Do not attach a route yet. Uncomment the Hyperdrive binding in `crm/worker/wrangler.jsonc` only after the new project's Hyperdrive id exists.
 4. Worker secrets, names only, values never in git:
-   - `DATABASE_URL` for the new project
+   - Hyperdrive configuration for the new project (preferred). `DATABASE_URL` remains the local and fallback secret.
    - `AUTHORIZENET_MODE=sandbox`
    - `BILLING_CHARGES_ENABLED` unset or `0`
    - `QBO_ENABLED` unset or `0`

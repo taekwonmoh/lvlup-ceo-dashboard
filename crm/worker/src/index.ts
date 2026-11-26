@@ -1,39 +1,16 @@
 /**
- * Local Worker entry. No route is configured, so this file cannot attach api.lvlupma.com.
- * Health does not touch a database. Other routes return 503 until DATABASE_URL is set locally.
- * Prepaid rollover, tuition credits, and referrals are the local /v1 routes in crm/src/server.ts.
- * This file does not charge a card and does not send a message.
+ * lvlup-crm-api. Serves the CRM /v1 routes.
+ * No custom domain is attached. Hyperdrive is preferred when the binding exists;
+ * DATABASE_URL is the local fallback. Neither value is logged or returned.
+ * Charges, QuickBooks, and message delivery stay off unless a later approval flips them.
  */
+import { handleWorkerRequest, type CrmWorkerEnv } from './app.ts';
+import { workerLoaders } from './fixtures.ts';
+
+const loaders = workerLoaders();
+
 export default {
-  async fetch(request: Request, env: {
-    BILLING_CHARGES_ENABLED?: string;
-    QBO_ENABLED?: string;
-    AUTHORIZENET_MODE?: string;
-    AUTOMATION_DELIVERY_ENABLED?: string;
-    PUSH_DELIVERY_ENABLED?: string;
-    WEBHOOK_DELIVERY_ENABLED?: string;
-  }): Promise<Response> {
-    const url = new URL(request.url);
-    if (request.method === 'GET' && url.pathname === '/v1/health') {
-      return Response.json({
-        ok: true,
-        charges: false,
-        qbo: false,
-        mode: env.AUTHORIZENET_MODE || 'sandbox',
-        billingFlag: env.BILLING_CHARGES_ENABLED || '0',
-        qboFlag: env.QBO_ENABLED || '0',
-        automationDelivery: '0',
-        pushDelivery: '0',
-        webhookDelivery: '0',
-        configuredAutomationDelivery: env.AUTOMATION_DELIVERY_ENABLED || '0',
-        configuredPushDelivery: env.PUSH_DELIVERY_ENABLED || '0',
-        configuredWebhookDelivery: env.WEBHOOK_DELIVERY_ENABLED || '0',
-        intendedHost: 'api.lvlupma.com',
-      });
-    }
-    return Response.json(
-      { error: { code: 'not_deployed', message: 'This Worker is local-only. Set DATABASE_URL for a local database. Nothing is deployed.' } },
-      { status: 503 },
-    );
+  async fetch(request: Request, env: CrmWorkerEnv, ctx: { waitUntil(promise: Promise<unknown>): void }): Promise<Response> {
+    return handleWorkerRequest(request, env, ctx, { loaders });
   },
 };
