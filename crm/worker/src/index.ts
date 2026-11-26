@@ -1,6 +1,8 @@
 /**
  * Local Worker entry. No route is configured, so this file cannot attach api.lvlupma.com.
  * Health does not touch a database. Other routes return 503 until DATABASE_URL is set locally.
+ * Prepaid rollover, tuition credits, and referrals are the local /v1 routes in crm/src/server.ts.
+ * This file does not charge a card and does not send a message.
  */
 export default {
   async fetch(request: Request, env: {

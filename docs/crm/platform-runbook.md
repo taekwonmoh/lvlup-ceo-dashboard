@@ -13,7 +13,7 @@ npm test
 npm start
 ```
 
-`npm test` applies `crm/migrations/` through `007_automations_messaging.sql` (Supabase filename `20261126000007_automations_messaging.sql`) to a local database `crm_test` (and `crm_platform_test`, `crm_messaging_test`). Charges, QuickBooks, journey delivery, and push stay off.
+`npm test` applies `crm/migrations/` through `008_rollover_credits_referrals.sql` (Supabase filename `20261126000008_rollover_credits_referrals.sql`) to a local database `crm_test` (and `crm_platform_test`, `crm_messaging_test`, `crm_rollover_test`). Charges, QuickBooks, journey delivery, and push stay off.
 
 Supabase CLI, from `crm/supabase`, against a new empty project only:
 
@@ -71,6 +71,19 @@ Waunakee first, then East Madison, then Verona. DeForest and Go Ninja wait on th
 
 ## Phase 1 vs Phase 2
 
-Phase 1 is this code: schema, API, import, shadow billing, guest trial and party contracts, geofence and QR check-in endpoints, journey API, dry-run dunning, the canonical automation catalog, two-way message threads, and QuickBooks payloads. It is not live. Migration `20261126000007_automations_messaging.sql` adds the automation and messaging tables. Health reports `automationDelivery`, `pushDelivery`, and `webhookDelivery` as `0`.
+Phase 1 is this code: schema, API, import, shadow billing, guest trial and party contracts, geofence and QR check-in endpoints, journey API, dry-run dunning, the canonical automation catalog, two-way message threads, QuickBooks payloads, and the dry-run rollover, tuition-credit, and referral routes. It is not live. Migration `20261126000007_automations_messaging.sql` adds the automation and messaging tables. Migration `20261126000008_rollover_credits_referrals.sql` adds prepaid rollover, the credit ledger, and referrals. Health reports `automationDelivery`, `pushDelivery`, and `webhookDelivery` as `0`.
+
+## Prepaid rollover, tuition credits, and referrals
+
+These three behaviors are sandbox drafts. `BILLING_CHARGES_ENABLED`, `AUTOMATION_DELIVERY_ENABLED`, `PUSH_DELIVERY_ENABLED`, `WEBHOOK_DELIVERY_ENABLED`, and `QBO_ENABLED` stay `0`. A draft invoice is not a charge. The referral thanks automation (`ret_referral_thanks`) is planned and stored as `dry_run`. Nothing in this build calls Authorize.net, GymDesk, QuickBooks, or a messaging provider.
+
+Staff routes, all under `/v1` and still local:
+
+- `POST /v1/memberships/:id/rollover` configures a prepaid membership to start a `monthly`, `weekly`, or `every_4_weeks` draft on or after `paid_through_date` (`paid_through_on` in the table). `4_weeks` is stored as `every_4_weeks`. `cancel: true` is the opt-out.
+- `POST /v1/billing/drafts` builds that would-charge invoice and applies family tuition credits. A second call for the same period returns the same invoice.
+- `POST /v1/families/:id/credits` issues or adjusts a credit in one step. `GET` is the balance a family sees on the billing screen.
+- `POST /v1/referrals/codes`, `GET /v1/referrals`, and `POST /v1/referrals/rules` are the referral book. A public trial body may include `referralCode`.
+
+Families read their own code, referral status, and credit balance. Staff are limited to their schools. The detail is in [ROLLOVER-CREDITS-REFERRALS.md](ROLLOVER-CREDITS-REFERRALS.md).
 
 Phase 2, after Mike asks for it: native app UI, live push, live email, live SMS, live webhooks, certificate PDFs, a real Authorize.net submit, and a real QuickBooks submit. Those paths return `submitted: false`, `sent: false`, `delivered: false`, `pushSent: false`, or `pdf: null` today. See [AUTOMATIONS-AND-MESSAGING.md](AUTOMATIONS-AND-MESSAGING.md).

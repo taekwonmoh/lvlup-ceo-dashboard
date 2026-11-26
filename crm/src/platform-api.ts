@@ -20,6 +20,7 @@ import { assertQboOffline, companyForSchool, instructorBill } from './qbo.ts';
 import { payoutReport, type PayRule, type TaughtLesson } from './payouts.ts';
 import { curriculumForRank, vimeoPlayerUrl } from './curriculum.ts';
 import { handleComms } from './comms-routes.ts';
+import { advanceReferral, attributeReferral, creditBalance, handleRolloverRoutes } from './rollover-routes.ts';
 
 export type Db = {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }>;
@@ -44,7 +45,8 @@ export function isAuthedPlatformPath(parts: string[]) {
   }
   if (head === 'imports' && parts[2] === 'gymdesk-staging') return true;
   if (head === 'payment-profiles' && parts[2] === 'accept') return true;
-  if (head === 'families' && (parts[3] === 'switcher' || parts[3] === 'timeline' || parts[3] === 'statements' || parts[3] === 'geofence-opt-in')) return true;
+  if (head === 'families' && (parts[3] === 'switcher' || parts[3] === 'timeline' || parts[3] === 'statements' || parts[3] === 'geofence-opt-in' || parts[3] === 'credits')) return true;
+  if (head === 'referrals') return true;
   if (head === 'members' && ['journey', 'resources', 'eligibility', 'geofence-opt-in', 'documents', 'timeline'].includes(parts[3] || '')) return true;
   if (head === 'bookings' && parts[3] === 'cancel') return true;
   return false;
@@ -129,6 +131,9 @@ export async function handlePlatform(input: {
   if (!actor) throw new CrmError(401, 'unauthorized', 'Sign in required.');
   const role = platformRoleOf(actor);
   const body = (input.body || {}) as Record<string, any>;
+
+  const rolloverHit = await handleRolloverRoutes({ method, parts, search, actor, body, pool });
+  if (rolloverHit) return rolloverHit;
 
   if (method === 'GET' && parts[1] === 'pathways') {
     const pathways = await pool.query(`select code, title, needs_signoff, note from career_pathways order by code`);
@@ -346,8 +351,10 @@ export async function handlePlatform(input: {
     const fx = await input.loadStaging();
     const payments = parsePayments(fx.paymentsCsv);
     const rows = await pool.query(
-      `select ms.gymdesk_member_id, ms.location_id, ms.status, ms.biller, ms.next_bill_on, ms.paid_through_on,
-              ms.discount_bps, ms.prepaid, p.amount_cents, h.status as hold_status, h.start_on, h.end_on
+      `select ms.gymdesk_member_id, ms.family_id, ms.location_id, ms.status, ms.biller, ms.next_bill_on, ms.paid_through_on,
+              ms.discount_bps, ms.prepaid, ms.rollover_enabled, ms.rollover_cancelled, ms.rollover_cadence,
+              ms.rollover_amount_cents, ms.rollover_anchor_on, ms.rollover_anchor_day,
+              p.amount_cents, h.status as hold_status, h.start_on, h.end_on
        from memberships ms
        join plans p on p.id = ms.plan_id
        left join lateral (
@@ -357,6 +364,21 @@ export async function handlePlatform(input: {
        ) h on true
        where ms.gymdesk_member_id is not null`,
     );
+    const creditRows = await pool.query(
+      `select id, family_id, remaining_cents, expires_on, created_at
+       from tuition_credits where voided = false and remaining_cents > 0`,
+    );
+    const creditsByFamily = new Map<string, ShadowMember['credits']>();
+    for (const credit of creditRows.rows) {
+      const list = creditsByFamily.get(credit.family_id) || [];
+      list.push({
+        id: credit.id,
+        remainingCents: credit.remaining_cents,
+        expiresOn: asDay(credit.expires_on),
+        createdAt: new Date(credit.created_at).toISOString(),
+      });
+      creditsByFamily.set(credit.family_id, list);
+    }
     const members: ShadowMember[] = rows.rows.map(row => ({
       memberId: row.gymdesk_member_id,
       locationId: row.location_id,
@@ -367,6 +389,13 @@ export async function handlePlatform(input: {
       amountCents: row.amount_cents,
       discountBps: row.discount_bps,
       prepaid: row.prepaid,
+      rolloverEnabled: row.rollover_enabled,
+      rolloverCancelled: row.rollover_cancelled,
+      rolloverCadence: row.rollover_cadence,
+      rolloverAmountCents: row.rollover_amount_cents,
+      rolloverAnchorOn: asDay(row.rollover_anchor_on),
+      rolloverAnchorDay: row.rollover_anchor_day,
+      credits: creditsByFamily.get(row.family_id) || [],
       hold: row.hold_status ? { status: row.hold_status, startOn: asDay(row.start_on) || '', endOn: asDay(row.end_on) || '' } : null,
     }));
     const report = compareShadowDay({ on: body.on, merchantLocationId: body.merchantLocationId, members, payments });
@@ -388,13 +417,18 @@ export async function handlePlatform(input: {
     if (role === 'family' && !actor.familyIds.includes(parts[2])) throw new CrmError(404, 'not_found', 'Not found.');
     const year = search.get('year') || '2026';
     const rows = await pool.query(
-      `select to_char(occurred_on, 'YYYY-MM') as month, coalesce(sum(amount_cents), 0)::int as cents
+      `select to_char(occurred_on, 'YYYY-MM') as month,
+              coalesce(sum(case
+                when source_type in ('tuition_credit', 'referral_reward') and amount_cents > 0 then 0
+                else amount_cents
+              end), 0)::int as cents
        from ledger_entries where family_id = $1 and shadow = false and occurred_on >= $2 and occurred_on < $3
        group by 1 order by 1`,
       [parts[2], `${year}-01-01`, `${Number(year) + 1}-01-01`],
     );
     const total = rows.rows.reduce((sum, row) => sum + row.cents, 0);
-    return { status: 200, body: { year: Number(year), months: rows.rows, totalCents: total, delivery: 'not_sent' } };
+    const balance = await creditBalance(pool, parts[2], chicagoToday(now));
+    return { status: 200, body: { year: Number(year), months: rows.rows, totalCents: total, creditBalanceCents: balance, delivery: 'not_sent' } };
   }
 
   if (method === 'GET' && parts[1] === 'families' && parts[3] === 'timeline') {
@@ -513,7 +547,7 @@ export async function handlePlatform(input: {
     if (!lead.rowCount) throw new CrmError(404, 'not_found', 'Not found.');
     const row = lead.rows[0];
     staffSchool(actor, row.location_id);
-    const result = await withTx(pool, async client => convertLead(client, row));
+    const result = await withTx(pool, async client => convertLead(client, row, body, actor.email));
     return { status: 200, body: result };
   }
 
@@ -709,14 +743,24 @@ async function publicRoutes(input: {
         `insert into attributions (lead_id, location_id, source_type, source_id) values ($1, $2, 'trial', $3)`,
         [lead.rows[0].id, row.location_id, booking.rows[0].id],
       );
-      return { leadId: lead.rows[0].id, bookingId: booking.rows[0].id };
+      let referral = null;
+      const referralCode = body.referralCode || body.referral_code;
+      if (referralCode) {
+        referral = await attributeReferral(client, {
+          code: String(referralCode),
+          leadId: lead.rows[0].id,
+          locationId: row.location_id,
+          stage: 'trial_booked',
+        });
+      }
+      return { leadId: lead.rows[0].id, bookingId: booking.rows[0].id, referral };
     });
-    return { status: 201, body: { ...saved, accountRequired: false } };
+    return { status: 201, body: { leadId: saved.leadId, bookingId: saved.bookingId, referral: saved.referral, accountRequired: false } };
   }
   throw new CrmError(404, 'not_found', 'Not found.');
 }
 
-async function convertLead(client: Db, lead: any) {
+async function convertLead(client: Db, lead: any, body: Record<string, any> = {}, actorEmail: string | null = null) {
   let guardian = await client.query(`select id from guardians where email = $1`, [lead.email]);
   if (!guardian.rowCount) {
     guardian = await client.query(
@@ -774,7 +818,24 @@ async function convertLead(client: Db, lead: any) {
      values ($1, $2, $3, $4, 'membership', $5, 0, 'trial conversion')`,
     [today, family.rows[0].id, member.rows[0].id, lead.location_id, membership.rows[0].id],
   );
-  return { familyId: family.rows[0].id, memberId: member.rows[0].id, leadId: lead.id };
+  const referralCode = body.referralCode || body.referral_code;
+  if (referralCode) {
+    await attributeReferral(client, {
+      code: String(referralCode),
+      leadId: lead.id,
+      locationId: lead.location_id,
+      stage: 'lead',
+    });
+  }
+  const referral = await advanceReferral(client, {
+    leadId: lead.id,
+    familyId: family.rows[0].id,
+    memberId: member.rows[0].id,
+    locationId: lead.location_id,
+    guardianName: lead.guardian_name || '',
+    actorEmail,
+  });
+  return { familyId: family.rows[0].id, memberId: member.rows[0].id, leadId: lead.id, referral };
 }
 
 async function checkInFamily(pool: PoolLike, input: {
