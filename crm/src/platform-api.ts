@@ -19,6 +19,7 @@ import { insideGeofence, sessionInCheckinWindow } from './geofence.ts';
 import { assertQboOffline, companyForSchool, instructorBill } from './qbo.ts';
 import { payoutReport, type PayRule, type TaughtLesson } from './payouts.ts';
 import { curriculumForRank, vimeoPlayerUrl } from './curriculum.ts';
+import { handleComms } from './comms-routes.ts';
 
 export type Db = {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }>;
@@ -38,13 +39,13 @@ export function isPublicPlatformPath(parts: string[]) {
 export function isAuthedPlatformPath(parts: string[]) {
   if (parts[0] !== 'v1') return false;
   const head = parts[1];
-  if (['roster', 'memberships', 'holds', 'billing', 'ledger', 'payouts', 'qbo', 'private-lessons', 'retail', 'check-ins', 'sessions', 'events', 'parties', 'leads', 'pathways', 'promotions', 'reports', 'automations', 'devices', 'documents'].includes(head)) {
+  if (['roster', 'memberships', 'holds', 'billing', 'ledger', 'payouts', 'qbo', 'private-lessons', 'retail', 'check-ins', 'sessions', 'events', 'parties', 'leads', 'pathways', 'promotions', 'reports', 'automations', 'devices', 'documents', 'messages', 'locations'].includes(head)) {
     return true;
   }
   if (head === 'imports' && parts[2] === 'gymdesk-staging') return true;
   if (head === 'payment-profiles' && parts[2] === 'accept') return true;
   if (head === 'families' && (parts[3] === 'switcher' || parts[3] === 'timeline' || parts[3] === 'statements' || parts[3] === 'geofence-opt-in')) return true;
-  if (head === 'members' && ['journey', 'resources', 'eligibility', 'geofence-opt-in', 'documents'].includes(parts[3] || '')) return true;
+  if (head === 'members' && ['journey', 'resources', 'eligibility', 'geofence-opt-in', 'documents', 'timeline'].includes(parts[3] || '')) return true;
   if (head === 'bookings' && parts[3] === 'cancel') return true;
   return false;
 }
@@ -398,22 +399,20 @@ export async function handlePlatform(input: {
 
   if (method === 'GET' && parts[1] === 'families' && parts[3] === 'timeline') {
     if (role === 'family' && !actor.familyIds.includes(parts[2])) throw new CrmError(404, 'not_found', 'Not found.');
-    const events = await pool.query(
-      `select 'attendance' as kind, a.attended_on as on, a.source as label
-       from attendance a join members m on m.id = a.member_id where m.family_id = $1
-       union all
-       select 'rank', e.awarded_on, rk.name from member_rank_events e
-       join members m on m.id = e.member_id join ranks rk on rk.id = e.rank_id where m.family_id = $1
-       union all
-       select 'ledger', l.occurred_on, l.source_type from ledger_entries l
-       where l.family_id = $1 and l.shadow = false
-       union all
-       select 'lead', ld.created_at::date, ld.pipeline_status from leads ld
-       join attributions at on at.lead_id = ld.id where at.family_id = $1
-       order by 2`,
-      [parts[2]],
-    );
+    const events = await loadFamilyTimeline(pool, parts[2]);
     return { status: 200, body: { events: events.rows } };
+  }
+
+  if (method === 'GET' && parts[1] === 'members' && parts[3] === 'timeline') {
+    const member = await pool.query(`select id, family_id, location_id from members where id = $1`, [parts[2]]);
+    if (!member.rowCount) throw new CrmError(404, 'not_found', 'Not found.');
+    if (role === 'family' && !actor.familyIds.includes(member.rows[0].family_id)) throw new CrmError(404, 'not_found', 'Not found.');
+    if (role !== 'family' && role !== 'owner' && !actor.locationIds.includes(member.rows[0].location_id)) {
+      throw new CrmError(404, 'not_found', 'Not found.');
+    }
+    const events = await loadFamilyTimeline(pool, member.rows[0].family_id);
+    const rows = events.rows.filter(row => !row.member_id || row.member_id === member.rows[0].id);
+    return { status: 200, body: { events: rows } };
   }
 
   if (method === 'GET' && parts[1] === 'families' && parts[3] === 'switcher') {
@@ -545,7 +544,42 @@ export async function handlePlatform(input: {
     return { status: 200, body: result };
   }
 
+  const comms = await handleComms({ method, parts, search, actor, body, pool, env });
+  if (comms) return comms;
+
   return null;
+}
+
+async function loadFamilyTimeline(pool: PoolLike, familyId: string) {
+  return pool.query(
+    `select 'attendance' as kind, a.attended_on as on, a.source as label, a.member_id::text as member_id
+     from attendance a join members m on m.id = a.member_id where m.family_id = $1
+     union all
+     select 'rank', e.awarded_on, rk.name, e.member_id::text
+     from member_rank_events e
+     join members m on m.id = e.member_id join ranks rk on rk.id = e.rank_id where m.family_id = $1
+     union all
+     select 'ledger', l.occurred_on, l.source_type, l.member_id::text
+     from ledger_entries l
+     where l.family_id = $1 and l.shadow = false
+     union all
+     select 'lead', ld.created_at::date, ld.pipeline_status, null
+     from leads ld
+     join attributions at on at.lead_id = ld.id where at.family_id = $1
+     union all
+     select 'message', msg.created_at::date, left(msg.body, 140), t.member_id::text
+     from messages msg
+     join message_threads t on t.id = msg.thread_id
+     where t.family_id = $1
+     union all
+     select 'automation', r.created_at::date, w.code, e.member_id::text
+     from automation_step_runs r
+     join automation_enrollments e on e.id = r.enrollment_id
+     join automation_workflows w on w.id = e.workflow_id
+     where e.family_id = $1
+     order by 2, 1`,
+    [familyId],
+  );
 }
 
 async function publicRoutes(input: {
