@@ -25,6 +25,7 @@ Mike Moh wants to replace GymDesk with a CRM and member platform that the staff 
 | [GEOFENCE-CHECKIN.md](GEOFENCE-CHECKIN.md) | Opt-in geofence check-in and one-scan family check-in. |
 | [QUICKBOOKS.md](QUICKBOOKS.md) | Three-company mapping and the offline export. |
 | [FAMILY-AND-EVENTS.md](FAMILY-AND-EVENTS.md) | Family switcher, ledger, events, and dry-run messages. |
+| [AUTOMATIONS-AND-MESSAGING.md](AUTOMATIONS-AND-MESSAGING.md) | Canonical journey automations and two-way family messaging. Dry-run only. |
 | [GYMDESK-PARITY.md](GYMDESK-PARITY.md) | Gus’s GymDesk inventory as a built / planned checklist. Unverified items stay marked. |
 | [FINANCIALS.md](FINANCIALS.md) | Spark-style Financials screen: metric definitions, LVLUP additions, and the open questions. |
 

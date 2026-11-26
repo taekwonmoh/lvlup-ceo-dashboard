@@ -13,7 +13,7 @@ npm test
 npm start
 ```
 
-`npm test` applies `crm/migrations/` to a local database `crm_test` (and `crm_platform_test`). Charges, QuickBooks, and messages stay off.
+`npm test` applies `crm/migrations/` through `007_automations_messaging.sql` (Supabase filename `20261126000007_automations_messaging.sql`) to a local database `crm_test` (and `crm_platform_test`, `crm_messaging_test`). Charges, QuickBooks, journey delivery, and push stay off.
 
 Supabase CLI, from `crm/supabase`, against a new empty project only:
 
@@ -43,6 +43,10 @@ npx wrangler dev --config worker/wrangler.jsonc --port 8788 --local
    - `AUTHORIZENET_MODE=sandbox`
    - `BILLING_CHARGES_ENABLED` unset or `0`
    - `QBO_ENABLED` unset or `0`
+   - `AUTOMATION_DELIVERY_ENABLED` unset or `0`
+   - `PUSH_DELIVERY_ENABLED` unset or `0`
+   - `WEBHOOK_DELIVERY_ENABLED` unset or `0`
+   - `WATCHLIST_WEBHOOK_SECRET` only when a later build is allowed to call the watch-list hook. This build reads the name and never sends it
    - `CRM_ALLOW_LOCAL_TOKENS=0` outside local dev
    - Per merchant, sandbox only: `AUTHORIZENET_WAUNAKEE_API_LOGIN`, `AUTHORIZENET_WAUNAKEE_TRANSACTION_KEY`, `AUTHORIZENET_WAUNAKEE_SIGNATURE_KEY`, and the same pattern for `EASTMAD` and `VERONA`
 5. DNS for `api.lvlupma.com` is a later change. Do not add it in this phase.
@@ -67,6 +71,6 @@ Waunakee first, then East Madison, then Verona. DeForest and Go Ninja wait on th
 
 ## Phase 1 vs Phase 2
 
-Phase 1 is this code: schema, API, import, shadow billing, guest trial and party contracts, geofence and QR check-in endpoints, journey API, dry-run dunning, automations, and QuickBooks payloads. It is not live.
+Phase 1 is this code: schema, API, import, shadow billing, guest trial and party contracts, geofence and QR check-in endpoints, journey API, dry-run dunning, the canonical automation catalog, two-way message threads, and QuickBooks payloads. It is not live. Migration `20261126000007_automations_messaging.sql` adds the automation and messaging tables. Health reports `automationDelivery`, `pushDelivery`, and `webhookDelivery` as `0`.
 
-Phase 2, after Mike asks for it: native app UI, live push, live email, certificate PDFs, a real Authorize.net submit, and a real QuickBooks submit. Those paths return `submitted: false`, `sent: false`, `pushSent: false`, or `pdf: null` today.
+Phase 2, after Mike asks for it: native app UI, live push, live email, live SMS, live webhooks, certificate PDFs, a real Authorize.net submit, and a real QuickBooks submit. Those paths return `submitted: false`, `sent: false`, `delivered: false`, `pushSent: false`, or `pdf: null` today. See [AUTOMATIONS-AND-MESSAGING.md](AUTOMATIONS-AND-MESSAGING.md).

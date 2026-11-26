@@ -108,7 +108,14 @@ export function createApp(pool: pg.Pool): App {
     const url = new URL(req.url || '/', 'http://localhost');
     try {
       if (req.method === 'GET' && url.pathname === '/v1/health') {
-        send(res, 200, { ok: true, charges: false, mode: 'sandbox' });
+        send(res, 200, {
+          ok: true,
+          charges: false,
+          mode: 'sandbox',
+          automationDelivery: '0',
+          pushDelivery: '0',
+          webhookDelivery: '0',
+        });
         return;
       }
       const parts = url.pathname.split('/').filter(Boolean);

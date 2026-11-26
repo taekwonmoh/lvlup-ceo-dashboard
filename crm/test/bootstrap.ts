@@ -12,6 +12,11 @@ export function bootstrapDatabase(name: string) {
     EXCEPTION WHEN duplicate_object THEN NULL;
     END $$;
     ALTER ROLE crm WITH LOGIN PASSWORD 'crm' CREATEROLE;
+    DO $$ BEGIN
+      CREATE ROLE crm_app NOLOGIN NOBYPASSRLS;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+    GRANT crm_app TO crm;
   `);
   psql('postgres', `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${name}' AND pid <> pg_backend_pid();`);
   psql('postgres', `DROP DATABASE IF EXISTS ${name};`);

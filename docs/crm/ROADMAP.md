@@ -16,9 +16,10 @@ Phase 1 is the platform in this pull request. It is code, migrations, and tests.
 | Guest trial and Go Ninja party | `/v1/public/trials`, `/v1/public/goninja/bookings` | No account. No phone field. Party `charged` cannot be true |
 | Lead convert | `POST /v1/leads/{id}/convert` | Writes family, member, waiver copy, ledger row |
 | Dunning schedule, statements | `/v1/billing/dunning/preview`, `/v1/families/{id}/statements` | `sent: false`, `delivery: not_sent` |
-| Automations | `automation_rules`, `communication_log` | Rules cannot be enabled. Log status can only be `dry_run` |
+| Automations | `007_automations_messaging.sql`, `crm/src/automations.ts` | 57 canonical workflows, 8 triggers, 12 step types. Per-school settings. Evaluate is dry-run. `enabled` cannot be turned on |
 | QuickBooks payloads | `POST /v1/qbo/preview` | `submitted: false`. Flag `1` still refuses the network |
 | Device token and curriculum read | `POST /v1/devices`, `GET /v1/members/{id}/resources` | `pushSent: false` |
+| Two-way messages | `message_threads`, `messages`, `push_notification_outbox` | Family and staff threads. Push rows stay `delivered: false` and `dry_run: true`. Timeline includes messages and automation runs |
 | Bulk promotion | `POST /v1/promotions/bulk` | Certificate row `not_generated`, `pdf: null` |
 | Private-lesson payout math | `crm/src/payouts.ts` | No payment leaves the building |
 | Crosswalk RLS | `crm_private.identity_crosswalk` | Family role sees zero rows |
@@ -26,8 +27,8 @@ Phase 1 is the platform in this pull request. It is code, migrations, and tests.
 ## Phase 2 (not in this build)
 
 - iOS and Android UI, App Store, and Play Store
-- Live Apple or Google push
-- Live email from the automation or dunning tables
+- Live Apple or Google push (the outbox already queues a dry-run payload)
+- Live email, SMS, or webhook delivery from the journey engine (`AUTOMATION_DELIVERY_ENABLED`, `PUSH_DELIVERY_ENABLED`, and `WEBHOOK_DELIVERY_ENABLED` stay `0`)
 - Certificate PDF files
 - Authorize.net `createTransactionRequest` over the network
 - Intuit OAuth and a real journal or bill post
