@@ -3,13 +3,14 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-import { verifyToken, assertStaff, canSeeFamily, canSeeLocation, type Actor } from './auth.ts';
+import { verifyToken, assertStaff, assertFinance, canSeeFamily, canSeeLocation, type Actor } from './auth.ts';
 import { CrmError } from './errors.ts';
 import { migrate } from './migrate.ts';
 import { parseMembersCsv, type CimProfile, type LeadRow } from './gymdesk.ts';
 import { buildChargeProfileRequest, buildGetCustomerProfileRequest, getCustomerProfile, submitCharge, type SandboxProfile } from './authorize.ts';
 import { curriculumForRank, vimeoPlayerUrl } from './curriculum.ts';
 import { activeCycle } from './cycles.ts';
+import { financialReport, financialsSummary, scopeAllowed, schoolsInScope } from './financials.ts';
 import { homeSummary, previewPaymentRetry } from './home.ts';
 import { quoteBooking, type PromoCode } from './pricing.ts';
 import { PROGRAMS, ranksForProgram, resolveRank } from './ranks.ts';
@@ -372,6 +373,36 @@ export function createApp(pool: pg.Pool): App {
           send(res, 200, homeSummary(url.searchParams.get('scope') || 'all', url.searchParams.get('asOf') || '2026-11-24'));
         } catch (err) {
           send(res, 404, { error: { code: 'not_found', message: err instanceof Error ? err.message : 'Unknown scope.' } });
+        }
+        return;
+      }
+      if (req.method === 'GET' && (url.pathname === '/v1/financials/summary' || (parts[0] === 'v1' && parts[1] === 'financials' && parts[2] === 'reports' && parts[3]))) {
+        assertFinance(actor);
+        const scope = url.searchParams.get('scope') || 'all';
+        try { schoolsInScope(scope); }
+        catch (err) {
+          send(res, 404, { error: { code: 'not_found', message: err instanceof Error ? err.message : 'Unknown scope.' } });
+          return;
+        }
+        if (!scopeAllowed(actor, scope)) throw new CrmError(403, 'forbidden', 'That scope is outside your schools.');
+        const query = {
+          scope,
+          period: (url.searchParams.get('period') || 'month') as 'month' | 'last' | 'ytd' | 'custom',
+          asOf: url.searchParams.get('asOf') || '2026-11-24',
+          compare: (url.searchParams.get('compare') || 'prev_month') as 'none' | 'prev_month' | 'prev_year',
+          from: url.searchParams.get('from') || undefined,
+          through: url.searchParams.get('through') || undefined,
+        };
+        try {
+          if (parts[2] === 'reports') {
+            send(res, 200, financialReport(parts[3], query));
+          } else {
+            send(res, 200, financialsSummary(query));
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Unknown report.';
+          const missing = /Unknown report/.test(message);
+          send(res, missing ? 404 : 500, { error: { code: missing ? 'not_found' : 'error', message } });
         }
         return;
       }
