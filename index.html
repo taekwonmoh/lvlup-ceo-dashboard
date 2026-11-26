@@ -1566,14 +1566,17 @@ function proofFieldsOk(task, rec){
   }
   return !!notes;
 }
-function taskPostsFilled(task, rec){
+function taskPostsFilled(task, rec, ctx){
   if(!task||!task.posts) return 0;
   let n=0;
   const posts=(rec&&rec.posts)||{};
   for(let i=1;i<=task.posts;i++){ if(String(posts[i]||'').trim()) n++; }
   if(task.contentPillars&&typeof mergedContentUploads==='function'){
     try{
-      const ups=mergedContentUploads(state.tasksLoc, getTaskWeekKey(state.tasksDate), rec||{}).filter(r=>r._thisWeek);
+      ctx=ctx||{};
+      const empId=ctx.empId||state.tasksLoc;
+      const weekKey=ctx.weekKey||getTaskWeekKey(ctx.dateKey||state.tasksDate);
+      const ups=mergedContentUploads(empId, weekKey, rec||{}).filter(r=>r._thisWeek);
       n=Math.max(n, ups.length);
     }catch(e){}
   }
@@ -1583,31 +1586,43 @@ function taskPostsFilled(task, rec){
 // taskDone — so past bonus math does not move. New saves set proofV. A checkoff
 // counts on that click. A task that still asks for proof counts only when the
 // proof is filled. An unconfirmed burst still holds the task out.
-function taskBonusComplete(task, rec){
+function taskBonusComplete(task, rec, ctx){
+  // Capture Content is done when this week's uploads already exist. The task
+  // node is optional — the Content tab writes contentSubmissions, and a week
+  // snapshot can arrive without a cc_content row. Count those records in place.
+  if(task&&task.contentPillars&&task.posts){
+    if(rec&&rec.proofV&&rec.burst&&!rec.burstOk) return false;
+    if(rec&&rec.proofV&&rec.reusedPhoto&&!rec.reusedOk) return false;
+    if(taskPostsFilled(task, rec, ctx)>=task.posts) return true;
+  }
   if(!rec||typeof rec!=='object') return false;
   if(!rec.proofV) return true;
   if(rec.burst&&!rec.burstOk) return false;
   if(rec.reusedPhoto&&!rec.reusedOk) return false;
-  if(task&&task.posts) return taskPostsFilled(task, rec)>=task.posts;
+  if(task&&task.posts) return taskPostsFilled(task, rec, ctx)>=task.posts;
   if(task&&task.proof) return proofFieldsOk(task, rec);
   if(task&&task.priorPhoto) return ((rec.photos)||[]).length>0;
   return proofFieldsOk(task, rec);
 }
-function taskSheetDone(section, task, rec){
+function taskSheetDone(section, task, rec, ctx){
   task=taskForProof(section, task);
-  if(!taskBonusComplete(task, rec)) return false;
+  if(task&&task.contentPillars&&task.posts){
+    if(rec&&rec.proofV&&((rec.burst&&!rec.burstOk)||(rec.reusedPhoto&&!rec.reusedOk))) return false;
+    return taskPostsFilled(task, rec, ctx)>=(task.posts||0);
+  }
+  if(!taskBonusComplete(task, rec, ctx)) return false;
   if(!rec||!rec.proofV){
-    if(task&&task.posts) return taskPostsFilled(task, rec)>=(task.posts||0);
+    if(task&&task.posts) return taskPostsFilled(task, rec, ctx)>=(task.posts||0);
     if(task&&task.priorPhoto) return ((rec.photos)||[]).length>0;
   }
   return true;
 }
-function scoreTaskList(tasks, dd){
+function scoreTaskList(tasks, dd, ctx){
   let done=0;
   const items=[];
   (tasks||[]).forEach(t=>{
     const rec=taskRecord(dd, t.id);
-    const verified=taskBonusComplete(t, rec);
+    const verified=taskBonusComplete(t, rec, ctx);
     if(verified) done++;
     items.push({id:t.id, text:t.text, verified, rec:rec||null});
   });
@@ -12010,7 +12025,7 @@ function loadHistoryWeekly(empId,weekKey){
   const rec=weeklyTasksFor(empId, weekKey); const total=rec.length;
   fbRef(empPath(empId)+'/weekly/'+weekKey).once('value').then(snap=>{
     const dd=snap.val()||{};
-    const scored=scoreTaskList(rec, dd);
+    const scored=scoreTaskList(rec, dd, {empId, weekKey});
     state.historyWeekly[key]={done:scored.done,total,needsReview:!!scored.needsReview,items:scored.items};
     render();
   }).catch(()=>{state.historyWeekly[key]=null;render();});
@@ -12020,7 +12035,7 @@ function weeklyRequiredStatus(empId,weekKey){
   const locData=state.tasksData[empId]||{};
   const dd=(locData.weekly||{})[weekKey]||{};
   const rec=weeklyTasksFor(empId, weekKey);
-  const missing=rec.filter(t=>!taskBonusComplete(t, taskRecord(dd, t.id)));
+  const missing=rec.filter(t=>!taskBonusComplete(t, taskRecord(dd, t.id), {empId, weekKey}));
   return {done:rec.length-missing.length,total:rec.length,missing};
 }
 function loadHistoryWeekData(weekOff){
@@ -12705,17 +12720,20 @@ function contentBrandForEmp(empId){ return isGoNinja(empId) ? 'GO NINJA' : 'LVLU
 function contentTime(rec){
   const raw = rec && (rec.at != null ? rec.at : (rec.ts != null ? rec.ts : (rec.createdAt || rec.sentAt || rec.dueAt)));
   if(raw == null || raw === '') return 0;
-  if(typeof raw === 'number' && isFinite(raw)) return raw;
+  if(typeof raw === 'number' && isFinite(raw)){
+    if(raw > 1e9 && raw < 1e11) return raw * 1000;
+    return raw;
+  }
   const n = Number(raw);
   if(isFinite(n) && n > 1e11) return n;
+  if(isFinite(n) && n > 1e9 && n < 1e11) return n * 1000;
   const p = Date.parse(String(raw));
   return isNaN(p) ? 0 : p;
 }
 function contentWeekFromTime(ms){
-  if(!ms) return '';
-  const d = new Date(ms);
-  if(isNaN(d.getTime())) return '';
-  const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  if(!ms || ms < Date.UTC(2000, 0, 1)) return '';
+  const ds = ctDateKey(new Date(ms));
+  if(!ds) return '';
   return getTaskWeekKey(ds);
 }
 // Brand of a content submission or a synced social post.
@@ -12767,26 +12785,67 @@ function contentAll(){
     return !!(contentMediaUrl(r) || r.caption || r.text || r.pillar || r.name || r.status);
   });
 }
+function contentCanonLoc(raw){
+  const s = String(raw || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+  if(!s) return '';
+  if(/go\s*ninja/.test(s) && /verona/.test(s)) return 'goninjaV';
+  if(/go\s*ninja/.test(s) && /waunakee/.test(s)) return 'goninjaW';
+  if(s === 'goninjaw' || s === 'goninja w') return 'goninjaW';
+  if(s === 'goninjav' || s === 'goninja v') return 'goninjaV';
+  if(/east\s*mad/.test(s) || s === 'emad' || s === 'e mad' || s === 'e madison') return 'eastmad';
+  if(s === 'waunakee') return 'waunakee';
+  if(s === 'verona') return 'verona';
+  if(s === 'deforest' || s === 'de forest') return 'deforest';
+  if(LVLUP_LOC_IDS.includes(raw) || GONINJA_LOC_IDS.includes(raw)) return raw;
+  return '';
+}
+function contentKnownEmp(id){
+  const raw = String(id || '').trim();
+  if(!raw) return '';
+  if(TASK_EMPLOYEES.some(e => e.id === raw)) return raw;
+  const known = dashKnownSeat(raw);
+  if(known && known.empId) return known.empId;
+  return '';
+}
+function contentAliasIds(empId){
+  const ids = [String(empId || '')];
+  if(empId === 'ash') ids.push('bein', 'tc_ash');
+  return ids;
+}
+function contentNamesOtherEmp(rec, empId){
+  const ids = [rec && rec.uploaderId, rec && rec.empId, rec && rec.staffId, rec && rec.userId, rec && rec.email, rec && rec.uploaderEmail];
+  for(let i = 0; i < ids.length; i++){
+    const who = contentKnownEmp(ids[i]);
+    if(who && who !== empId) return true;
+  }
+  return false;
+}
 function contentUploaderMatches(rec, empId){
   if(!rec || !empId) return false;
-  const ids = [rec.uploaderId, rec.empId, rec.staffId, rec.userId].map(x => String(x || '').trim()).filter(Boolean);
-  if(ids.indexOf(empId) >= 0) return true;
+  const ids = [rec.uploaderId, rec.empId, rec.staffId, rec.userId, rec.email, rec.uploaderEmail].map(x => String(x || '').trim()).filter(Boolean);
+  const aliases = contentAliasIds(empId).map(x => x.toLowerCase());
+  if(ids.some(id => aliases.indexOf(id.toLowerCase()) >= 0 || contentKnownEmp(id) === empId)) return true;
   const emp = TASK_EMPLOYEES.find(e => e.id === empId);
   const short = emp ? (((/\(([^)]+)\)/.exec(emp.name || '') || [])[1] || '').trim().toLowerCase()) : '';
-  const name = String(rec.uploaderName || rec.who || rec.author || '').toLowerCase();
+  const name = String(rec.uploaderName || rec.who || rec.author || rec.uploaderId || '').toLowerCase();
   if(short && short.length > 2 && name.indexOf(short) >= 0) return true;
   if(empId === 'mirandaS'){
     const blob = (ids.join(' ') + ' ' + name).toLowerCase();
     if(/miranda|msmith/.test(blob)) return true;
     if(/smith/.test(name) && contentBrandOf(rec) === 'GO NINJA') return true;
   }
+  const sch = contentCanonLoc(rec.school || rec.loc || rec.location);
+  if(sch && emp && sch === emp.loc && !contentNamesOtherEmp(rec, empId)) return true;
   return false;
 }
 function contentTouchesWeek(rec, weekKey){
   if(!rec || !weekKey) return false;
-  if(rec.week && String(rec.week) === String(weekKey)) return true;
-  const w = contentWeekFromTime(contentTime(rec));
-  return !!w && w === String(weekKey);
+  const fromTime = contentWeekFromTime(contentTime(rec));
+  if(fromTime) return fromTime === String(weekKey);
+  const stamped = String(rec.week || rec.weekKey || '').trim();
+  if(stamped === String(weekKey)) return true;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(stamped) && getTaskWeekKey(stamped) === String(weekKey)) return true;
+  return false;
 }
 function contentIsRecent(rec){
   const t = contentTime(rec);
@@ -12800,7 +12859,7 @@ function contentVisibleOnStaffDash(rec, empId){
   if(contentBrandOf(rec) !== want) return false;
   if(want === 'LVLUP'){
     const emp = TASK_EMPLOYEES.find(e => e.id === empId);
-    const sch = rec.school || rec.loc || '';
+    const sch = contentCanonLoc(rec.school || rec.loc || rec.location);
     if(sch && emp && LVLUP_LOC_IDS.includes(sch) && sch !== emp.loc && contentMediaUrl(rec) && !contentUploaderMatches(rec, empId)) return false;
   }
   return true;
@@ -12811,6 +12870,8 @@ function mergedContentUploads(empId, weekKey, taskRec){
   const seen = {};
   function consider(rec){
     if(!rec) return;
+    const st = String(rec.status || 'new').toLowerCase();
+    if(st === 'error' || st === 'rejected' || st === 'deleted' || st === 'failed') return;
     const b = contentBrandOf(rec);
     if(b && b !== brand) return;
     if(!contentUploaderMatches(rec, empId) && !rec._mine) return;
