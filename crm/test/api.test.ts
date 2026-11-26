@@ -1,11 +1,11 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import pg from 'pg';
 import { signToken } from '../src/auth.ts';
 import { migrate } from '../src/migrate.ts';
 import { createApp } from '../src/server.ts';
 import { createServer } from 'node:http';
+import { bootstrapDatabase, grantCrmApp } from './bootstrap.ts';
 
 const SECRET = 'dev-only-secret';
 const URL = process.env.CRM_DATABASE_URL || 'postgres://crm:crm@127.0.0.1:5432/crm_test';
@@ -43,21 +43,10 @@ async function api(method: string, path: string, tok: string, body?: unknown) {
 }
 
 before(async () => {
-  execFileSync('sudo', ['-u', 'postgres', 'psql', '-v', 'ON_ERROR_STOP=1', '-c', `
-    DO $$ BEGIN
-      CREATE ROLE crm LOGIN PASSWORD 'crm';
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END $$;
-  `], { stdio: 'pipe' });
-  execFileSync('sudo', ['-u', 'postgres', 'psql', '-v', 'ON_ERROR_STOP=1', '-d', 'postgres', '-c', `
-    SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'crm_test' AND pid <> pg_backend_pid();
-  `], { stdio: 'pipe' });
-  execFileSync('sudo', ['-u', 'postgres', 'psql', '-v', 'ON_ERROR_STOP=1', '-d', 'postgres', '-c',
-    'DROP DATABASE IF EXISTS crm_test;'], { stdio: 'pipe' });
-  execFileSync('sudo', ['-u', 'postgres', 'psql', '-v', 'ON_ERROR_STOP=1', '-d', 'postgres', '-c',
-    'CREATE DATABASE crm_test OWNER crm;'], { stdio: 'pipe' });
+  bootstrapDatabase('crm_test');
   pool = new pg.Pool({ connectionString: URL });
   await migrate(pool);
+  grantCrmApp();
   const app = createApp(pool);
   const server = createServer((req, res) => { void app.handle(req, res); });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));

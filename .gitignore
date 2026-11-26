@@ -5,3 +5,7 @@ gymdesk_data.json
 gymdesk_data.csv
 
 crm/node_modules/
+crm/worker/.dev.vars
+crm/worker/.wrangler/
+crm/supabase/.temp/
+crm/supabase/.branches/

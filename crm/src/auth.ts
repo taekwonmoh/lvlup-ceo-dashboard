@@ -1,5 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { CrmError } from './errors.ts';
+import { isPlatformRole, type PlatformRole } from './scope.ts';
+
+export type { PlatformRole } from './scope.ts';
+export { platformRoleOf, canApproveHolds, isStaffRole, seesAllSchools } from './scope.ts';
 
 export type Role = 'admin' | 'staff' | 'guardian' | 'member';
 
@@ -10,6 +14,7 @@ export type Actor = {
   familyIds: string[];
   memberId: string | null;
   canFinance: boolean;
+  platformRole?: PlatformRole;
   exp: number;
 };
 
@@ -43,6 +48,9 @@ export function verifyToken(token: string, secret: string): Actor {
     throw new CrmError(401, 'unauthorized', 'Sign in required.');
   }
   if (!['admin', 'staff', 'guardian', 'member'].includes(actor.role)) {
+    throw new CrmError(401, 'unauthorized', 'Sign in required.');
+  }
+  if (actor.platformRole && !isPlatformRole(actor.platformRole)) {
     throw new CrmError(401, 'unauthorized', 'Sign in required.');
   }
   return actor;
