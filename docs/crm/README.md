@@ -18,6 +18,13 @@ Mike Moh wants to replace GymDesk with a CRM and member platform that the staff 
 | [MEMBERS-API.md](MEMBERS-API.md) | Endpoints the lvlupma.com members area will call, including promo codes on a booking. |
 | [STAFF-OPS.md](STAFF-OPS.md) | How task sheets and the staff scheduler work today, and how they move into this model without a cutover. |
 | [`crm/`](../../crm/) | The runnable backbone: migrations, API, fixtures, and tests. |
+| [platform-runbook.md](platform-runbook.md) | Local run, the provisioning steps Mike must approve, and the cutover checklist. |
+| [ROADMAP.md](ROADMAP.md) | What is in Phase 1 (this code) and what waits for Phase 2. |
+| [RANK-JOURNEY.md](RANK-JOURNEY.md) | Belt ladder from the catalog, and career rows that still need sign-off. |
+| [WEBSITE-EMBEDS.md](WEBSITE-EMBEDS.md) | Guest trial and Go Ninja party contracts. |
+| [GEOFENCE-CHECKIN.md](GEOFENCE-CHECKIN.md) | Opt-in geofence check-in and one-scan family check-in. |
+| [QUICKBOOKS.md](QUICKBOOKS.md) | Three-company mapping and the offline export. |
+| [FAMILY-AND-EVENTS.md](FAMILY-AND-EVENTS.md) | Family switcher, ledger, events, and dry-run messages. |
 | [GYMDESK-PARITY.md](GYMDESK-PARITY.md) | Gus’s GymDesk inventory as a built / planned checklist. Unverified items stay marked. |
 
 ## Decision in one paragraph

@@ -19,6 +19,7 @@ import {
 } from './store.ts';
 import type { FirebaseTaskExport } from './tasks.ts';
 import type { ScheduleExport } from './schedule.ts';
+import { handlePlatform, isAuthedPlatformPath, isPublicPlatformPath } from './platform-api.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = process.env.CRM_TOKEN_SECRET || 'dev-only-secret';
@@ -73,6 +74,20 @@ function memberView(row: Record<string, unknown>, actor: Actor) {
   };
 }
 
+async function loadPlatformFixtures() {
+  const [membersCsv, paymentsCsv, cimRaw, holdsRaw, waiversRaw] = await Promise.all([
+    readFile(join(root, 'fixtures/platform/members.csv'), 'utf8'),
+    readFile(join(root, 'fixtures/platform/payments.csv'), 'utf8'),
+    readFile(join(root, 'fixtures/platform/cim-profiles.json'), 'utf8'),
+    readFile(join(root, 'fixtures/platform/holds.json'), 'utf8'),
+    readFile(join(root, 'fixtures/platform/waivers.json'), 'utf8'),
+  ]);
+  const cim = JSON.parse(cimRaw) as { profiles: CimProfile[] };
+  const holds = JSON.parse(holdsRaw) as { holds: { memberId: string; startOn: string; endOn: string; reason: string }[] };
+  const waivers = JSON.parse(waiversRaw) as { waivers: { memberId: string; version: string; signedOn: string }[] };
+  return { membersCsv, paymentsCsv, profiles: cim.profiles, holds: holds.holds, waivers: waivers.waivers };
+}
+
 async function loadFixtures() {
   const [membersCsv, cimRaw, leadsRaw] = await Promise.all([
     readFile(join(root, 'fixtures/gymdesk-members.csv'), 'utf8'),
@@ -95,8 +110,29 @@ export function createApp(pool: pg.Pool): App {
         send(res, 200, { ok: true, charges: false, mode: 'sandbox' });
         return;
       }
-      const actor = actorFrom(req);
       const parts = url.pathname.split('/').filter(Boolean);
+      const platformCtx = async (actor: ReturnType<typeof actorFrom> | null) => {
+        const raw = req.method === 'GET' || req.method === 'HEAD' ? null : JSON.parse(await readBody(req) || '{}');
+        return handlePlatform({
+          method: req.method || 'GET',
+          parts,
+          search: url.searchParams,
+          actor,
+          body: raw,
+          pool,
+          env,
+          loadStaging: () => loadPlatformFixtures(),
+        });
+      };
+      if (isPublicPlatformPath(parts)) {
+        const result = await platformCtx(null);
+        if (result) { send(res, result.status, result.body); return; }
+      }
+      const actor = actorFrom(req);
+      if (isAuthedPlatformPath(parts)) {
+        const result = await platformCtx(actor);
+        if (result) { send(res, result.status, result.body); return; }
+      }
 
       if (req.method === 'GET' && url.pathname === '/v1/me') {
         send(res, 200, actor);

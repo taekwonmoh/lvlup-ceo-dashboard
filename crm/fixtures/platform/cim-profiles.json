@@ -1,0 +1,28 @@
+{
+  "profiles": [
+    {
+      "locationId": "waunakee",
+      "customerProfileId": "910000001",
+      "merchantCustomerId": "20000001",
+      "paymentProfileId": "810000001",
+      "brand": "Visa",
+      "last4": "1111"
+    },
+    {
+      "locationId": "waunakee",
+      "customerProfileId": "910000003",
+      "merchantCustomerId": "20000003",
+      "paymentProfileId": null,
+      "brand": null,
+      "last4": null
+    },
+    {
+      "locationId": "waunakee",
+      "customerProfileId": "910000099",
+      "merchantCustomerId": "20000099",
+      "paymentProfileId": "810000099",
+      "brand": "Visa",
+      "last4": "9999"
+    }
+  ]
+}

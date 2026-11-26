@@ -1,0 +1,19 @@
+{
+  "name": "lvlup-crm-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true }
+  },
+  "vars": {
+    "AUTHORIZENET_MODE": "sandbox",
+    "BILLING_CHARGES_ENABLED": "0",
+    "QBO_ENABLED": "0",
+    "CRM_ALLOW_LOCAL_TOKENS": "0",
+    "FIREBASE_PROJECT_ID": "lvlup-members-app"
+  }
+}

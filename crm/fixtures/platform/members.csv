@@ -1,0 +1,7 @@
+member_id,first_name,last_name,status,joined,rank,email,location,plan,amount,next_bill_on,paid_through_on,prepaid,discount_bps,firebase_family_id,firebase_family_scheme,firebase_student_key
+20000001,Avery,Sample,active,2024-03-02,Yellow,avery.sample@example.test,Waunakee,Standard,224.00,2027-01-04,,0,0,fam_aaaaaaaaaaaaaaaa,hash,gymdesk_20000001
+20000002,Blake,Sample,active,2025-06-15,White,avery.sample@example.test,Verona,Standard,209.00,2027-01-04,,0,0,fam_1700000000001,timestamp,gymdesk_20000002
+20000003,Casey,Sample,active,2026-01-09,Orange,casey.sample@example.test,Waunakee,Mini-Tigers,119.00,2027-01-04,,0,0,fam_bbbbbbbbbbbbbbbb,hash,gymdesk_20000003
+20000004,Eden,Sample,active,2025-02-01,Green,eden.sample@example.test,Waunakee,Standard,224.00,2028-01-01,2027-12-31,1,0,fam_cccccccccccccccc,hash,gymdesk_20000004
+20000005,Finley,Sample,active,2024-08-01,Blue,finley.sample@example.test,East Madison,Standard,199.00,2027-01-04,,0,0,fam_dddddddddddddddd,hash,gymdesk_20000005
+20000006,Gray,Sample,hold,2024-04-04,Camo - Recommended,gray.sample@example.test,Waunakee,Standard,224.00,2027-01-04,,0,0,fam_eeeeeeeeeeeeeeee,hash,gymdesk_20000006
