@@ -981,6 +981,90 @@ sandbox.document.activeElement = null;
 state.taskPendingWrites = {};
 state._proofNow = null;
 
+// Ash, Wed Nov 25 2026: Capture Content stays open when the photos live only on
+// the Content tab. A week snapshot can omit cc_content. East Madison uploads
+// are stored under her email or the school name, and a late Central evening
+// falls on the next UTC date. Completion is computed from those records.
+const contentWeekFromTime = grab('contentWeekFromTime');
+const contentCanonLoc = grab('contentCanonLoc');
+const taskPostsFilled = grab('taskPostsFilled');
+const taskSheetDone = grab('taskSheetDone');
+const mergedContentUploads = grab('mergedContentUploads');
+const contentWeek = getTaskWeekKey('2026-11-25');
+const contentTask = weeklyTasksFor('ash', contentWeek).find(t => t.id === 'cc_content');
+const ashEvening = Date.parse('2026-11-26T02:14:00Z');
+const sundayNight = Date.parse('2026-11-30T02:14:00Z');
+function contentPhoto(id, extra) {
+  return Object.assign({
+    url: 'https://example.test/content/' + id + '.jpg',
+    type: 'image',
+    status: 'uploaded',
+    at: ashEvening,
+    caption: 'East Madison class',
+  }, extra || {});
+}
+function contentSet(make) {
+  const bag = {};
+  [1, 2, 3].forEach(n => { bag['cs_ash_' + n] = make(n); });
+  state.contentSubmissions = bag;
+}
+check(contentWeek === '2026-W48', 'Nov 25 2026 is task week 2026-W48');
+check(contentWeekFromTime(ashEvening) === contentWeek, 'Wed 8:14pm CT stays in this task week');
+check(contentWeekFromTime(sundayNight) === contentWeek, 'Sun 8:14pm CT stays in this task week, not Monday UTC');
+check(contentCanonLoc('East Madison') === 'eastmad' && contentCanonLoc('eastmadison') === 'eastmad' && contentCanonLoc('east_madison') === 'eastmad', 'East Madison school names map to eastmad');
+
+state.tasksLoc = 'ash';
+state.tasksDate = '2026-11-25';
+state.tasksData.ash = { weekly: { [contentWeek]: {} } };
+contentSet(n => contentPhoto(n, { uploaderId: 'ash', empId: 'ash', school: 'eastmad', brand: 'LVLUP', week: contentWeek }));
+check(taskPostsFilled(contentTask, null) === 3, 'three Content-tab uploads count with no checklist row');
+check(taskSheetDone('weekly', contentTask, null) && taskBonusComplete(contentTask, null), 'the task checks off from those uploads');
+check(!weeklyRequiredStatus('ash', contentWeek).missing.some(t => t.id === 'cc_content'), 'week sign-off counts Capture Content from the uploads');
+let contentSheet = sheet('ash', '2026-11-25');
+check(contentSheet.indexOf('class="task-item done" data-task-id="cc_content"') >= 0, 'the Capture Content row is marked done');
+check(contentSheet.indexOf('task-check checked') >= 0 && contentSheet.indexOf('3/3 uploaded') >= 0, 'the check and the 3/3 count are green');
+check(contentSheet.indexOf('data-upload-count="3"') >= 0, 'the Content tab count is 3');
+
+applyTaskSnap('ash', 'weekly', contentWeek, { schedule: { ts: 1, proofV: 1 } });
+check(!((state.tasksData.ash.weekly[contentWeek] || {}).cc_content), 'a week snapshot can omit the content row');
+check(taskSheetDone('weekly', contentTask, null) && !weeklyRequiredStatus('ash', contentWeek).missing.some(t => t.id === 'cc_content'), 'the snapshot does not uncheck content that is already uploaded');
+
+contentSet(n => contentPhoto(n, { uploaderId: 'amouille.lvlupma@gmail.com', school: 'eastmad' }));
+state.tasksData.ash.weekly[contentWeek] = {};
+check(taskSheetDone('weekly', contentTask, null) && mergedContentUploads('bryanG', contentWeek, {}).filter(r => r._thisWeek).length === 0, 'Ash’s email counts for her and not for Verona');
+
+contentSet(n => contentPhoto(n, { school: 'East Madison', brand: 'LVLUP', status: 'Uploaded' }));
+check(taskSheetDone('weekly', contentTask, null), 'East Madison uploads with Uploaded status complete Ash’s task');
+check(mergedContentUploads('bryanG', contentWeek, {}).filter(r => r._thisWeek).length === 0, 'those East Madison uploads stay off Bryan’s sheet');
+
+contentSet(n => contentPhoto(n, { uploaderId: 'bein', school: 'eastmadison' }));
+check(taskPostsFilled(contentTask, null) === 3, 'Ash’s scorecard id bein still counts');
+
+contentSet(n => contentPhoto(n, { uploaderId: 'ash', school: 'eastmad', at: sundayNight }));
+check(taskSheetDone('weekly', contentTask, null, { empId: 'ash', weekKey: contentWeek }), 'a Sunday night CT upload still completes this week');
+check(!taskSheetDone('weekly', contentTask, null, { empId: 'ash', weekKey: getTaskWeekKey('2026-11-30') }), 'that Sunday night upload does not complete the next week');
+
+state.contentSubmissions = {
+  cs_one: contentPhoto(1, { uploaderId: 'ash', school: 'eastmad', week: contentWeek }),
+  cs_two: contentPhoto(2, { uploaderId: 'ash', school: 'eastmad', week: contentWeek }),
+};
+check(!taskSheetDone('weekly', contentTask, null) && weeklyRequiredStatus('ash', contentWeek).missing.some(t => t.id === 'cc_content'), 'two uploads leave Capture Content open');
+
+state.contentSubmissions.cs_bad = contentPhoto(3, { uploaderId: 'ash', school: 'eastmad', week: contentWeek, status: 'rejected' });
+check(!taskSheetDone('weekly', contentTask, null), 'a rejected upload does not fill the third spot');
+
+state.contentSubmissions = {
+  cs_ninja: contentPhoto(1, { uploaderId: 'mirandaS', school: 'goninjaW', brand: 'GO NINJA', week: contentWeek }),
+  cs_ninja2: contentPhoto(2, { uploaderId: 'mirandaS', school: 'goninjaW', brand: 'GO NINJA', week: contentWeek }),
+  cs_ninja3: contentPhoto(3, { uploaderId: 'mirandaS', school: 'goninjaW', brand: 'GO NINJA', week: contentWeek }),
+};
+check(!taskSheetDone('weekly', contentTask, null), 'Go Ninja uploads do not complete the LVLUP task');
+
+state.contentSubmissions = {};
+state.tasksData.ash.weekly[contentWeek] = { cc_content: { ts: 1 } };
+check(taskBonusComplete(contentTask, { ts: 1 }) && !taskSheetDone('weekly', contentTask, { ts: 1 }), 'an old content row with no uploads still counts in bonus history and stays unchecked on the sheet');
+state.contentSubmissions = {};
+
 if (failed) {
   console.error(failed + ' failed, ' + passed + ' passed');
   process.exit(1);
