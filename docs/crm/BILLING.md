@@ -153,7 +153,7 @@ Webhooks get missed. A nightly job pulls settled batches per merchant (`getSettl
 - Store or log a card number.
 - Use ARB.
 - Charge a membership whose `biller` is `gymdesk`.
-- Charge a period covered by `paid_through_on`.
+- Charge a period covered by `paid_through_on`. A prepaid membership with rollover enabled is still skipped until `paid_through_on`. On or after that date the shadow draft follows the rollover cadence. See [ROLLOVER-CREDITS-REFERRALS.md](ROLLOVER-CREDITS-REFERRALS.md).
 - Auto-complete a cancellation.
 - Apply the unpublished hold-fee or notice-tuition formula.
 - Route DeForest tuition until the merchant question in the README is answered. DeForest can be imported and shadowed with `live_billing_enabled` false.

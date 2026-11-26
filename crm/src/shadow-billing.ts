@@ -4,6 +4,7 @@
  */
 import { billingDecision, type HoldFeePolicy } from './holds.ts';
 import { merchantAccountFor } from './billing.ts';
+import { applyTuitionCredits, isRolloverDraftDate, normalizeRolloverCadence, type CreditLot } from './rollover.ts';
 
 export const HOLD_FEE_OFF: HoldFeePolicy = { enabled: false, monthlyAmountCents: null };
 
@@ -23,6 +24,13 @@ export type ShadowMember = {
   discountBps: number;
   prepaid: boolean;
   hold: { status: string; startOn: string; endOn: string } | null;
+  rolloverEnabled?: boolean;
+  rolloverCancelled?: boolean;
+  rolloverCadence?: string | null;
+  rolloverAmountCents?: number | null;
+  rolloverAnchorOn?: string | null;
+  rolloverAnchorDay?: number | null;
+  credits?: CreditLot[];
 };
 
 export type ShadowLine = {
@@ -30,15 +38,45 @@ export type ShadowLine = {
   locationId: string;
   merchantLocationId: string;
   amountCents: number;
+  grossCents?: number;
+  creditAppliedCents?: number;
+  chargeAmountCents?: number;
   reason: string;
   action: 'charge' | 'skip';
 };
 
+function lineBase(member: ShadowMember, merchantLocationId: string, amountCents: number, reason: string, action: 'charge' | 'skip', extra: Partial<ShadowLine> = {}): ShadowLine {
+  return { memberId: member.memberId, locationId: member.locationId, merchantLocationId, amountCents, reason, action, ...extra };
+}
+
 export function classifyMember(member: ShadowMember, on: string): ShadowLine {
   const merchantLocationId = merchantAccountFor(member.locationId).merchantLocationId;
   const amountCents = netTuitionCents(member.amountCents, member.discountBps);
+  const credits = member.credits || [];
   if (member.prepaid) {
-    return { memberId: member.memberId, locationId: member.locationId, merchantLocationId, amountCents, reason: 'skipped_prepaid', action: 'skip' };
+    const cadence = normalizeRolloverCadence(member.rolloverCadence);
+    if (!member.rolloverEnabled || !cadence || !member.paidThroughOn || on < member.paidThroughOn) {
+      return lineBase(member, merchantLocationId, amountCents, 'skipped_prepaid', 'skip');
+    }
+    if (member.rolloverCancelled) {
+      return lineBase(member, merchantLocationId, amountCents, 'skipped_rollover_cancelled', 'skip');
+    }
+    if (!isRolloverDraftDate({
+      on,
+      paidThroughOn: member.paidThroughOn,
+      cadence,
+      anchorOn: member.rolloverAnchorOn,
+      anchorDay: member.rolloverAnchorDay,
+    })) {
+      return lineBase(member, merchantLocationId, amountCents, 'skipped_not_due', 'skip');
+    }
+    const gross = netTuitionCents(member.rolloverAmountCents ?? member.amountCents, member.discountBps);
+    const applied = applyTuitionCredits(gross, on, credits);
+    return lineBase(member, merchantLocationId, applied.chargeAmountCents, 'would_charge', 'charge', {
+      grossCents: applied.grossCents,
+      creditAppliedCents: applied.creditAppliedCents,
+      chargeAmountCents: applied.chargeAmountCents,
+    });
   }
   const decision = billingDecision({
     on,
@@ -58,9 +96,14 @@ export function classifyMember(member: ShadowMember, on: string): ShadowLine {
         : decision.reason === 'not_due'
           ? 'skipped_not_due'
           : `skipped_${decision.reason}`;
-    return { memberId: member.memberId, locationId: member.locationId, merchantLocationId, amountCents, reason, action: 'skip' };
+    return lineBase(member, merchantLocationId, amountCents, reason, 'skip');
   }
-  return { memberId: member.memberId, locationId: member.locationId, merchantLocationId, amountCents, reason: 'would_charge', action: 'charge' };
+  const applied = applyTuitionCredits(amountCents, on, credits);
+  return lineBase(member, merchantLocationId, applied.chargeAmountCents, 'would_charge', 'charge', {
+    grossCents: applied.grossCents,
+    creditAppliedCents: applied.creditAppliedCents,
+    chargeAmountCents: applied.chargeAmountCents,
+  });
 }
 
 export type GymdeskPayment = {
