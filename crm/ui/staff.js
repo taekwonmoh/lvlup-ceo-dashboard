@@ -6,7 +6,7 @@
   var esc = uiLib.esc;
   var store = uiLib.load();
   var ui = {
-    tab: 'today',
+    tab: location.hash === '#growth' ? 'growth' : 'today',
     toast: null,
     query: '',
     filter: 'all',
@@ -37,6 +37,16 @@
     qboLiveError: '',
     qboDraft: null,
     qboMapError: '',
+    growthView: 'pulse',
+    growthMonth: '2026-11',
+    growthScope: 'all',
+    spendSchool: 'waunakee',
+    spendDraft: {},
+    spendError: '',
+    askText: '',
+    askAnswer: '',
+    growthCells: null,
+    growthNote: '',
   };
 
   var TABS = [
@@ -45,6 +55,7 @@
     ['schedule', 'Schedule & Events', 'calendar', 'Schedule'],
     ['money', 'Financials & Billing', 'chart', 'Billing'],
     ['inbox', 'Messages & Automations', 'message', 'Messages'],
+    ['growth', 'Attrition & CAC', 'chart', 'Growth'],
   ];
 
   function save() { uiLib.save(store); }
@@ -78,6 +89,7 @@
     if (ui.tab === 'schedule') return schedule();
     if (ui.tab === 'money') return money();
     if (ui.tab === 'inbox') return inbox();
+    if (ui.tab === 'growth') return growth();
     return today();
   }
 
@@ -211,12 +223,12 @@
     return [header].concat(lines).join('\n') + '\n';
   }
 
-  function downloadCsv(csv) {
+  function downloadCsv(csv, filename) {
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
     link.href = url;
-    link.download = 'payroll-preview.csv';
+    link.download = filename || 'payroll-preview.csv';
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -295,6 +307,7 @@
       ? uiLib.liveNote(ui.liveNote) + (ui.signOpen || uiLib.token() ? uiLib.signCard('staff') : '<button type="button" class="big" data-act="sign-open">Sign in to the sandbox</button>')
       : '';
     return sign + '<p class="lede">' + esc(where) + '. Start here.</p>' +
+      ownerPulseStrip() +
       '<div class="kpis"><div class="kpi"><span>Classes Today</span><strong>' + (classesHere(store.today).length) + '</strong></div>' +
       '<div class="kpi"><span>Checked In</span><strong>' + checked + '</strong></div>' +
       '<div class="kpi"><span>Pro Shop Pickups Ready</span><strong>' + readyCount + '</strong></div>' +
@@ -742,6 +755,142 @@
       }).join('') + '</div>';
   }
 
+  function growthApi() { return window.LvlupGrowth; }
+
+  function storedSpendRows() {
+    var bag = {};
+    try { bag = JSON.parse(localStorage.getItem('lvlupGrowthSpendV1') || '{}'); } catch (err) { bag = {}; }
+    return Object.keys(bag).map(function (key) {
+      var parts = key.split('|');
+      return { locationId: parts[0], month: parts[1], channel: parts[2], amountCents: Number(bag[key]) };
+    }).filter(function (row) { return row.locationId && row.month && row.channel && Number.isInteger(row.amountCents); });
+  }
+
+  function growthCells() {
+    var api = growthApi();
+    if (!api) return [];
+    if (uiLib.dataMode() === 'live' && ui.growthCells && ui.growthCells.length) return ui.growthCells;
+    return api.cellsWithSpend(storedSpendRows());
+  }
+
+  function spendSchoolId() {
+    var scope = ui.growthScope;
+    if (scope && scope !== 'all' && scope !== 'lvlup' && scope !== 'goninja') return scope;
+    return ui.spendSchool || 'waunakee';
+  }
+
+  function ownerPulseStrip() {
+    var view = window.LvlupGrowthView;
+    if (!view) return '';
+    return view.strip(schoolId(), growthCells());
+  }
+
+  function growth() {
+    var view = window.LvlupGrowthView;
+    if (!view) return '<h1>Attrition &amp; CAC</h1><p class="lede">Growth figures are not in this preview.</p>';
+    return view.page({
+      view: ui.growthView,
+      month: ui.growthMonth,
+      scope: ui.growthScope,
+      spendSchool: spendSchoolId(),
+      spendError: ui.spendError,
+      askText: ui.askText,
+      askAnswer: ui.askAnswer,
+      note: ui.growthNote || (uiLib.dataMode() === 'live' ? ui.liveNote : ''),
+      cells: growthCells(),
+      draft: ui.spendDraft,
+    });
+  }
+
+  function saveSpend() {
+    var api = growthApi();
+    if (!api) return;
+    var school = spendSchoolId();
+    var month = ui.growthMonth;
+    var rows = api.CHANNELS.map(function (channel) {
+      var key = school + '|' + month + '|' + channel.id;
+      var input = document.querySelector('.spend-input[data-key="' + key + '"]');
+      var text = input ? input.value : (ui.spendDraft[key] != null ? ui.spendDraft[key] : '0');
+      return { locationId: school, month: month, channel: channel.id, amountDollars: text };
+    });
+    var parsed;
+    try { parsed = api.parseSpendInput({ rows: rows }); }
+    catch (err) {
+      ui.spendError = err && err.message ? err.message : 'Enter a dollar amount from 0 to 250000.';
+      render();
+      return;
+    }
+    var bag = {};
+    try { bag = JSON.parse(localStorage.getItem('lvlupGrowthSpendV1') || '{}'); } catch (err) { bag = {}; }
+    parsed.forEach(function (row) {
+      bag[row.locationId + '|' + row.month + '|' + row.channel] = row.amountCents;
+      delete ui.spendDraft[row.locationId + '|' + row.month + '|' + row.channel];
+    });
+    try { localStorage.setItem('lvlupGrowthSpendV1', JSON.stringify(bag)); } catch (err) { /* private mode */ }
+    ui.spendError = '';
+    if (uiLib.dataMode() === 'live' && uiLib.token()) {
+      fetch(uiLib.apiBase() + '/v1/growth/spend', {
+        method: 'PUT',
+        headers: { authorization: 'Bearer ' + uiLib.token(), 'content-type': 'application/json' },
+        body: JSON.stringify({ rows: parsed }),
+      }).then(function (res) {
+        return res.json().then(function (body) { return { ok: res.ok, body: body }; });
+      }).then(function (res) {
+        if (!res.ok) {
+          ui.spendError = (res.body && res.body.error && res.body.error.message) || 'Could not save spend.';
+          render();
+          return;
+        }
+        toast('ok', res.body && res.body.database ? 'Spend saved in the sandbox. Nothing was charged.' : 'Spend saved on this iPad. The sandbox has no spend table yet.');
+        pullGrowth();
+      }).catch(function () {
+        toast('ok', 'Spend saved on this iPad. The sandbox API did not answer.');
+      });
+      return;
+    }
+    toast('ok', 'Spend saved in this preview. Nothing was charged.');
+  }
+
+  function askGrowth(question) {
+    var api = growthApi();
+    var text = String(question || '').trim();
+    ui.askText = text;
+    ui.growthView = 'ask';
+    if (!api) { ui.askAnswer = 'Growth figures are not in this preview.'; render(); return; }
+    var local = api.answerGrowthQuestion(text, { scope: ui.growthScope, month: ui.growthMonth, cells: growthCells() });
+    ui.askAnswer = local.answer;
+    if (local.month && api.GROWTH_MONTHS.indexOf(local.month) >= 0) ui.growthMonth = local.month;
+    if (local.scope) ui.growthScope = local.scope;
+    render();
+    if (uiLib.dataMode() !== 'live' || !uiLib.token()) return;
+    uiLib.api('/v1/growth/ask?q=' + encodeURIComponent(text) + '&scope=' + encodeURIComponent(ui.growthScope) + '&month=' + encodeURIComponent(ui.growthMonth)).then(function (res) {
+      if (res.ok && res.body && res.body.answer) {
+        ui.askAnswer = res.body.answer;
+        render();
+      }
+    });
+  }
+
+  function pullGrowth() {
+    if (uiLib.dataMode() !== 'live' || !uiLib.token()) {
+      ui.growthCells = null;
+      return;
+    }
+    uiLib.api('/v1/growth/summary?scope=all&month=' + encodeURIComponent(ui.growthMonth)).then(function (res) {
+      if (res.ok && res.body && res.body.cells) {
+        ui.growthCells = res.body.cells;
+        ui.growthNote = res.body.fixture
+          ? 'Sample studio figures. The sandbox has no monthly snapshot yet. Charges are off.'
+          : 'Sandbox snapshots for the schools you can open. Charges are off.';
+        render();
+      } else if (res.status === 404) {
+        ui.growthCells = null;
+        ui.growthNote = 'Live sandbox is up. Attrition and CAC stay on this device until the next API deploy.';
+        render();
+      }
+    });
+  }
+
   function inbox() {
     var changed = false;
     store.messages.forEach(function (row) {
@@ -808,6 +957,7 @@
       ui.tab = el.getAttribute('data-tab');
       ui.drawer = '';
       ui.toast = null;
+      if (ui.tab === 'growth') history.replaceState(null, '', '#growth');
       if (ui.tab === 'schedule') {
         var next = upcomingHere()[0];
         if (next) ui.day = next.date;
@@ -816,6 +966,41 @@
       return;
     }
     if (act === 'school') { store.staffSchool = el.getAttribute('data-id'); save(); render(); return; }
+    if (act === 'growth-open') {
+      ui.tab = 'growth';
+      ui.growthView = el.getAttribute('data-view') || 'pulse';
+      var opened = el.getAttribute('data-school');
+      if (opened) ui.growthScope = opened;
+      history.replaceState(null, '', '#growth');
+      render();
+      return;
+    }
+    if (act === 'growth-view') { ui.growthView = el.getAttribute('data-view') || 'pulse'; render(); return; }
+    if (act === 'growth-month') { ui.growthMonth = el.getAttribute('data-month') || ui.growthMonth; render(); return; }
+    if (act === 'growth-scope') {
+      ui.growthScope = el.getAttribute('data-scope') || 'all';
+      if (ui.growthScope !== 'all' && ui.growthScope !== 'lvlup' && ui.growthScope !== 'goninja') ui.spendSchool = ui.growthScope;
+      render();
+      return;
+    }
+    if (act === 'spend-school') { ui.spendSchool = el.getAttribute('data-id') || ui.spendSchool; ui.growthScope = ui.spendSchool; render(); return; }
+    if (act === 'spend-save') { saveSpend(); return; }
+    if (act === 'ask-chip') { askGrowth(el.getAttribute('data-q') || ''); return; }
+    if (act === 'ask-go') {
+      var box = document.getElementById('ask-q');
+      askGrowth(box ? box.value : ui.askText);
+      return;
+    }
+    if (act === 'attrition-csv' || act === 'cac-csv') {
+      var growthLib = growthApi();
+      if (!growthLib) return;
+      var csv = act === 'attrition-csv'
+        ? growthLib.attritionCsv(ui.growthScope, ui.growthMonth, growthCells())
+        : growthLib.cacCsv(ui.growthScope, ui.growthMonth, growthCells());
+      downloadCsv(csv, (act === 'attrition-csv' ? 'attrition-' : 'cac-') + ui.growthMonth + '.csv');
+      toast('ok', act === 'attrition-csv' ? 'Attrition CSV downloaded.' : 'CAC CSV downloaded.');
+      return;
+    }
     if (act === 'kiosk') {
       var cls = upcomingHere().filter(function (row) { return row.id === el.getAttribute('data-id'); })[0];
       if (!cls) return;
@@ -1191,6 +1376,8 @@
       ui.liveMembers = null;
       ui.liveBilling = null;
       ui.liveShifts = null;
+      ui.growthCells = null;
+      ui.growthNote = '';
       return;
     }
     ui.liveNote = 'Connecting to the live sandbox…';
@@ -1206,6 +1393,7 @@
         render();
       }
     });
+    pullGrowth();
     if (!uiLib.token()) return;
     uiLib.api('/v1/members?locationId=' + encodeURIComponent(schoolId())).then(function (res) {
       if (res.ok && res.body && res.body.members) {
@@ -1264,6 +1452,10 @@
     if (event.target.id === 'desk-initials') deskState().initials = event.target.value;
     if (event.target.id === 'one-title') ui.oneTitle = event.target.value;
     if (event.target.id === 'one-phase') ui.onePhase = event.target.value;
+    if (event.target.classList && event.target.classList.contains('spend-input')) {
+      ui.spendDraft[event.target.getAttribute('data-key')] = event.target.value;
+    }
+    if (event.target.id === 'ask-q') ui.askText = event.target.value;
   });
   document.getElementById('app').addEventListener('change', function (event) {
     if (event.target.id === 'qbo-from' || event.target.id === 'qbo-through') {
