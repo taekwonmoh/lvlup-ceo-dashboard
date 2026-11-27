@@ -30,6 +30,9 @@ export function rethrowDb(err: unknown): never {
   if (pgErr.code === '23514' && message.includes('pinned_note_cap')) {
     throw new CrmError(409, 'pinned_note_cap', 'A profile can have at most 3 pinned notes.');
   }
+  if (pgErr.code === '23514' && message.includes('sale_credit_share_cap')) {
+    throw new CrmError(409, 'sale_credit_share_cap', 'Sold-by shares cannot total more than 100%.');
+  }
   if (pgErr.code === '23505') throw new CrmError(409, 'conflict', 'That record already exists.');
   throw err;
 }

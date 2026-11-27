@@ -25,7 +25,12 @@ function readBody(req: IncomingMessage) {
   });
 }
 
-function send(res: ServerResponse, status: number, body: unknown) {
+function send(res: ServerResponse, status: number, body: unknown, extra?: { text?: string; contentType?: string }) {
+  if (extra?.text != null) {
+    res.writeHead(status, { 'content-type': extra.contentType || 'text/csv; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(extra.text);
+    return;
+  }
   const raw = JSON.stringify(body);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(raw);
@@ -91,7 +96,7 @@ export function createApp(pool: pg.Pool): App {
       allowLocalTokens: nodeAllowsLocalTokens(),
       loaders: fixtureLoaders,
     });
-    send(res, result.status, result.body);
+    send(res, result.status, result.body, { text: result.text, contentType: result.contentType });
   }
   return { pool, handle };
 }

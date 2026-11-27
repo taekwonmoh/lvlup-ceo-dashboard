@@ -132,6 +132,12 @@ export async function handleWorkerRequest(request: Request, env: CrmWorkerEnv, c
       redact: true,
       secrets,
     });
+    if (result.text != null) {
+      return new Response(result.text, {
+        status: result.status,
+        headers: { 'content-type': result.contentType || 'text/csv; charset=utf-8', 'cache-control': 'no-store' },
+      });
+    }
     return json(result.status, result.body, secrets);
   } finally {
     if (owns) await closePool(pool, ctx);
