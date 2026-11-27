@@ -37,7 +37,7 @@ test('catalog covers every category, trigger, and step type without session ids'
   const counts: Record<string, number> = {};
   for (const workflow of AUTOMATION_CATALOG) counts[workflow.category] = (counts[workflow.category] || 0) + 1;
   assert.deepEqual(counts, CATALOG_COUNTS);
-  assert.equal(AUTOMATION_CATALOG.length, 57);
+  assert.equal(AUTOMATION_CATALOG.length, 60);
   assert.equal(new Set(AUTOMATION_CATALOG.map(item => item.trigger)).size, TRIGGER_TYPES.length);
   const steps = new Set(AUTOMATION_CATALOG.flatMap(item => item.steps.map(step => step.stepType)));
   assert.equal(steps.size, STEP_TYPES.length);

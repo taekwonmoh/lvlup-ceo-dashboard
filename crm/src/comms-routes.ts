@@ -5,11 +5,14 @@ import type { Actor } from './auth.ts';
 import { CrmError } from './errors.ts';
 import { platformRoleOf } from './scope.ts';
 import { AUTOMATION_CATALOG } from './automation-catalog.ts';
+import { familyMarketingOptIn } from './automation-run.ts';
+import { recordAutomationTag } from './tag-effects.ts';
 import {
   assertLocationId,
   deliverySnapshot,
   isLocationId,
   matchingWorkflows,
+  marketingSuppressed,
   planEnrollment,
   sanitizePublicTemplate,
   type AutomationStep,
@@ -66,7 +69,7 @@ async function withTx<T>(pool: Pool, fn: (client: Db) => Promise<T>) {
 
 async function loadWorkflows(pool: Db): Promise<AutomationWorkflow[]> {
   const workflows = await pool.query(
-    `select id, code, category, brand, name, trigger_type, trigger_rules, exit_conditions, enabled, dry_run, staff_note
+    `select id, code, category, brand, name, trigger_type, trigger_rules, exit_conditions, enabled, dry_run, staff_note, marketing
      from automation_workflows order by category, code`,
   );
   const steps = await pool.query(
@@ -97,6 +100,7 @@ async function loadWorkflows(pool: Db): Promise<AutomationWorkflow[]> {
     rules: row.trigger_rules || {},
     exits: row.exit_conditions || [],
     steps: grouped.get(row.code) || [],
+    marketing: row.marketing === true,
     id: row.id,
     enabled: row.enabled,
     dryRun: row.dry_run,
@@ -242,10 +246,23 @@ async function persistPlan(
   );
   const stepIds = new Map(stepRows.rows.map(row => [row.step_key, row.id]));
   for (const step of plan.steps) {
+    let rendered = step.rendered;
+    if (step.stepType === 'add_tag' || step.stepType === 'remove_tag') {
+      const intent = await recordAutomationTag(client, {
+        dryRun: true,
+        op: step.stepType === 'add_tag' ? 'add' : 'remove',
+        tagName: String(rendered.tag || ''),
+        locationId: event.locationId,
+        memberId: ids.memberId,
+        leadId: ids.leadId,
+        familyId: ids.familyId,
+      });
+      rendered = { ...rendered, applied: intent.applied, tagId: intent.tagId, reason: intent.reason };
+    }
     await client.query(
       `insert into automation_step_runs (enrollment_id, step_id, status, rendered)
        values ($1, $2, 'dry_run', $3::jsonb)`,
-      [enrollmentId, stepIds.get(step.stepKey), JSON.stringify(step.rendered)],
+      [enrollmentId, stepIds.get(step.stepKey), JSON.stringify(rendered)],
     );
     if (step.stepType === 'add_document') {
       await client.query(
@@ -304,13 +321,16 @@ async function evaluate(pool: Pool, actor: Actor, body: Record<string, any>, env
   const matched = matchingWorkflows(workflows, event, settings);
   const context = mergeFrom(body, member, settings);
   const familyId = member?.family_id || body.familyId || null;
+  const optedIn = await familyMarketingOptIn(pool, familyId);
   const plans = await withTx(pool, async client => {
     const saved = [];
     const seen = new Set(matched.map(item => item.code));
     const queue = matched.map(workflow => ({ workflow, depth: 0 }));
     for (let i = 0; i < queue.length; i += 1) {
       const current = queue[i];
-      const plan = planEnrollment(current.workflow, event, settings, context, env);
+      const plan = marketingSuppressed(current.workflow, { marketing: optedIn })
+        ? { code: current.workflow.code, status: 'exited' as const, exitReason: 'marketing_opt_out', steps: [], tags: [] as string[] }
+        : planEnrollment(current.workflow, event, settings, context, env);
       const enrollmentId = await persistPlan(client, current.workflow, plan, event, {
         familyId,
         memberId: member?.id || body.memberId || null,

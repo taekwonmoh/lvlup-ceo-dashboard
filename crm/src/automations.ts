@@ -13,6 +13,9 @@ export const TRIGGER_TYPES = [
   'promotion',
   'absence',
   'member_frozen',
+  'form_submitted',
+  'booking_cancelled',
+  'lead_invite_accepted',
 ] as const;
 
 export const STEP_TYPES = [
@@ -66,6 +69,7 @@ export type AutomationWorkflow = {
   rules: Record<string, unknown>;
   exits: string[];
   steps: AutomationStep[];
+  marketing?: boolean;
 };
 
 export type TriggerEvent = {
@@ -225,6 +229,15 @@ export function workflowMatches(workflow: AutomationWorkflow, event: TriggerEven
   if (workflow.category === 'WATCHLIST' && settings.toggles.watchlist === false) return false;
   if (workflow.code === 'goninja_birthday_waiver' && settings.toggles.birthday_waiver === false) return false;
   return true;
+}
+
+/** Marketing journeys skip people who have not opted in. Other journeys still run. */
+export function marketingSuppressed(
+  workflow: { marketing?: boolean },
+  preference: { marketing?: boolean } | null,
+): boolean {
+  if (!workflow.marketing) return false;
+  return preference?.marketing !== true;
 }
 
 export function matchingWorkflows(

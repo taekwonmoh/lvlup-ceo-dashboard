@@ -28,6 +28,7 @@ Mike Moh wants to replace GymDesk with a CRM and member platform that the staff 
 | [AUTOMATIONS-AND-MESSAGING.md](AUTOMATIONS-AND-MESSAGING.md) | Canonical journey automations and two-way family messaging. Dry-run only. |
 | [ROLLOVER-CREDITS-REFERRALS.md](ROLLOVER-CREDITS-REFERRALS.md) | Prepaid rollover, tuition credits, and the referral reward. Drafts only. |
 | [GYMDESK-PARITY.md](GYMDESK-PARITY.md) | Gus’s GymDesk inventory as a built / planned checklist. Unverified items stay marked. |
+| [GYMDESK-UPDATES-WAVE1.md](GYMDESK-UPDATES-WAVE1.md) | Wave 1 profiles, tags, and forms. Dry-run only. |
 | [FINANCIALS.md](FINANCIALS.md) | Spark-style Financials screen: metric definitions, LVLUP additions, and the open questions. |
 
 ## Decision in one paragraph
