@@ -153,7 +153,7 @@ export async function handleWorkerRequest(request: Request, env: CrmWorkerEnv, c
       readBody,
       pool,
       env: handlerEnv(env),
-      tokenSecret: allowLocalTokens ? (env.CRM_TOKEN_SECRET || '') : '',
+      tokenSecret: env.CRM_TOKEN_SECRET || '',
       allowLocalTokens,
       loaders: deps.loaders,
       redact: true,

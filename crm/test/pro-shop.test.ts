@@ -378,6 +378,10 @@ test('localhost preview origins get CORS and other origins do not', async () => 
     headers: { origin: 'http://127.0.0.1:8765' },
   }), env, undefined, { pool: null });
   assert.equal(ok.headers.get('access-control-allow-origin'), 'http://127.0.0.1:8765');
+  const localhost = await handleWorkerRequest(new Request('https://crm.test/v1/health', {
+    headers: { origin: 'http://localhost:4173' },
+  }), env, undefined, { pool: null });
+  assert.equal(localhost.headers.get('access-control-allow-origin'), 'http://localhost:4173');
   const preflight = await handleWorkerRequest(new Request('https://crm.test/v1/pro-shop/items', {
     method: 'OPTIONS',
     headers: { origin: 'https://staff.lvlupma.com' },

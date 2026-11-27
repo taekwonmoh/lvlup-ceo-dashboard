@@ -3,6 +3,10 @@
   var KEY = 'lvlupCrmPreviewV1';
   var API_KEY = 'lvlupCrmApiBase';
   var TOKEN_KEY = 'lvlupCrmApiToken';
+  var MODE_KEY = 'lvlupCrmDataMode';
+  var EMAIL_KEY = 'lvlupCrmAuthEmail';
+  var OTP_KEY = 'lvlupCrmOtpPreview';
+  var LIVE_API = 'https://lvlup-crm-api.mike-moh.workers.dev';
 
   function esc(value) {
     return String(value == null ? '' : value)
@@ -100,11 +104,35 @@
       emailToggles: {},
       extraEvents: [],
       duplicated: [],
+      desk: {
+        initials: 'AM',
+        punch: {
+          locationId: 'waunakee',
+          initials: 'AM',
+          inAt: '2026-11-27T12:48:00.000Z',
+          outAt: null,
+          onBreak: false,
+          breakStartedAt: null,
+          breakMinutes: 0,
+        },
+        history: [
+          { id: 'h1', locationId: 'waunakee', initials: 'AM', date: '2026-11-16', inAt: '2026-11-16T14:00:00.000Z', outAt: '2026-11-16T18:00:00.000Z', breakMinutes: 15 },
+        ],
+        done: {
+          waunakee: {
+            'open-door': { at: '2026-11-27T13:05:00.000Z', initials: 'AM' },
+            'open-computer': { at: '2026-11-27T13:06:00.000Z', initials: 'AM' },
+            'open-pickup': { at: '2026-11-27T13:08:00.000Z', initials: 'AM' },
+            'open-roster': { at: '2026-11-27T13:10:00.000Z', initials: 'AM' },
+          },
+        },
+        extras: [],
+      },
       today: today,
     };
   }
 
-  var KEEP = ['personId', 'staffSchool', 'orders', 'bookings', 'eventSignups', 'parties', 'practiced', 'messages', 'card', 'upgrade', 'contacts', 'kiosk', 'checkins', 'paymentPreview', 'emailToggles', 'extraEvents', 'duplicated'];
+  var KEEP = ['personId', 'staffSchool', 'orders', 'bookings', 'eventSignups', 'parties', 'practiced', 'messages', 'card', 'upgrade', 'contacts', 'kiosk', 'checkins', 'paymentPreview', 'emailToggles', 'extraEvents', 'duplicated', 'desk'];
 
   function load() {
     var base = seed();
@@ -148,6 +176,150 @@
     } catch (err) { /* ignore */ }
   }
 
+  function dataMode() {
+    try { return sessionStorage.getItem(MODE_KEY) === 'live' ? 'live' : 'demo'; }
+    catch (err) { return 'demo'; }
+  }
+
+  function setDataMode(mode) {
+    try {
+      if (mode === 'live') {
+        sessionStorage.setItem(MODE_KEY, 'live');
+        sessionStorage.setItem(API_KEY, LIVE_API);
+      } else {
+        sessionStorage.setItem(MODE_KEY, 'demo');
+        sessionStorage.removeItem(API_KEY);
+      }
+    } catch (err) { /* ignore */ }
+  }
+
+  function authEmail() {
+    try { return sessionStorage.getItem(EMAIL_KEY) || ''; } catch (err) { return ''; }
+  }
+
+  function previewCode() {
+    try { return sessionStorage.getItem(OTP_KEY) || ''; } catch (err) { return ''; }
+  }
+
+  function api(path, options) {
+    options = options || {};
+    if (dataMode() !== 'live') return Promise.resolve({ ok: false, status: 0, body: null, offline: false, demo: true });
+    var headers = { accept: 'application/json' };
+    if (options.body != null) headers['content-type'] = 'application/json';
+    var bearer = token();
+    if (bearer) headers.authorization = 'Bearer ' + bearer;
+    return fetch(LIVE_API + path, {
+      method: options.method || 'GET',
+      headers: headers,
+      body: options.body == null ? undefined : JSON.stringify(options.body),
+    }).then(function (res) {
+      return res.text().then(function (text) {
+        var body = null;
+        try { body = text ? JSON.parse(text) : null; } catch (err) { body = null; }
+        return { ok: res.ok, status: res.status, body: body, offline: false, demo: false };
+      });
+    }).catch(function () {
+      return { ok: false, status: 0, body: null, offline: true, demo: false };
+    });
+  }
+
+  function signCard(kind) {
+    if (dataMode() !== 'live') return '';
+    var email = authEmail();
+    if (token()) {
+      return '<div class="card sign-card"><h3>Signed in</h3><p>' + esc(email || 'Session token saved in this browser tab.') + '</p><p class="meta">Sandbox session. Nothing is charged.</p>' +
+        '<button type="button" class="big" data-act="sign-out">Sign out</button></div>';
+    }
+    var desk = kind === 'staff'
+      ? '<p class="meta">This desk asks for a staff session. Charges stay off.</p>'
+      : '<label class="checkline"><input id="auth-desk" type="checkbox"> I work at the front desk</label>';
+    return '<div class="card sign-card"><h3>Sign in</h3><p>Sandbox only. Email delivery is off, so the code shows here. You can also paste a session token.</p>' +
+      '<div class="stack"><label>Email<input id="auth-email" type="email" autocomplete="username" value="' + esc(email) + '" placeholder="you@example.test"></label>' +
+      '<button type="button" class="big" data-act="auth-otp">Email me a sandbox code</button>' +
+      '<label>Code<input id="auth-code" inputmode="text" autocomplete="one-time-code" value="' + esc(previewCode()) + '" placeholder="Sandbox code"></label>' +
+      desk +
+      '<button type="button" class="big primary" data-act="auth-code">Sign in</button>' +
+      '<label>Session token<input id="auth-token" type="password" autocomplete="off" placeholder="Paste a bearer token"></label>' +
+      '<button type="button" class="big" data-act="auth-token">Use token</button></div></div>';
+  }
+
+  function liveNote(text) {
+    if (dataMode() !== 'live') return '';
+    return '<div class="note live-note" role="status">' + esc(text || 'Live sandbox. Charges are off.') + '</div>';
+  }
+
+  function rememberEmail(email) {
+    try { if (email) sessionStorage.setItem(EMAIL_KEY, email); } catch (err) { /* ignore */ }
+  }
+
+  function handleAuthAct(act, done) {
+    if (act === 'sign-out') {
+      setApi(dataMode() === 'live' ? LIVE_API : '', '');
+      try { sessionStorage.removeItem(EMAIL_KEY); sessionStorage.removeItem(OTP_KEY); } catch (err) { /* ignore */ }
+      done('ok', 'Signed out. The public catalog stays available. Nothing was charged.');
+      return true;
+    }
+    if (act === 'auth-otp') {
+      var emailEl = document.getElementById('auth-email');
+      var email = (emailEl && emailEl.value || '').trim();
+      api('/v1/auth/otp', { method: 'POST', body: { email: email } }).then(function (res) {
+        if (res.offline) { done('bad', 'The sandbox API is offline. Demo mode still works, and you can paste a token when it is back.'); return; }
+        if (!res.ok || !res.body || !res.body.previewCode) {
+          var missing = res.body && res.body.error && res.body.error.message;
+          done('bad', missing || 'Sandbox sign-in is not on this API yet. Paste a session token, or keep browsing the public catalog.');
+          return;
+        }
+        rememberEmail(res.body.email || email);
+        try { sessionStorage.setItem(OTP_KEY, res.body.previewCode); } catch (err) { /* ignore */ }
+        done('ok', 'Email was not sent. Delivery is off. Your sandbox code is ' + res.body.previewCode + '.');
+      });
+      return true;
+    }
+    if (act === 'auth-code') {
+      var emailBox = document.getElementById('auth-email');
+      var codeBox = document.getElementById('auth-code');
+      var deskBox = document.getElementById('auth-desk');
+      var desk = deskBox ? !!deskBox.checked : true;
+      api('/v1/auth/session', {
+        method: 'POST',
+        body: {
+          email: (emailBox && emailBox.value || authEmail()).trim(),
+          code: (codeBox && codeBox.value || '').trim(),
+          desk: desk,
+        },
+      }).then(function (res) {
+        if (res.offline) { done('bad', 'The sandbox API is offline. Nothing was charged.'); return; }
+        if (!res.ok || !res.body || !res.body.token) {
+          var message = res.body && res.body.error && res.body.error.message;
+          done('bad', message || 'Sign-in did not start a session. Paste a bearer token if you have one. The catalog stays public.');
+          return;
+        }
+        setApi(LIVE_API, res.body.token);
+        rememberEmail(res.body.email || '');
+        try { sessionStorage.removeItem(OTP_KEY); } catch (err) { /* ignore */ }
+        done('ok', 'Signed in to the live sandbox. Charges stay off.');
+      });
+      return true;
+    }
+    if (act === 'auth-token') {
+      var tokenBox = document.getElementById('auth-token');
+      var bearer = (tokenBox && tokenBox.value || '').trim();
+      if (!bearer) { done('bad', 'Paste a session token first.'); return true; }
+      setApi(LIVE_API, bearer);
+      api('/v1/me').then(function (res) {
+        if (res.offline) { done('bad', 'Token saved, but the sandbox API is offline.'); return; }
+        if (!res.ok) {
+          done('bad', 'That token was not accepted. Protected pages stay on the sample studio.');
+          return;
+        }
+        if (res.body && res.body.email) rememberEmail(res.body.email);
+        done('ok', 'Signed in. Charges stay off.');
+      });
+      return true;
+    }
+    return false;
+  }
+
   var ICONS = {
     home: '<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/>',
     calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/>',
@@ -167,6 +339,7 @@
     star: '<path d="m12 3 2.2 4.6 5 .7-3.6 3.5.9 5.1L12 14.8 7.5 17l.9-5.1L4.8 8.3l5-.7z"/>',
     chart: '<path d="M4 19h16M7 16v-5M12 16V8M17 16v-3"/>',
     spark: '<path d="M12 3v4M12 17v4M4.9 6.5l2.8 2.8M16.3 14.7l2.8 2.8M3 12h4M17 12h4M4.9 17.5l2.8-2.8M16.3 9.3l2.8-2.8"/>',
+    x: '<path d="M6 6l12 12M18 6 6 18"/>',
   };
 
   function logo(kind) {
@@ -182,12 +355,16 @@
   function header(mode) {
     var memberOn = mode === 'member' ? ' on' : '';
     var staffOn = mode === 'staff' ? ' on' : '';
+    var live = dataMode() === 'live';
     return '<div class="utility">' +
       '<div class="brand-row">' + logo('white') + '</div>' +
-      '<span class="sandbox-pill">Sandbox Preview</span>' +
+      '<div class="mode data-mode" role="group" aria-label="Data">' +
+      '<button type="button" class="' + (live ? '' : 'on') + '" data-act="data-mode" data-mode="demo" aria-pressed="' + (live ? 'false' : 'true') + '">Demo</button>' +
+      '<button type="button" class="' + (live ? 'on' : '') + '" data-act="data-mode" data-mode="live" aria-pressed="' + (live ? 'true' : 'false') + '">Live</button>' +
+      '</div>' +
       '<div class="mode" role="group" aria-label="Preview">' +
-      '<a class="' + memberOn.trim() + '" href="member.html">Member app</a>' +
-      '<a class="' + staffOn.trim() + '" href="staff.html">Staff desk</a>' +
+      '<a class="' + memberOn.trim() + '" href="member.html" title="Member app">Member</a>' +
+      '<a class="' + staffOn.trim() + '" href="staff.html" title="Staff desk">Staff</a>' +
       '</div></div>';
   }
 
@@ -212,6 +389,13 @@
     apiBase: apiBase,
     token: token,
     setApi: setApi,
+    dataMode: dataMode,
+    setDataMode: setDataMode,
+    liveApi: function () { return LIVE_API; },
+    api: api,
+    signCard: signCard,
+    liveNote: liveNote,
+    handleAuthAct: handleAuthAct,
     header: header,
     icon: icon,
     logo: logo,
