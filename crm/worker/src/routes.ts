@@ -10,6 +10,7 @@ import { buildChargeProfileRequest, buildGetCustomerProfileRequest, getCustomerP
 import { curriculumForRank, vimeoPlayerUrl } from '../../src/curriculum.ts';
 import { activeCycle } from '../../src/cycles.ts';
 import { financialReport, financialsSummary, scopeAllowed, schoolsInScope } from '../../src/financials.ts';
+import { handleGrowthHttp } from '../../src/growth-routes.ts';
 import { handleQuickbooksHttp } from '../../src/qbo-export-routes.ts';
 import { homeSummary, previewPaymentRetry } from '../../src/home.ts';
 import { quoteBooking, type PromoCode } from '../../src/pricing.ts';
@@ -566,6 +567,17 @@ export async function dispatchCrm(input: {
         const missing = /Unknown report/.test(message);
         return { status: missing ? 404 : 500, body: { error: { code: missing ? 'not_found' : 'error', message } } };
       }
+    }
+    if (parts[0] === 'v1' && parts[1] === 'growth') {
+      const growth = await handleGrowthHttp({
+        method,
+        parts,
+        search: url.searchParams,
+        actor,
+        body: method === 'GET' || method === 'HEAD' ? {} : await readJson(),
+        pool,
+      });
+      if (growth) return growth;
     }
     if (method === 'POST' && url.pathname === '/v1/payments/retry-preview') {
       assertStaff(actor);

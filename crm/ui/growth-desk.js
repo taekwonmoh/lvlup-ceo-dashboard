@@ -170,7 +170,19 @@
     }).filter(function (row) { return row.days >= 0 && row.days <= 14; }).sort(function (a, b) { return a.days - b.days; });
   }
 
+  function metricsQuestion(question) {
+    var q = String(question || '').toLowerCase();
+    if (/best trial|at risk|quit|birthday|next month revenue|projected revenue/.test(q)) return false;
+    return /attrition|churn|retention|net member|cac|acquisition|ad spend|marketing spend|new lead|first class|lifespan|ltv|arpm|payback|new member|lead to member|by school and channel/.test(q);
+  }
+
   function answerQuestion(question, asOf) {
+    var lib = typeof globalThis !== 'undefined' ? globalThis.LvlupGrowth : null;
+    if (lib && metricsQuestion(question)) {
+      var cells = lib.demoCells();
+      var answered = lib.answerGrowthQuestion(question, { scope: 'all', asOf: asOf, cells: cells });
+      return { title: 'Growth & Metrics', detail: answered.answer, rows: [] };
+    }
     var q = String(question || '').toLowerCase();
     if (/risk|quit|miss/.test(q)) {
       var rows = ROSTER.filter(function (person) { return person.streak === 'miss14' && person.role === 'student'; });
@@ -240,7 +252,7 @@
     var esc = ctx.esc;
     var g = bag(ctx.store);
     var answer = g.answer;
-    var chips = ['Which students are at risk of quitting?', 'Projected revenue next month by school?', 'Best trial conversion school?', 'Who has a birthday next week?'];
+    var chips = ['Which students are at risk of quitting?', 'Projected revenue next month by school?', 'Best trial conversion school?', 'Who has a birthday next week?', 'What was our attrition rate last month?', 'What is our CAC by school and channel?'];
     return '<section class="ask-bar"><h2>Ask LVLUP CRM</h2><div class="ask-row"><label class="grow">Question<input id="ask-q" placeholder="Which students are at risk of quitting?" value="' + esc(g.question || '') + '"></label>' +
       '<button type="button" class="big primary" data-act="ask-go">Ask</button></div>' +
       '<div class="chips">' + chips.map(function (text) {

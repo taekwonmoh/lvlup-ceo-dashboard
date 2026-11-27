@@ -325,9 +325,25 @@
     return !scope || scope === 'all' || scope === schoolId;
   }
 
+  function growthPulse(ctx) {
+    var lib = typeof globalThis !== 'undefined' ? globalThis.LvlupGrowth : null;
+    if (!lib) return null;
+    var cells = ctx.growthCells && ctx.growthCells.length ? ctx.growthCells : lib.demoCells();
+    try { return lib.pulseReport('all', '2026-11', cells); }
+    catch (err) { return null; }
+  }
+
   function pulseHtml(ctx) {
     var esc = ctx.esc;
     var pulse = model(ctx).pulse;
+    var gp = growthPulse(ctx);
+    var roll = gp && gp.rollup;
+    var banner = roll
+      ? '<button type="button" class="metrics-banner" data-act="metrics-open" data-school="all">' +
+        '<span>All 6 schools</span><strong data-metric="attrition">' + esc(globalThis.LvlupGrowth.formatPct(roll.attritionPct)) + '</strong><span>Attrition</span>' +
+        '<strong data-metric="cac">' + esc(globalThis.LvlupGrowth.formatMoney(roll.blendedCacCents)) + '</strong><span>Blended CAC</span>' +
+        '<strong>' + esc((roll.netGrowth > 0 ? '+' : '') + roll.netGrowth) + '</strong><span>Net growth</span></button>'
+      : '';
     var cards = pulse.schools.map(function (school) {
       var on = ctx.schoolId === school.locationId ? ' on' : '';
       var logo = school.brand === 'goninja' ? '../../images/goninja-logo.png' : '../../images/lvlup-logo.png';
@@ -348,17 +364,24 @@
         stat(String(school.readyToTest), 'Ready to test', 'testing') +
         stat(String(school.attendanceToday), 'Attendance today') +
         stat(dollars(school.mtdCollectedCents), 'MTD revenue') +
+        (function () {
+          if (!gp) return '';
+          var row = gp.schools.filter(function (item) { return item.id === school.locationId; })[0];
+          if (!row) return '';
+          return stat(globalThis.LvlupGrowth.formatPct(row.attritionPct), 'Attrition', 'metrics') +
+            stat(globalThis.LvlupGrowth.formatMoney(row.blendedCacCents), 'Blended CAC', 'metrics');
+        })() +
         '</div>' +
         '<p class="pulse-drafts">Drafts ' + esc(dollars(school.mtdDraftsCents)) + ' · testing included</p>' +
         '<p class="pulse-signup">Testing sign-up ' + esc(String(signupPct(school.locationId, ctx.asOf, ctx.store))) + '%</p>' +
         '</article>';
     }).join('');
-    return '<section class="pulse" aria-label="Owner pulse"><div class="pulse-head"><h2>Owner pulse</h2><p class="meta">All 6 academies. Sandbox totals. Nothing was sent or charged.</p></div><div class="pulse-grid">' + cards + '</div></section>';
+    return '<section class="pulse" aria-label="Owner pulse"><div class="pulse-head"><h2>Owner pulse</h2><p class="meta">All 6 academies. Sandbox totals. Nothing was sent or charged.</p></div>' + banner + '<div class="pulse-grid">' + cards + '</div></section>';
   }
 
   function switcher(ctx) {
     var esc = ctx.esc;
-    var views = [['members', 'Members'], ['leads', 'Leads'], ['retention', 'Retention'], ['testing', 'Testing'], ['report', 'Report'], ['quizzes', 'Quizzes'], ['growth', 'Growth']];
+    var views = [['members', 'Members'], ['leads', 'Leads'], ['metrics', 'Metrics'], ['retention', 'Retention'], ['testing', 'Testing'], ['report', 'Report'], ['quizzes', 'Quizzes'], ['growth', 'Growth']];
     var chips = views.map(function (view) {
       var on = ctx.ui.peopleView === view[0] ? ' on' : '';
       return '<button type="button" class="chip' + on + '" data-act="people-view" data-view="' + view[0] + '">' + esc(view[1]) + '</button>';
