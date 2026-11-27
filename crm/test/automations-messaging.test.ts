@@ -6,6 +6,7 @@ import { signToken } from '../src/auth.ts';
 import { migrate } from '../src/migrate.ts';
 import { createApp } from '../src/server.ts';
 import { AUTOMATION_CATALOG, CATALOG_COUNTS } from '../src/automation-catalog.ts';
+import { TRIGGER_TYPES } from '../src/automations.ts';
 import { bootstrapDatabase } from './bootstrap.ts';
 
 const URL = 'postgres://crm:crm@127.0.0.1:5432/crm_messaging_test';
@@ -86,7 +87,7 @@ test('canonical journeys evaluate in dry-run and messaging stays on the family t
   const stepTypes = await pool.query(`select count(distinct step_type)::int as n from automation_steps`);
   assert.equal(stepTypes.rows[0].n, 12);
   const triggers = await pool.query(`select count(distinct trigger_type)::int as n from automation_workflows`);
-  assert.equal(triggers.rows[0].n, 8);
+  assert.equal(triggers.rows[0].n, TRIGGER_TYPES.length);
 
   const schools = await api('GET', '/v1/locations/deforest/automation-settings', admin);
   const waunakee = await api('GET', '/v1/locations/waunakee/automation-settings', admin);

@@ -4,6 +4,8 @@ From Gus’s inventory, November 2026. Tags stay as he wrote them: **[V]** seen 
 
 Status is against this repo’s CRM backbone. **Built** means the model or the preview implements it with fixtures. **Planned** means it is not in the backbone yet. Nothing here charges a card or writes GymDesk.
 
+Wave 1 of the later product-update list (profiles, tags, forms, consent, and invites) is in [GYMDESK-UPDATES-WAVE1.md](GYMDESK-UPDATES-WAVE1.md). Those routes are dry-run. They do not send email and they do not change billing status.
+
 ## Decisions already in the engine
 
 - **[R]** Mini-Tigers and grandfathered memberships bill monthly. Everything else bills every 4 weeks. `cadenceForPlan` in `crm/src/billing.ts`.

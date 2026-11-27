@@ -580,6 +580,48 @@ function build(): AutomationWorkflow[] {
     },
   );
 
+  flows.push(
+    {
+      code: 'lead_form_submitted',
+      category: 'LEAD',
+      brand: 'shared',
+      name: 'Form submitted',
+      trigger: 'form_submitted',
+      marketing: true,
+      rules: {},
+      exits: [],
+      steps: linear([
+        email('We received your form', 'Hi {first_name}, we received your form for {location_name}.'),
+        { stepType: 'add_tag', config: { tag: 'form_submitted' } },
+      ]),
+    },
+    {
+      code: 'book_cancelled',
+      category: 'BOOK',
+      brand: 'shared',
+      name: 'Booking cancelled',
+      trigger: 'booking_cancelled',
+      rules: {},
+      exits: [],
+      steps: linear([
+        task('Review the cancelled booking', 'A booking was cancelled at {location_name} for {first_name}.'),
+      ]),
+    },
+    {
+      code: 'lead_invite_accepted',
+      category: 'LEAD',
+      brand: 'shared',
+      name: 'Lead invite accepted',
+      trigger: 'lead_invite_accepted',
+      rules: {},
+      exits: [],
+      steps: linear([
+        { stepType: 'add_tag', config: { tag: 'invite_accepted' } },
+        task('Confirm the invited start date', 'Review the accepted invite for {first_name} at {location_name}.'),
+      ]),
+    },
+  );
+
   assertCatalogSafe(flows);
   return flows;
 }
@@ -587,8 +629,8 @@ function build(): AutomationWorkflow[] {
 export const AUTOMATION_CATALOG: AutomationWorkflow[] = build();
 
 export const CATALOG_COUNTS: Record<string, number> = {
-  BOOK: 6,
-  LEAD: 9,
+  BOOK: 7,
+  LEAD: 11,
   NOSHOW: 6,
   ONB: 2,
   ONB90: 1,

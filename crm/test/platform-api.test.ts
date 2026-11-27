@@ -201,7 +201,7 @@ test('import, shadow billing, journey, booking, geofence, party, and trial conve
     childAge: '6',
     source: 'website',
     utm: { source: 'fixture' },
-    waiver: { version: 'fixture-2026-09', signerName: 'Jordan Sample', signedOn: '2026-11-01' },
+    waiver: { version: 'fixture-2026-09', signerName: 'Jordan Sample', signature: 'Jordan Sample', signedOn: '2026-11-01' },
   });
   assert.equal(trial.status, 201, JSON.stringify(trial.json));
   assert.equal(trial.json.accountRequired, false);

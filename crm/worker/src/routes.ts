@@ -21,6 +21,8 @@ import type { FirebaseTaskExport } from '../../src/tasks.ts';
 import type { ScheduleExport } from '../../src/schedule.ts';
 import { handlePlatform, isAuthedPlatformPath, isPublicPlatformPath } from '../../src/platform-api.ts';
 import type { StagingHold, StagingWaiver } from '../../src/import-job.ts';
+import { handleWave1, isPublicWave1Path, isStaffWave1Path } from '../../src/wave1-routes.ts';
+import type { SqlPool } from '../../src/query.ts';
 import { clientMessage } from './redact.ts';
 
 export type CrmRuntimeEnv = {
@@ -164,6 +166,24 @@ export async function dispatchCrm(input: {
       };
     }
     const parts = url.pathname.split('/').filter(Boolean);
+    const readJson = async () => {
+      if (method === 'GET' || method === 'HEAD') return {} as Record<string, unknown>;
+      const text = await readBody() || '';
+      if (!text) return {} as Record<string, unknown>;
+      try { return JSON.parse(text) as Record<string, unknown>; }
+      catch { throw new CrmError(400, 'bad_json', 'Send JSON.'); }
+    };
+    if (isPublicWave1Path(method, parts)) {
+      return await handleWave1({
+        method,
+        parts,
+        search: url.searchParams,
+        actor: null,
+        body: await readJson(),
+        pool: pool as unknown as SqlPool,
+        env,
+      });
+    }
     const platformCtx = async (actor: Actor | null) => {
       const raw = method === 'GET' || method === 'HEAD' ? null : JSON.parse(await readBody() || '{}');
       return handlePlatform({
@@ -182,6 +202,17 @@ export async function dispatchCrm(input: {
       if (result) return result;
     }
     const actor = actorFrom(input.authorization, input.tokenSecret, input.allowLocalTokens);
+    if (isStaffWave1Path(method, parts, url.searchParams)) {
+      return await handleWave1({
+        method,
+        parts,
+        search: url.searchParams,
+        actor,
+        body: await readJson(),
+        pool: pool as unknown as SqlPool,
+        env,
+      });
+    }
     if (isAuthedPlatformPath(parts)) {
       const result = await platformCtx(actor);
       if (result) return result;

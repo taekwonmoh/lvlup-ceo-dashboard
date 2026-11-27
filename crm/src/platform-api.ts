@@ -21,6 +21,7 @@ import { payoutReport, type PayRule, type TaughtLesson } from './payouts.ts';
 import { curriculumForRank, vimeoPlayerUrl } from './curriculum.ts';
 import { handleComms } from './comms-routes.ts';
 import { advanceReferral, attributeReferral, creditBalance, handleRolloverRoutes } from './rollover-routes.ts';
+import { assertMinorGuardian, splitName } from './names.ts';
 
 export type Db = {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }>;
@@ -739,20 +740,64 @@ async function publicRoutes(input: {
     if ((row.age_min != null && age < row.age_min) || (row.age_max != null && age > row.age_max)) {
       throw new CrmError(422, 'age', 'That class is for a different age group.');
     }
+    const child = splitName(String(body.childName || ''));
+    const guardian = splitName(String(body.guardianName || ''));
+    const minor = !Number.isFinite(age) || age < 18;
+    if (body.waiver && minor) {
+      const signer = splitName(String(body.waiver.signerName || body.guardianName || ''));
+      assertMinorGuardian({
+        minor: true,
+        required: true,
+        guardianFirstName: signer.firstName,
+        guardianLastName: signer.lastName,
+        signature: body.waiver.signature || body.waiver.signatureData || '',
+        signedByGuardianName: body.waiver.signerName || body.guardianName || '',
+      });
+    }
     const saved = await withTx(pool, async client => {
       const lead = await client.query(
-        `insert into leads (location_id, guardian_name, email, child_name, child_age, source, status, pipeline_status, utm)
-         values ($1, $2, $3, $4, $5, $6, 'booked', 'trial_booked', $7::jsonb) returning id`,
-        [row.location_id, body.guardianName, String(body.email || '').toLowerCase(), body.childName, String(body.childAge), body.source || 'website', JSON.stringify(body.utm || {})],
+        `insert into leads
+           (location_id, guardian_name, email, child_name, child_age, source, status, pipeline_status, utm,
+            first_name, last_name, guardian_first_name, guardian_last_name)
+         values ($1, $2, $3, $4, $5, $6, 'booked', 'trial_booked', $7::jsonb, $8, $9, $10, $11) returning id`,
+        [
+          row.location_id,
+          body.guardianName,
+          String(body.email || '').toLowerCase(),
+          body.childName,
+          String(body.childAge),
+          body.source || 'website',
+          JSON.stringify(body.utm || {}),
+          child.firstName || null,
+          child.lastName || null,
+          guardian.firstName || null,
+          guardian.lastName || null,
+        ],
       );
       const booking = await client.query(
         `insert into bookings (session_id, kind, lead_id, status) values ($1, 'trial', $2, 'booked') returning id`,
         [row.id, lead.rows[0].id],
       );
       if (body.waiver?.version && body.waiver?.signerName) {
+        const signer = splitName(String(body.waiver.signerName));
         await client.query(
-          `insert into lead_waivers (lead_id, waiver_version, signer_name, signed_on, minor) values ($1, $2, $3, $4, true)`,
-          [lead.rows[0].id, body.waiver.version, body.waiver.signerName, body.waiver.signedOn || chicagoToday()],
+          `insert into lead_waivers
+             (lead_id, waiver_version, signer_name, signed_on, minor, first_name, last_name,
+              guardian_first_name, guardian_last_name, signature_data, signed_by_guardian_name)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            lead.rows[0].id,
+            body.waiver.version,
+            body.waiver.signerName,
+            body.waiver.signedOn || chicagoToday(),
+            minor,
+            child.firstName || null,
+            child.lastName || null,
+            signer.firstName || null,
+            signer.lastName || null,
+            body.waiver.signature || body.waiver.signatureData || null,
+            body.waiver.signerName,
+          ],
         );
       }
       await client.query(

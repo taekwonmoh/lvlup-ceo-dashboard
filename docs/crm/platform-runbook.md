@@ -13,7 +13,7 @@ npm test
 npm start
 ```
 
-`npm test` applies `crm/migrations/` through `008_rollover_credits_referrals.sql` (Supabase filename `20261126000008_rollover_credits_referrals.sql`) to a local database `crm_test` (and `crm_platform_test`, `crm_messaging_test`, `crm_rollover_test`). Charges, QuickBooks, journey delivery, and push stay off.
+`npm test` applies `crm/migrations/` through `010_forms_consent_invites.sql` (Supabase filenames `20261127000009_profiles_tags_contacts.sql` and `20261127000010_forms_consent_invites.sql`) to a local database `crm_test` (and `crm_platform_test`, `crm_messaging_test`, `crm_rollover_test`, `crm_wave_test`). Charges, QuickBooks, journey delivery, and push stay off. Wave 1 profiles, tags, and forms are described in [GYMDESK-UPDATES-WAVE1.md](GYMDESK-UPDATES-WAVE1.md).
 
 Supabase CLI, from `crm/supabase`, against a new empty project only:
 
@@ -93,7 +93,7 @@ Waunakee first, then East Madison, then Verona. DeForest and Go Ninja wait on th
 
 ## Phase 1 vs Phase 2
 
-Phase 1 is this code: schema, API, import, shadow billing, guest trial and party contracts, geofence and QR check-in endpoints, journey API, dry-run dunning, the canonical automation catalog, two-way message threads, QuickBooks payloads, and the dry-run rollover, tuition-credit, and referral routes. It is not live. Migration `20261126000007_automations_messaging.sql` adds the automation and messaging tables. Migration `20261126000008_rollover_credits_referrals.sql` adds prepaid rollover, the credit ledger, and referrals. Health reports `automationDelivery`, `pushDelivery`, and `webhookDelivery` as `0`.
+Phase 1 is this code: schema, API, import, shadow billing, guest trial and party contracts, geofence and QR check-in endpoints, journey API, dry-run dunning, the canonical automation catalog, two-way message threads, QuickBooks payloads, and the dry-run rollover, tuition-credit, and referral routes. It is not live. Migration `20261126000007_automations_messaging.sql` adds the automation and messaging tables. Migration `20261126000008_rollover_credits_referrals.sql` adds prepaid rollover, the credit ledger, and referrals. Migrations `20261127000009_profiles_tags_contacts.sql` and `20261127000010_forms_consent_invites.sql` add wave 1 profiles, tags, forms, consent, and invites. Health reports `automationDelivery`, `pushDelivery`, and `webhookDelivery` as `0`.
 
 ## Prepaid rollover, tuition credits, and referrals
 
