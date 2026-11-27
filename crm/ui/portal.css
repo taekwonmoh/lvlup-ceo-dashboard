@@ -911,7 +911,10 @@ body[data-app="staff"] .sold-row span[data-label]::before {
   font-weight: 700;
   line-height: 1.25;
 }
-.pulse-drafts { margin: 8px 2px 0; color: var(--muted); font-size: 12px; font-weight: 700; }
+.pulse-drafts, .pulse-signup { margin: 8px 2px 0; color: var(--muted); font-size: 12px; font-weight: 700; }
+.signup { margin: 8px 0 18px; }
+.signup-row { margin: 8px 0; }
+.signup-row.on { padding: 8px; border-radius: 12px; background: var(--ice); }
 
 .roster-line { display: flex; align-items: stretch; gap: 8px; }
 .roster-line .roster-row { flex: 1 1 auto; min-width: 0; }

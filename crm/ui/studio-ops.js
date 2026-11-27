@@ -277,7 +277,7 @@
 
   function bag(store) {
     if (!store.studio || typeof store.studio !== 'object') {
-      store.studio = { retention: {}, marks: {}, drafts: [], attempts: [], questions: [], scans: [] };
+      store.studio = { retention: {}, marks: {}, drafts: [], attempts: [], questions: [], scans: [], signupAdds: {} };
     }
     var studio = store.studio;
     studio.retention = studio.retention || {};
@@ -286,6 +286,7 @@
     studio.attempts = studio.attempts || [];
     studio.questions = studio.questions || [];
     studio.scans = studio.scans || [];
+    studio.signupAdds = studio.signupAdds || {};
     return studio;
   }
 
@@ -349,6 +350,7 @@
         stat(dollars(school.mtdCollectedCents), 'MTD revenue') +
         '</div>' +
         '<p class="pulse-drafts">Drafts ' + esc(dollars(school.mtdDraftsCents)) + ' · testing included</p>' +
+        '<p class="pulse-signup">Testing sign-up ' + esc(String(signupPct(school.locationId, ctx.asOf, ctx.store))) + '%</p>' +
         '</article>';
     }).join('');
     return '<section class="pulse" aria-label="Owner pulse"><div class="pulse-head"><h2>Owner pulse</h2><p class="meta">All 6 academies. Sandbox totals. Nothing was sent or charged.</p></div><div class="pulse-grid">' + cards + '</div></section>';
@@ -356,7 +358,7 @@
 
   function switcher(ctx) {
     var esc = ctx.esc;
-    var views = [['members', 'Members'], ['leads', 'Leads'], ['retention', 'Retention'], ['testing', 'Testing'], ['quizzes', 'Quizzes'], ['growth', 'Growth']];
+    var views = [['members', 'Members'], ['leads', 'Leads'], ['retention', 'Retention'], ['testing', 'Testing'], ['report', 'Report'], ['quizzes', 'Quizzes'], ['growth', 'Growth']];
     var chips = views.map(function (view) {
       var on = ctx.ui.peopleView === view[0] ? ' on' : '';
       return '<button type="button" class="chip' + on + '" data-act="people-view" data-view="' + view[0] + '">' + esc(view[1]) + '</button>';
@@ -457,6 +459,158 @@
     return '<h1>Miss you</h1><p class="lede">Active students who have not checked in for 7, 14, or 21 days. The check-in is a draft. Nothing is sent.</p>' + blocks;
   }
 
+  var TEST_SCHOOLS = [
+    { id: 'waunakee', name: 'LVLUP Waunakee', active: 140 },
+    { id: 'verona', name: 'LVLUP Verona', active: 110 },
+    { id: 'eastmad', name: 'LVLUP East Madison', active: 90 },
+    { id: 'deforest', name: 'LVLUP DeForest', active: 70 },
+    { id: 'goninjaW', name: 'Go Ninja Waunakee', active: 48 },
+    { id: 'goninjaV', name: 'Go Ninja Verona', active: 36 },
+  ];
+  var SIGNUP_WEEKS = [
+    { id: 'w4', title: '4 weeks out' },
+    { id: 'w3', title: '3 weeks out' },
+    { id: 'w2', title: '2 weeks out' },
+    { id: 'w1', title: '1 week out' },
+    { id: 'test', title: 'Test week' },
+  ];
+  var SIGNED = {
+    waunakee: { w4: 28, w3: 42, w2: 63, w1: 84, test: 98 },
+    verona: { w4: 18, w3: 30, w2: 48, w1: 66, test: 77 },
+    eastmad: { w4: 12, w3: 22, w2: 36, w1: 49, test: 58 },
+    deforest: { w4: 8, w3: 14, w2: 21, w1: 28, test: 35 },
+    goninjaW: { w4: 14, w3: 18, w2: 24, w1: 29, test: 34 },
+    goninjaV: { w4: 6, w3: 10, w2: 14, w1: 18, test: 22 },
+  };
+  var COMPLETED = [
+    { id: '2026-c5', name: 'Cycle 5', testOn: '2026-10-19', tested: { waunakee: 91, verona: 70, eastmad: 52, deforest: 31, goninjaW: 30, goninjaV: 19 } },
+    { id: '2026-c4', name: 'Cycle 4', testOn: '2026-08-17', tested: { waunakee: 84, verona: 64, eastmad: 48, deforest: 28, goninjaW: 26, goninjaV: 16 } },
+    { id: '2026-c3', name: 'Cycle 3', testOn: '2026-06-15', tested: { waunakee: 78, verona: 60, eastmad: 44, deforest: 25, goninjaW: 22, goninjaV: 14 } },
+  ];
+
+  function pct(part, whole) {
+    if (!whole) return 0;
+    return Math.round((part / whole) * 100);
+  }
+
+  function checkpoint(asOf) {
+    var days = Math.round((Date.parse('2026-12-14T00:00:00Z') - Date.parse(asOf + 'T00:00:00Z')) / 86400000);
+    if (days <= 0) return 'test';
+    if (days <= 7) return 'w1';
+    if (days <= 14) return 'w2';
+    if (days <= 21) return 'w3';
+    return 'w4';
+  }
+
+  function signupBoard(asOf, store) {
+    var adds = store ? bag(store).signupAdds : {};
+    var current = checkpoint(asOf);
+    var currentIndex = 0;
+    SIGNUP_WEEKS.forEach(function (week, index) { if (week.id === current) currentIndex = index; });
+    var weeks = SIGNUP_WEEKS.map(function (week, index) {
+      var open = index <= currentIndex;
+      var schools = TEST_SCHOOLS.map(function (school) {
+        var count = open ? SIGNED[school.id][week.id] : 0;
+        if (open && week.id === current) count += adds[school.id] || 0;
+        count = Math.min(school.active, Math.max(0, count));
+        return { locationId: school.id, name: school.name, active: school.active, count: count, percent: open ? pct(count, school.active) : 0 };
+      });
+      var active = schools.reduce(function (sum, row) { return sum + row.active; }, 0);
+      var count = schools.reduce(function (sum, row) { return sum + row.count; }, 0);
+      return { id: week.id, title: week.title, open: open, current: week.id === current, active: active, count: count, percent: open ? pct(count, active) : 0, schools: schools };
+    });
+    return { current: current, weeks: weeks, schools: weeks[currentIndex].schools, total: { active: weeks[currentIndex].active, count: weeks[currentIndex].count, percent: weeks[currentIndex].percent } };
+  }
+
+  function signupPct(locationId, asOf, store) {
+    var board = signupBoard(asOf, store);
+    var row = board.schools.filter(function (school) { return school.locationId === locationId; })[0];
+    return row ? row.percent : board.total.percent;
+  }
+
+  function meter(percent) {
+    return '<div class="bar" aria-hidden="true"><span style="width:' + Math.max(0, Math.min(100, percent)) + '%"></span></div>';
+  }
+
+  function signupHtml(ctx) {
+    var esc = ctx.esc;
+    var board = signupBoard(ctx.asOf, ctx.store);
+    var now = board.weeks.filter(function (week) { return week.current; })[0];
+    var prior = null;
+    board.weeks.forEach(function (week, index) { if (week.current && index > 0) prior = board.weeks[index - 1]; });
+    var ramp = prior && prior.open ? '<p class="meta">Week over week: ' + prior.percent + '% to ' + now.percent + '% (' + (now.percent - prior.percent >= 0 ? '+' : '') + (now.percent - prior.percent) + ' points).</p>' : '';
+    var schools = board.schools.map(function (school) {
+      return '<div class="signup-row"><div class="split"><strong>' + esc(school.name) + '</strong><span class="tabular">' + school.count + ' / ' + school.active + ' = ' + school.percent + '%</span></div>' + meter(school.percent) + '</div>';
+    }).join('');
+    var weeks = board.weeks.map(function (week) {
+      var label = week.open ? week.count + ' / ' + week.active + ' = ' + week.percent + '%' : 'Not yet';
+      return '<div class="signup-row' + (week.current ? ' on' : '') + '"><div class="split"><strong>' + esc(week.title) + (week.current ? ' · now' : '') + '</strong><span>' + esc(label) + '</span></div>' + (week.open ? meter(week.percent) : '') + '</div>';
+    }).join('');
+    return '<section class="signup"><h2>Sign-up countdown · Cycle 6</h2><p class="lede">Test week of Dec 14. ' + esc(now.title) + '. Signed up / active students. Included with tuition.</p>' +
+      '<div class="card"><div class="split"><strong>All schools</strong><span class="tabular">' + board.total.count + ' / ' + board.total.active + ' = ' + board.total.percent + '%</span></div>' + meter(board.total.percent) + ramp + '</div>' +
+      schools + '<h3>Ramp</h3>' + weeks + '</section>';
+  }
+
+  function cycleReport(cycleId) {
+    var cycle = COMPLETED.filter(function (row) { return row.id === cycleId; })[0] || COMPLETED[0];
+    var schools = TEST_SCHOOLS.map(function (school) {
+      var tested = cycle.tested[school.id];
+      return { locationId: school.id, name: school.name, active: school.active, tested: tested, percent: pct(tested, school.active) };
+    });
+    var active = schools.reduce(function (sum, row) { return sum + row.active; }, 0);
+    var tested = schools.reduce(function (sum, row) { return sum + row.tested; }, 0);
+    return { id: cycle.id, name: cycle.name, testOn: cycle.testOn, schools: schools, total: { active: active, tested: tested, percent: pct(tested, active) } };
+  }
+
+  function reportCsv(cycleId) {
+    var report = cycleReport(cycleId);
+    var lines = ['Cycle,Test date,School,Active students,Tested,Percent'];
+    report.schools.forEach(function (school) {
+      lines.push([report.name, report.testOn, school.name, school.active, school.tested, school.percent].join(','));
+    });
+    lines.push([report.name, report.testOn, 'All schools', report.total.active, report.total.tested, report.total.percent].join(','));
+    return lines.join('\n') + '\n';
+  }
+
+  function downloadReport(csv, cycleId) {
+    if (!globalThis.document) return;
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'testing-participation-' + (cycleId || 'cycle') + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function reportHtml(ctx) {
+    var esc = ctx.esc;
+    var cycleId = ctx.ui.reportCycle || '2026-c5';
+    var compareId = ctx.ui.reportCompare || '2026-c4';
+    var primary = cycleReport(cycleId);
+    var compare = compareId && compareId !== cycleId ? cycleReport(compareId) : null;
+    function options(selected) {
+      return COMPLETED.map(function (cycle) {
+        return '<option value="' + esc(cycle.id) + '"' + (cycle.id === selected ? ' selected' : '') + '>' + esc(cycle.name + ' · ' + cycle.testOn) + '</option>';
+      }).join('');
+    }
+    function column(report) {
+      return '<article class="card"><h3>' + esc(report.name) + '</h3><p class="meta">Test date ' + esc(report.testOn) + ' · Included with tuition</p>' +
+        '<div class="split"><strong>All schools</strong><span class="tabular">' + report.total.tested + ' / ' + report.total.active + ' = ' + report.total.percent + '%</span></div>' + meter(report.total.percent) +
+        report.schools.map(function (school) {
+          return '<div class="signup-row"><div class="split"><strong>' + esc(school.name) + '</strong><span class="tabular">' + school.tested + ' / ' + school.active + ' = ' + school.percent + '%</span></div>' + meter(school.percent) + '</div>';
+        }).join('') + '</article>';
+    }
+    return '<h1>Post-cycle report</h1><p class="lede">Share of each school that tested. Included with tuition.</p>' +
+      '<div class="fee-grid"><label>Cycle<select id="report-cycle">' + options(primary.id) + '</select></label>' +
+      '<label>Compare<select id="report-compare"><option value="">None</option>' + options(compare ? compare.id : '') + '</select></label></div>' +
+      '<button type="button" class="big" data-act="report-apply">Show report</button>' +
+      '<button type="button" class="big primary" data-act="report-csv" data-id="' + esc(primary.id) + '">Download CSV</button>' +
+      '<div class="fee-pair">' + column(primary) + (compare ? column(compare) : '') + '</div>';
+  }
+
   function testingHtml(ctx) {
     var esc = ctx.esc;
     var board = model(ctx).testing;
@@ -477,8 +631,8 @@
       }).join('') : '<p class="quiet">No one in this band.</p>';
       return '<section class="band"><h2>' + esc(band.title) + '</h2><p class="meta">' + people.length + '</p>' + rows + '</section>';
     }).join('');
-    return '<h1>Ready to test</h1><p class="lede">Belt testing is included with tuition. The fee is $0. Invites are drafts and are not sent.</p>' +
-      '<p class="fee-note">2027 all-inclusive testing · Included with tuition · $0</p>' + bands;
+    return '<h1>Ready to test</h1><p class="lede">Belt testing is included with tuition. Invites are drafts and are not sent.</p>' +
+      '<p class="fee-note">Included with tuition</p>' + signupHtml(ctx) + bands;
   }
 
   function lobbyHtml(ctx) {
@@ -620,6 +774,21 @@
 
   function handle(act, el, ctx) {
     var id = el.getAttribute('data-id');
+    if (act === 'report-apply') {
+      var cycle = (document.getElementById('report-cycle') || {}).value || '2026-c5';
+      var compare = (document.getElementById('report-compare') || {}).value || '';
+      ctx.ui.reportCycle = cycle;
+      ctx.ui.reportCompare = compare;
+      ctx.render();
+      return true;
+    }
+    if (act === 'report-csv') {
+      var cycle = el.getAttribute('data-id') || '2026-c5';
+      downloadReport(reportCsv(cycle), cycle);
+      if (ctx.live && ctx.api) ctx.api('/v1/studio/testing-report.csv?cycle=' + encodeURIComponent(cycle));
+      ctx.toast('ok', 'CSV saved on this device. Included with tuition.');
+      return true;
+    }
     if (act === 'people-view') {
       ctx.ui.peopleView = el.getAttribute('data-view') || 'members';
       ctx.ui.quickId = '';
@@ -728,11 +897,15 @@
         invite.templateId = 'testing_invite';
         invite.body = athlete.first + ' is ready to test at ' + SCHOOLS[athlete.school].name + '. Belt testing is included with tuition. This invite was saved as a draft and was not sent.';
         rememberDraft(ctx, athlete, 'email', invite);
-      } else ctx.save();
+      } else {
+        var adds = bag(ctx.store).signupAdds;
+        adds[athlete.school] = (adds[athlete.school] || 0) + 1;
+        ctx.save();
+      }
       post(ctx, '/v1/studio/testing', { personKey: athlete.id, locationId: athlete.school, action: action, asOf: ctx.asOf }).then(function (res) {
         wrote(ctx, res, action === 'invite'
-          ? 'Testing invite drafted for ' + athlete.first + '. Fee $0. Nothing was sent.'
-          : athlete.first + ' is on the testing roster. Fee $0.');
+          ? 'Testing invite drafted for ' + athlete.first + '. Included with tuition. Nothing was sent.'
+          : athlete.first + ' is on the testing roster. Included with tuition.');
       });
       return true;
     }
@@ -833,6 +1006,9 @@
     line: line,
     retentionHtml: retentionHtml,
     testingHtml: testingHtml,
+    reportHtml: reportHtml,
+    signupBoard: signupBoard,
+    reportCsv: reportCsv,
     lobbyHtml: lobbyHtml,
     quizzesHtml: quizzesHtml,
     bubbleHtml: bubbleHtml,

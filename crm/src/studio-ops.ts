@@ -6,6 +6,7 @@
  */
 import catalog from '../fixtures/studio-ops.json' with { type: 'json' };
 import { assertStaff, type Actor } from './auth.ts';
+import { gridFromRows, participationCsv, participationReport, signupTracker } from './testing-participation.ts';
 import { findCardPayload } from './charge-gate.ts';
 import { CrmError } from './errors.ts';
 import type { SqlPool } from './query.ts';
@@ -490,12 +491,31 @@ export async function handleStudio(input: {
   actor: Actor;
   body: Record<string, unknown>;
   pool: SqlPool;
-}): Promise<{ status: number; body: unknown }> {
+}): Promise<{ status: number; body: unknown; text?: string; contentType?: string }> {
   assertStaff(input.actor);
   rejectUnsafe(input.body);
   const { method, parts, search, body, pool } = input;
   const asOf = assertDate(search.get('asOf') || String(body.asOf || '2026-11-27'));
   const head = parts[2] || '';
+
+  if (method === 'GET' && head === 'testing-signup' && parts.length === 3) {
+    const res = await optionalQuery(pool, "select location_id, week_key, signed_up from testing_signups where cycle_id = '2026-c6'");
+    const grid = gridFromRows(res?.rows || []);
+    return { status: 200, body: { ...signupTracker(asOf, {}, grid || undefined), charges: false, sends: false } };
+  }
+  if (method === 'GET' && (head === 'testing-report' || head === 'testing-report.csv') && parts.length === 3) {
+    const cycle = search.get('cycle') || '2026-c5';
+    const compare = search.get('compare') || '';
+    try {
+      if (head === 'testing-report.csv') {
+        return { status: 200, body: { charges: false, sends: false }, text: participationCsv(cycle), contentType: 'text/csv; charset=utf-8' };
+      }
+      return { status: 200, body: { ...participationReport(cycle, compare || undefined), charges: false, sends: false } };
+    } catch (err) {
+      if (err instanceof CrmError) throw err;
+      throw err;
+    }
+  }
 
   if (method === 'GET' && (head === 'pulse' || head === 'overview') && parts.length === 3) {
     const states = await loadStates(pool);

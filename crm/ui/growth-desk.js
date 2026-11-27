@@ -216,7 +216,7 @@
         '</div>';
     }
     return '<section class="fee-panel"><h2>Processing fee pass-through</h2>' +
-      '<p class="lede">Tuition can pass the card or ACH fee. Pro Shop never does. Belt tests stay at $0. Nothing is charged from this screen.</p>' +
+      '<p class="lede">Tuition can pass the card or ACH fee. Pro Shop never does. Belt testing is included with tuition. Nothing is charged from this screen.</p>' +
       '<div class="fee-grid"><label>Card percent<input id="fee-card-pct" inputmode="decimal" value="' + esc((schedule.cardBps / 100).toFixed(1)) + '"></label>' +
       '<label>Card fixed fee<input id="fee-card-fixed" inputmode="decimal" value="' + esc((schedule.cardFixedCents / 100).toFixed(2)) + '"></label>' +
       '<label>ACH style<select id="fee-ach-mode"><option value="percent"' + (schedule.achMode === 'percent' ? ' selected' : '') + '>Percent</option><option value="flat"' + (schedule.achMode === 'flat' ? ' selected' : '') + '>Flat</option></select></label>' +
@@ -228,10 +228,10 @@
       toggle('proshop', 'Pro Shop Purchases', false, true, 'Never passed on. This stays off.') +
       toggle('events', 'Events / Clinics', schedule.events, false, 'Off until you turn it on') +
       toggle('parties', 'Birthday Parties', schedule.parties, false, 'Off until you turn it on') +
-      toggle('belt', 'Belt Tests', false, true, 'Included with tuition · $0') +
       '</div>' +
+      '<p class="fee-note">Belt testing is included with tuition.</p>' +
       '<div class="fee-pair"><article class="card"><h3>Tuition · $209.00</h3><p>Card fee <strong>' + esc(dollars(preview.cardTuitionFeeCents)) + '</strong></p><p>ACH fee <strong>' + esc(dollars(preview.achTuitionFeeCents)) + '</strong></p></article>' +
-      '<article class="card"><h3>Pro Shop · $45.00</h3><p>Card fee <strong>' + esc(dollars(preview.cardShopFeeCents)) + '</strong></p><p>ACH fee <strong>$0.00</strong></p><p class="meta">Party card fee ' + esc(dollars(preview.cardPartyFeeCents)) + ' · Belt test $0.00</p></article></div>' +
+      '<article class="card"><h3>Pro Shop · $45.00</h3><p>Card fee <strong>' + esc(dollars(preview.cardShopFeeCents)) + '</strong></p><p>ACH fee <strong>$0.00</strong></p><p class="meta">Party card fee ' + esc(dollars(preview.cardPartyFeeCents)) + ' when that switch is on.</p></article></div>' +
       '<button type="button" class="chip' + (g.passExport !== false ? ' on' : '') + '" data-act="fee-export">' + (g.passExport !== false ? 'QuickBooks preview uses this policy' : 'QuickBooks preview uses the old card fee') + '</button>' +
       '<p class="meta">The fee column on the export below follows this switch. Pro Shop stays $0 either way when the policy is on.</p></section>';
   }

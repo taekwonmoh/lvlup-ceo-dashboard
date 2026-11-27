@@ -413,6 +413,7 @@
     var studio = window.CrmStudio;
     var head = studio ? studio.switcher(studioCtx()) : '';
     if (view === 'growth' && window.CrmGrowth) return head + window.CrmGrowth.page(studioCtx());
+    if (studio && view === 'report') return head + studio.reportHtml(studioCtx());
     if (studio && view === 'retention') return head + studio.retentionHtml(studioCtx());
     if (studio && view === 'testing') return head + studio.testingHtml(studioCtx());
     if (studio && view === 'quizzes') return head + studio.quizzesHtml(studioCtx());
