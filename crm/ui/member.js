@@ -70,19 +70,47 @@
 
   function catalog() { return ui.catalog || data.catalog; }
 
+  var NAV_ICON = { home: 'home', classes: 'calendar', shop: 'bag', practice: 'play', more: 'grid' };
+
+  function beltOf(row) {
+    if (!row || row.role === 'parent') return 'belt-parent';
+    var name = String(row.belt || '').toLowerCase();
+    if (name === 'yellow') return 'belt-yellow';
+    if (name === 'white' || name === 'new') return 'belt-white';
+    if (name === 'green') return 'belt-green';
+    return 'belt-gold';
+  }
+
+  function avatar(row) {
+    var face = row.role === 'parent' ? uiLib.icon('person') : esc(row.first.slice(0, 1));
+    return '<span class="avatar ' + beltOf(row) + '"><span class="face">' + face + '</span><i class="stripe"></i></span>';
+  }
+
+  function art(sku) {
+    var common = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"';
+    if (sku === 'lvlup-hoodie') return '<svg viewBox="0 0 80 80" ' + common + '><path d="M28 18h24l8 10v34H20V28z"/><path d="M32 18c2 6 14 6 16 0"/><path d="M20 32h10M50 32h10"/></svg>';
+    if (sku === 'sparring-kit') return '<svg viewBox="0 0 80 80" ' + common + '><circle cx="40" cy="28" r="10"/><path d="M18 58c4-10 10-14 22-14s18 4 22 14"/><path d="M22 40h10M48 40h10"/></svg>';
+    if (sku === 'bo-staff') return '<svg viewBox="0 0 80 80" ' + common + '><path d="M24 62 56 18"/><path d="M50 16h10v8"/><path d="M20 56h8v10"/></svg>';
+    if (sku === 'goninja-grip-socks') return '<svg viewBox="0 0 80 80" ' + common + '><path d="M30 16h14v28l12 8v10H26V48z"/><path d="M34 24h6M34 30h6M34 36h6"/></svg>';
+    return '<svg viewBox="0 0 80 80" ' + common + '><path d="M26 20h28v40H26z"/><path d="M32 20v-4h16v4"/><path d="M34 36h12"/></svg>';
+  }
+
   function render() {
     var who = person();
     document.getElementById('app').innerHTML =
       uiLib.header('member') +
+      '<div class="stage"><div class="device">' +
+      '<header class="appbar"><div class="wordmark">LVLUP</div><div class="appbar-meta">Family</div></header>' +
       '<div class="layout"><nav class="sidebar" aria-label="Sections">' + sideNav() + '</nav><main class="main">' +
       switcher() + uiLib.toast(ui.toast) + body(who) +
-      '</main></div>' + bottom() + sheet();
+      '</main></div>' + bottom() + sheet() +
+      '</div></div>';
   }
 
   function sideNav() {
-    var items = [['home', 'Home'], ['profile', 'My family'], ['billing', 'Payments'], ['upgrade', 'Upgrade'], ['shop', 'Pro Shop'], ['classes', 'Classes'], ['events', 'Events'], ['parties', 'Parties'], ['practice', 'Practice'], ['messages', 'Messages']];
+    var items = [['home', 'Home', 'home'], ['profile', 'My family', 'users'], ['billing', 'Payments', 'card'], ['upgrade', 'Upgrade', 'star'], ['shop', 'Pro Shop', 'bag'], ['classes', 'Classes', 'calendar'], ['events', 'Events', 'spark'], ['parties', 'Parties', 'star'], ['practice', 'Practice', 'play'], ['messages', 'Messages', 'message']];
     return items.map(function (item) {
-      return '<button type="button" class="' + (ui.tab === item[0] ? 'on' : '') + '" data-act="tab" data-tab="' + item[0] + '">' + esc(item[1]) + '</button>';
+      return '<button type="button" class="' + (ui.tab === item[0] ? 'on' : '') + '" data-act="tab" data-tab="' + item[0] + '">' + uiLib.icon(item[2]) + esc(item[1]) + '</button>';
     }).join('');
   }
 
@@ -91,15 +119,16 @@
       var on = row.id === store.personId ? ' on' : '';
       var detail = row.role === 'parent' ? 'Parent' : row.belt + ' belt';
       return '<button type="button" class="person' + on + '" data-act="person" data-id="' + esc(row.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
-        '<span class="avatar">' + esc(row.first.slice(0, 1)) + '</span><span><strong>' + esc(row.first) + '</strong><small>' + esc(detail) + '</small></span></button>';
+        avatar(row) + '<span><strong>' + esc(row.first) + '</strong><small>' + esc(detail) + '</small></span></button>';
     }).join('') + '</div>';
   }
 
   function bottom() {
     return '<nav class="bottom" aria-label="Main">' + NAV.map(function (item) {
       var on = item[0] === 'more' ? ui.more : ui.tab === item[0];
-      var dot = item[0] === 'more' && unread() ? ' •' : '';
-      return '<button type="button" class="navbtn' + (on ? ' on' : '') + '" data-act="tab" data-tab="' + item[0] + '">' + esc(item[1] + dot) + '</button>';
+      var dot = item[0] === 'more' && unread() ? '<i class="dot"></i>' : '';
+      return '<button type="button" class="navbtn' + (on ? ' on' : '') + '" data-act="tab" data-tab="' + item[0] + '">' +
+        uiLib.icon(NAV_ICON[item[0]]) + '<span>' + esc(item[1]) + '</span>' + dot + '</button>';
     }).join('') + '</nav>';
   }
 
@@ -139,10 +168,10 @@
     var ready = mine.filter(function (order) { return order.fulfillmentStatus === 'ready_for_pickup'; });
     var next = nextClass(who);
     var readyHtml = ready.map(function (order) {
-      return '<button type="button" class="card ready" data-act="tab" data-tab="shop"><strong>' + esc(rules.orderStatusLabel(order, names())) + '</strong><span class="meta">' + esc(lineSummary(order)) + ' · Tap to see the order</span></button>';
+      return '<button type="button" class="card ready" data-act="tab" data-tab="shop"><strong>' + uiLib.icon('store') + esc(rules.orderStatusLabel(order, names())) + '</strong><span class="meta">' + esc(lineSummary(order)) + ' · Tap to see the order</span></button>';
     }).join('');
     var nextHtml = next
-      ? '<div class="card next-class"><div class="meta">Next class</div><h3>' + esc(next.title) + '</h3><div>' + esc(rules.prettyDate(next.date) + ' · ' + rules.prettyTime(next.time)) + '</div><div class="meta">' + esc(uiLib.school(next.locationId).name) + '</div></div>'
+      ? '<div class="hero"><span class="live-pill"><i></i> Next class</span><h3>' + esc(next.title) + '</h3><p>' + esc(rules.prettyDate(next.date) + ' · ' + rules.prettyTime(next.time)) + '</p><div class="where">' + uiLib.icon('pin') + esc(uiLib.school(next.locationId).name) + '</div></div>'
       : '<div class="card"><h3>Pick a student</h3><p class="lede">Tap Riley or Avery above. Their next class shows up here.</p></div>';
     return '<h1>Hi, ' + esc(who.first) + '</h1><p class="lede">Here is what to do next.</p>' +
       nextHtml + readyHtml +
@@ -155,7 +184,8 @@
   }
 
   function tile(tab, title, sub) {
-    return '<button type="button" class="tile" data-act="tab" data-tab="' + tab + '">' + esc(title) + '<span>' + esc(sub) + '</span></button>';
+    var icons = { classes: 'calendar', practice: 'play', shop: 'bag', events: 'spark' };
+    return '<button type="button" class="tile" data-act="tab" data-tab="' + tab + '"><span class="ico-wrap">' + uiLib.icon(icons[tab] || 'spark') + '</span>' + esc(title) + '<span>' + esc(sub) + '</span></button>';
   }
 
   function nextClass(who) {
@@ -208,7 +238,7 @@
 
   function upgrade(who) {
     var current = data.tiers.filter(function (tier) { return tier.id === who.planId; })[0];
-    var note = '<div class="note">' + esc(data.tuitionNote) + '</div>';
+    var note = '<div class="note">' + uiLib.icon('star') + ' ' + esc(data.tuitionNote) + '</div>';
     if (!current) {
       return '<h1>Upgrade</h1><p class="lede">' + esc(who.first) + ' is on ' + esc(who.plan) + '.</p>' + note +
         '<button type="button" class="big primary" data-act="upgrade" data-id="extra">Ask about extra days</button>';
@@ -217,7 +247,16 @@
     return '<h1>Upgrade</h1><p class="lede">' + esc(who.first) + ' is on ' + esc(current.name) + ' at ' + esc(uiLib.money(current.cents)) + ' every 4 weeks.</p>' + note +
       rest.map(function (tier, index) {
         var diff = tier.cents - current.cents;
-        return '<div class="card"><div class="meta">' + (index === 0 ? 'Next step' : 'Also available') + '</div><h3>' + esc(tier.name) + '</h3><p>' + esc(tier.blurb) + '</p><div class="diff">+' + esc(uiLib.money(diff)) + '</div><div class="meta">more every 4 weeks</div>' +
+          var perks = {
+          bbc: ['More classes each week', 'A clear path to black belt', 'Belt tests included in 2027'],
+          leadership: ['Leadership class each week', 'Core classes included', 'Belt tests included in 2027'],
+          legacy: ['The fullest training week', 'Leadership plus extra classes', 'Belt tests included in 2027'],
+        }[tier.id] || [tier.blurb];
+        return '<div class="card tier' + (index === 0 ? ' recommend' : '') + '">' +
+          (index === 0 ? '<div class="recommend-flag">' + uiLib.icon('star') + ' Recommended</div>' : '<div class="meta">Also available</div>') +
+          '<h3>' + esc(tier.name) + '</h3><p>' + esc(tier.blurb) + '</p><ul class="perks">' +
+          perks.map(function (perk) { return '<li>' + uiLib.icon('check') + esc(perk) + '</li>'; }).join('') +
+          '</ul><div class="diff">+' + esc(uiLib.money(diff)) + '</div><div class="meta">more every 4 weeks</div>' +
           '<button type="button" class="big primary" data-act="upgrade" data-id="' + esc(tier.id) + '">Preview this upgrade</button></div>';
       }).join('') +
       (store.upgrade && store.upgrade.personId === who.id ? '<div class="card ready"><strong>Request saved.</strong><div>Nothing was charged.</div></div>' : '');
@@ -237,11 +276,11 @@
       }).join('') + '</div>' +
       items.map(function (item) {
         var size = ui.sizes[item.sku] || '';
-        return '<div class="card"><h3>' + esc(item.name) + '</h3><p>' + esc(item.description) + '</p><div class="price">' + esc(uiLib.money(item.priceCents)) + '</div>' +
+        return '<article class="product"><div class="product-art">' + art(item.sku) + '</div><div class="product-body"><h3>' + esc(item.name) + '</h3><p>' + esc(item.description) + '</p><div class="price">' + esc(uiLib.money(item.priceCents)) + '</div>' +
           '<div class="chips">' + (item.variants || []).map(function (variant) {
             return '<button type="button" class="chip' + (size === variant ? ' on' : '') + '" data-act="size" data-sku="' + esc(item.sku) + '" data-size="' + esc(variant) + '">' + esc(variant) + '</button>';
           }).join('') + '</div>' +
-          '<button type="button" class="big" data-act="add-item" data-sku="' + esc(item.sku) + '"' + (size ? '' : ' disabled') + '>' + (size ? 'Add to bag' : 'Tap a size') + '</button></div>';
+          '<button type="button" class="big" data-act="add-item" data-sku="' + esc(item.sku) + '"' + (size ? '' : ' disabled') + '>' + (size ? 'Add to bag' : 'Tap a size') + '</button></div></article>';
       }).join('') + cartBlock(who, subtotal, shipping) + orderList(who);
   }
 
@@ -262,8 +301,8 @@
       ? '<div class="stack"><label>Street<input id="ship-line" value="' + esc(ui.address.line1) + '"></label><label>City<input id="ship-city" value="' + esc(ui.address.city) + '"></label><div class="row"><label>State<input id="ship-region" value="' + esc(ui.address.region) + '"></label><label>ZIP<input id="ship-postal" value="' + esc(ui.address.postal) + '"></label></div><p class="meta">Sample home for this preview. Edit it if you want.</p></div>'
       : '<div class="chips">' + schools + '</div><p class="meta">' + esc(uiLib.school(ui.pickupSchool).city) + '</p>';
     return '<h2>Bag</h2><div class="card">' + lines +
-      '<button type="button" class="choice' + (ui.fulfill === 'studio_pickup' ? ' on' : '') + '" data-act="cart-method" data-method="studio_pickup">Pick up at my studio (Free)</button>' +
-      '<button type="button" class="choice' + (ui.fulfill === 'ship_to_home' ? ' on' : '') + '" data-act="cart-method" data-method="ship_to_home">Ship to my home (' + esc(uiLib.money(data.shippingCents)) + ')</button>' +
+      '<button type="button" class="choice' + (ui.fulfill === 'studio_pickup' ? ' on' : '') + '" data-act="cart-method" data-method="studio_pickup">' + uiLib.icon('store') + '<span class="grow"><strong>Pick up at my studio (Free)</strong><small>Ready at the front desk</small></span></button>' +
+      '<button type="button" class="choice' + (ui.fulfill === 'ship_to_home' ? ' on' : '') + '" data-act="cart-method" data-method="ship_to_home">' + uiLib.icon('truck') + '<span class="grow"><strong>Ship to my home (' + esc(uiLib.money(data.shippingCents)) + ')</strong><small>Sandbox preview shipping</small></span></button>' +
       ship +
       '<div class="split"><span>Total</span><strong>' + esc(uiLib.money(subtotal + shipping)) + '</strong></div>' +
       '<button type="button" class="big primary" data-act="place-order">Place sandbox preview order</button></div>';
@@ -273,8 +312,19 @@
     var rows = ordersFor(who);
     if (!rows.length) return '';
     return '<h2>Your orders</h2>' + rows.map(function (order) {
-      return '<div class="card"><strong>' + esc(rules.orderStatusLabel(order, names())) + '</strong><div class="meta">' + esc(lineSummary(order)) + '</div></div>';
+      return '<div class="card"><strong>' + esc(rules.orderStatusLabel(order, names())) + '</strong><div class="meta">' + esc(lineSummary(order)) + '</div>' + stepper(order) + '</div>';
     }).join('');
+  }
+
+  function stepper(order) {
+    var flow = order.fulfillmentMethod === 'studio_pickup'
+      ? [['ordered', 'Ordered'], ['ready_for_pickup', 'Ready'], ['picked_up', 'Picked up']]
+      : [['ordered', 'Ordered'], ['packed', 'Packed'], ['shipped', 'Shipped'], ['delivered', 'Delivered']];
+    var at = flow.findIndex(function (step) { return step[0] === order.fulfillmentStatus; });
+    return '<ol class="stepper">' + flow.map(function (step, index) {
+      var cls = index < at ? 'done' : index === at ? 'on' : '';
+      return '<li class="' + cls + '"><span>' + esc(step[1]) + '</span></li>';
+    }).join('') + '</ol>';
   }
 
   function classes(who) {
@@ -373,8 +423,8 @@
       videos.map(function (video) {
         var key = who.id + '|' + store.today + '|' + video.id;
         var done = !!store.practiced[key];
-        return '<div class="card"><h3>' + esc(video.title) + '</h3><div class="meta">' + esc(video.meta) + '</div>' +
-          '<iframe class="video" src="' + esc(rules.vimeoUrl) + '" title="' + esc(video.title) + '" allow="fullscreen" allowfullscreen></iframe>' +
+        return '<div class="card"><span class="theme-badge">' + uiLib.icon('spark') + esc(theme) + '</span><h3>' + esc(video.title) + '</h3><div class="meta">' + esc(video.meta) + '</div>' +
+          '<div class="cinema"><iframe class="video" src="' + esc(rules.vimeoUrl) + '" title="' + esc(video.title) + '" allow="fullscreen" allowfullscreen></iframe><div class="playcap">' + uiLib.icon('play') + ' Play</div></div>' +
           '<button type="button" class="big' + (done ? ' ok' : '') + '" data-act="practiced" data-id="' + esc(video.id) + '">' + (done ? 'Practiced today' : 'Mark practiced today') + '</button></div>';
       }).join('');
   }

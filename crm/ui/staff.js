@@ -22,11 +22,11 @@
   };
 
   var TABS = [
-    ['today', 'Today'],
-    ['people', 'Members & Leads'],
-    ['schedule', 'Schedule & Events'],
-    ['money', 'Financials & Billing'],
-    ['inbox', 'Messages & Automations'],
+    ['today', 'Today', 'home'],
+    ['people', 'Members & Leads', 'users'],
+    ['schedule', 'Schedule & Events', 'calendar'],
+    ['money', 'Financials & Billing', 'chart'],
+    ['inbox', 'Messages & Automations', 'message'],
   ];
 
   function save() { uiLib.save(store); }
@@ -36,13 +36,12 @@
   function render() {
     document.getElementById('app').innerHTML =
       uiLib.header('staff') +
-      '<main class="main staff-main">' +
-      '<div class="tabs" role="tablist" aria-label="Front desk">' + TABS.map(function (tab) {
-        return '<button type="button" class="chip' + (ui.tab === tab[0] ? ' on' : '') + '" data-act="tab" data-tab="' + tab[0] + '">' + esc(tab[1]) + '</button>';
-      }).join('') + '</div>' +
+      '<div class="desk"><nav class="rail" aria-label="Front desk">' + TABS.map(function (tab) {
+        return '<button type="button" class="railbtn' + (ui.tab === tab[0] ? ' on' : '') + '" data-act="tab" data-tab="' + tab[0] + '">' + uiLib.icon(tab[2]) + '<span>' + esc(tab[1]) + '</span></button>';
+      }).join('') + '</nav><main class="desk-main">' +
       uiLib.toast(ui.toast) +
       screen() +
-      '</main>' + connectSheet() + drawer();
+      '</main></div>' + connectSheet() + drawer();
   }
 
   function screen() {
@@ -81,14 +80,23 @@
     var locked = store.kiosk && store.kiosk.locationId === schoolId();
     var place = uiLib.school(schoolId());
     var where = place.id === 'eastmad' ? place.name + ' · ' + place.city : place.name;
+    var checked = store.checkins.filter(function (row) { return row.ok; }).length;
+    var readyCount = store.orders.filter(function (order) {
+      return order.fulfillmentMethod === 'studio_pickup' && order.fulfillmentStatus === 'ready_for_pickup' && order.pickupLocationId === schoolId();
+    }).length;
+    var alerts = uiLib.people().filter(function (row) { return row.school === schoolId() && row.card === 'expired'; }).length;
     return '<h1>Today</h1><p class="lede">' + esc(where) + '. Start here.</p>' +
+      '<div class="kpis"><div class="kpi"><span>Classes Today</span><strong>' + (classesHere(store.today).length) + '</strong></div>' +
+      '<div class="kpi"><span>Checked In</span><strong>' + checked + '</strong></div>' +
+      '<div class="kpi"><span>Pro Shop Pickups Ready</span><strong>' + readyCount + '</strong></div>' +
+      '<div class="kpi"><span>Billing Alerts</span><strong>' + alerts + '</strong></div></div>' +
       schoolChips() +
       '<h2>' + heading + '</h2>' + (rows.length ? rows.map(function (cls) {
         var isLocked = locked && store.kiosk.classId === cls.id;
         return '<div class="card"><h3>' + esc(cls.title) + '</h3><div>' + esc(rules.prettyDate(cls.date) + ' · ' + rules.prettyTime(cls.time) + ' · ' + cls.program) + '</div>' +
           (isLocked
             ? '<div class="note">Kiosk locked on ' + esc(cls.title) + ' · ' + esc(rules.prettyTime(cls.time)) + '.</div><button type="button" class="big" data-act="kiosk-off">Unlock kiosk</button>'
-            : '<button type="button" class="big primary" data-act="kiosk" data-id="' + esc(cls.id) + '">Lock kiosk on this class</button>') +
+            : '<button type="button" class="big primary" data-act="kiosk" data-id="' + esc(cls.id) + '">' + uiLib.icon('lock') + ' Lock kiosk on this class</button>') +
           '</div>';
       }).join('') : '<div class="card"><p>No classes at this school today. Check the schedule for the week.</p></div>') +
       '<h2>Quick check-in</h2><label>Name<input id="checkin-q" placeholder="Riley" value="' + esc(ui.query) + '"></label>' +
@@ -109,7 +117,8 @@
     if (!rows.length) return '<div class="toast bad" role="alert">No one matches that.</div>';
     return rows.map(function (row) {
       var dot = row.card === 'expired' ? '<span class="dot hot"></span> ' : '';
-      return '<button type="button" class="rowbtn" data-act="checkin" data-id="' + esc(row.id) + '">' + dot + 'Check in ' + esc(row.first + ' ' + row.last) + '<span class="meta">' + esc(row.belt + ' · ' + row.plan) + '</span></button>';
+      var pill = row.card === 'expired' ? '<span class="badge bad">Card expired</span>' : '<span class="badge ok">Ready</span>';
+      return '<button type="button" class="rowbtn roster-row" data-act="checkin" data-id="' + esc(row.id) + '"><span class="avatar ' + (row.belt === 'Yellow' ? 'belt-yellow' : row.belt === 'White' || row.belt === 'New' ? 'belt-white' : row.belt === 'Green' ? 'belt-green' : 'belt-gold') + '"><span class="face">' + esc(row.first.slice(0, 1)) + '</span></span><span><strong>' + dot + 'Check in ' + esc(row.first + ' ' + row.last) + '</strong><span class="meta">' + esc(row.belt + ' · ' + row.plan) + '</span></span>' + pill + '</button>';
     }).join('');
   }
 
@@ -127,7 +136,7 @@
       var track = next === 'shipped'
         ? '<label>Tracking, optional<input id="track-' + esc(order.id) + '" placeholder="SAMPLETRACK"></label>'
         : '';
-      return '<div class="card"><strong>' + esc(rules.orderStatusLabel(order, uiLib.names())) + '</strong><div class="meta">' + esc(who.first + ' · ' + (order.lines[0] ? order.lines[0].name : 'Item')) + '</div>' +
+      return '<div class="card"><strong>' + uiLib.icon(method === 'studio_pickup' ? 'store' : 'truck') + ' ' + esc(rules.orderStatusLabel(order, uiLib.names())) + '</strong><div class="meta">' + esc(who.first + ' · ' + (order.lines[0] ? order.lines[0].name : 'Item')) + '</div>' +
         track +
         (next ? '<button type="button" class="big primary" data-act="fulfill" data-id="' + esc(order.id) + '">' + esc(rules.actionLabel(next)) + '</button>' : '') +
         '</div>';
@@ -141,7 +150,7 @@
       '<div class="chips">' +
       chip('all', 'All') + chip('active', 'Active') + chip('expired', 'Expired Card') + chip('trial', 'Tag · Trial') + chip('alex', 'Sold by Alex') +
       '</div><div class="stack">' + rows.map(function (row) {
-        return '<button type="button" class="rowbtn" data-act="open" data-id="' + esc(row.id) + '"><strong>' + esc(row.first + ' ' + row.last) + '</strong><span class="meta">' + esc(row.belt + ' · ' + row.tag + ' · ' + uiLib.school(row.school).name) + '</span></button>';
+        return '<button type="button" class="rowbtn roster-row" data-act="open" data-id="' + esc(row.id) + '"><span class="avatar belt-gold"><span class="face">' + esc(row.first.slice(0, 1)) + '</span></span><span><strong>' + esc(row.first + ' ' + row.last) + '</strong><span class="meta">' + esc(row.belt + ' · ' + row.tag + ' · ' + uiLib.school(row.school).name) + '</span></span></button>';
       }).join('') + '</div>';
   }
 
@@ -174,7 +183,7 @@
     var next = nextClassFor(who);
     return '<div class="drawer"><div class="panel"><button type="button" class="textbtn" data-act="close">Close</button>' +
       '<h1>' + esc(who.first + ' ' + who.last) + '</h1><p class="lede">' + esc(who.program + ' · ' + uiLib.school(who.school).name) + '</p>' +
-      '<div class="note">Pinned note · ' + esc(who.note) + '</div>' +
+      '<div class="pin-note">Pinned note · ' + esc(who.note) + '</div>' +
       '<h2>Emergency and pickup</h2>' + (contacts.length ? contacts.map(function (row) {
         return '<div class="card"><strong>' + esc(row.name) + '</strong><div class="meta">' + esc(row.kind + ' · ' + row.relationship) + '</div></div>';
       }).join('') : '<p class="quiet">None saved.</p>') +
