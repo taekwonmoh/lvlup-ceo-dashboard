@@ -6,7 +6,7 @@
   var esc = uiLib.esc;
   var store = uiLib.load();
   var ui = {
-    tab: location.hash === '#growth' ? 'growth' : 'today',
+    tab: (location.hash === '#metrics' || location.hash === '#growth') ? 'people' : 'today',
     toast: null,
     query: '',
     filter: 'all',
@@ -19,7 +19,16 @@
     eventName: '',
     eventType: 'Belt test',
     eventDate: store.today,
-    todayView: location.hash === '#tasks' ? 'tasks' : 'desk',
+    todayView: location.hash === '#tasks' ? 'tasks' : location.hash === '#lobby' ? 'lobby' : 'desk',
+    peopleView: (location.hash === '#metrics' || location.hash === '#growth') ? 'metrics' : 'members',
+    listScope: 'all',
+    quickId: '',
+    holdScroll: false,
+    quizId: '',
+    quizAnswers: {},
+    quizPerson: '',
+    qrResult: '',
+    remoteStudio: null,
     onePhase: 'opening',
     oneTitle: '',
     liveNote: 'Live sandbox. Charges are off.',
@@ -55,7 +64,6 @@
     ['schedule', 'Schedule & Events', 'calendar', 'Schedule'],
     ['money', 'Financials & Billing', 'chart', 'Billing'],
     ['inbox', 'Messages & Automations', 'message', 'Messages'],
-    ['growth', 'Attrition & CAC', 'chart', 'Growth'],
   ];
 
   function save() { uiLib.save(store); }
@@ -70,6 +78,7 @@
   }
 
   function render() {
+    var keepY = ui.holdScroll ? window.scrollY : null;
     var go = String(schoolId()).indexOf('goninja') === 0 ? uiLib.logo('go') : '';
     document.getElementById('app').innerHTML =
       uiLib.header('staff') +
@@ -81,7 +90,29 @@
       '</main></div>' +
       '<nav class="bottom staff-tabs" aria-label="Front desk">' +
       TABS.map(function (tab) { return tabButton(tab, 'short'); }).join('') +
-      '</nav>' + connectSheet() + drawer() + qboDrawer();
+      '</nav>' + connectSheet() + drawer() + qboDrawer() +
+      (window.CrmStudio ? window.CrmStudio.bubbleHtml(studioCtx()) : '');
+    if (keepY != null) window.scrollTo(0, keepY);
+    ui.holdScroll = false;
+    if (window.CrmStudio) window.CrmStudio.placeQuick();
+  }
+
+  function studioCtx() {
+    return {
+      esc: esc,
+      icon: uiLib.icon,
+      store: store,
+      ui: ui,
+      asOf: store.today,
+      schoolId: schoolId(),
+      live: uiLib.dataMode() === 'live',
+      preview: uiLib.people(),
+      api: uiLib.api,
+      save: save,
+      render: render,
+      toast: toast,
+      growthCells: growthCells(),
+    };
   }
 
   function screen() {
@@ -89,7 +120,6 @@
     if (ui.tab === 'schedule') return schedule();
     if (ui.tab === 'money') return money();
     if (ui.tab === 'inbox') return inbox();
-    if (ui.tab === 'growth') return growth();
     return today();
   }
 
@@ -240,7 +270,7 @@
       var on = view === id;
       return '<button type="button" role="tab" class="' + (on ? 'on' : '') + '" data-act="today-view" data-view="' + id + '" aria-selected="' + (on ? 'true' : 'false') + '">' + label + '</button>';
     }
-    return '<div class="segment" role="tablist" aria-label="Today">' + btn('desk', 'Front Desk') + btn('tasks', 'Tasks &amp; Clock-In') + '</div>';
+    return '<div class="segment cols-3" role="tablist" aria-label="Today">' + btn('desk', 'Front Desk') + btn('tasks', 'Tasks') + btn('lobby', 'Lobby QR') + '</div>';
   }
 
   function tasksView() {
@@ -287,8 +317,11 @@
   }
 
   function today() {
-    var view = ui.todayView === 'tasks' ? 'tasks' : 'desk';
-    return '<h1>Today</h1>' + todaySwitch(view) + (view === 'tasks' ? tasksView() : frontDesk());
+    var view = ui.todayView === 'tasks' ? 'tasks' : ui.todayView === 'lobby' ? 'lobby' : 'desk';
+    var pulse = view === 'desk' && window.CrmStudio ? window.CrmStudio.pulseHtml(studioCtx()) : '';
+    var ask = view === 'desk' && window.CrmGrowth ? window.CrmGrowth.askHtml(studioCtx()) + window.CrmGrowth.feedHtml(studioCtx()) : '';
+    var body = view === 'tasks' ? tasksView() : view === 'lobby' ? schoolChips() + window.CrmStudio.lobbyHtml(studioCtx()) : frontDesk();
+    return '<h1>Today</h1>' + ask + pulse + todaySwitch(view) + body;
   }
 
   function frontDesk() {
@@ -307,7 +340,6 @@
       ? uiLib.liveNote(ui.liveNote) + (ui.signOpen || uiLib.token() ? uiLib.signCard('staff') : '<button type="button" class="big" data-act="sign-open">Sign in to the sandbox</button>')
       : '';
     return sign + '<p class="lede">' + esc(where) + '. Start here.</p>' +
-      ownerPulseStrip() +
       '<div class="kpis"><div class="kpi"><span>Classes Today</span><strong>' + (classesHere(store.today).length) + '</strong></div>' +
       '<div class="kpi"><span>Checked In</span><strong>' + checked + '</strong></div>' +
       '<div class="kpi"><span>Pro Shop Pickups Ready</span><strong>' + readyCount + '</strong></div>' +
@@ -334,7 +366,19 @@
 
   function findPerson(id) {
     var live = (ui.liveMembers || []).filter(function (row) { return row.id === id; })[0];
-    return live || uiLib.person(id);
+    if (live) return live;
+    var preview = uiLib.people().filter(function (row) { return row.id === id; })[0];
+    var extra = window.CrmStudio && window.CrmStudio.lookup(id);
+    if (preview && extra) {
+      return Object.assign({}, preview, extra, {
+        note: preview.note || extra.note,
+        card: preview.card,
+        tag: preview.tag,
+        soldBy: preview.soldBy,
+        planCents: preview.planCents,
+      });
+    }
+    return preview || extra || uiLib.person(id);
   }
 
   function checkinRows() {
@@ -376,14 +420,29 @@
   }
 
   function people() {
+    var view = ui.peopleView || 'members';
+    var studio = window.CrmStudio;
+    var head = studio ? studio.switcher(studioCtx()) : '';
+    if (view === 'metrics') return head + growth();
+    if (view === 'growth' && window.CrmGrowth) return head + window.CrmGrowth.page(studioCtx());
+    if (studio && view === 'report') return head + studio.reportHtml(studioCtx());
+    if (studio && view === 'retention') return head + studio.retentionHtml(studioCtx());
+    if (studio && view === 'testing') return head + studio.testingHtml(studioCtx());
+    if (studio && view === 'quizzes') return head + studio.quizzesHtml(studioCtx());
     var rows = filtered();
-    return '<h1>Members &amp; Leads</h1><p class="lede">Search, then tap a name. Pinned notes are at the top of the card.</p>' +
+    var title = view === 'leads' ? 'Leads' : 'Members';
+    var lede = view === 'leads'
+      ? 'Trials and new families. Tap the bubble for a draft. Nothing is sent.'
+      : 'Search, then tap a name. The bubble drafts a note without leaving the list.';
+    return head + '<h1>' + title + '</h1><p class="lede">' + lede + '</p>' +
       '<label>Search<input id="people-q" placeholder="Search the sample studio" value="' + esc(ui.query) + '"></label>' +
       '<div class="chips">' +
       chip('all', 'All') + chip('active', 'Active') + chip('expired', 'Expired Card') + chip('trial', 'Tag · Trial') + chip('alex', 'Sold by Alex') +
-      '</div><div class="stack">' + rows.map(function (row) {
-        return '<button type="button" class="rowbtn roster-row" data-act="open" data-id="' + esc(row.id) + '"><span class="avatar belt-gold"><span class="face">' + esc(row.first.slice(0, 1)) + '</span></span><span><strong>' + esc(row.first + ' ' + row.last) + '</strong><span class="meta">' + esc(row.belt + ' · ' + row.tag + ' · ' + uiLib.school(row.school).name) + '</span></span></button>';
-      }).join('') + '</div>';
+      '</div><div class="stack">' + (rows.length ? rows.map(function (row) {
+        var meta = esc(row.belt + ' · ' + row.tag + ' · ' + uiLib.school(row.school).name);
+        if (studio) return studio.line(studioCtx(), row, 'open', meta);
+        return '<button type="button" class="rowbtn roster-row" data-act="open" data-id="' + esc(row.id) + '"><span class="avatar belt-gold"><span class="face">' + esc(row.first.slice(0, 1)) + '</span></span><span><strong>' + esc(row.first + ' ' + row.last) + '</strong><span class="meta">' + meta + '</span></span></button>';
+      }).join('') : '<p class="quiet">No one in this view.</p>') + '</div>';
   }
 
   function chip(id, label) {
@@ -392,9 +451,14 @@
 
   function filtered() {
     var q = ui.query.trim().toLowerCase();
-    return roster().filter(function (row) {
+    var source = roster();
+    if (window.CrmStudio) source = window.CrmStudio.scoped(window.CrmStudio.merged(source), ui.listScope || 'all');
+    var leads = ui.peopleView === 'leads';
+    return source.filter(function (row) {
       if (row.role === 'parent') return false;
-      if (q && (row.first + ' ' + row.last + ' ' + row.tag).toLowerCase().indexOf(q) < 0) return false;
+      var isLead = row.status === 'lead' || row.role === 'lead' || row.tag === 'Trial';
+      if (leads ? !isLead : isLead) return false;
+      if (q && (row.first + ' ' + row.last + ' ' + (row.tag || '')).toLowerCase().indexOf(q) < 0) return false;
       if (ui.filter === 'active') return row.status === 'active';
       if (ui.filter === 'expired') return row.card === 'expired';
       if (ui.filter === 'trial') return row.tag === 'Trial';
@@ -516,7 +580,8 @@
   function qboIsLive() { return !!(uiLib.apiBase() && uiLib.token()); }
 
   function qboQueryKey() {
-    return [ui.qboEntity, ui.qboPeriod, ui.qboFrom, ui.qboThrough, store.today, uiLib.apiBase(), qboIsLive() ? '1' : '0'].join('|');
+    var pass = window.CrmGrowth && store.growth && store.growth.passExport !== false ? 'pass' : 'card';
+    return [ui.qboEntity, ui.qboPeriod, ui.qboFrom, ui.qboThrough, store.today, uiLib.apiBase(), qboIsLive() ? '1' : '0', pass].join('|');
   }
 
   function ensureQboLive() {
@@ -525,6 +590,7 @@
     if (ui.qboLiveKey === key) return;
     ui.qboLiveKey = key;
     var params = new URLSearchParams({ entity: ui.qboEntity, period: ui.qboPeriod, format: 'preview', asOf: store.today });
+    if (!store.growth || store.growth.passExport !== false) params.set('passThrough', '1');
     if (ui.qboPeriod === 'custom') {
       if (ui.qboFrom) params.set('from', ui.qboFrom);
       if (ui.qboThrough) params.set('through', ui.qboThrough);
@@ -555,6 +621,7 @@
       through: ui.qboThrough,
       asOf: store.today,
       catalog: catalog,
+      feeSchedule: window.CrmGrowth ? window.CrmGrowth.exportSchedule(store) : undefined,
     });
   }
 
@@ -739,6 +806,7 @@
       : '';
     return '<h1>Financials &amp; Billing</h1>' + uiLib.liveNote(ui.liveNote) + liveMoney +
       '<p class="lede">Sample month unless a finance sign-in loaded the sandbox summary. Nothing is charged.</p>' +
+      (window.CrmGrowth ? window.CrmGrowth.feePanel(studioCtx()) : '') +
       qboCard() +
       '<div class="note">' + esc(data.tuitionNote) + '</div>' +
       '<div class="tiles money-tiles"><div class="card"><div class="meta">Collected</div><div class="price">' + esc(uiLib.money(fin.collectedCents)) + '</div></div>' +
@@ -773,25 +841,22 @@
     return api.cellsWithSpend(storedSpendRows());
   }
 
-  function spendSchoolId() {
-    var scope = ui.growthScope;
-    if (scope && scope !== 'all' && scope !== 'lvlup' && scope !== 'goninja') return scope;
-    return ui.spendSchool || 'waunakee';
+  function metricsScope() {
+    return ui.listScope || 'all';
   }
 
-  function ownerPulseStrip() {
-    var view = window.LvlupGrowthView;
-    if (!view) return '';
-    return view.strip(schoolId(), growthCells());
+  function spendSchoolId() {
+    var scope = metricsScope();
+    if (scope && scope !== 'all' && scope !== 'lvlup' && scope !== 'goninja') return scope;
+    return ui.spendSchool || schoolId() || 'waunakee';
   }
 
   function growth() {
     var view = window.LvlupGrowthView;
-    if (!view) return '<h1>Attrition &amp; CAC</h1><p class="lede">Growth figures are not in this preview.</p>';
+    if (!view) return '<h1>Growth &amp; Metrics</h1><p class="lede">Metrics are not in this preview.</p>';
     return view.page({
-      view: ui.growthView,
       month: ui.growthMonth,
-      scope: ui.growthScope,
+      scope: metricsScope(),
       spendSchool: spendSchoolId(),
       spendError: ui.spendError,
       askText: ui.askText,
@@ -855,12 +920,16 @@
     var api = growthApi();
     var text = String(question || '').trim();
     ui.askText = text;
-    ui.growthView = 'ask';
+    ui.tab = 'people';
+    ui.peopleView = 'metrics';
     if (!api) { ui.askAnswer = 'Growth figures are not in this preview.'; render(); return; }
-    var local = api.answerGrowthQuestion(text, { scope: ui.growthScope, month: ui.growthMonth, cells: growthCells() });
+    var local = api.answerGrowthQuestion(text, { scope: metricsScope(), month: ui.growthMonth, cells: growthCells() });
     ui.askAnswer = local.answer;
     if (local.month && api.GROWTH_MONTHS.indexOf(local.month) >= 0) ui.growthMonth = local.month;
-    if (local.scope) ui.growthScope = local.scope;
+    if (local.scope) {
+      ui.listScope = local.scope;
+      ui.growthScope = local.scope;
+    }
     render();
     if (uiLib.dataMode() !== 'live' || !uiLib.token()) return;
     uiLib.api('/v1/growth/ask?q=' + encodeURIComponent(text) + '&scope=' + encodeURIComponent(ui.growthScope) + '&month=' + encodeURIComponent(ui.growthMonth)).then(function (res) {
@@ -948,16 +1017,42 @@
     }
     if (act === 'sign-open') { ui.signOpen = true; render(); return; }
     if (act === 'today-view') {
-      ui.todayView = el.getAttribute('data-view') === 'tasks' ? 'tasks' : 'desk';
-      history.replaceState(null, '', ui.todayView === 'tasks' ? '#tasks' : '#today');
+      var nextView = el.getAttribute('data-view');
+      ui.todayView = nextView === 'tasks' ? 'tasks' : nextView === 'lobby' ? 'lobby' : 'desk';
+      history.replaceState(null, '', ui.todayView === 'tasks' ? '#tasks' : ui.todayView === 'lobby' ? '#lobby' : '#today');
       render();
       return;
     }
+    if (act === 'metrics-open') {
+      ui.tab = 'people';
+      ui.peopleView = 'metrics';
+      var chosen = el.getAttribute('data-school');
+      if (chosen === 'all') ui.listScope = 'all';
+      else if (chosen) { ui.listScope = chosen; store.staffSchool = chosen; save(); }
+      history.replaceState(null, '', '#metrics');
+      render();
+      return;
+    }
+    if (act === 'metrics-ask' || act === 'metrics-ask-go') {
+      var asked = act === 'metrics-ask' ? (el.getAttribute('data-q') || '') : ((document.getElementById('metrics-q') || {}).value || ui.askText);
+      askGrowth(asked);
+      return;
+    }
+    if (act === 'metrics-csv') {
+      var metricsLib = growthApi();
+      if (!metricsLib) return;
+      downloadCsv(metricsLib.metricsCsv(metricsScope(), ui.growthMonth, growthCells()), 'metrics-' + ui.growthMonth + '.csv');
+      toast('ok', 'Metrics CSV downloaded.');
+      return;
+    }
+    if (window.CrmGrowth && window.CrmGrowth.handle(act, el, studioCtx())) return;
+    if (window.CrmStudio && window.CrmStudio.handle(act, el, studioCtx())) return;
     if (act === 'tab') {
       ui.tab = el.getAttribute('data-tab');
       ui.drawer = '';
+      ui.quickId = '';
       ui.toast = null;
-      if (ui.tab === 'growth') history.replaceState(null, '', '#growth');
+      if (ui.tab === 'people' && ui.peopleView === 'metrics') history.replaceState(null, '', '#metrics');
       if (ui.tab === 'schedule') {
         var next = upcomingHere()[0];
         if (next) ui.day = next.date;
@@ -967,11 +1062,15 @@
     }
     if (act === 'school') { store.staffSchool = el.getAttribute('data-id'); save(); render(); return; }
     if (act === 'growth-open') {
-      ui.tab = 'growth';
-      ui.growthView = el.getAttribute('data-view') || 'pulse';
+      ui.tab = 'people';
+      ui.peopleView = 'metrics';
       var opened = el.getAttribute('data-school');
-      if (opened) ui.growthScope = opened;
-      history.replaceState(null, '', '#growth');
+      if (opened && opened !== 'all') {
+        ui.listScope = opened;
+        store.staffSchool = opened;
+        save();
+      }
+      history.replaceState(null, '', '#metrics');
       render();
       return;
     }
@@ -1035,6 +1134,7 @@
     if (act === 'pay-undo') { delete store.paymentPreview[ui.drawer]; ui.editPay = false; save(); toast('ok', 'Draft restored. Nothing was charged.'); return; }
     if (act === 'open') {
       ui.drawer = el.getAttribute('data-id');
+      ui.quickId = '';
       ui.editPay = false;
       var opened = findPerson(ui.drawer);
       render();
@@ -1437,9 +1537,30 @@
     uiLib.api('/v1/desk/tasks?locationId=' + encodeURIComponent(schoolId())).then(function (res) {
       if (res.status === 404) ui.liveNote = 'Live sandbox is up. Task sync arrives with the next API deploy. Checks stay on this device. Charges are off.';
     });
+    uiLib.api('/v1/studio/overview?asOf=' + encodeURIComponent(store.today) + '&locationId=' + encodeURIComponent(schoolId())).then(function (res) {
+      if (res.ok && res.body && res.body.pulse && res.body.charges === false) {
+        ui.remoteStudio = res.body;
+        render();
+      }
+    });
   }
 
   document.getElementById('app').addEventListener('click', onClick);
+  document.getElementById('app').addEventListener('dragstart', function (event) {
+    var card = event.target.closest('[data-drag]');
+    if (!card || !event.dataTransfer) return;
+    event.dataTransfer.setData('text/plain', card.getAttribute('data-drag'));
+    event.dataTransfer.effectAllowed = 'move';
+  });
+  document.getElementById('app').addEventListener('dragover', function (event) {
+    if (event.target.closest('[data-stage]')) event.preventDefault();
+  });
+  document.getElementById('app').addEventListener('drop', function (event) {
+    var col = event.target.closest('[data-stage]');
+    if (!col || !event.dataTransfer) return;
+    event.preventDefault();
+    if (window.CrmGrowth) window.CrmGrowth.move(event.dataTransfer.getData('text/plain'), col.getAttribute('data-stage'), studioCtx());
+  });
   document.getElementById('app').addEventListener('input', function (event) {
     if (event.target.id === 'people-q' || event.target.id === 'checkin-q') {
       ui.query = event.target.value;
@@ -1455,9 +1576,14 @@
     if (event.target.classList && event.target.classList.contains('spend-input')) {
       ui.spendDraft[event.target.getAttribute('data-key')] = event.target.value;
     }
-    if (event.target.id === 'ask-q') ui.askText = event.target.value;
+    if (event.target.id === 'ask-q' || event.target.id === 'metrics-q') ui.askText = event.target.value;
+    if (event.target.id === 'quiz-person') ui.quizPerson = event.target.value;
   });
   document.getElementById('app').addEventListener('change', function (event) {
+    if (event.target.getAttribute('data-act') === 'pipe-move' && window.CrmGrowth) {
+      window.CrmGrowth.move(event.target.getAttribute('data-id'), event.target.value, studioCtx());
+      return;
+    }
     if (event.target.id === 'qbo-from' || event.target.id === 'qbo-through') {
       ui.qboFrom = (document.getElementById('qbo-from') || {}).value || '';
       ui.qboThrough = (document.getElementById('qbo-through') || {}).value || '';

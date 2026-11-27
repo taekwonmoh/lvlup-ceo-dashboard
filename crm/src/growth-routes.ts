@@ -14,6 +14,8 @@ import {
   attritionReport,
   cacCsv,
   cacReport,
+  metricsCsv,
+  metricsReport,
   cellsWithSpend,
   parseSpendInput,
   pulseReport,
@@ -222,6 +224,9 @@ export async function handleGrowthHttp(input: {
     if (kind === 'cac.csv') {
       return { status: 200, text: cacCsv(scope, month, loaded.cells), contentType: 'text/csv; charset=utf-8', body: null };
     }
+    if (kind === 'metrics.csv') {
+      return { status: 200, text: metricsCsv(scope, month, loaded.cells), contentType: 'text/csv; charset=utf-8', body: null };
+    }
     if (kind === 'attrition') {
       return { status: 200, body: { ...flags, ...attritionReport(scope, month, loaded.cells) } };
     }
@@ -230,6 +235,9 @@ export async function handleGrowthHttp(input: {
     }
     if (kind === 'pulse') {
       return { status: 200, body: { ...flags, ...pulseReport(scope, month, loaded.cells) } };
+    }
+    if (kind === 'metrics') {
+      return { status: 200, body: { ...flags, ...metricsReport(scope, month, loaded.cells) } };
     }
     if (kind === 'ask') {
       const question = String(search.get('q') || input.body.question || input.body.q || '');

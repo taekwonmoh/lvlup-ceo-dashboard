@@ -4,6 +4,7 @@
  */
 import { assertFinance, type Actor } from './auth.ts';
 import { CrmError } from './errors.ts';
+import { readFeeSchedule } from './growth-desk.ts';
 import {
   SELECT_QBO_MAPPINGS,
   UPSERT_QBO_MAPPING,
@@ -146,6 +147,7 @@ export async function handleQuickbooksHttp(input: {
       through: search.get('through') || undefined,
       asOf: search.get('asOf') || undefined,
       catalog,
+      feeSchedule: search.get('passThrough') === '1' ? await readFeeSchedule(pool) : undefined,
     });
     const format = search.get('format') || 'preview';
     if (format === 'csv') {

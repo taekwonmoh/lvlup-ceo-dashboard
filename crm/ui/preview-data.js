@@ -79,6 +79,6 @@
         { name: 'Sam Preview', memberships: 3, cents: 180000 },
       ],
     },
-    tuitionNote: 'Starting in 2027, tuition includes every belt test. There is no $100 belt test fee.',
+    tuitionNote: 'Starting in 2027, tuition includes every belt test.',
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

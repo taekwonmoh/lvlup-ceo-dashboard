@@ -4,6 +4,7 @@
  * QBO_SYNC_ENABLED stays 0. Nothing here is submitted or charged.
  */
 import { CrmError } from './errors.ts';
+import { policyFeeCents, type FeeSchedule } from './growth-desk.ts';
 import { QBO_COMPANIES } from './qbo.ts';
 
 export const QBO_AS_OF = '2026-11-27';
@@ -463,7 +464,8 @@ type Bucket = {
   memos: string[];
 };
 
-function lineFee(line: QboLedgerLine): number {
+function lineFee(line: QboLedgerLine, schedule?: FeeSchedule): number {
+  if (schedule) return policyFeeCents(line, schedule);
   const captured = line.grossCents - line.creditCents;
   return processingFeeCents(captured, line.method);
 }
@@ -486,6 +488,7 @@ function buildEntity(
   period: { from: string; through: string },
   catalog: QboCatalog,
   lines: QboLedgerLine[],
+  schedule?: FeeSchedule,
 ): EntityExport {
   const schools = new Set<string>(company.schools);
   const buckets = new Map<string, Bucket>();
@@ -507,7 +510,7 @@ function buildEntity(
     bucket.count += line.count;
     bucket.grossCents += line.grossCents;
     bucket.refundCents += line.refundCents;
-    bucket.feeCents += lineFee(line);
+    bucket.feeCents += lineFee(line, schedule);
     bucket.creditCents += line.creditCents;
     if (line.memo) bucket.memos.push(line.memo);
     buckets.set(key, bucket);
@@ -694,12 +697,13 @@ export function buildQuickbooksExport(input: {
   asOf?: string;
   catalog?: QboCatalog;
   lines?: QboLedgerLine[];
+  feeSchedule?: FeeSchedule;
 } = {}): QboExport {
   const catalog = input.catalog || defaultCatalog();
   const period = periodRange(input);
   const companies = companiesFor(input.entity || 'all');
   const lines = input.lines || QBO_SANDBOX_LINES;
-  const entities = companies.map(company => buildEntity(company, period, catalog, lines));
+  const entities = companies.map(company => buildEntity(company, period, catalog, lines, input.feeSchedule));
   const categories = sumCategories(entities, catalog);
   const creditCents = categories.reduce((sum, row) => sum + row.creditCents, 0);
   const totals = totalsOf(categories, creditCents);

@@ -39,9 +39,15 @@ var LvlupGrowth = (() => {
     cacCsv: () => cacCsv,
     cacReport: () => cacReport,
     cellsWithSpend: () => cellsWithSpend,
+    conversionPct: () => conversionPct,
     demoCells: () => demoCells,
     formatMoney: () => formatMoney,
     formatPct: () => formatPct,
+    lifespanMonths: () => lifespanMonths,
+    ltvFromAttrition: () => ltvFromAttrition,
+    metricsCsv: () => metricsCsv,
+    metricsReport: () => metricsReport,
+    momPct: () => momPct,
     monthFromQuestion: () => monthFromQuestion,
     monthLabel: () => monthLabel,
     monthShort: () => monthShort,
@@ -310,7 +316,7 @@ var LvlupGrowth = (() => {
       Math.max(0, startingActive - 1),
       Math.max(0, Math.round(base.cancellations * (1 + 0.1 * monthsAgo)))
     );
-    const gained = Math.max(0, Math.round(base.newEnrollments * (monthsAgo % 2 === 0 ? 0.92 : 1)));
+    const gained = Math.max(0, Math.round(base.newEnrollments * (1 - 0.12 * monthsAgo)));
     const reasonWeights = REASONS.map((reason) => base.reasons[reason.id]);
     const tenureWeights = TENURES.map((bucket) => base.tenure[bucket.id]);
     const reasonParts = apportion(cancellations, reasonWeights);
@@ -325,12 +331,12 @@ var LvlupGrowth = (() => {
       tenure[bucket.id] = tenureParts[index];
     });
     const channels = blankChannels();
-    const scale = monthsAgo % 2 === 0 ? 1.08 : 0.95;
+    const leadScale = 1 + 0.22 * monthsAgo;
     CHANNELS.forEach((channel, index) => {
       const enrolled = enrolledParts[index];
       const source = base.channels[channel.id];
-      const leads = Math.max(enrolled, Math.round(source.leads * scale));
-      const trials = Math.max(enrolled, Math.min(leads, Math.round(source.trials * scale)));
+      const leads = Math.max(enrolled, Math.round(source.leads * leadScale));
+      const trials = Math.max(enrolled, Math.min(leads, Math.round(source.trials * leadScale)));
       const spendCents = source.spendCents === 0 ? 0 : Math.max(0, Math.round(source.spendCents * (1 + 0.03 * monthsAgo)));
       channels[channel.id] = { leads, trials, enrolled, spendCents };
     });
@@ -797,6 +803,170 @@ var LvlupGrowth = (() => {
     }
     return null;
   }
+  function conversionPct(part, whole) {
+    if (!whole) return null;
+    return round1(part / whole * 100);
+  }
+  function momPct(current, previous) {
+    if (previous == null || previous <= 0) return null;
+    return round1((current - previous) / previous * 100);
+  }
+  function lifespanMonths(attrition) {
+    if (attrition == null || attrition <= 0) return null;
+    return round1(100 / attrition);
+  }
+  function ltvFromAttrition(arpmCents, attrition) {
+    if (arpmCents == null || attrition == null || attrition <= 0) return null;
+    return Math.round(arpmCents * 100 / attrition);
+  }
+  function channelTotals(rows) {
+    return CHANNELS.map((channel) => channelEconomics(channel.id, rows.map((row) => row.channels[channel.id])));
+  }
+  function metricsSnapshot(rows, prior) {
+    const channels = channelTotals(rows);
+    const priorChannels = prior ? channelTotals(prior) : null;
+    const leads = sum(channels.map((row) => row.leads));
+    const trials = sum(channels.map((row) => row.trials));
+    const newMembers = sum(rows.map((row) => row.newEnrollments));
+    const priorLeads = priorChannels ? sum(priorChannels.map((row) => row.leads)) : null;
+    const priorTrials = priorChannels ? sum(priorChannels.map((row) => row.trials)) : null;
+    const priorMembers = prior ? sum(prior.map((row) => row.newEnrollments)) : null;
+    const startingActive = sum(rows.map((row) => row.startingActive));
+    const cancellations = sum(rows.map((row) => row.cancellations));
+    const attrition = attritionPct(cancellations, startingActive);
+    const spendCents = sum(channels.map((row) => row.spendCents));
+    const paid = channels.filter((row) => row.paid);
+    const blended = cacCents(spendCents, newMembers);
+    const arpm = weighted(rows, tuitionOf);
+    const life = lifespanMonths(attrition);
+    const ltv = ltvFromAttrition(arpm, attrition);
+    return {
+      leads,
+      trials,
+      newMembers,
+      leadsMom: momPct(leads, priorLeads),
+      trialsMom: momPct(trials, priorTrials),
+      membersMom: momPct(newMembers, priorMembers),
+      leadToTrialPct: conversionPct(trials, leads),
+      trialToMemberPct: conversionPct(newMembers, trials),
+      leadToMemberPct: conversionPct(newMembers, leads),
+      startingActive,
+      cancellations,
+      attritionPct: attrition,
+      retentionPct: retentionPct(attrition),
+      netGrowth: newMembers - cancellations,
+      onTrack: attrition == null ? true : attrition <= GOAL_PCT,
+      spendCents,
+      blendedCacCents: blended,
+      paidCacCents: cacCents(sum(paid.map((row) => row.spendCents)), sum(paid.map((row) => row.newMembers))),
+      arpmCents: arpm,
+      lifespanMonths: life,
+      ltvCents: ltv,
+      ltvCacRatio: blended && ltv != null ? round1(ltv / blended) : null
+    };
+  }
+  function metricsReport(scope, month, cells = demoCells()) {
+    assertMonth(month);
+    const { ids, partial } = idsFor(scope, cells);
+    const priorKey = shiftMonth(month, -1);
+    const priorOk = GROWTH_MONTHS.includes(priorKey);
+    const current = monthCells(cells, month, ids);
+    const prior = priorOk ? monthCells(cells, priorKey, ids) : null;
+    const summary = metricsSnapshot(current, prior);
+    const bySchool = ids.map((id) => {
+      const school = schoolById(id);
+      const rows = current.filter((row) => row.locationId === id);
+      const before = prior ? prior.filter((row) => row.locationId === id) : null;
+      return { id, name: school.name, brand: school.brand, ...metricsSnapshot(rows, before) };
+    });
+    const channels = channelTotals(current).map((row) => ({
+      ...row,
+      leadToTrialPct: conversionPct(row.trials, row.leads),
+      trialToMemberPct: conversionPct(row.newMembers, row.trials),
+      leadToMemberPct: conversionPct(row.newMembers, row.leads)
+    }));
+    const label = groupLabel(ids, scope, partial);
+    const attrition = attritionReport(scope, month, cells);
+    const trend = GROWTH_MONTHS.map((key) => {
+      const rows = monthCells(cells, key, ids);
+      const shot = metricsSnapshot(rows, null);
+      return {
+        month: key,
+        label: monthLabel(key),
+        short: monthShort(key),
+        attritionPct: shot.attritionPct,
+        leads: shot.leads,
+        trials: shot.trials,
+        newMembers: shot.newMembers,
+        netGrowth: shot.netGrowth,
+        blendedCacCents: shot.blendedCacCents
+      };
+    });
+    return {
+      scope,
+      scopeLabel: label,
+      month,
+      monthLabel: monthLabel(month),
+      partial,
+      goalPct: GOAL_PCT,
+      summary,
+      bySchool,
+      channels,
+      reasons: attrition.reasons,
+      tenure: attrition.tenure,
+      trend
+    };
+  }
+  function metricsCsv(scope, month, cells = demoCells()) {
+    const report = metricsReport(scope, month, cells);
+    const header = ["Type", "Name", "Leads", "Trials", "New members", "Lead to first class %", "First class to member %", "Lead to member %", "Starting active", "Cancellations", "Attrition %", "Net growth", "Spend", "CAC", "ARPM", "Lifespan months", "LTV", "LTV:CAC"];
+    const line = (type, name, row, spend = row.spendCents) => [
+      type,
+      name,
+      row.leads,
+      row.trials,
+      row.newMembers,
+      row.leadToTrialPct == null ? "" : row.leadToTrialPct.toFixed(1),
+      row.trialToMemberPct == null ? "" : row.trialToMemberPct.toFixed(1),
+      row.leadToMemberPct == null ? "" : row.leadToMemberPct.toFixed(1),
+      row.startingActive,
+      row.cancellations,
+      row.attritionPct == null ? "" : row.attritionPct.toFixed(1),
+      row.netGrowth,
+      dollars(spend),
+      dollars(row.blendedCacCents),
+      dollars(row.arpmCents),
+      row.lifespanMonths == null ? "" : row.lifespanMonths.toFixed(1),
+      dollars(row.ltvCents),
+      row.ltvCacRatio == null ? "" : row.ltvCacRatio.toFixed(1)
+    ].map(csvEscape).join(",");
+    const channelLine = (row) => [
+      "Channel",
+      row.name,
+      row.leads,
+      row.trials,
+      row.newMembers,
+      row.leadToTrialPct == null ? "" : row.leadToTrialPct.toFixed(1),
+      row.trialToMemberPct == null ? "" : row.trialToMemberPct.toFixed(1),
+      row.leadToMemberPct == null ? "" : row.leadToMemberPct.toFixed(1),
+      "",
+      "",
+      "",
+      "",
+      dollars(row.spendCents),
+      dollars(row.cacCents),
+      "",
+      "",
+      "",
+      ""
+    ].map(csvEscape).join(",");
+    return [
+      header.join(","),
+      line("Summary", report.scopeLabel === "all 6 schools" ? "All schools" : report.scopeLabel, report.summary),
+      ...report.bySchool.map((row) => line("School", row.name, row)),
+      ...report.channels.map(channelLine)
+    ].join("\n") + "\n";
+  }
   function topCounts(rows, limit = 3) {
     return rows.filter((row) => row.count > 0).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, limit);
   }
@@ -830,9 +1000,12 @@ var LvlupGrowth = (() => {
     }
     const attrition = attritionReport(reportScope, month, cells);
     const cac = cacReport(reportScope, month, cells);
+    const metrics = metricsReport(reportScope, month, cells);
     const where = attrition.scopeLabel;
     const when = attrition.monthLabel;
-    const wantsCac = /cac|acquisition|ad spend|channel|cost per/.test(text);
+    const wantsCac = /cac|acquisition|ad spend|marketing spend|channel|cost per/.test(text);
+    const wantsFunnel = /new lead|first class|lead to|how many lead|conversion funnel/.test(text);
+    const wantsLifespan = /lifespan|arpm|revenue per member/.test(text);
     const wantsWhy = /why|reason|leaving|left|cancel reason/.test(text);
     const wantsTenure = /tenure|early|how long|under 3|3 month/.test(text);
     const wantsUnit = /ltv|payback|tuition|unit economic/.test(text);
@@ -895,12 +1068,20 @@ var LvlupGrowth = (() => {
         const channelBits = cac.channels.map((row) => row.name + " " + formatMoney(row.cacCents) + " (" + formatMoney(row.spendCents) + " spend, " + row.newMembers + " new)");
         parts.push("By channel: " + channelBits.join("; ") + ".");
       }
-      if (wantsUnit) {
+      if (wantsFunnel) {
+        topic = "funnel";
+        const row = metrics.summary;
+        parts.push(when + " across " + where + ": " + row.leads + " new leads, " + row.trials + " first classes, and " + row.newMembers + " new members.");
+        parts.push("Lead to first class is " + formatPct(row.leadToTrialPct) + ". First class to membership is " + formatPct(row.trialToMemberPct) + ". Lead to member is " + formatPct(row.leadToMemberPct) + ".");
+        parts.push("By school: " + metrics.bySchool.map((school) => school.name + " " + school.leads + " leads, " + school.newMembers + " members").join("; ") + ".");
+      }
+      if (wantsLifespan || wantsUnit) {
         topic = "unit";
-        const summary = cac.summary;
-        parts.push("Across " + where + " in " + when + ", average monthly tuition is " + formatMoney(summary.avgTuitionCents) + " and LTV is " + formatMoney(summary.ltvCents) + ".");
-        parts.push("The LTV to CAC ratio is " + (summary.ltvCacRatio == null ? "n/a" : summary.ltvCacRatio.toFixed(1) + " to 1") + ". CAC payback is " + (summary.paybackMonths == null ? "n/a" : summary.paybackMonths.toFixed(1) + " months") + ".");
-        parts.push("LTV is average monthly tuition times average length of stay. Payback is blended CAC divided by that tuition.");
+        const row = metrics.summary;
+        const stay = cac.summary;
+        parts.push("Across " + where + " in " + when + ", average revenue per member is " + formatMoney(row.arpmCents) + ". Average member lifespan is " + (row.lifespanMonths == null ? "n/a" : row.lifespanMonths.toFixed(1) + " months") + ", which is 1 divided by the " + formatPct(row.attritionPct) + " attrition rate.");
+        parts.push("LTV from that lifespan is " + formatMoney(row.ltvCents) + ". The LTV to CAC ratio is " + (row.ltvCacRatio == null ? "n/a" : row.ltvCacRatio.toFixed(1) + " to 1") + ".");
+        parts.push("Using the sample length of stay, the ratio is " + (stay.ltvCacRatio == null ? "n/a" : stay.ltvCacRatio.toFixed(1) + " to 1") + ". CAC payback is " + (stay.paybackMonths == null ? "n/a" : stay.paybackMonths.toFixed(1) + " months") + ".");
       }
     }
     if (!parts.length) {

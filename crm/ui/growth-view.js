@@ -1,4 +1,4 @@
-/* Attrition and CAC screens for the staff preview. Synthetic counts only. */
+/* Growth & Metrics. One view for the funnel, attrition, and acquisition cost. */
 (function (root) {
   function esc(value) {
     return String(value == null ? '' : value)
@@ -25,55 +25,17 @@
     return n > 0 ? '+' + n : String(n);
   }
 
-  function cellFor(cells, school, month) {
-    return (cells || []).filter(function (row) { return row.locationId === school && row.month === month; })[0] || null;
+  function mom(value) {
+    if (value == null) return '';
+    return '<em class="mom">' + esc(signed(value) + '% vs last month') + '</em>';
   }
 
   function spendText(cells, school, month, channel, draft) {
     var key = school + '|' + month + '|' + channel;
     if (draft && Object.prototype.hasOwnProperty.call(draft, key)) return draft[key];
-    var cell = cellFor(cells, school, month);
+    var cell = (cells || []).filter(function (row) { return row.locationId === school && row.month === month; })[0];
     var cents = cell && cell.channels && cell.channels[channel] ? cell.channels[channel].spendCents : 0;
     return (Number(cents) / 100).toFixed(2);
-  }
-
-  function pill(onTrack) {
-    return onTrack
-      ? '<span class="growth-pill on">At or under 3%</span>'
-      : '<span class="growth-pill watch">Above 3%</span>';
-  }
-
-  function metrics(card) {
-    return '<div class="pulse-metrics">' +
-      '<div><span>Monthly attrition</span><strong data-metric="attrition">' + esc(pct(card.attritionPct)) + '</strong></div>' +
-      '<div><span>Blended CAC</span><strong data-metric="cac">' + esc(money(card.blendedCacCents)) + '</strong></div>' +
-      '<div><span>Net growth</span><strong>' + esc(signed(card.netGrowth)) + '</strong></div>' +
-      '<div><span>Retention</span><strong>' + esc(pct(card.retentionPct)) + '</strong></div>' +
-      '</div>';
-  }
-
-  function strip(schoolId, cells) {
-    var lib = api();
-    if (!lib) return '';
-    var pulse;
-    try { pulse = lib.pulseReport(schoolId, '2026-11', cells); }
-    catch (err) { return ''; }
-    var card = pulse.rollup;
-    return '<button type="button" class="pulse-strip" data-act="growth-open" data-view="pulse" data-school="' + esc(schoolId) + '">' +
-      '<span class="pulse-kicker">Owner Pulse</span>' +
-      '<span><strong data-metric="attrition">' + esc(pct(card.attritionPct)) + '</strong><em>Attrition</em></span>' +
-      '<span><strong data-metric="cac">' + esc(money(card.blendedCacCents)) + '</strong><em>Blended CAC</em></span>' +
-      '<span class="pulse-link">Open</span></button>';
-  }
-
-  function switcher(view) {
-    function btn(id, label) {
-      var on = view === id;
-      return '<button type="button"' + (on ? ' class="on" aria-current="page"' : '') + ' data-act="growth-view" data-view="' + id + '">' + label + '</button>';
-    }
-    return '<div class="segment growth-switch" role="tablist" aria-label="Growth">' +
-      btn('pulse', 'Owner Pulse') + btn('attrition', 'Attrition') + btn('cac', 'CAC') + btn('ask', 'Ask LVLUP') +
-      '</div>';
   }
 
   function monthChips(month) {
@@ -84,30 +46,8 @@
     }).join('') + '</div>';
   }
 
-  function scopeChips(scope) {
-    var lib = api();
-    var rows = [{ id: 'all', name: 'All schools' }, { id: 'lvlup', name: 'LVLUP' }, { id: 'goninja', name: 'Go Ninja' }].concat(lib.GROWTH_SCHOOLS.map(function (row) {
-      return { id: row.id, name: row.name };
-    }));
-    return '<div class="chips growth-chips" aria-label="Schools">' + rows.map(function (row) {
-      var on = row.id === scope ? ' on' : '';
-      return '<button type="button" class="chip' + on + '" data-act="growth-scope" data-scope="' + esc(row.id) + '">' + esc(row.name) + '</button>';
-    }).join('') + '</div>';
-  }
-
-  function pulsePage(pulse) {
-    var rollup = '<article class="pulse-card rollup"><p class="pulse-kicker">All in this view</p><h2>' + esc(pulse.rollup.name) + '</h2>' +
-      pill(pulse.rollup.onTrack) + metrics(pulse.rollup) +
-      '<div class="pulse-actions"><button type="button" class="big" data-act="growth-open" data-view="attrition" data-school="' + esc(pulse.scope) + '">Attrition detail</button>' +
-      '<button type="button" class="big" data-act="growth-open" data-view="cac" data-school="' + esc(pulse.scope) + '">CAC detail</button></div></article>';
-    var cards = pulse.schools.map(function (card) {
-      return '<article class="pulse-card"><p class="pulse-kicker">' + esc(card.brand === 'goninja' ? 'Go Ninja' : 'LVLUP') + '</p><h3>' + esc(card.name) + '</h3>' +
-        pill(card.onTrack) + (card.earlyDrop ? '<span class="growth-pill early">Early drop</span>' : '') +
-        metrics(card) +
-        '<div class="pulse-actions"><button type="button" class="big" data-act="growth-open" data-view="attrition" data-school="' + esc(card.id) + '">Attrition</button>' +
-        '<button type="button" class="big" data-act="growth-open" data-view="cac" data-school="' + esc(card.id) + '">CAC</button></div></article>';
-    }).join('');
-    return rollup + '<div class="pulse-grid">' + cards + '</div>';
+  function kpi(label, value, note) {
+    return '<div class="kpi"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong>' + (note || '') + '</div>';
   }
 
   function trend(report) {
@@ -138,72 +78,45 @@
     }).join('');
   }
 
-  function attritionPage(report) {
-    var summary = report.summary;
-    var head = '<div class="kpis growth-kpis">' +
-      '<div class="kpi"><span>Attrition</span><strong>' + esc(pct(summary.attritionPct)) + '</strong></div>' +
-      '<div class="kpi"><span>Net growth</span><strong>' + esc(signed(summary.netGrowth)) + '</strong></div>' +
-      '<div class="kpi"><span>Retention</span><strong>' + esc(pct(summary.retentionPct)) + '</strong></div>' +
-      '<div class="kpi"><span>Canceled</span><strong>' + summary.cancellations + '</strong></div></div>' +
-      '<p class="meta">Attrition is cancellations divided by starting active members. Retention is 100% minus attrition. Net growth is new enrollments minus cancellations.</p>';
-    var tableHead = '<div class="growth-row growth-head" role="row"><span>School</span><span>Start</span><span>New</span><span>Lost</span><span>Attrition</span><span>Net</span><span>Retention</span></div>';
+  function schoolTable(report) {
+    var head = '<div class="growth-row growth-head" role="row"><span>School</span><span>Leads</span><span>Trials</span><span>New</span><span>Lead to member</span><span>Attrition</span><span>Net</span><span>CAC</span></div>';
     var lines = report.bySchool.map(function (row) {
       return '<div class="growth-row" role="row">' +
-        '<span data-label="School"><strong>' + esc(row.name) + '</strong>' + (row.earlyDrop ? '<em class="growth-pill early">Early drop</em>' : '') + '</span>' +
-        '<span data-label="Start">' + row.startingActive + '</span>' +
-        '<span data-label="New">' + row.newEnrollments + '</span>' +
-        '<span data-label="Lost">' + row.cancellations + '</span>' +
+        '<span data-label="School"><strong>' + esc(row.name) + '</strong></span>' +
+        '<span data-label="Leads">' + row.leads + '</span>' +
+        '<span data-label="Trials">' + row.trials + '</span>' +
+        '<span data-label="New">' + row.newMembers + '</span>' +
+        '<span data-label="Lead to member">' + esc(pct(row.leadToMemberPct)) + '</span>' +
         '<span data-label="Attrition">' + esc(pct(row.attritionPct)) + '</span>' +
         '<span data-label="Net">' + esc(signed(row.netGrowth)) + '</span>' +
-        '<span data-label="Retention">' + esc(pct(row.retentionPct)) + '</span></div>';
+        '<span data-label="CAC">' + esc(money(row.blendedCacCents)) + '</span></div>';
     }).join('');
-    var total = '<div class="growth-row total" role="row"><span data-label="School"><strong>' + esc(summary.name) + '</strong></span>' +
-      '<span data-label="Start">' + summary.startingActive + '</span><span data-label="New">' + summary.newEnrollments + '</span>' +
-      '<span data-label="Lost">' + summary.cancellations + '</span><span data-label="Attrition">' + esc(pct(summary.attritionPct)) + '</span>' +
-      '<span data-label="Net">' + esc(signed(summary.netGrowth)) + '</span><span data-label="Retention">' + esc(pct(summary.retentionPct)) + '</span></div>';
-    return head + '<h2>6-month trend</h2>' + trend(report) +
-      '<div class="growth-table" role="table" aria-label="Monthly attrition by school">' + tableHead + lines + total + '</div>' +
-      '<button type="button" class="big primary" data-act="attrition-csv">Download attrition CSV</button>' +
-      '<div class="split-panels"><section><h2>Why students left</h2>' + bars(report.reasons) + '</section>' +
-      '<section><h2>How long they had trained</h2>' + bars(report.tenure) + '</section></div>';
+    var summary = report.summary;
+    var total = '<div class="growth-row total" role="row"><span data-label="School"><strong>All in this view</strong></span>' +
+      '<span data-label="Leads">' + summary.leads + '</span><span data-label="Trials">' + summary.trials + '</span>' +
+      '<span data-label="New">' + summary.newMembers + '</span><span data-label="Lead to member">' + esc(pct(summary.leadToMemberPct)) + '</span>' +
+      '<span data-label="Attrition">' + esc(pct(summary.attritionPct)) + '</span><span data-label="Net">' + esc(signed(summary.netGrowth)) + '</span>' +
+      '<span data-label="CAC">' + esc(money(summary.blendedCacCents)) + '</span></div>';
+    return '<div class="growth-table" role="table" aria-label="Metrics by school">' + head + lines + total + '</div>';
   }
 
-  function channelRows(channels) {
-    return channels.map(function (row) {
+  function channelTable(report) {
+    var head = '<div class="growth-row growth-head channel" role="row"><span>Channel</span><span>Spend</span><span>Leads</span><span>Trials</span><span>New</span><span>Lead to class</span><span>Class to member</span><span>CAC</span></div>';
+    var lines = report.channels.map(function (row) {
       return '<div class="growth-row channel" role="row">' +
         '<span data-label="Channel"><strong>' + esc(row.name) + '</strong></span>' +
         '<span data-label="Spend">' + esc(money(row.spendCents)) + '</span>' +
         '<span data-label="Leads">' + row.leads + '</span>' +
         '<span data-label="Trials">' + row.trials + '</span>' +
-        '<span data-label="New members">' + row.newMembers + '</span>' +
-        '<span data-label="Cost per lead">' + esc(money(row.costPerLeadCents)) + '</span>' +
-        '<span data-label="Cost per trial">' + esc(money(row.costPerTrialCents)) + '</span>' +
+        '<span data-label="New">' + row.newMembers + '</span>' +
+        '<span data-label="Lead to class">' + esc(pct(row.leadToTrialPct)) + '</span>' +
+        '<span data-label="Class to member">' + esc(pct(row.trialToMemberPct)) + '</span>' +
         '<span data-label="CAC">' + esc(money(row.cacCents)) + '</span></div>';
     }).join('');
+    return '<div class="growth-table" role="table" aria-label="Metrics by channel">' + head + lines + '</div>';
   }
 
-  function channelHead() {
-    return '<div class="growth-row growth-head channel" role="row"><span>Channel</span><span>Spend</span><span>Leads</span><span>Trials</span><span>New</span><span>Per lead</span><span>Per trial</span><span>CAC</span></div>';
-  }
-
-  function econ(summary) {
-    function tile(label, value) {
-      return '<div class="kpi"><span>' + label + '</span><strong>' + esc(value) + '</strong></div>';
-    }
-    var ratio = summary.ltvCacRatio == null ? 'n/a' : summary.ltvCacRatio.toFixed(1) + ' : 1';
-    var payback = summary.paybackMonths == null ? 'n/a' : summary.paybackMonths.toFixed(1);
-    return '<div class="kpis growth-kpis econ">' +
-      tile('Blended CAC', money(summary.blendedCacCents)) +
-      tile('Paid-only CAC', money(summary.paidCacCents)) +
-      tile('Avg monthly tuition', money(summary.avgTuitionCents)) +
-      tile('LTV', money(summary.ltvCents)) +
-      tile('LTV : CAC', ratio) +
-      tile('Payback, months', payback) +
-      '</div><p class="meta">Blended CAC is all marketing spend divided by new enrolled students. Paid-only CAC uses Google Ads and Meta / Facebook Ads. LTV is average monthly tuition times average length of stay. Payback is blended CAC divided by that tuition.</p>';
-  }
-
-  function spendPanel(ctx, lib) {
-    var school = ctx.spendSchool;
+  function spendPanel(ctx, lib, school) {
     var schoolName = (lib.schoolById(school) || {}).name || school;
     var chips = lib.GROWTH_SCHOOLS.map(function (row) {
       var on = row.id === school ? ' on' : '';
@@ -222,54 +135,69 @@
       '<button type="button" class="big primary" data-act="spend-save">Save spend</button></section>';
   }
 
-  function cacPage(ctx, report) {
-    var lib = api();
-    var groups = report.bySchool.length > 1 ? report.bySchool.map(function (school) {
-      return '<h3>' + esc(school.name) + '</h3><div class="growth-table" role="table" aria-label="CAC for ' + esc(school.name) + '">' + channelHead() + channelRows(school.channels) + '</div>';
-    }).join('') : '';
-    return econ(report.summary) + spendPanel(ctx, lib) +
-      '<h2>Channel comparison</h2><p class="meta">' + esc(report.summary.name) + ' · ' + esc(report.monthLabel) + '</p>' +
-      '<div class="growth-table" role="table" aria-label="CAC by channel">' + channelHead() + channelRows(report.channels) + '</div>' +
-      groups +
-      '<button type="button" class="big primary" data-act="cac-csv">Download CAC CSV</button>';
-  }
-
-  function askPage(ctx) {
+  function askBlock(ctx) {
     var chips = [
       'What was our attrition rate last month?',
       'What is our CAC by school and channel?',
+      'How many new leads became members?',
       'Which school has the highest attrition?',
-      'Why are students leaving?',
       'What is our LTV to CAC ratio?',
     ];
     var buttons = chips.map(function (text) {
-      return '<button type="button" class="chip" data-act="ask-chip" data-q="' + esc(text) + '">' + esc(text) + '</button>';
+      return '<button type="button" class="chip" data-act="metrics-ask" data-q="' + esc(text) + '">' + esc(text) + '</button>';
     }).join('');
     var answer = ctx.askAnswer
       ? '<div class="ask-answer" role="status">' + esc(ctx.askAnswer) + '</div>'
-      : '<p class="lede">Ask in a sentence. The answer uses the sample studio.</p>';
+      : '<p class="lede">Ask in a sentence. The answer uses this month and the schools in view.</p>';
     return '<h2>Ask LVLUP CRM</h2>' + answer +
       '<div class="chips ask-chips">' + buttons + '</div>' +
-      '<label>Question<textarea id="ask-q">' + esc(ctx.askText || '') + '</textarea></label>' +
-      '<button type="button" class="big primary" data-act="ask-go">Ask</button>';
+      '<label>Question<textarea id="metrics-q">' + esc(ctx.askText || '') + '</textarea></label>' +
+      '<button type="button" class="big primary" data-act="metrics-ask-go">Ask</button>';
   }
 
   function page(ctx) {
     var lib = api();
-    if (!lib) return '<h1>Attrition &amp; CAC</h1><p class="lede">Growth figures are not in this preview.</p>';
-    var month = (lib.GROWTH_MONTHS.indexOf(ctx.month) >= 0) ? ctx.month : '2026-11';
+    if (!lib) return '<h1>Growth &amp; Metrics</h1><p class="lede">Metrics are not in this preview.</p>';
+    var month = lib.GROWTH_MONTHS.indexOf(ctx.month) >= 0 ? ctx.month : '2026-11';
     var scope = ctx.scope || 'all';
+    var report;
+    try { report = lib.metricsReport(scope, month, ctx.cells); }
+    catch (err) { return '<h1>Growth &amp; Metrics</h1><p class="lede">Choose a school and a month from June through November 2026.</p>'; }
+    var row = report.summary;
+    var ratio = row.ltvCacRatio == null ? 'n/a' : row.ltvCacRatio.toFixed(1) + ' : 1';
+    var life = row.lifespanMonths == null ? 'n/a' : row.lifespanMonths.toFixed(1);
     var note = ctx.note ? '<div class="note">' + esc(ctx.note) + '</div>' : '';
-    var intro = '<h1>Attrition &amp; CAC</h1>' + note +
-      '<p class="lede">Sample studio for all 6 schools. These counts are not live billing. Nothing is charged.</p>' +
-      switcher(ctx.view || 'pulse') + monthChips(month) + scopeChips(scope);
-    var body = '';
-    if ((ctx.view || 'pulse') === 'attrition') body = attritionPage(lib.attritionReport(scope, month, ctx.cells));
-    else if (ctx.view === 'cac') body = cacPage(ctx, lib.cacReport(scope, month, ctx.cells));
-    else if (ctx.view === 'ask') body = askPage(ctx);
-    else body = pulsePage(lib.pulseReport(scope, month, ctx.cells));
-    return intro + body;
+    var school = ctx.spendSchool;
+    if (scope !== 'all' && scope !== 'lvlup' && scope !== 'goninja') school = scope;
+    return '<h1>Growth &amp; Metrics</h1>' + note +
+      '<p class="lede">' + esc(report.monthLabel) + ' · ' + esc(report.scopeLabel) + '. Sample studio. Nothing is charged.</p>' +
+      monthChips(month) +
+      '<div class="kpis metrics-kpis">' +
+      kpi('New leads', String(row.leads), mom(row.leadsMom)) +
+      kpi('New trials / first classes', String(row.trials), mom(row.trialsMom)) +
+      kpi('New members', String(row.newMembers), mom(row.membersMom)) +
+      kpi('Lead → first class', pct(row.leadToTrialPct)) +
+      kpi('First class → member', pct(row.trialToMemberPct)) +
+      kpi('Lead → member', pct(row.leadToMemberPct)) +
+      kpi('Monthly attrition', pct(row.attritionPct)) +
+      kpi('Net member growth', signed(row.netGrowth)) +
+      kpi('Blended CAC', money(row.blendedCacCents)) +
+      kpi('Paid-only CAC', money(row.paidCacCents)) +
+      kpi('ARPM', money(row.arpmCents)) +
+      kpi('Member lifespan', life) +
+      kpi('LTV', money(row.ltvCents)) +
+      kpi('LTV : CAC', ratio) +
+      '</div>' +
+      '<p class="meta">Attrition is cancellations divided by starting active members. Lifespan is 1 divided by that rate. LTV is average revenue per member times lifespan. CAC is marketing spend divided by new enrolled members.</p>' +
+      '<h2>6-month attrition</h2>' + trend(report) +
+      '<h2>By school</h2>' + schoolTable(report) +
+      '<div class="split-panels"><section><h2>Why students left</h2>' + bars(report.reasons) + '</section>' +
+      '<section><h2>How long they had trained</h2>' + bars(report.tenure) + '</section></div>' +
+      '<h2>By channel</h2>' + channelTable(report) +
+      spendPanel(ctx, lib, school) +
+      '<button type="button" class="big primary" data-act="metrics-csv">Download metrics CSV</button>' +
+      askBlock(ctx);
   }
 
-  root.LvlupGrowthView = { page: page, strip: strip };
+  root.LvlupGrowthView = { page: page };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

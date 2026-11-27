@@ -19,6 +19,7 @@ import {
   cacReport,
   cellsWithSpend,
   demoCells,
+  metricsReport,
   parseSpendInput,
   pulseReport,
   retentionPct,
@@ -203,6 +204,29 @@ test('a saved snapshot replaces counts and keeps the edited spend', () => {
   assert.ok((cac.summary.spendCents || 0) > 0);
 });
 
+test('the metrics view rolls the funnel, attrition, lifespan, and CAC into one report', () => {
+  const report = metricsReport('all', '2026-11');
+  assert.equal(report.summary.leads, 79);
+  assert.equal(report.summary.trials, 47);
+  assert.equal(report.summary.newMembers, 28);
+  assert.equal(report.summary.leadToTrialPct, 59.5);
+  assert.equal(report.summary.trialToMemberPct, 59.6);
+  assert.equal(report.summary.leadToMemberPct, 35.4);
+  assert.equal(report.summary.attritionPct, 3.5);
+  assert.equal(report.summary.netGrowth, 11);
+  assert.equal(report.summary.blendedCacCents, 41250);
+  assert.equal(report.summary.arpmCents, 15768);
+  assert.equal(report.summary.lifespanMonths, 28.6);
+  assert.equal(report.summary.ltvCents, 450514);
+  assert.equal(report.summary.ltvCacRatio, 10.9);
+  assert.equal(report.bySchool.length, 6);
+  assert.equal(report.trend.length, 6);
+  assert.equal(report.channels.length, 5);
+  const leads = answerGrowthQuestion('How many new leads became members?');
+  assert.match(leads.answer, /79 new leads/);
+  assert.match(leads.answer, /35\.4%/);
+});
+
 test('Ask LVLUP answers attrition, CAC, and the highest school in plain English', () => {
   const last = answerGrowthQuestion('What was our attrition rate last month?');
   assert.equal(last.month, '2026-10');
@@ -233,8 +257,10 @@ test('Ask LVLUP answers attrition, CAC, and the highest school in plain English'
   assert.match(why.answer, /<3 mo/);
 
   const ltv = answerGrowthQuestion('What is our LTV to CAC ratio?');
+  assert.match(ltv.answer, /10\.9 to 1/);
   assert.match(ltv.answer, /5\.7 to 1/);
   assert.match(ltv.answer, /2\.6 months/);
+  assert.match(ltv.answer, /28\.6 months/);
 
   const named = answerGrowthQuestion('What is Go Ninja Verona attrition?');
   assert.equal(named.scope, 'goninjaV');
@@ -357,17 +383,26 @@ test('the migration, preview bundle, and live dashboard stay apart', () => {
   const staff = readFileSync(join(root, '../ui/staff.js'), 'utf8');
   const view = readFileSync(join(root, '../ui/growth-view.js'), 'utf8');
   const html = readFileSync(join(root, '../preview/staff.html'), 'utf8');
-  assert.match(staff, /Attrition & CAC/);
+  assert.equal(staff.includes("['growth', 'Attrition & CAC'"), false);
+  assert.match(staff, /Growth &amp; Metrics/);
+  assert.match(staff, /view === 'metrics'/);
   assert.match(staff, /\/v1\/growth\/summary/);
   assert.match(staff, /\/v1\/growth\/spend/);
   assert.match(staff, /\/v1\/growth\/ask/);
-  assert.match(view, /Owner Pulse/);
   assert.match(view, /Ask LVLUP CRM/);
-  assert.match(view, /Download attrition CSV/);
-  assert.match(view, /Download CAC CSV/);
+  assert.match(view, /Download metrics CSV/);
   assert.match(view, /Monthly ad spend/);
+  assert.match(view, /New leads/);
+  assert.match(view, /Monthly attrition/);
+  assert.match(view, /Blended CAC/);
   assert.match(html, /growth\.js/);
   assert.match(html, /growth-view\.js/);
+  assert.match(html, /growth-desk\.js/);
+  assert.match(html, /studio-ops\.js/);
+  const pulse = readFileSync(join(root, '../ui/studio-ops.js'), 'utf8');
+  assert.match(pulse, /data-metric="attrition"/);
+  assert.match(pulse, /data-metric="cac"/);
+  assert.match(pulse, /'metrics', 'Metrics'/);
   const index = readFileSync(join(root, '../../index.html'), 'utf8');
   assert.equal(index.includes('/v1/growth'), false);
   assert.equal(index.includes('crm_marketing_spend'), false);
