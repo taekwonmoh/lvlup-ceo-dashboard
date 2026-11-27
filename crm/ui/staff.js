@@ -19,6 +19,14 @@
     eventName: '',
     eventType: 'Belt test',
     eventDate: store.today,
+    todayView: location.hash === '#tasks' ? 'tasks' : 'desk',
+    onePhase: 'opening',
+    oneTitle: '',
+    liveNote: 'Live sandbox. Charges are off.',
+    liveMembers: null,
+    liveBilling: null,
+    liveShifts: null,
+    signOpen: false,
   };
 
   var TABS = [
@@ -84,7 +92,184 @@
     }).sort(function (a, b) { return (a.date + a.time).localeCompare(b.date + b.time); });
   }
 
+  var DESK_TASKS = [
+    { id: 'open-door', phase: 'opening', title: 'Unlock the front door and turn on the lights' },
+    { id: 'open-computer', phase: 'opening', title: 'Start the front desk computer' },
+    { id: 'open-pickup', phase: 'opening', title: 'Check the Pro Shop pickup shelf' },
+    { id: 'open-roster', phase: 'opening', title: "Review today's class roster" },
+    { id: 'open-sheet', phase: 'opening', title: 'Set out the sign-in sheet' },
+    { id: 'open-walk', phase: 'opening', title: 'Walk the lobby and the mats' },
+    { id: 'mid-stock', phase: 'mid', title: 'Restock the front desk' },
+    { id: 'mid-wipe', phase: 'mid', title: 'Wipe the check-in counter' },
+    { id: 'mid-roster', phase: 'mid', title: 'Confirm the next class roster' },
+    { id: 'mid-lost', phase: 'mid', title: 'Check the lost-and-found bin' },
+    { id: 'mid-towels', phase: 'mid', title: 'Refill paper towels' },
+    { id: 'mid-billing', phase: 'mid', title: 'Note billing alerts for the lead' },
+    { id: 'close-cabinet', phase: 'closing', title: 'Lock the Pro Shop cabinet' },
+    { id: 'close-trash', phase: 'closing', title: 'Empty the front desk trash' },
+    { id: 'close-lights', phase: 'closing', title: 'Turn off the lobby lights' },
+    { id: 'close-lockset', phase: 'closing', title: 'Confirm the door is set to lock' },
+    { id: 'close-note', phase: 'closing', title: 'Write the next-shift note' },
+    { id: 'close-door', phase: 'closing', title: 'Lock the front door' },
+  ];
+  var DESK_PHASES = [
+    ['opening', 'Opening'],
+    ['mid', 'Mid-Shift'],
+    ['closing', 'Closing'],
+  ];
+
+  function deskState() {
+    if (!store.desk || typeof store.desk !== 'object') {
+      store.desk = { initials: '', punch: null, history: [], done: {}, extras: [] };
+    }
+    store.desk.done = store.desk.done || {};
+    store.desk.extras = store.desk.extras || [];
+    store.desk.history = store.desk.history || [];
+    store.desk.done[schoolId()] = store.desk.done[schoolId()] || {};
+    return store.desk;
+  }
+
+  function taskRows() {
+    var extras = deskState().extras.filter(function (row) { return row.locationId === schoolId(); });
+    return DESK_TASKS.concat(extras.map(function (row) {
+      return { id: row.id, phase: row.phase, title: row.title, oneOff: true };
+    }));
+  }
+
+  function stamp(iso) {
+    if (!iso) return '';
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      }).format(new Date(iso));
+    } catch (err) { return iso; }
+  }
+
+  function payBounds(iso) {
+    var parts = String(iso || store.today).split('-');
+    var day = Number(parts[2]);
+    if (day <= 15) return { start: parts[0] + '-' + parts[1] + '-01', end: parts[0] + '-' + parts[1] + '-15' };
+    var last = new Date(Date.UTC(Number(parts[0]), Number(parts[1]), 0)).getUTCDate();
+    return { start: parts[0] + '-' + parts[1] + '-16', end: parts[0] + '-' + parts[1] + '-' + String(last).padStart(2, '0') };
+  }
+
+  function elapsedMs(punch, now) {
+    if (!punch || !punch.inAt) return 0;
+    var end = punch.outAt ? Date.parse(punch.outAt) : now;
+    var br = (Number(punch.breakMinutes) || 0) * 60000;
+    if (punch.onBreak && punch.breakStartedAt) br += Math.max(0, now - Date.parse(punch.breakStartedAt));
+    return Math.max(0, end - Date.parse(punch.inAt) - br);
+  }
+
+  function formatElapsed(ms) {
+    var total = Math.floor(ms / 1000);
+    var h = Math.floor(total / 3600);
+    var m = Math.floor((total % 3600) / 60);
+    var s = total % 60;
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    return h + ':' + pad(m) + ':' + pad(s);
+  }
+
+  function chicagoDate(iso) {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(iso));
+    } catch (err) { return String(iso || '').slice(0, 10); }
+  }
+
+  function hoursInPeriod() {
+    var bounds = payBounds(store.today);
+    return deskState().history.filter(function (row) {
+      var date = row.date || chicagoDate(row.inAt);
+      return date >= bounds.start && date <= bounds.end;
+    });
+  }
+
+  function csvEscape(value) {
+    var text = String(value == null ? '' : value);
+    if (/[",\n]/.test(text)) return '"' + text.replace(/"/g, '""') + '"';
+    return text;
+  }
+
+  function localPayrollCsv(rows) {
+    var header = 'Date,Initials,School,Clock in,Clock out,Break minutes,Hours,Memo';
+    var memo = 'Dry-run preview. QuickBooks was not updated.';
+    var lines = rows.map(function (row) {
+      var minutes = Math.round(elapsedMs(row, Date.parse(row.outAt)) / 60000);
+      var hours = (minutes / 60).toFixed(2);
+      return [row.date || chicagoDate(row.inAt), row.initials, uiLib.school(row.locationId).name, row.inAt, row.outAt, row.breakMinutes || 0, hours, memo].map(csvEscape).join(',');
+    });
+    return [header].concat(lines).join('\n') + '\n';
+  }
+
+  function downloadCsv(csv) {
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'payroll-preview.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function todaySwitch(view) {
+    function btn(id, label) {
+      var on = view === id;
+      return '<button type="button" role="tab" class="' + (on ? 'on' : '') + '" data-act="today-view" data-view="' + id + '" aria-selected="' + (on ? 'true' : 'false') + '">' + label + '</button>';
+    }
+    return '<div class="segment" role="tablist" aria-label="Today">' + btn('desk', 'Front Desk') + btn('tasks', 'Tasks &amp; Clock-In') + '</div>';
+  }
+
+  function tasksView() {
+    var desk = deskState();
+    var punch = desk.punch;
+    var clocked = punch && !punch.outAt;
+    var elapsed = formatElapsed(elapsedMs(punch, Date.now()));
+    var bounds = payBounds(store.today);
+    var rows = taskRows();
+    var phases = DESK_PHASES.map(function (phase) {
+      var list = rows.filter(function (task) { return task.phase === phase[0]; });
+      var done = list.filter(function (task) { return desk.done[schoolId()][task.id]; }).length;
+      var width = list.length ? Math.round((done / list.length) * 100) : 0;
+      return '<h2>' + esc(phase[1]) + '</h2><p class="meta">' + done + ' of ' + list.length + ' complete</p><div class="bar" aria-hidden="true"><span style="width:' + width + '%"></span></div>' +
+        list.map(function (task) {
+          var mark = desk.done[schoolId()][task.id];
+          return '<button type="button" class="rowbtn task-row' + (mark ? ' on' : '') + '" data-act="task-toggle" data-id="' + esc(task.id) + '"><span class="box" aria-hidden="true"></span><span><strong>' + esc(task.title) + '</strong>' +
+            (mark ? '<span class="meta">' + esc(mark.initials) + ' · ' + esc(stamp(mark.at)) + '</span>' : '<span class="meta">Tap to complete</span>') +
+            '</span></button>';
+        }).join('');
+    }).join('');
+    var hours = hoursInPeriod();
+    var hourList = hours.length ? hours.map(function (row) {
+      var minutes = Math.round(elapsedMs(row, Date.parse(row.outAt)) / 60000);
+      return '<div class="card"><strong>' + esc(row.initials) + ' · ' + esc(uiLib.school(row.locationId).name) + '</strong><div class="meta">' + esc(rules.prettyDate(row.date || chicagoDate(row.inAt))) + ' · ' + (minutes / 60).toFixed(2) + ' hours · break ' + esc(row.breakMinutes || 0) + ' min</div></div>';
+    }).join('') : '<p class="quiet">No finished shifts in this pay period yet.</p>';
+    return uiLib.liveNote(ui.liveNote) +
+      (ui.signOpen || uiLib.token() ? uiLib.signCard('staff') : '') +
+      '<p class="lede">' + esc(uiLib.school(schoolId()).name) + '. Shift sheet and checklists. Nothing is sent to QuickBooks.</p>' +
+      schoolChips() +
+      '<div class="card clock-card"><div class="meta">' + (clocked ? (punch.onBreak ? 'On break' : 'On the clock') : 'Not clocked in') + '</div>' +
+      '<div class="timer" id="shift-elapsed">' + esc(elapsed) + '</div>' +
+      '<label>Initials<input id="desk-initials" maxlength="4" autocomplete="off" value="' + esc(desk.initials || '') + '" placeholder="AM"></label>' +
+      '<button type="button" class="big primary clock-btn" data-act="clock">' + (clocked ? 'Clock Out' : 'Clock In') + '</button>' +
+      '<button type="button" class="big" data-act="break"' + (clocked ? '' : ' disabled') + '>' + (punch && punch.onBreak ? 'End break' : 'Start break') + '</button></div>' +
+      phases +
+      '<h2>This pay period</h2><p class="meta">' + esc(rules.prettyDate(bounds.start) + ' – ' + rules.prettyDate(bounds.end)) + '</p>' + hourList +
+      '<button type="button" class="big" data-act="payroll">Export Payroll CSV (QuickBooks-ready preview)</button>' +
+      '<h2>Add one-off task</h2><div class="card stack"><label>Task<input id="one-title" value="' + esc(ui.oneTitle) + '" placeholder="Sweep the entry mat"></label>' +
+      '<label>When<select id="one-phase">' + DESK_PHASES.map(function (phase) {
+        return '<option value="' + phase[0] + '"' + (ui.onePhase === phase[0] ? ' selected' : '') + '>' + esc(phase[1]) + '</option>';
+      }).join('') + '</select></label>' +
+      '<button type="button" class="big primary" data-act="task-add">Add one-off task</button></div>';
+  }
+
   function today() {
+    var view = ui.todayView === 'tasks' ? 'tasks' : 'desk';
+    return '<h1>Today</h1>' + todaySwitch(view) + (view === 'tasks' ? tasksView() : frontDesk());
+  }
+
+  function frontDesk() {
     var todayRows = classesHere(store.today);
     var rows = todayRows.length ? todayRows : upcomingHere().slice(0, 1);
     var heading = todayRows.length ? 'Classes' : 'Next class';
@@ -96,7 +281,10 @@
       return order.fulfillmentMethod === 'studio_pickup' && order.fulfillmentStatus === 'ready_for_pickup' && order.pickupLocationId === schoolId();
     }).length;
     var alerts = uiLib.people().filter(function (row) { return row.school === schoolId() && row.card === 'expired'; }).length;
-    return '<h1>Today</h1><p class="lede">' + esc(where) + '. Start here.</p>' +
+    var sign = uiLib.dataMode() === 'live'
+      ? uiLib.liveNote(ui.liveNote) + (ui.signOpen || uiLib.token() ? uiLib.signCard('staff') : '<button type="button" class="big" data-act="sign-open">Sign in to the sandbox</button>')
+      : '';
+    return sign + '<p class="lede">' + esc(where) + '. Start here.</p>' +
       '<div class="kpis"><div class="kpi"><span>Classes Today</span><strong>' + (classesHere(store.today).length) + '</strong></div>' +
       '<div class="kpi"><span>Checked In</span><strong>' + checked + '</strong></div>' +
       '<div class="kpi"><span>Pro Shop Pickups Ready</span><strong>' + readyCount + '</strong></div>' +
@@ -116,9 +304,19 @@
       '<h2>Shipping</h2>' + queue('ship_to_home');
   }
 
+  function roster() {
+    if (ui.liveMembers && ui.liveMembers.length) return ui.liveMembers;
+    return uiLib.people();
+  }
+
+  function findPerson(id) {
+    var live = (ui.liveMembers || []).filter(function (row) { return row.id === id; })[0];
+    return live || uiLib.person(id);
+  }
+
   function checkinRows() {
     var q = ui.query.trim().toLowerCase();
-    var rows = uiLib.people().filter(function (row) {
+    var rows = roster().filter(function (row) {
       if (row.role === 'parent') return false;
       if (row.school !== schoolId() && q) return (row.first + ' ' + row.last).toLowerCase().indexOf(q) >= 0;
       if (row.school !== schoolId()) return false;
@@ -171,7 +369,7 @@
 
   function filtered() {
     var q = ui.query.trim().toLowerCase();
-    return uiLib.people().filter(function (row) {
+    return roster().filter(function (row) {
       if (row.role === 'parent') return false;
       if (q && (row.first + ' ' + row.last + ' ' + row.tag).toLowerCase().indexOf(q) < 0) return false;
       if (ui.filter === 'active') return row.status === 'active';
@@ -184,7 +382,10 @@
 
   function drawer() {
     if (!ui.drawer) return '';
-    var who = uiLib.person(ui.drawer);
+    var who = findPerson(ui.drawer);
+    if (!who.note) who.note = who.live ? 'No pinned note on the sandbox yet.' : 'No note yet.';
+    who.stripes = who.stripes || 0;
+    who.stripesNeed = who.stripesNeed || 1;
     var contacts = store.contacts.filter(function (row) { return row.personId === who.id; });
     var cents = store.paymentPreview[who.id] != null ? store.paymentPreview[who.id] : who.planCents;
     var pay = ui.editPay
@@ -219,7 +420,11 @@
     var viewChips = ['day', 'week', 'month'].map(function (view) {
       return '<button type="button" class="chip' + (ui.view === view ? ' on' : '') + '" data-act="view" data-view="' + view + '">' + esc(view[0].toUpperCase() + view.slice(1)) + '</button>';
     }).join('');
-    return '<h1>Schedule &amp; Events</h1><p class="lede">' + esc(uiLib.school(schoolId()).name) + '</p>' + schoolChips() +
+    var shifts = (ui.liveShifts || []).slice(0, 6).map(function (row) {
+      return '<div class="card"><strong>' + esc(row.role || 'Shift') + '</strong><div class="meta">' + esc((row.shift_date || row.date || '') + ' · ' + (row.start_local || '') + '–' + (row.end_local || '')) + '</div></div>';
+    }).join('');
+    return '<h1>Schedule &amp; Events</h1>' + uiLib.liveNote(ui.liveNote) + '<p class="lede">' + esc(uiLib.school(schoolId()).name) + '</p>' + schoolChips() +
+      (shifts ? '<h2>Sandbox shifts</h2>' + shifts : '') +
       '<div class="chips">' + viewChips + '</div>' + viewBody() +
       '<h2>Add an event</h2><div class="card stack"><label>Name<input id="event-name" value="' + esc(ui.eventName) + '" placeholder="Parents Night Out"></label>' +
       '<label>Date<input id="event-date" type="date" value="' + esc(ui.eventDate) + '"></label>' +
@@ -281,7 +486,10 @@
   function money() {
     var fin = data.financials;
     var max = fin.categories[0].cents;
-    return '<h1>Financials</h1><p class="lede">Sample month. Not a live account. Nothing is charged.</p>' +
+    var liveMoney = ui.liveBilling && ui.liveBilling.tiles
+      ? '<div class="note">Sandbox billing summary. Charges are off. Collected ' + esc(uiLib.money(ui.liveBilling.tiles.collected.cents)) + '.</div>'
+      : '';
+    return '<h1>Financials</h1>' + uiLib.liveNote(ui.liveNote) + liveMoney + '<p class="lede">Sample month unless a finance sign-in loaded the sandbox summary. Nothing is charged.</p>' +
       '<div class="note">' + esc(data.tuitionNote) + '</div>' +
       '<div class="tiles money-tiles"><div class="card"><div class="meta">Collected</div><div class="price">' + esc(uiLib.money(fin.collectedCents)) + '</div></div>' +
       '<div class="card"><div class="meta">Last month</div><div class="price">' + esc(uiLib.money(fin.lastMonthCents)) + '</div></div>' +
@@ -330,11 +538,9 @@
 
   function connectSheet() {
     if (!ui.connect) return '';
-    return '<div class="sheet"><div class="panel"><h2>Sandbox connection</h2><p class="lede">The desk runs on sample data with no sign-in. Paste the sandbox API only if you want the live catalog.</p>' +
-      '<div class="stack"><label>API address<input id="api-base" value="' + esc(uiLib.apiBase() || data.apiDefault) + '"></label>' +
-      '<label>Token, optional<input id="api-token" type="password" autocomplete="off"></label>' +
-      '<button type="button" class="big primary" data-act="connect-save">Save connection</button>' +
-      '<button type="button" class="big" data-act="connect-off">Stay in preview</button>' +
+    return '<div class="sheet"><div class="panel"><h2>Sandbox connection</h2><p class="lede">Use Demo or Live in the top bar. Live talks to the sandbox API. Charges stay off.</p>' +
+      uiLib.signCard('staff') +
+      '<div class="stack"><button type="button" class="big" data-act="connect-off">Use Demo</button>' +
       '<button type="button" class="big" data-act="reset">Reset sample data</button></div></div></div>';
   }
 
@@ -343,6 +549,24 @@
     if (!el) return;
     var act = el.getAttribute('data-act');
     if (act === 'toast-off') { ui.toast = null; render(); return; }
+    if (uiLib.handleAuthAct(act, function (tone, text) {
+      if (tone === 'ok' && (act === 'auth-code' || act === 'auth-token' || act === 'sign-out')) pullLive();
+      toast(tone, text);
+    })) return;
+    if (act === 'data-mode') {
+      uiLib.setDataMode(el.getAttribute('data-mode'));
+      ui.signOpen = false;
+      pullLive();
+      render();
+      return;
+    }
+    if (act === 'sign-open') { ui.signOpen = true; render(); return; }
+    if (act === 'today-view') {
+      ui.todayView = el.getAttribute('data-view') === 'tasks' ? 'tasks' : 'desk';
+      history.replaceState(null, '', ui.todayView === 'tasks' ? '#tasks' : '#today');
+      render();
+      return;
+    }
     if (act === 'tab') {
       ui.tab = el.getAttribute('data-tab');
       ui.drawer = '';
@@ -365,24 +589,58 @@
     }
     if (act === 'kiosk-off') { store.kiosk = null; save(); toast('ok', 'Kiosk unlocked.'); return; }
     if (act === 'checkin') {
-      var who = uiLib.person(el.getAttribute('data-id'));
+      var who = findPerson(el.getAttribute('data-id'));
       if (who.card === 'expired') { toast('bad', 'Card expired. Ask them to update the card before you check them in.'); return; }
       store.checkins.unshift({ personId: who.id, ok: true });
       save();
-      toast('ok', 'Checked in. ' + who.first + ' is here.');
+      if (uiLib.dataMode() !== 'live') { toast('ok', 'Checked in. ' + who.first + ' is here.'); return; }
+      if (!uiLib.token()) { toast('ok', 'Checked in on this device. Sign in to record it on the sandbox.'); return; }
+      uiLib.api('/v1/check-ins/family', {
+        method: 'POST',
+        body: { source: 'manual', familyId: who.familyId || '', locationId: who.school || schoolId() },
+      }).then(function (res) {
+        if (res.offline) toast('bad', 'Checked in on this device. The sandbox API is offline.');
+        else if (!res.ok) toast('ok', 'Checked in on this device. The sandbox did not take this family. Nothing was charged.');
+        else toast('ok', 'Checked in on the sandbox. Nothing was charged.');
+      });
       return;
     }
     if (act === 'fulfill') { advance(el.getAttribute('data-id')); return; }
     if (act === 'filter') { ui.filter = el.getAttribute('data-id'); render(); return; }
-    if (act === 'open') { ui.drawer = el.getAttribute('data-id'); ui.editPay = false; render(); return; }
     if (act === 'close') { ui.drawer = ''; render(); return; }
     if (act === 'pay-edit') { ui.editPay = true; render(); return; }
     if (act === 'pay-save') { savePay(); return; }
     if (act === 'pay-undo') { delete store.paymentPreview[ui.drawer]; ui.editPay = false; save(); toast('ok', 'Draft restored. Nothing was charged.'); return; }
+    if (act === 'open') {
+      ui.drawer = el.getAttribute('data-id');
+      ui.editPay = false;
+      var opened = findPerson(ui.drawer);
+      render();
+      if (opened.live && uiLib.token()) {
+        uiLib.api('/v1/members/' + encodeURIComponent(opened.id) + '/notes').then(function (res) {
+          if (!res.ok || !res.body || !res.body.notes || !res.body.notes.length) return;
+          var pinned = res.body.notes.filter(function (row) { return row.pinned; })[0] || res.body.notes[0];
+          opened.note = pinned.body;
+          if (ui.drawer === opened.id) render();
+        });
+      }
+      return;
+    }
     if (act === 'book-next') {
-      var who = uiLib.person(ui.drawer);
+      var who = findPerson(ui.drawer);
       store.bookings.push({ classId: el.getAttribute('data-id'), personId: who.id, status: 'booked' });
       save();
+      if (uiLib.dataMode() === 'live' && uiLib.token()) {
+        uiLib.api('/v1/sessions/' + encodeURIComponent(el.getAttribute('data-id')) + '/bookings', {
+          method: 'POST',
+          body: { memberId: who.id },
+        }).then(function (res) {
+          if (res.offline) toast('bad', 'Booked on this device. The sandbox API is offline.');
+          else if (!res.ok) toast('ok', 'Booked on this device. The sandbox did not take this class. Nothing was charged.');
+          else toast('ok', 'Booked on the sandbox. Nothing was charged.');
+        });
+        return;
+      }
       toast('ok', 'Booked. ' + who.first + ' is in that class.');
       return;
     }
@@ -415,13 +673,12 @@
       return;
     }
     if (act === 'connect') { ui.connect = true; render(); return; }
-    if (act === 'connect-off') { uiLib.setApi('', ''); ui.connect = false; toast('ok', 'Staying in the sample studio.'); return; }
-    if (act === 'connect-save') {
-      uiLib.setApi(document.getElementById('api-base').value.trim(), document.getElementById('api-token').value.trim());
-      ui.connect = false;
-      toast('ok', 'Connection saved in this browser tab. The desk still shows sample people.');
-      return;
-    }
+    if (act === 'connect-off') { uiLib.setDataMode('demo'); ui.connect = false; ui.liveMembers = null; toast('ok', 'Back on Demo. The sample studio stays on this device.'); return; }
+    if (act === 'clock') { clockShift(); return; }
+    if (act === 'break') { toggleBreak(); return; }
+    if (act === 'payroll') { exportPayroll(); return; }
+    if (act === 'task-toggle') { toggleTask(el.getAttribute('data-id')); return; }
+    if (act === 'task-add') { addOneOff(); return; }
     if (act === 'reset') { store = uiLib.reset(); ui.connect = false; ui.drawer = ''; toast('ok', 'Sample data is fresh.'); return; }
   }
 
@@ -446,7 +703,19 @@
     }
     order.fulfillmentStatus = next;
     save();
-    toast('ok', rules.orderStatusLabel(order, uiLib.names()));
+    if (uiLib.dataMode() === 'live' && uiLib.token() && /^[0-9a-f-]{36}$/i.test(order.id)) {
+      uiLib.api('/v1/pro-shop/orders/' + order.id + '/fulfillment', {
+        method: 'PATCH',
+        body: { status: next, trackingNumber: order.trackingNumber || null },
+      }).then(function (res) {
+        if (res.offline) toast('bad', 'Updated on this device. The sandbox API is offline.');
+        else if (!res.ok) toast('ok', rules.orderStatusLabel(order, uiLib.names()) + ' The sandbox copy was left as it was. Nothing was charged.');
+        else toast('ok', (res.body && res.body.statusLabel) || rules.orderStatusLabel(order, uiLib.names()));
+      });
+      return;
+    }
+    var offline = uiLib.dataMode() === 'live' && !uiLib.token() ? ' Sign in to update the sandbox copy.' : '';
+    toast('ok', rules.orderStatusLabel(order, uiLib.names()) + offline);
   }
 
   function duplicate(id) {
@@ -481,6 +750,245 @@
     toast('ok', 'Event added. It also shows on the member Events page.');
   }
 
+  function initialsOf() {
+    var box = document.getElementById('desk-initials');
+    var initials = ((box && box.value) || deskState().initials || '').trim().toUpperCase();
+    if (!/^[A-Z]{1,4}$/.test(initials)) return '';
+    deskState().initials = initials;
+    return initials;
+  }
+
+  function postClock(action, punch) {
+    var initials = initialsOf();
+    if (!initials) { toast('bad', 'Add 1 to 4 initials first.'); return; }
+    var at = new Date().toISOString();
+    var next = localClock(punch, action, initials, at);
+    if (!next) return;
+    deskState().punch = next.punch;
+    if (next.closed) deskState().history.unshift(next.closed);
+    save();
+    if (uiLib.dataMode() !== 'live' || !uiLib.token()) {
+      toast('ok', next.message + (uiLib.dataMode() === 'live' ? ' Sign in to record it on the sandbox.' : ''));
+      return;
+    }
+    uiLib.api('/v1/desk/clock', {
+      method: 'POST',
+      body: { action: action, locationId: schoolId(), initials: initials, at: at, punch: punch },
+    }).then(function (res) {
+      if (res.ok && res.body && res.body.punch) {
+        deskState().punch = res.body.punch.outAt ? null : res.body.punch;
+        save();
+        toast('ok', next.message + ' Sandbox confirmed. Nothing was charged.');
+      } else if (res.offline) toast('bad', next.message + ' The sandbox API is offline.');
+      else toast('ok', next.message + ' Saved on this device. The sandbox did not store it.');
+    });
+  }
+
+  function localClock(punch, action, initials, at) {
+    if (action === 'in') {
+      if (punch && !punch.outAt) { toast('bad', 'Clock out before starting another shift.'); return null; }
+      return {
+        punch: { locationId: schoolId(), initials: initials, inAt: at, outAt: null, onBreak: false, breakStartedAt: null, breakMinutes: 0 },
+        message: 'Clocked in at ' + uiLib.school(schoolId()).name + '.',
+      };
+    }
+    if (!punch || punch.outAt) { toast('bad', 'Clock in first.'); return null; }
+    if (action === 'break_start') {
+      if (punch.onBreak) { toast('bad', 'You are already on break.'); return null; }
+      return { punch: Object.assign({}, punch, { onBreak: true, breakStartedAt: at }), message: 'Break started.' };
+    }
+    if (action === 'break_end') {
+      if (!punch.onBreak) { toast('bad', 'You are not on break.'); return null; }
+      var extra = Math.max(0, Math.round((Date.parse(at) - Date.parse(punch.breakStartedAt)) / 60000));
+      return { punch: Object.assign({}, punch, { onBreak: false, breakStartedAt: null, breakMinutes: (punch.breakMinutes || 0) + extra }), message: 'Break ended.' };
+    }
+    var closed = Object.assign({}, punch, { outAt: at, onBreak: false });
+    if (punch.onBreak && punch.breakStartedAt) {
+      closed.breakMinutes = (punch.breakMinutes || 0) + Math.max(0, Math.round((Date.parse(at) - Date.parse(punch.breakStartedAt)) / 60000));
+      closed.breakStartedAt = null;
+    }
+    closed.date = chicagoDate(punch.inAt);
+    return { punch: null, closed: closed, message: 'Clocked out. Hours stay a preview.' };
+  }
+
+  function clockShift() {
+    var punch = deskState().punch;
+    postClock(punch && !punch.outAt ? 'out' : 'in', punch && !punch.outAt ? punch : null);
+  }
+
+  function toggleBreak() {
+    var punch = deskState().punch;
+    if (!punch || punch.outAt) { toast('bad', 'Clock in first.'); return; }
+    postClock(punch.onBreak ? 'break_end' : 'break_start', punch);
+  }
+
+  function exportPayroll() {
+    var rows = hoursInPeriod();
+    if (!rows.length) { toast('bad', 'No finished shifts in this pay period yet.'); return; }
+    function finish(csv, extra) {
+      downloadCsv(csv);
+      toast('ok', 'Payroll preview downloaded. QuickBooks was not updated.' + (extra || ''));
+    }
+    if (uiLib.dataMode() !== 'live' || !uiLib.token()) {
+      finish(localPayrollCsv(rows), uiLib.dataMode() === 'live' ? ' Sign in to confirm it with the sandbox.' : '');
+      return;
+    }
+    uiLib.api('/v1/desk/payroll/preview', {
+      method: 'POST',
+      body: {
+        locationId: schoolId(),
+        asOf: store.today,
+        rows: rows.filter(function (row) { return row.locationId === schoolId(); }).map(function (row) {
+          return { date: row.date || chicagoDate(row.inAt), initials: row.initials, locationId: row.locationId, inAt: row.inAt, outAt: row.outAt, breakMinutes: row.breakMinutes || 0 };
+        }),
+      },
+    }).then(function (res) {
+      if (res.ok && res.body && res.body.csv && res.body.charged === false && res.body.qbo === '0') finish(res.body.csv, ' Sandbox confirmed the dry run.');
+      else if (res.offline) finish(localPayrollCsv(rows), ' The sandbox API is offline.');
+      else finish(localPayrollCsv(rows), ' The sandbox did not build the file, so this copy stayed on the device.');
+    });
+  }
+
+  function toggleTask(id) {
+    var initials = initialsOf();
+    if (!initials) { toast('bad', 'Add 1 to 4 initials first.'); return; }
+    var bag = deskState().done[schoolId()];
+    var done = !bag[id];
+    if (done) bag[id] = { at: new Date().toISOString(), initials: initials };
+    else delete bag[id];
+    save();
+    if (uiLib.dataMode() !== 'live' || !uiLib.token()) {
+      toast('ok', done ? 'Marked complete on this device.' : 'Cleared on this device.');
+      return;
+    }
+    uiLib.api('/v1/desk/tasks', {
+      method: 'POST',
+      body: { action: done ? 'complete' : 'reopen', locationId: schoolId(), taskId: id, initials: initials },
+    }).then(function (res) {
+      if (res.offline) toast('bad', 'Saved on this device. The sandbox API is offline.');
+      else if (!res.ok) toast('ok', 'Saved on this device. The sandbox did not store this check.');
+      else toast('ok', 'Saved. Nothing was charged.');
+    });
+  }
+
+  function addOneOff() {
+    var initials = initialsOf();
+    var title = (document.getElementById('one-title').value || '').trim();
+    var phase = document.getElementById('one-phase').value;
+    if (!initials) { toast('bad', 'Add 1 to 4 initials first.'); return; }
+    if (title.length < 2) { toast('bad', 'Name the task in a short sentence.'); return; }
+    var row = { id: 'extra-' + Date.now().toString(36), locationId: schoolId(), phase: phase, title: title };
+    deskState().extras.push(row);
+    ui.oneTitle = '';
+    ui.onePhase = phase;
+    save();
+    if (uiLib.dataMode() !== 'live' || !uiLib.token()) {
+      toast('ok', 'Task added on this device.');
+      return;
+    }
+    uiLib.api('/v1/desk/tasks', {
+      method: 'POST',
+      body: { action: 'add', locationId: schoolId(), phase: phase, title: title, initials: initials },
+    }).then(function (res) {
+      if (res.ok && res.body && res.body.id) {
+        row.id = res.body.id;
+        save();
+        toast('ok', 'Task added. Nothing was charged.');
+      } else if (res.offline) toast('bad', 'Task added on this device. The sandbox API is offline.');
+      else toast('ok', 'Task added on this device. The sandbox did not store it.');
+    });
+  }
+
+  function mapMember(row) {
+    return {
+      id: row.id,
+      first: row.firstName || 'Member',
+      last: row.lastName || '',
+      role: 'student',
+      program: row.planName || 'Member',
+      belt: 'Member',
+      beltRank: 'color',
+      stripes: 0,
+      stripesNeed: 1,
+      school: row.locationId || schoolId(),
+      plan: row.planName || 'Membership',
+      planCents: row.amountCents || 0,
+      status: row.status || 'active',
+      tag: row.status || 'Active',
+      soldBy: 'Sandbox',
+      card: 'ok',
+      note: '',
+      familyId: row.familyId || '',
+      live: true,
+    };
+  }
+
+  function pullLive() {
+    if (uiLib.dataMode() !== 'live') {
+      ui.liveNote = '';
+      ui.liveMembers = null;
+      ui.liveBilling = null;
+      ui.liveShifts = null;
+      return;
+    }
+    ui.liveNote = 'Connecting to the live sandbox…';
+    uiLib.api('/v1/health').then(function (res) {
+      if (res.offline) ui.liveNote = 'The sandbox API is offline. Showing the sample studio. Nothing was charged.';
+      else if (res.ok && res.body && res.body.charges === false) ui.liveNote = 'Live sandbox. Charges are off.';
+      else ui.liveNote = 'The sandbox answered in an unexpected way. This desk will not send a charge.';
+      render();
+    });
+    uiLib.api('/v1/pro-shop/items').then(function (res) {
+      if (res.ok && res.body && res.body.charges === false && res.body.items) {
+        ui.liveNote = 'Live sandbox catalog. Charges are off.';
+        render();
+      }
+    });
+    if (!uiLib.token()) return;
+    uiLib.api('/v1/members?locationId=' + encodeURIComponent(schoolId())).then(function (res) {
+      if (res.ok && res.body && res.body.members) {
+        ui.liveMembers = res.body.members.map(mapMember);
+        render();
+      } else if (res.status === 401 || res.status === 403) {
+        ui.liveMembers = null;
+        ui.liveNote = 'Sign in was not accepted for the roster. The sample studio stays. Nothing was charged.';
+        render();
+      }
+    });
+    uiLib.api('/v1/pro-shop/orders').then(function (res) {
+      if (!res.ok || !res.body || !res.body.orders) return;
+      res.body.orders.forEach(function (order) {
+        if (store.orders.some(function (row) { return row.id === order.id; })) return;
+        store.orders.push({
+          id: order.id,
+          personId: order.memberId,
+          lines: order.lines || [],
+          fulfillmentMethod: order.fulfillmentMethod,
+          pickupLocationId: order.pickupLocationId,
+          shippingAddress: order.shippingAddress,
+          shippingCents: order.shippingCents || 0,
+          trackingNumber: order.trackingNumber,
+          fulfillmentStatus: order.fulfillmentStatus,
+          subtotalCents: order.subtotalCents || 0,
+          totalCents: order.totalCents || 0,
+          live: true,
+        });
+      });
+      save();
+      render();
+    });
+    uiLib.api('/v1/staff-schedule').then(function (res) {
+      if (res.ok && res.body && res.body.shifts) { ui.liveShifts = res.body.shifts; render(); }
+    });
+    uiLib.api('/v1/financials/summary?scope=all&period=month').then(function (res) {
+      if (res.ok && res.body && res.body.tiles) { ui.liveBilling = res.body; render(); }
+      else if (res.status === 403) ui.liveBilling = null;
+    });
+    uiLib.api('/v1/desk/tasks?locationId=' + encodeURIComponent(schoolId())).then(function (res) {
+      if (res.status === 404) ui.liveNote = 'Live sandbox is up. Task sync arrives with the next API deploy. Checks stay on this device. Charges are off.';
+    });
+  }
+
   document.getElementById('app').addEventListener('click', onClick);
   document.getElementById('app').addEventListener('input', function (event) {
     if (event.target.id === 'people-q' || event.target.id === 'checkin-q') {
@@ -491,7 +999,17 @@
     }
     if (event.target.id === 'staff-draft') ui.draft = event.target.value;
     if (event.target.id === 'event-name') ui.eventName = event.target.value;
+    if (event.target.id === 'desk-initials') deskState().initials = event.target.value;
+    if (event.target.id === 'one-title') ui.oneTitle = event.target.value;
+    if (event.target.id === 'one-phase') ui.onePhase = event.target.value;
   });
   window.addEventListener('storage', function () { store = uiLib.load(); render(); });
+  setInterval(function () {
+    var el = document.getElementById('shift-elapsed');
+    var punch = store.desk && store.desk.punch;
+    if (!el || !punch || punch.outAt) return;
+    el.textContent = formatElapsed(elapsedMs(punch, Date.now()));
+  }, 1000);
+  if (uiLib.dataMode() === 'live') pullLive();
   render();
 })();

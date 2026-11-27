@@ -22,7 +22,11 @@
     cardOpen: false,
     draft: '',
     catalog: null,
+    liveNote: 'Live sandbox. Charges are off.',
+    signOpen: false,
+    billingLive: null,
   };
+  if (location.hash === '#shop') ui.tab = 'shop';
 
   var NAV = [
     ['home', 'Home'],
@@ -136,11 +140,8 @@
     if (!ui.more && !ui.connect) return '';
     if (ui.connect) {
       return '<div class="sheet"><div class="panel"><h2>Sandbox connection</h2>' +
-        '<p class="lede">Leave this blank to stay in the sample studio. Nothing is charged.</p>' +
-        '<div class="stack"><label>API address<input id="api-base" value="' + esc(uiLib.apiBase() || data.apiDefault) + '"></label>' +
-        '<label>Token, optional<input id="api-token" type="password" autocomplete="off" placeholder="Leave blank for preview"></label>' +
-        '<button type="button" class="big primary" data-act="connect-save">Load catalog</button>' +
-        '<button type="button" class="big" data-act="connect-off">Use sample studio</button>' +
+        '<p class="lede">Use Demo or Live in the top bar. Live reads the sandbox catalog. Charges stay off.</p>' +
+        '<div class="stack"><button type="button" class="big" data-act="connect-off">Use Demo</button>' +
         '<button type="button" class="big" data-act="reset-preview">Reset sample data</button></div></div></div>';
     }
     return '<div class="sheet"><div class="panel"><h2>More</h2><div class="stack">' + MORE.map(function (item) {
@@ -173,7 +174,10 @@
     var nextHtml = next
       ? '<div class="hero"><span class="live-pill"><i></i> Next class</span><h3>' + esc(next.title) + '</h3><p>' + esc(rules.prettyDate(next.date) + ' · ' + rules.prettyTime(next.time)) + '</p><div class="where">' + uiLib.icon('pin') + esc(uiLib.school(next.locationId).name) + '</div></div>'
       : '<div class="card"><h3>Pick a student</h3><p class="lede">Tap Riley or Avery above. Their next class shows up here.</p></div>';
-    return '<h1>Hi, ' + esc(who.first) + '</h1><p class="lede">Here is what to do next.</p>' +
+    var gate = uiLib.dataMode() === 'live'
+      ? uiLib.liveNote(ui.liveNote) + (ui.signOpen || uiLib.token() ? uiLib.signCard('member') : '<button type="button" class="big" data-act="sign-open">Sign in to the sandbox</button>')
+      : '';
+    return '<h1>Hi, ' + esc(who.first) + '</h1>' + gate + '<p class="lede">Here is what to do next.</p>' +
       nextHtml + readyHtml +
       '<div class="tiles">' +
       tile('classes', 'Book a Class', 'See this week') +
@@ -226,7 +230,10 @@
         '<button type="button" class="big primary" data-act="card-save">Save sandbox token</button>' +
         '<p class="quiet">You can leave the boxes empty. Nothing is charged.</p></div></div>'
       : '';
-    return '<h1>Payments</h1><p class="lede">Preview only. Nothing is charged from this screen.</p>' +
+    var liveBill = ui.billingLive && ui.billingLive.tiles
+      ? '<div class="note">Sandbox billing summary. Collected ' + esc(uiLib.money(ui.billingLive.tiles.collected.cents)) + '. Nothing was charged.</div>'
+      : '';
+    return '<h1>Payments</h1>' + uiLib.liveNote(ui.liveNote) + liveBill + '<p class="lede">Preview only. Nothing is charged from this screen.</p>' +
       '<div class="card"><div class="meta">Next draft</div><div class="price">' + esc(uiLib.money(amount)) + '</div><div>' + esc(rules.prettyDate(data.nextDraftOn)) + ' · ' + esc(who.plan) + '</div>' +
       '<p>Tuition credit ready: <strong>' + esc(uiLib.money(data.creditCents)) + '</strong></p></div>' +
       '<div class="card"><h3>Card on file</h3><p>' + esc(card.brand) + ' •••• ' + esc(card.last4) + ' · ' + esc(card.exp) + '</p><p class="meta">Token ' + esc(card.token) + '</p>' +
@@ -270,7 +277,14 @@
       return sum + (item ? item.priceCents * line.qty : 0);
     }, 0);
     var shipping = ui.fulfill === 'ship_to_home' ? data.shippingCents : 0;
-    return '<h1>Pro Shop</h1><p class="lede">Pick a size, then choose pickup or shipping. This is a sandbox preview.</p>' +
+    var liveShop = '';
+    if (uiLib.dataMode() === 'live') {
+      liveShop = uiLib.liveNote(ui.liveNote || 'Live sandbox catalog. Charges are off.');
+      if (!uiLib.token()) {
+        liveShop += ui.signOpen ? uiLib.signCard('member') : '<button type="button" class="big" data-act="sign-open">Sign in to the sandbox</button>';
+      } else liveShop += uiLib.signCard('member');
+    }
+    return '<h1>Pro Shop</h1>' + liveShop + '<p class="lede">Pick a size, then choose pickup or shipping.</p>' +
       '<div class="chips">' + cats.map(function (cat) {
         return '<button type="button" class="chip' + (ui.category === cat ? ' on' : '') + '" data-act="shop-cat" data-cat="' + esc(cat) + '">' + esc(cat) + '</button>';
       }).join('') + '</div>' +
@@ -467,11 +481,23 @@
     var act = el.getAttribute('data-act');
     var who = person();
     if (act === 'toast-off') { ui.toast = null; render(); return; }
+    if (uiLib.handleAuthAct(act, function (tone, text) {
+      if (tone === 'ok' && (act === 'auth-code' || act === 'auth-token' || act === 'sign-out')) pullLive();
+      toast(tone, text);
+    })) return;
+    if (act === 'data-mode') {
+      uiLib.setDataMode(el.getAttribute('data-mode'));
+      if (uiLib.dataMode() !== 'live') ui.catalog = null;
+      ui.signOpen = false;
+      pullLive();
+      render();
+      return;
+    }
+    if (act === 'sign-open') { ui.signOpen = true; render(); return; }
     if (act === 'close-more') { ui.more = false; render(); return; }
     if (act === 'connect') { ui.more = false; ui.connect = true; render(); return; }
-    if (act === 'connect-off') { uiLib.setApi('', ''); ui.catalog = null; ui.connect = false; toast('ok', 'Back on the sample studio.'); return; }
-    if (act === 'reset-preview') { store = uiLib.reset(); ui.connect = false; ui.cart = []; toast('ok', 'Sample data is fresh.'); return; }
-    if (act === 'connect-save') { loadCatalog(); return; }
+    if (act === 'connect-off') { uiLib.setDataMode('demo'); ui.catalog = null; ui.connect = false; toast('ok', 'Back on Demo. The sample studio stays on this device.'); return; }
+    if (act === 'reset-preview') { store = uiLib.reset(); ui.connect = false; ui.cart = []; ui.catalog = null; toast('ok', 'Sample data is fresh.'); return; }
     if (act === 'person') {
       store.personId = el.getAttribute('data-id');
       ui.pickupSchool = person().school || 'waunakee';
@@ -517,6 +543,17 @@
       store.bookings = store.bookings.filter(function (row) { return !(row.classId === classId && row.personId === who.id); });
       store.bookings.push({ classId: classId, personId: who.id, status: status });
       save();
+      if (uiLib.dataMode() === 'live' && uiLib.token() && status === 'booked') {
+        uiLib.api('/v1/sessions/' + encodeURIComponent(classId) + '/bookings', {
+          method: 'POST',
+          body: { memberId: who.id },
+        }).then(function (res) {
+          if (res.offline) toast('bad', 'Saved on this device. The sandbox API is offline.');
+          else if (!res.ok) toast('ok', 'Saved on this device. The sandbox did not take this class. Nothing was charged.');
+          else toast('ok', 'Booked on the sandbox. Nothing was charged.');
+        });
+        return;
+      }
       toast('ok', status === 'waitlist' ? who.first + ' is on the waitlist.' : 'Booked. ' + who.first + ' is in.');
       return;
     }
@@ -599,10 +636,26 @@
     var last4 = digits.length >= 4 ? digits.slice(-4) : store.card.last4;
     if (panEl) panEl.value = '';
     if (cvvEl) cvvEl.value = '';
-    store.card = { brand: 'Visa', last4: last4, exp: (expEl && expEl.value.trim()) || store.card.exp, token: 'sandbox-accept-preview' };
+    var opaque = 'sandbox-accept-' + last4;
+    store.card = { brand: 'Visa', last4: last4, exp: (expEl && expEl.value.trim()) || store.card.exp, token: opaque };
     ui.cardOpen = false;
     save();
-    toast('ok', 'Sandbox token saved. The card number was not stored.');
+    if (uiLib.dataMode() !== 'live') {
+      toast('ok', 'Sandbox token saved. The card number was not stored.');
+      return;
+    }
+    if (!uiLib.token()) {
+      toast('ok', 'Sandbox token saved on this device. Sign in to send the Accept.js token. The card number was not stored.');
+      return;
+    }
+    uiLib.api('/v1/payment-profiles/accept', {
+      method: 'POST',
+      body: { opaqueData: { dataDescriptor: 'COMMON.ACCEPT.INAPP.PAYMENT', dataValue: opaque } },
+    }).then(function (res) {
+      if (res.offline) toast('bad', 'Token saved on this device. The sandbox API is offline. The card number was not stored.');
+      else if (!res.ok) toast('ok', 'Token saved on this device. The sandbox did not store a profile. Nothing was charged.');
+      else toast('ok', 'Accept.js sandbox token sent. Nothing was charged.');
+    });
   }
 
   function placeOrder(who) {
@@ -639,9 +692,33 @@
     });
     ui.cart = [];
     save();
-    toast('ok', ui.fulfill === 'studio_pickup'
+    var local = ui.fulfill === 'studio_pickup'
       ? 'Preview order placed for pickup at ' + uiLib.school(pickup).name + '. Nothing was charged.'
-      : 'Preview order placed to ship. Nothing was charged.');
+      : 'Preview order placed to ship. Nothing was charged.';
+    if (uiLib.dataMode() !== 'live' || !uiLib.token()) {
+      toast('ok', local + (uiLib.dataMode() === 'live' ? ' Sign in to send it to the sandbox.' : ''));
+      return;
+    }
+    var payload = {
+      memberId: who.id,
+      fulfillmentMethod: ui.fulfill,
+      lines: uiLines(lines),
+    };
+    if (ui.fulfill === 'studio_pickup') payload.pickupLocationId = pickup;
+    else payload.shippingAddress = address;
+    uiLib.api('/v1/pro-shop/orders', { method: 'POST', body: payload }).then(function (res) {
+      if (res.offline) toast('bad', 'Saved on this device. The sandbox API is offline. Nothing was charged.');
+      else if (!res.ok || (res.body && res.body.charged !== false && res.body.charged !== undefined && res.body.chargesEnabled !== false)) {
+        toast('ok', 'Saved on this device. The sandbox did not take this preview family. Nothing was charged.');
+      } else toast('ok', 'Sandbox order saved. Nothing was charged.');
+    });
+  }
+
+  function uiLines(lines) {
+    return lines.map(function (line) {
+      var item = catalog().filter(function (row) { return row.name === line.name; })[0];
+      return { sku: item ? item.sku : line.name, variant: line.variant, qty: line.qty };
+    });
   }
 
   function confirmParty(who) {
@@ -663,29 +740,77 @@
     toast('ok', 'Party booked. That time is now taken.');
   }
 
-  function loadCatalog() {
-    var base = (document.getElementById('api-base').value || '').trim().replace(/\/$/, '');
-    var bearer = (document.getElementById('api-token').value || '').trim();
-    uiLib.setApi(base, bearer);
-    if (!base) { ui.catalog = null; ui.connect = false; toast('ok', 'Using the sample catalog.'); return; }
-    fetch(base + '/v1/pro-shop/items').then(function (res) { return res.json(); }).then(function (body) {
-      if (!body.items) throw new Error('no items');
-      ui.catalog = body.items.map(function (item) {
+  function pullLive() {
+    if (uiLib.dataMode() !== 'live') {
+      ui.liveNote = '';
+      ui.catalog = null;
+      ui.billingLive = null;
+      return;
+    }
+    ui.liveNote = 'Connecting to the live sandbox…';
+    uiLib.api('/v1/health').then(function (health) {
+      if (health.offline) {
+        ui.liveNote = 'The sandbox API is offline. Showing the sample catalog. Nothing was charged.';
+        ui.catalog = null;
+        render();
+        return;
+      }
+      if (health.ok && health.body && health.body.charges === false) ui.liveNote = 'Live sandbox. Charges are off.';
+      else ui.liveNote = 'The sandbox answered. This page will not send a charge.';
+      render();
+    });
+    uiLib.api('/v1/pro-shop/items').then(function (res) {
+      if (res.offline || !res.ok || !res.body || !res.body.items) {
+        ui.catalog = null;
+        if (res.offline) ui.liveNote = 'The sandbox API is offline. Showing the sample catalog. Nothing was charged.';
+        render();
+        return;
+      }
+      ui.catalog = res.body.items.map(function (item) {
         return {
-          sku: item.sku, name: item.name, category: item.category, description: item.description,
-          priceCents: item.priceCents, variants: item.variants || [], fulfillmentModes: item.fulfillmentModes || [],
+          sku: item.sku,
+          name: item.name,
+          brand: item.brand,
+          category: item.category,
+          description: item.description,
+          priceCents: item.priceCents,
+          variants: item.variants || [],
+          fulfillmentModes: item.fulfillmentModes || [],
         };
       });
-      ui.connect = false;
-      toast('ok', 'Catalog loaded from the sandbox API. Orders on this page stay a preview.');
-    }).catch(function () {
-      ui.catalog = null;
-      toast('bad', 'Could not reach the sandbox API. Staying on the sample catalog.');
+      ui.liveNote = res.body.charges === false ? 'Live sandbox catalog. Charges are off.' : 'Catalog loaded. This page will not send a charge.';
+      render();
+    });
+    if (!uiLib.token()) return;
+    uiLib.api('/v1/financials/summary?scope=all&period=month').then(function (res) {
+      if (res.ok && res.body && res.body.tiles) { ui.billingLive = res.body; render(); }
+    });
+    uiLib.api('/v1/pro-shop/orders').then(function (res) {
+      if (!res.ok || !res.body || !res.body.orders) return;
+      res.body.orders.forEach(function (order) {
+        if (store.orders.some(function (row) { return row.id === order.id; })) return;
+        store.orders.unshift({
+          id: order.id,
+          personId: store.personId,
+          lines: (order.lines || []).map(function (line) { return { name: line.name, variant: line.variant, qty: line.qty, lineCents: line.lineCents }; }),
+          fulfillmentMethod: order.fulfillmentMethod,
+          pickupLocationId: order.pickupLocationId,
+          shippingAddress: order.shippingAddress,
+          shippingCents: order.shippingCents || 0,
+          trackingNumber: order.trackingNumber,
+          fulfillmentStatus: order.fulfillmentStatus,
+          subtotalCents: order.subtotalCents || 0,
+          totalCents: order.totalCents || 0,
+        });
+      });
+      save();
+      render();
     });
   }
 
   window.addEventListener('storage', function () { store = uiLib.load(); render(); });
   document.getElementById('app').addEventListener('click', onClick);
+  if (uiLib.dataMode() === 'live') pullLive();
   document.getElementById('app').addEventListener('input', function (event) {
     if (event.target.id === 'msg-draft') ui.draft = event.target.value;
   });
