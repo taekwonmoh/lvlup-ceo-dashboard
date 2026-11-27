@@ -24,6 +24,8 @@ import type { StagingHold, StagingWaiver } from '../../src/import-job.ts';
 import { handleWave1, isPublicWave1Path, isStaffWave1Path } from '../../src/wave1-routes.ts';
 import { handleWave2, isStaffWave2Path, quoteProcessingFee } from '../../src/wave2-routes.ts';
 import { handleProShop, isProShopPath, isPublicProShopPath } from '../../src/pro-shop.ts';
+import { handleSandboxOtp, handleSandboxSession } from '../../src/sandbox-auth.ts';
+import { handleDesk } from '../../src/desk.ts';
 import type { SqlPool } from '../../src/query.ts';
 import { clientMessage } from './redact.ts';
 
@@ -216,6 +218,12 @@ export async function dispatchCrm(input: {
       const result = await platformCtx(null);
       if (result) return result;
     }
+    if (method === 'POST' && url.pathname === '/v1/auth/otp') {
+      return handleSandboxOtp(await readJson(), env, input.tokenSecret);
+    }
+    if (method === 'POST' && url.pathname === '/v1/auth/session') {
+      return handleSandboxSession(await readJson(), env, input.tokenSecret, input.allowLocalTokens);
+    }
     const actor = actorFrom(input.authorization, input.tokenSecret, input.allowLocalTokens);
     if (isProShopPath(method, parts)) {
       return await handleProShop({
@@ -257,6 +265,16 @@ export async function dispatchCrm(input: {
 
     if (method === 'GET' && url.pathname === '/v1/me') {
       return { status: 200, body: actor };
+    }
+    if (parts[0] === 'v1' && parts[1] === 'desk') {
+      return handleDesk({
+        method,
+        parts,
+        search: url.searchParams,
+        actor,
+        body: await readJson(),
+        env,
+      });
     }
 
     if (method === 'POST' && url.pathname === '/v1/imports/gymdesk') {

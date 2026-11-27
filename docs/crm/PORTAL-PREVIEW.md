@@ -16,17 +16,17 @@ Then open:
 - Staff desk: `http://127.0.0.1:8765/crm/preview/staff.html`
 - Chooser: `http://127.0.0.1:8765/crm/preview/index.html`
 
-The header switches between **Member app** and **Staff desk**. A badge says **Sandbox Preview**. Names are the Sample family. Nothing is a real member, and the pages do not show phone numbers.
+The header switches between **Member** and **Staff**, and between **Demo** and **Live**. Demo opens immediately with the Sample family and no sign-in. Live talks to `https://lvlup-crm-api.mike-moh.workers.dev`. Names in Demo are the Sample family. Nothing on these pages is a real member, and the pages do not show phone numbers.
 
-The member app is one tap at the top to switch Riley, Avery, or Jordan. The staff desk has five tabs: Today, Members & Leads, Schedule & Events, Financials & Billing, and Messages & Automations.
+The member app is one tap at the top to switch Riley, Avery, or Jordan. The staff desk has five tabs: Today, Members & Leads, Schedule & Events, Financials & Billing, and Messages & Automations. Today has a **Front Desk** | **Tasks & Clock-In** switch. Tasks & Clock-In is the shift timer, pay-period hours, and the opening, mid-shift, and closing checklists. The payroll button downloads a QuickBooks-ready preview and does not update QuickBooks.
 
 Both pages share one sample studio in this browser. Mark a hoodie ready on the staff desk, then open the member app and it shows **Ready for pickup at Waunakee**. Reset sample data from **More → Sandbox connection** on the member app, or **Messages → Sandbox connection** on the staff desk.
 
 ## Sandbox API
 
-Leave the connection blank to stay on sample data with no sign-in.
+**Demo** is the default and needs no sign-in.
 
-To read the gear catalog from the sandbox worker, paste `https://lvlup-crm-api.mike-moh.workers.dev`. A token is optional and stays in this browser tab. Catalog reads are public. Placing an order or moving a pickup still needs a staff or family token, and the worker must be running this build. This repo does not deploy it.
+**Live** reads `GET /v1/pro-shop/items` from the sandbox worker. The response includes `charges: false`. Sign in from the card on Home, Pro Shop, or the staff Today page. Email delivery stays off, so a sandbox code is shown on screen when the API offers one. You can also paste a bearer session token. Sign out clears that token. Protected calls fall back to the sample studio when you are signed out, the token is refused, or the API is offline. This repo does not deploy the worker.
 
 `GET /v1/pro-shop/items` returns the catalog.
 
