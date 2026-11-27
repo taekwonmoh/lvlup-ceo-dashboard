@@ -27,6 +27,7 @@ import { handleWave2, isStaffWave2Path, quoteProcessingFee } from '../../src/wav
 import { handleProShop, isProShopPath, isPublicProShopPath } from '../../src/pro-shop.ts';
 import { handleSandboxOtp, handleSandboxSession } from '../../src/sandbox-auth.ts';
 import { handleDesk } from '../../src/desk.ts';
+import { handleStudio } from '../../src/studio-ops.ts';
 import type { SqlPool } from '../../src/query.ts';
 import { clientMessage } from './redact.ts';
 
@@ -276,6 +277,16 @@ export async function dispatchCrm(input: {
         actor,
         body: await readJson(),
         env,
+      });
+    }
+    if (parts[0] === 'v1' && parts[1] === 'studio') {
+      return await handleStudio({
+        method,
+        parts,
+        search: url.searchParams,
+        actor,
+        body: await readJson(),
+        pool: pool as unknown as SqlPool,
       });
     }
 

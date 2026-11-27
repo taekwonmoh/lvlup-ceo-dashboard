@@ -1,0 +1,83 @@
+{
+  "passPct": 70,
+  "feeModel": "included_2027",
+  "beltTestFeeCents": 0,
+  "schools": [
+    { "id": "waunakee", "brand": "lvlup", "name": "LVLUP Waunakee", "short": "Waunakee", "qr": "WAUNAKEE", "active": 140, "trials": 6, "attendance": 18, "collectedCents": 2400000, "draftsCents": 800000 },
+    { "id": "verona", "brand": "lvlup", "name": "LVLUP Verona", "short": "Verona", "qr": "VERONA", "active": 110, "trials": 5, "attendance": 13, "collectedCents": 1900000, "draftsCents": 600000 },
+    { "id": "eastmad", "brand": "lvlup", "name": "LVLUP East Madison", "short": "East Madison", "qr": "EASTMAD", "active": 90, "trials": 4, "attendance": 11, "collectedCents": 1600000, "draftsCents": 500000 },
+    { "id": "deforest", "brand": "lvlup", "name": "LVLUP DeForest", "short": "DeForest", "qr": "DEFOREST", "active": 70, "trials": 2, "attendance": 8, "collectedCents": 900000, "draftsCents": 300000 },
+    { "id": "goninjaW", "brand": "goninja", "name": "Go Ninja Waunakee", "short": "Go Ninja Waunakee", "qr": "GNW", "active": 48, "trials": 3, "attendance": 7, "collectedCents": 420000, "draftsCents": 80000 },
+    { "id": "goninjaV", "brand": "goninja", "name": "Go Ninja Verona", "short": "Go Ninja Verona", "qr": "GNV", "active": 36, "trials": 2, "attendance": 5, "collectedCents": 300000, "draftsCents": 70000 }
+  ],
+  "people": [
+    { "id": "morgan", "first": "Morgan", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "Yellow", "school": "waunakee", "plan": "Core", "classes": 24, "classesNeed": 24, "rankAwardedOn": "2026-08-15", "daysNeed": 60, "lastCheckIn": "2026-11-26", "stripes": 0, "stripesNeed": 3 },
+    { "id": "riley", "first": "Riley", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "Yellow", "school": "waunakee", "plan": "Core", "classes": 22, "classesNeed": 24, "rankAwardedOn": "2026-09-01", "daysNeed": 60, "lastCheckIn": "2026-11-26", "stripes": 2, "stripesNeed": 3 },
+    { "id": "parker", "first": "Parker", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "Orange", "school": "waunakee", "plan": "Core", "classes": 8, "classesNeed": 24, "rankAwardedOn": "2026-11-01", "daysNeed": 60, "lastCheckIn": "2026-11-18", "stripes": 0, "stripesNeed": 3 },
+    { "id": "rowan", "first": "Rowan", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "Camo", "school": "waunakee", "plan": "Core", "classes": 10, "classesNeed": 24, "rankAwardedOn": "2026-10-01", "daysNeed": 60, "lastCheckIn": "2026-11-05", "stripes": 1, "stripesNeed": 3 },
+    { "id": "casey", "first": "Casey", "last": "Sample", "role": "lead", "status": "lead", "program": "Taekwondo", "belt": "New", "school": "waunakee", "plan": "Trial", "classes": 1, "classesNeed": 8, "rankAwardedOn": "2026-11-20", "daysNeed": 30, "lastCheckIn": "2026-11-25", "stripes": 0, "stripesNeed": 1 },
+    { "id": "harper", "first": "Harper", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "Green", "school": "eastmad", "plan": "Core", "classes": 24, "classesNeed": 24, "rankAwardedOn": "2026-08-01", "daysNeed": 60, "lastCheckIn": "2026-11-27", "stripes": 1, "stripesNeed": 3 },
+    { "id": "finley", "first": "Finley", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "White", "school": "eastmad", "plan": "Core", "classes": 4, "classesNeed": 16, "rankAwardedOn": "2026-10-20", "daysNeed": 45, "lastCheckIn": "2026-11-12", "stripes": 0, "stripesNeed": 3 },
+    { "id": "sage", "first": "Sage", "last": "Sample", "role": "lead", "status": "lead", "program": "Taekwondo", "belt": "New", "school": "eastmad", "plan": "Trial", "classes": 0, "classesNeed": 8, "rankAwardedOn": "2026-11-24", "daysNeed": 30, "lastCheckIn": "2026-11-26", "stripes": 0, "stripesNeed": 1 },
+    { "id": "blake", "first": "Blake", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "Red", "school": "verona", "plan": "Leadership", "classes": 30, "classesNeed": 30, "rankAwardedOn": "2026-07-15", "daysNeed": 90, "lastCheckIn": "2026-11-24", "stripes": 0, "stripesNeed": 1 },
+    { "id": "reese", "first": "Reese", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "Yellow", "school": "verona", "plan": "Core", "classes": 22, "classesNeed": 24, "rankAwardedOn": "2026-09-10", "daysNeed": 60, "lastCheckIn": "2026-11-08", "stripes": 2, "stripesNeed": 3 },
+    { "id": "elliot", "first": "Elliot", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "Orange", "school": "verona", "plan": "Core", "classes": 12, "classesNeed": 24, "rankAwardedOn": "2026-10-01", "daysNeed": 60, "lastCheckIn": "2026-11-20", "stripes": 1, "stripesNeed": 3 },
+    { "id": "hayden", "first": "Hayden", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "Camo", "school": "deforest", "plan": "Core", "classes": 24, "classesNeed": 24, "rankAwardedOn": "2026-09-01", "daysNeed": 60, "lastCheckIn": "2026-11-25", "stripes": 0, "stripesNeed": 3 },
+    { "id": "quinn", "first": "Quinn", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "Green", "school": "deforest", "plan": "Core", "classes": 23, "classesNeed": 24, "rankAwardedOn": "2026-08-28", "daysNeed": 60, "lastCheckIn": "2026-11-04", "stripes": 1, "stripesNeed": 3 },
+    { "id": "drew", "first": "Drew", "last": "Sample", "role": "student", "status": "active", "program": "Taekwondo", "belt": "White", "school": "deforest", "plan": "Core", "classes": 6, "classesNeed": 16, "rankAwardedOn": "2026-11-10", "daysNeed": 45, "lastCheckIn": "2026-11-19", "stripes": 0, "stripesNeed": 3 },
+    { "id": "logan", "first": "Logan", "last": "Sample", "role": "lead", "status": "lead", "program": "Taekwondo", "belt": "New", "school": "deforest", "plan": "Trial", "classes": 1, "classesNeed": 8, "rankAwardedOn": "2026-11-22", "daysNeed": 30, "lastCheckIn": "2026-11-22", "stripes": 0, "stripesNeed": 1 },
+    { "id": "robin", "first": "Robin", "last": "Sample", "role": "student", "status": "active", "program": "Go Ninja", "belt": "Yellow", "school": "goninjaW", "plan": "Movement", "classes": 12, "classesNeed": 12, "rankAwardedOn": "2026-09-01", "daysNeed": 45, "lastCheckIn": "2026-11-26", "stripes": 0, "stripesNeed": 2 },
+    { "id": "avery", "first": "Avery", "last": "Sample", "role": "student", "status": "active", "program": "Go Ninja", "belt": "White", "school": "goninjaW", "plan": "Movement", "classes": 6, "classesNeed": 12, "rankAwardedOn": "2026-10-15", "daysNeed": 45, "lastCheckIn": "2026-11-10", "stripes": 1, "stripesNeed": 2 },
+    { "id": "cameron", "first": "Cameron", "last": "Sample", "role": "student", "status": "active", "program": "Go Ninja", "belt": "Yellow", "school": "goninjaW", "plan": "Movement", "classes": 10, "classesNeed": 12, "rankAwardedOn": "2026-10-01", "daysNeed": 45, "lastCheckIn": "2026-11-25", "stripes": 1, "stripesNeed": 2 },
+    { "id": "noah", "first": "Noah", "last": "Sample", "role": "student", "status": "active", "program": "Go Ninja", "belt": "White", "school": "goninjaW", "plan": "Movement", "classes": 3, "classesNeed": 12, "rankAwardedOn": "2026-11-01", "daysNeed": 45, "lastCheckIn": "2026-11-06", "stripes": 0, "stripesNeed": 2 },
+    { "id": "taylor", "first": "Taylor", "last": "Sample", "role": "student", "status": "active", "program": "Go Ninja", "belt": "Orange", "school": "goninjaV", "plan": "Movement", "classes": 12, "classesNeed": 12, "rankAwardedOn": "2026-08-01", "daysNeed": 45, "lastCheckIn": "2026-11-21", "stripes": 0, "stripesNeed": 2 },
+    { "id": "jamie", "first": "Jamie", "last": "Sample", "role": "student", "status": "active", "program": "Go Ninja", "belt": "White", "school": "goninjaV", "plan": "Movement", "classes": 7, "classesNeed": 12, "rankAwardedOn": "2026-10-20", "daysNeed": 45, "lastCheckIn": "2026-11-13", "stripes": 0, "stripesNeed": 2 },
+    { "id": "skyler", "first": "Skyler", "last": "Sample", "role": "lead", "status": "lead", "program": "Go Ninja", "belt": "New", "school": "goninjaV", "plan": "Trial", "classes": 1, "classesNeed": 8, "rankAwardedOn": "2026-11-18", "daysNeed": 30, "lastCheckIn": "2026-11-18", "stripes": 0, "stripesNeed": 1 }
+  ],
+  "quizzes": [
+    {
+      "id": "white-korean",
+      "program": "Taekwondo",
+      "belt": "White",
+      "cycle": "Respect",
+      "title": "White belt Korean counts",
+      "questions": [
+        { "id": "wk1", "prompt": "What is the Korean word for belt?", "choices": ["Dobok", "Ti", "Dojang"], "answer": 1 },
+        { "id": "wk2", "prompt": "Which word means three?", "choices": ["Hana", "Dul", "Set"], "answer": 2 },
+        { "id": "wk3", "prompt": "What is the training hall called?", "choices": ["Dojang", "Dobok", "Charyeot"], "answer": 0 }
+      ]
+    },
+    {
+      "id": "yellow-stances",
+      "program": "Taekwondo",
+      "belt": "Yellow",
+      "cycle": "Foundation",
+      "title": "Yellow belt stances and blocks",
+      "questions": [
+        { "id": "ys1", "prompt": "What is the walking stance called?", "choices": ["Ap kubi", "Ap chagi", "Sonnal"], "answer": 0 },
+        { "id": "ys2", "prompt": "What is a low block called?", "choices": ["Eolgul makki", "Arae makki", "Dollyo chagi"], "answer": 1 },
+        { "id": "ys3", "prompt": "Which command means attention?", "choices": ["Kyungye", "Baro", "Charyeot"], "answer": 2 }
+      ]
+    },
+    {
+      "id": "ninja-safety",
+      "program": "Go Ninja",
+      "belt": "White",
+      "cycle": "Balance",
+      "title": "Go Ninja floor safety",
+      "questions": [
+        { "id": "ns1", "prompt": "What do you do before you climb?", "choices": ["Look at the coach", "Run at the wall", "Close your eyes"], "answer": 0 },
+        { "id": "ns2", "prompt": "Grip socks are for which floor?", "choices": ["The parking lot", "The ninja floor", "The lobby tile"], "answer": 1 },
+        { "id": "ns3", "prompt": "Where does a spotter stand?", "choices": ["In the lobby", "On the beam", "Beside the athlete"], "answer": 2 }
+      ]
+    }
+  ],
+  "attempts": [
+    { "id": "att-riley-white", "personId": "riley", "quizId": "white-korean", "scorePct": 100, "passed": true, "takenOn": "2026-11-12" },
+    { "id": "att-riley-yellow", "personId": "riley", "quizId": "yellow-stances", "scorePct": 67, "passed": false, "takenOn": "2026-11-20" },
+    { "id": "att-morgan-white", "personId": "morgan", "quizId": "white-korean", "scorePct": 100, "passed": true, "takenOn": "2026-11-18" },
+    { "id": "att-harper-yellow", "personId": "harper", "quizId": "yellow-stances", "scorePct": 100, "passed": true, "takenOn": "2026-11-21" },
+    { "id": "att-avery-ninja", "personId": "avery", "quizId": "ninja-safety", "scorePct": 100, "passed": true, "takenOn": "2026-11-11" },
+    { "id": "att-noah-ninja", "personId": "noah", "quizId": "ninja-safety", "scorePct": 33, "passed": false, "takenOn": "2026-11-05" }
+  ]
+}
