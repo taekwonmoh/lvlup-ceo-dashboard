@@ -23,6 +23,7 @@ import { handlePlatform, isAuthedPlatformPath, isPublicPlatformPath } from '../.
 import type { StagingHold, StagingWaiver } from '../../src/import-job.ts';
 import { handleWave1, isPublicWave1Path, isStaffWave1Path } from '../../src/wave1-routes.ts';
 import { handleWave2, isStaffWave2Path, quoteProcessingFee } from '../../src/wave2-routes.ts';
+import { handleProShop, isProShopPath, isPublicProShopPath } from '../../src/pro-shop.ts';
 import type { SqlPool } from '../../src/query.ts';
 import { clientMessage } from './redact.ts';
 
@@ -176,6 +177,17 @@ export async function dispatchCrm(input: {
       try { return JSON.parse(text) as Record<string, unknown>; }
       catch { throw new CrmError(400, 'bad_json', 'Send JSON.'); }
     };
+    if (isPublicProShopPath(method, parts)) {
+      return await handleProShop({
+        method,
+        parts,
+        search: url.searchParams,
+        actor: null,
+        body: {},
+        pool: pool as unknown as SqlPool,
+        env,
+      });
+    }
     if (isPublicWave1Path(method, parts)) {
       return await handleWave1({
         method,
@@ -205,6 +217,17 @@ export async function dispatchCrm(input: {
       if (result) return result;
     }
     const actor = actorFrom(input.authorization, input.tokenSecret, input.allowLocalTokens);
+    if (isProShopPath(method, parts)) {
+      return await handleProShop({
+        method,
+        parts,
+        search: url.searchParams,
+        actor,
+        body: await readJson(),
+        pool: pool as unknown as SqlPool,
+        env,
+      });
+    }
     if (isStaffWave2Path(method, parts, url.searchParams)) {
       return await handleWave2({
         method,

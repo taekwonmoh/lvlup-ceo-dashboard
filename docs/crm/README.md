@@ -31,6 +31,7 @@ Mike Moh wants to replace GymDesk with a CRM and member platform that the staff 
 | [GYMDESK-UPDATES-WAVE1.md](GYMDESK-UPDATES-WAVE1.md) | Wave 1 profiles, tags, and forms. Dry-run only. |
 | [GYMDESK-UPDATES-WAVE2.md](GYMDESK-UPDATES-WAVE2.md) | Wave 2 schedule, billing preview, and templates. Dry-run only. |
 | [FINANCIALS.md](FINANCIALS.md) | Spark-style Financials screen: metric definitions, LVLUP additions, and the open questions. |
+| [PORTAL-PREVIEW.md](PORTAL-PREVIEW.md) | How to open the member portal and the staff front-desk preview. |
 
 ## Decision in one paragraph
 
