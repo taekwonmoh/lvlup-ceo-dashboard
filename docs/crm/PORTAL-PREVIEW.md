@@ -14,11 +14,14 @@ Then open:
 
 - Member app: `http://127.0.0.1:8765/crm/preview/member.html`
 - Staff desk: `http://127.0.0.1:8765/crm/preview/staff.html`
+- Go Ninja web: `http://127.0.0.1:8765/crm/preview/goninja.html`
 - Chooser: `http://127.0.0.1:8765/crm/preview/index.html`
 
 The header switches between **Member** and **Staff**, and between **Demo** and **Live**. Demo opens immediately with the Sample family and no sign-in. Live talks to `https://lvlup-crm-api.mike-moh.workers.dev`. Names in Demo are the Sample family. Nothing on these pages is a real member, and the pages do not show phone numbers.
 
 The member app is one tap at the top to switch Riley, Avery, or Jordan. The staff desk has five tabs: Today, Members & Leads, Schedule & Events, Financials & Billing, and Messages & Automations. Today has a **Front Desk** | **Tasks & Clock-In** switch. Tasks & Clock-In is the shift timer, pay-period hours, and the opening, mid-shift, and closing checklists. The payroll button downloads a QuickBooks-ready preview and does not update QuickBooks.
+
+Go Ninja web (`goninja.html`) is the branded landing and enrollment preview for Go Ninja Waunakee and Go Ninja Verona. It has three flows: the 8-week Ninja Movement Academy (`#academy`), summer camp week picking (`#camp`), and afterschool family management (`#afterschool`). Sibling prices come from `crm/lib/household-discounts.js`. Staff edit those rates on Financials & Billing (`staff.html#billing`). Names are the Sample family. Nothing on that page is charged.
 
 Both pages share one sample studio in this browser. Mark a hoodie ready on the staff desk, then open the member app and it shows **Ready for pickup at Waunakee**. Reset sample data from **More → Sandbox connection** on the member app, or **Messages → Sandbox connection** on the staff desk.
 

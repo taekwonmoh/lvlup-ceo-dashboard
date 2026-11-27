@@ -6,7 +6,7 @@
   var esc = uiLib.esc;
   var store = uiLib.load();
   var ui = {
-    tab: (location.hash === '#metrics' || location.hash === '#growth') ? 'people' : 'today',
+    tab: (location.hash === '#metrics' || location.hash === '#growth') ? 'people' : (location.hash === '#billing' || location.hash === '#household' || location.hash === '#money') ? 'money' : 'today',
     toast: null,
     query: '',
     filter: 'all',
@@ -932,6 +932,7 @@
     return '<h1>Financials &amp; Billing</h1>' + uiLib.liveNote(ui.liveNote) + liveMoney +
       '<p class="lede">Sample month unless a finance sign-in loaded the sandbox summary. Nothing is charged.</p>' +
       (window.CrmGrowth ? window.CrmGrowth.feePanel(studioCtx()) : '') +
+      (window.CrmHousehold ? window.CrmHousehold.panel(studioCtx()) : '') +
       qboCard() +
       '<div class="note">' + esc(data.tuitionNote) + '</div>' +
       '<div class="tiles money-tiles"><div class="card"><div class="meta">Collected</div><div class="price">' + esc(uiLib.money(fin.collectedCents)) + '</div></div>' +
@@ -1170,6 +1171,7 @@
       toast('ok', 'Metrics CSV downloaded.');
       return;
     }
+    if (window.CrmHousehold && window.CrmHousehold.handle(act, el, studioCtx())) return;
     if (window.CrmGrowth && window.CrmGrowth.handle(act, el, studioCtx())) return;
     if (window.CrmStudio && window.CrmStudio.handle(act, el, studioCtx())) return;
     if (act === 'tab') {
@@ -1770,8 +1772,13 @@
     }
     if (event.target.id === 'ask-q' || event.target.id === 'metrics-q') ui.askText = event.target.value;
     if (event.target.id === 'quiz-person') ui.quizPerson = event.target.value;
+    if (window.CrmHousehold && event.target.closest && event.target.closest('#hh-card')) window.CrmHousehold.typed();
   });
   document.getElementById('app').addEventListener('change', function (event) {
+    if (window.CrmHousehold && event.target.closest && event.target.closest('#hh-card')) {
+      window.CrmHousehold.changed(event.target, studioCtx());
+      return;
+    }
     if (event.target.getAttribute('data-act') === 'pipe-move' && window.CrmGrowth) {
       window.CrmGrowth.move(event.target.getAttribute('data-id'), event.target.value, studioCtx());
       return;
