@@ -224,6 +224,7 @@ test('wrangler config binds Hyperdrive by id and keeps the sandbox defaults', ()
   assert.equal(config.vars.AUTHORIZENET_MODE, 'sandbox');
   assert.equal(config.vars.BILLING_CHARGES_ENABLED, '0');
   assert.equal(config.vars.QBO_ENABLED, '0');
+  assert.equal(config.vars.QBO_SYNC_ENABLED, '0');
   assert.equal(config.vars.AUTOMATION_DELIVERY_ENABLED, '0');
   assert.equal(config.vars.PUSH_DELIVERY_ENABLED, '0');
   assert.equal(config.vars.WEBHOOK_DELIVERY_ENABLED, '0');

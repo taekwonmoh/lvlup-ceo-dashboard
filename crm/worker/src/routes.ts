@@ -10,6 +10,7 @@ import { buildChargeProfileRequest, buildGetCustomerProfileRequest, getCustomerP
 import { curriculumForRank, vimeoPlayerUrl } from '../../src/curriculum.ts';
 import { activeCycle } from '../../src/cycles.ts';
 import { financialReport, financialsSummary, scopeAllowed, schoolsInScope } from '../../src/financials.ts';
+import { handleQuickbooksHttp } from '../../src/qbo-export-routes.ts';
 import { homeSummary, previewPaymentRetry } from '../../src/home.ts';
 import { quoteBooking, type PromoCode } from '../../src/pricing.ts';
 import { PROGRAMS, ranksForProgram, resolveRank } from '../../src/ranks.ts';
@@ -35,6 +36,7 @@ export type CrmRuntimeEnv = {
   BILLING_CHARGES_ENABLED?: string;
   BILLING_CHARGE_SINK?: string;
   QBO_ENABLED?: string;
+  QBO_SYNC_ENABLED?: string;
   AUTOMATION_DELIVERY_ENABLED?: string;
   PUSH_DELIVERY_ENABLED?: string;
   WEBHOOK_DELIVERY_ENABLED?: string;
@@ -487,6 +489,18 @@ export async function dispatchCrm(input: {
       } catch (err) {
         return { status: 404, body: { error: { code: 'not_found', message: err instanceof Error ? err.message : 'Unknown scope.' } } };
       }
+    }
+    if (parts[0] === 'v1' && parts[1] === 'financials' && (parts[2] === 'quickbooks-export' || parts[2] === 'quickbooks-categories')) {
+      const qbo = await handleQuickbooksHttp({
+        method,
+        parts,
+        search: url.searchParams,
+        actor,
+        body: method === 'GET' ? {} : await readJson(),
+        pool,
+        env,
+      });
+      if (qbo) return qbo;
     }
     if (method === 'GET' && (url.pathname === '/v1/financials/summary' || (parts[0] === 'v1' && parts[1] === 'financials' && parts[2] === 'reports' && parts[3]))) {
       assertFinance(actor);
