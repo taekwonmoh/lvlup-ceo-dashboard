@@ -11,19 +11,18 @@
     "enabled": true,
     "traces": { "enabled": true }
   },
-  // Hyperdrive binding for a new Supabase Postgres project.
-  // Do not reuse project xxyndswrierztzdbjvrd.
-  // Leave this commented until the live Hyperdrive configuration id is filled in.
-  // An empty id makes wrangler deploy fail, so this file still builds as-is.
-  // Uncomment and set id from the Cloudflare dashboard (Storage & databases → Hyperdrive).
+  // Hyperdrive config lvlup-crm-db. The id is not a secret.
+  // The database password stays in Hyperdrive and is never written here.
+  // Do not reuse Supabase project xxyndswrierztzdbjvrd.
   // The Worker reads env.HYPERDRIVE.connectionString and never logs or returns it.
-  // Local wrangler dev can set DATABASE_URL in worker/.dev.vars instead.
-  // "hyperdrive": [
-  //   {
-  //     "binding": "HYPERDRIVE",
-  //     "id": "REPLACE_WITH_HYPERDRIVE_ID"
-  //   }
-  // ],
+  // Local wrangler dev can still set DATABASE_URL in worker/.dev.vars.
+  // Do not add a route or custom domain. api.lvlupma.com stays unattached.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "d711e181a6bb4f869ca9ac79f69382f7"
+    }
+  ],
   "rules": [
     { "type": "Text", "globs": ["**/*.csv"], "fallthrough": true }
   ],

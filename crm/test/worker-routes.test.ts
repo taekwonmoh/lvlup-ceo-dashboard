@@ -207,15 +207,20 @@ test('routes that need Postgres report the database is unavailable', async () =>
   assert.equal(missing.json.error.code, 'not_found');
 });
 
-test('wrangler config keeps the sandbox defaults and leaves Hyperdrive commented out', () => {
+test('wrangler config binds Hyperdrive by id and keeps the sandbox defaults', () => {
   const root = dirname(fileURLToPath(import.meta.url));
   const raw = readFileSync(join(root, '../worker/wrangler.jsonc'), 'utf8');
   const stripped = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const config = JSON.parse(stripped);
   assert.equal(config.name, 'lvlup-crm-api');
   assert.equal(config.workers_dev, true);
-  assert.equal(config.hyperdrive, undefined);
+  assert.deepEqual(config.hyperdrive, [{
+    binding: 'HYPERDRIVE',
+    id: 'd711e181a6bb4f869ca9ac79f69382f7',
+  }]);
   assert.equal(config.routes, undefined);
+  assert.equal(config.route, undefined);
+  assert.equal(/"pattern"\s*:/.test(stripped), false);
   assert.equal(config.vars.AUTHORIZENET_MODE, 'sandbox');
   assert.equal(config.vars.BILLING_CHARGES_ENABLED, '0');
   assert.equal(config.vars.QBO_ENABLED, '0');
@@ -225,6 +230,5 @@ test('wrangler config keeps the sandbox defaults and leaves Hyperdrive commented
   assert.equal(config.vars.CRM_ALLOW_LOCAL_TOKENS, '0');
   assert.equal(config.vars.FIREBASE_PROJECT_ID, 'lvlup-members-app');
   assert.ok(config.compatibility_flags.includes('nodejs_compat'));
-  assert.match(raw, /"binding": "HYPERDRIVE"/);
-  assert.match(raw, /REPLACE_WITH_HYPERDRIVE_ID/);
+  assert.equal(/postgres(?:ql)?:\/\//i.test(raw), false);
 });

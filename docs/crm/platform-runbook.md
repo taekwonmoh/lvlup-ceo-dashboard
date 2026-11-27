@@ -49,7 +49,7 @@ Database, in order:
 
 - `nodejs_compat` is on so `pg` can use the Hyperdrive connection string. `pg` is `^8.16.3`, the minimum Hyperdrive accepts.
 - `workers_dev` is true so a later sandbox deploy can use the workers.dev subdomain. There is no `routes` entry and no custom domain. `api.lvlupma.com` is not attached.
-- The `hyperdrive` block is commented out until the live Hyperdrive configuration id is filled in. An empty id makes `wrangler deploy` fail, so the file builds as-is. Uncomment it and set `id` from the Cloudflare dashboard (Storage & databases → Hyperdrive) only after Mike approves the new Supabase project. Do not point Hyperdrive at `xxyndswrierztzdbjvrd`.
+- Hyperdrive config `lvlup-crm-db` is bound as `HYPERDRIVE` with id `d711e181a6bb4f869ca9ac79f69382f7`. That id is not a secret. The database password stays in Hyperdrive, not in git. Do not point this binding at `xxyndswrierztzdbjvrd`.
 
 Safety vars in that file stay sandbox / off: `AUTHORIZENET_MODE=sandbox`, `BILLING_CHARGES_ENABLED=0`, `QBO_ENABLED=0`, `AUTOMATION_DELIVERY_ENABLED=0`, `PUSH_DELIVERY_ENABLED=0`, `WEBHOOK_DELIVERY_ENABLED=0`, `CRM_ALLOW_LOCAL_TOKENS=0`, `FIREBASE_PROJECT_ID=lvlup-members-app`.
 
@@ -59,9 +59,9 @@ Safety vars in that file stay sandbox / off: `AUTHORIZENET_MODE=sandbox`, `BILLI
 
 1. Create a **new** Supabase project (Postgres 15+, `us-east` or `us-west-2`). Do not reuse `xxyndswrierztzdbjvrd`.
 2. Apply `crm/supabase/migrations/` to that project only. Seed is fixture data (`example.test`), not a roster.
-3. Create the Cloudflare Worker. Do not attach a route yet. Uncomment the Hyperdrive binding in `crm/worker/wrangler.jsonc` only after the new project's Hyperdrive id exists.
+3. Create the Cloudflare Worker. Do not attach a route yet. Hyperdrive `lvlup-crm-db` (`d711e181a6bb4f869ca9ac79f69382f7`) is bound in `crm/worker/wrangler.jsonc`.
 4. Worker secrets, names only, values never in git:
-   - Hyperdrive configuration for the new project (preferred). `DATABASE_URL` remains the local and fallback secret.
+   - The Hyperdrive id above is public configuration. The database password stays in Hyperdrive. `DATABASE_URL` remains the local fallback secret.
    - `AUTHORIZENET_MODE=sandbox`
    - `BILLING_CHARGES_ENABLED` unset or `0`
    - `QBO_ENABLED` unset or `0`
