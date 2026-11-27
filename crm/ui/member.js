@@ -100,7 +100,7 @@
     document.getElementById('app').innerHTML =
       uiLib.header('member') +
       '<div class="stage"><div class="device">' +
-      '<header class="appbar"><div class="wordmark">LVLUP</div><div class="appbar-meta">Family</div></header>' +
+      '<header class="appbar"><div class="brand-row">' + uiLib.logo('mark') + (who.program === 'Go Ninja' ? uiLib.logo('go') : '') + '</div><div class="appbar-meta">' + (who.program === 'Go Ninja' ? 'Go Ninja' : 'Family') + '</div></header>' +
       '<div class="layout"><nav class="sidebar" aria-label="Sections">' + sideNav() + '</nav><main class="main">' +
       switcher() + uiLib.toast(ui.toast) + body(who) +
       '</main></div>' + bottom() + sheet() +
@@ -276,7 +276,8 @@
       }).join('') + '</div>' +
       items.map(function (item) {
         var size = ui.sizes[item.sku] || '';
-        return '<article class="product"><div class="product-art">' + art(item.sku) + '</div><div class="product-body"><h3>' + esc(item.name) + '</h3><p>' + esc(item.description) + '</p><div class="price">' + esc(uiLib.money(item.priceCents)) + '</div>' +
+        var mark = item.brand === 'goninja' ? '<div class="brand-row" style="margin-bottom:8px">' + uiLib.logo('go') + '</div>' : '';
+        return '<article class="product"><div class="product-art">' + art(item.sku) + '</div><div class="product-body">' + mark + '<h3>' + esc(item.name) + '</h3><p>' + esc(item.description) + '</p><div class="price">' + esc(uiLib.money(item.priceCents)) + '</div>' +
           '<div class="chips">' + (item.variants || []).map(function (variant) {
             return '<button type="button" class="chip' + (size === variant ? ' on' : '') + '" data-act="size" data-sku="' + esc(item.sku) + '" data-size="' + esc(variant) + '">' + esc(variant) + '</button>';
           }).join('') + '</div>' +

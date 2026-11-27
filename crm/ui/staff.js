@@ -36,7 +36,7 @@
   function render() {
     document.getElementById('app').innerHTML =
       uiLib.header('staff') +
-      '<div class="desk"><nav class="rail" aria-label="Front desk">' + TABS.map(function (tab) {
+      '<div class="desk"><nav class="rail" aria-label="Front desk"><div class="rail-logo">' + uiLib.logo('mark') + (String(schoolId()).indexOf('goninja') === 0 ? uiLib.logo('go') : '') + '</div>' + TABS.map(function (tab) {
         return '<button type="button" class="railbtn' + (ui.tab === tab[0] ? ' on' : '') + '" data-act="tab" data-tab="' + tab[0] + '">' + uiLib.icon(tab[2]) + '<span>' + esc(tab[1]) + '</span></button>';
       }).join('') + '</nav><main class="desk-main">' +
       uiLib.toast(ui.toast) +

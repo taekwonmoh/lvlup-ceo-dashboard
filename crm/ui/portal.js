@@ -169,6 +169,12 @@
     spark: '<path d="M12 3v4M12 17v4M4.9 6.5l2.8 2.8M16.3 14.7l2.8 2.8M3 12h4M17 12h4M4.9 17.5l2.8-2.8M16.3 9.3l2.8-2.8"/>',
   };
 
+  function logo(kind) {
+    if (kind === 'white') return '<img class="brand-logo" src="../../images/lvlup-logo-white.png" alt="LVLUP Martial Arts">';
+    if (kind === 'go') return '<img class="go-mark" src="../../images/goninja-logo.png" alt="Go Ninja">';
+    return '<img class="brand-mark" src="../../images/lvlup-logo.png" alt="LVLUP Martial Arts">';
+  }
+
   function icon(name) {
     return '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || ICONS.spark) + '</svg>';
   }
@@ -177,7 +183,7 @@
     var memberOn = mode === 'member' ? ' on' : '';
     var staffOn = mode === 'staff' ? ' on' : '';
     return '<div class="utility">' +
-      '<span class="utility-brand">LVLUP</span>' +
+      '<div class="brand-row">' + logo('white') + '</div>' +
       '<span class="sandbox-pill">Sandbox Preview</span>' +
       '<div class="mode" role="group" aria-label="Preview">' +
       '<a class="' + memberOn.trim() + '" href="member.html">Member app</a>' +
@@ -208,6 +214,7 @@
     setApi: setApi,
     header: header,
     icon: icon,
+    logo: logo,
     toast: toast,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
