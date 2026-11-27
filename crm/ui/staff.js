@@ -17,8 +17,14 @@
     draft: '',
     connect: false,
     eventName: '',
-    eventType: 'Belt test',
+    eventType: 'Summer Camp',
     eventDate: store.today,
+    eventTime: '09:00',
+    eventLocation: store.staffSchool || 'waunakee',
+    eventPortal: false,
+    eventEditor: '',
+    eventFilter: 'all',
+    portalTouched: false,
     todayView: location.hash === '#tasks' ? 'tasks' : location.hash === '#lobby' ? 'lobby' : 'desk',
     peopleView: (location.hash === '#metrics' || location.hash === '#growth') ? 'metrics' : 'members',
     listScope: 'all',
@@ -57,6 +63,11 @@
     growthCells: null,
     growthNote: '',
   };
+
+  var startParams = new URLSearchParams(location.search);
+  if (startParams.get('tab') === 'schedule' || location.hash === '#schedule') ui.tab = 'schedule';
+  if (startParams.get('filter') === 'portal' || startParams.get('filter') === 'cross-brand') ui.eventFilter = 'portal';
+  if (startParams.get('event')) openEventEditor(startParams.get('event'), true);
 
   var TABS = [
     ['today', 'Today', 'home', 'Today'],
@@ -503,6 +514,122 @@
     return rows[0] || null;
   }
 
+  function catalogEvents() {
+    var source = (ui.liveEvents && ui.liveEvents.length) ? ui.liveEvents : rules.studioEvents(store.today);
+    var edits = store.eventEdits || {};
+    var rows = source.map(function (row) {
+      var edit = edits[row.id];
+      return rules.decorateEvent(edit ? Object.assign({}, row, edit) : row);
+    });
+    var ids = {};
+    rows.forEach(function (row) { ids[row.id] = true; });
+    (store.extraEvents || []).forEach(function (row) {
+      if (!row || ids[row.id]) return;
+      rows.push(rules.decorateEvent(row));
+    });
+    return rules.sortStaffEvents(rows);
+  }
+
+  function listedEvents() {
+    var filter = ui.eventFilter === 'portal' ? 'portal' : (ui.eventFilter === 'school' ? 'school' : 'all');
+    return rules.filterStudioEvents(catalogEvents(), filter, schoolId());
+  }
+
+  function openEventEditor(id, silent) {
+    ui.eventEditor = id || 'new';
+    ui.portalTouched = false;
+    var row = id && id !== 'new' ? catalogEvents().filter(function (item) { return item.id === id; })[0] : null;
+    if (id && id !== 'new' && !row) ui.eventEditor = '';
+    if (row) {
+      ui.eventName = row.title;
+      ui.eventType = row.type;
+      ui.eventDate = row.date;
+      ui.eventTime = row.time;
+      ui.eventLocation = row.locationId;
+      ui.eventPortal = row.showInLvlupMemberPortal === true;
+    } else if (ui.eventEditor === 'new') {
+      ui.eventName = '';
+      ui.eventType = 'Summer Camp';
+      ui.eventDate = store.today;
+      ui.eventTime = '09:00';
+      ui.eventLocation = schoolId();
+      ui.eventPortal = rules.defaultShowInLvlupMemberPortal(schoolId(), 'Summer Camp');
+    }
+    if (!silent) render();
+  }
+
+  function syncPortalDefault() {
+    ui.eventPortal = rules.defaultShowInLvlupMemberPortal(ui.eventLocation, ui.eventType);
+    ui.portalTouched = false;
+  }
+
+  function eventOption(value, label, current) {
+    return '<option value="' + esc(value) + '"' + (value === current ? ' selected' : '') + '>' + esc(label) + '</option>';
+  }
+
+  function eventEditor() {
+    if (!ui.eventEditor) return '';
+    var types = ['Summer Camp', "Parents' Night Out", 'Belt test', 'Clinic', 'Tournament', 'Party'];
+    var editing = ui.eventEditor !== 'new';
+    var preview = rules.decorateEvent({
+      id: 'preview',
+      title: ui.eventName || 'Event',
+      type: ui.eventType,
+      date: ui.eventDate || store.today,
+      time: ui.eventTime || '09:00',
+      locationId: ui.eventLocation,
+      showInLvlupMemberPortal: ui.eventPortal === true,
+    });
+    var livePill = rules.isCrossBrandLvlupOffer(preview) ? '<span class="badge portal">Shown to LVLUP members</span>' : '';
+    return '<form class="card event-editor" role="dialog" aria-labelledby="event-editor-title" data-event-editor="' + esc(ui.eventEditor) + '">' +
+      '<h2 id="event-editor-title">' + (editing ? 'Edit event' : 'New event') + '</h2>' +
+      '<label class="portal-toggle"><input id="event-portal" type="checkbox"' + (ui.eventPortal ? ' checked' : '') + '>' +
+      '<span><strong>Also show in LVLUP Member Portal</strong>' + livePill +
+      '<small>On by default for Summer Camp and Parents\' Night Out at Go Ninja Waunakee and Go Ninja Verona. You can change it for any event.</small></span></label>' +
+      '<label>Name<input id="event-name" value="' + esc(ui.eventName) + '" placeholder="Summer Camp"></label>' +
+      '<label>Host school<select id="event-location">' + data.schools.map(function (row) {
+        return eventOption(row.id, row.name, ui.eventLocation);
+      }).join('') + '</select></label>' +
+      '<label>Type<select id="event-type">' + types.map(function (type) {
+        return eventOption(type, type, ui.eventType);
+      }).join('') + '</select></label>' +
+      '<div class="event-grid"><label>Date<input id="event-date" type="date" value="' + esc(ui.eventDate) + '"></label>' +
+      '<label>Start<input id="event-time" type="time" value="' + esc(ui.eventTime) + '"></label></div>' +
+      '<div class="event-actions"><button type="button" class="big primary" data-act="event-save">' + (editing ? 'Save event' : 'Add event') + '</button>' +
+      '<button type="button" class="big" data-act="event-cancel">Cancel</button></div></form>';
+  }
+
+  function eventCard(row) {
+    var place = uiLib.school(row.locationId);
+    var when = rules.prettyDate(row.date) + (row.endDate && row.endDate !== row.date ? ' – ' + rules.prettyDate(row.endDate) : '') + ' · ' + rules.prettyTime(row.time);
+    var pill = rules.isCrossBrandLvlupOffer(row)
+      ? '<span class="badge portal">Shown to LVLUP members</span>'
+      : '';
+    return '<article class="card event-card ' + (row.brand === 'goninja' ? 'goninja' : 'lvlup') + '">' +
+      '<div class="event-pills"><span class="badge">' + esc(row.type) + '</span>' + pill + '</div>' +
+      '<h3>' + esc(row.title) + '</h3>' +
+      '<div>' + esc(when) + '</div>' +
+      '<div class="meta">' + esc(place.name) + (place.city ? ' · ' + place.city : '') + '</div>' +
+      '<p>' + esc(row.blurb || '') + '</p>' +
+      '<button type="button" class="big" data-act="event-edit" data-id="' + esc(row.id) + '">Edit event</button></article>';
+  }
+
+  function eventsSection() {
+    var filters = [['all', 'All events'], ['school', 'This school'], ['portal', 'Shown to LVLUP members']];
+    var chips = filters.map(function (row) {
+      var on = ui.eventFilter === row[0];
+      return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-act="event-filter" data-filter="' + row[0] + '"' + (on ? ' aria-pressed="true"' : '') + '>' + esc(row[1]) + '</button>';
+    }).join('');
+    var rows = listedEvents();
+    return '<section class="event-section"><div class="event-head"><h2>Events</h2>' +
+      '<p class="lede">Go Ninja Waunakee and Go Ninja Verona Summer Camps and Parents\' Night Out can show in the LVLUP Member Portal.</p></div>' +
+      '<div class="event-tools"><div class="chips" aria-label="Event filter">' + chips + '</div>' +
+      '<button type="button" class="big primary" data-act="event-new">New event</button></div>' +
+      '<div class="event-board' + (ui.eventEditor ? ' open' : '') + '"><div class="event-list">' +
+      (rows.length ? rows.map(eventCard).join('') : '<p class="quiet">No events in this filter.</p>') +
+      '</div>' + eventEditor() + '</div></section>';
+  }
+
   function schedule() {
     var viewChips = ['day', 'week', 'month'].map(function (view) {
       return '<button type="button" class="chip' + (ui.view === view ? ' on' : '') + '" data-act="view" data-view="' + view + '">' + esc(view[0].toUpperCase() + view.slice(1)) + '</button>';
@@ -512,11 +639,8 @@
     }).join('');
     return '<h1>Schedule &amp; Events</h1>' + uiLib.liveNote(ui.liveNote) + '<p class="lede">' + esc(uiLib.school(schoolId()).name) + '</p>' + schoolChips() +
       (shifts ? '<h2>Sandbox shifts</h2>' + shifts : '') +
+      eventsSection() +
       '<div class="chips">' + viewChips + '</div>' + viewBody() +
-      '<h2>Add an event</h2><div class="card stack"><label>Name<input id="event-name" value="' + esc(ui.eventName) + '" placeholder="Parents Night Out"></label>' +
-      '<label>Date<input id="event-date" type="date" value="' + esc(ui.eventDate) + '"></label>' +
-      '<label>Type<select id="event-type"><option>Belt test</option><option>Clinic</option><option>Tournament</option><option>Parents Night Out</option><option>Party</option></select></label>' +
-      '<button type="button" class="big primary" data-act="add-event">Add event</button></div>' +
       '<h2>Bookings and waitlist</h2>' + bookingList();
   }
 
@@ -524,7 +648,7 @@
     if (ui.view === 'month') {
       var cells = rules.monthCells(ui.day);
       var busy = {};
-      rules.classesForWeek(rules.mondayOf(ui.day)).concat(store.duplicated || [], store.extraEvents || []).forEach(function (row) {
+      rules.classesForWeek(rules.mondayOf(ui.day)).concat(store.duplicated || [], catalogEvents()).forEach(function (row) {
         if (row.locationId === schoolId() || !row.locationId) busy[row.date] = true;
       });
       return '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (d) { return '<div class="dow">' + d + '</div>'; }).join('') +
@@ -552,11 +676,12 @@
   }
 
   function extraEvents() {
-    var rows = (store.extraEvents || []).filter(function (row) { return row.locationId === schoolId(); });
+    var rows = catalogEvents().filter(function (row) {
+      var end = row.endDate || row.date;
+      return row.locationId === schoolId() && row.date <= ui.day && end >= ui.day;
+    });
     if (!rows.length) return '';
-    return rows.map(function (row) {
-      return '<div class="card"><span class="badge">' + esc(row.type) + '</span><h3>' + esc(row.title) + '</h3><div>' + esc(rules.prettyDate(row.date)) + '</div></div>';
-    }).join('');
+    return '<h2>Events this day</h2>' + rows.map(eventCard).join('');
   }
 
   function bookingList() {
@@ -1169,7 +1294,11 @@
     if (act === 'view') { ui.view = el.getAttribute('data-view'); render(); return; }
     if (act === 'pick-day') { ui.day = el.getAttribute('data-date'); ui.view = 'day'; render(); return; }
     if (act === 'duplicate') { duplicate(el.getAttribute('data-id')); return; }
-    if (act === 'add-event') { addEvent(); return; }
+    if (act === 'event-new') { openEventEditor('new'); return; }
+    if (act === 'event-edit') { openEventEditor(el.getAttribute('data-id')); return; }
+    if (act === 'event-cancel') { ui.eventEditor = ''; render(); return; }
+    if (act === 'event-filter') { ui.eventFilter = el.getAttribute('data-filter') || 'all'; render(); return; }
+    if (act === 'event-save' || act === 'add-event') { saveEvent(); return; }
     if (act === 'template') {
       var template = data.templates.filter(function (row) { return row.id === el.getAttribute('data-id'); })[0];
       ui.draft = template ? template.body : '';
@@ -1285,16 +1414,72 @@
     toast('ok', 'Copied. The new class has no bookings.');
   }
 
-  function addEvent() {
-    var name = (document.getElementById('event-name').value || '').trim();
-    var date = document.getElementById('event-date').value;
-    var type = document.getElementById('event-type').value;
+  function saveEvent() {
+    var nameEl = document.getElementById('event-name');
+    var dateEl = document.getElementById('event-date');
+    var timeEl = document.getElementById('event-time');
+    var typeEl = document.getElementById('event-type');
+    var locEl = document.getElementById('event-location');
+    var portalEl = document.getElementById('event-portal');
+    var name = nameEl ? nameEl.value.trim() : '';
+    var date = dateEl ? dateEl.value : '';
     if (!name || !date) { toast('bad', 'Add a name and a date.'); return; }
+    var prior = ui.eventEditor && ui.eventEditor !== 'new'
+      ? catalogEvents().filter(function (item) { return item.id === ui.eventEditor; })[0]
+      : null;
+    var row = rules.decorateEvent({
+      id: prior ? prior.id : ('ev-' + Date.now()),
+      title: name,
+      type: typeEl ? typeEl.value : ui.eventType,
+      date: date,
+      endDate: prior && prior.date === date ? prior.endDate : date,
+      time: timeEl && timeEl.value ? timeEl.value : '18:00',
+      locationId: locEl ? locEl.value : schoolId(),
+      showInLvlupMemberPortal: !!(portalEl && portalEl.checked),
+      blurb: prior ? prior.blurb : 'Added from the staff desk. Nothing was charged.',
+      capacity: prior ? prior.capacity : 16,
+      registered: prior ? prior.registered : 0,
+      memberPriceCents: prior ? prior.memberPriceCents : 0,
+      nonMemberPriceCents: prior ? prior.nonMemberPriceCents : 0,
+    });
+    var inCatalog = rules.studioEvents(store.today).some(function (item) { return item.id === row.id; });
+    if (!prior) {
+      store.extraEvents = store.extraEvents || [];
+      store.extraEvents.push(row);
+    } else if (!inCatalog) {
+      store.extraEvents = (store.extraEvents || []).map(function (item) { return item.id === row.id ? row : item; });
+    } else {
+      store.eventEdits = store.eventEdits || {};
+      store.eventEdits[row.id] = row;
+    }
     ui.eventName = '';
-    ui.eventDate = date;
-    store.extraEvents.push({ id: 'ev-' + Date.now(), type: type, title: name, date: date, time: '6:00 PM', locationId: schoolId(), blurb: 'Added from the front desk preview.' });
+    ui.eventEditor = '';
+    ui.portalTouched = false;
     save();
-    toast('ok', 'Event added. It also shows on the member Events page.');
+    var shown = rules.isCrossBrandLvlupOffer(row);
+    var note = shown ? 'Saved. Shown to LVLUP members. Nothing was charged.' : 'Saved. Nothing was charged.';
+    if (uiLib.dataMode() === 'live' && uiLib.token()) {
+      uiLib.api((prior ? '/v1/events/' + encodeURIComponent(row.id) : '/v1/events'), {
+        method: prior ? 'PATCH' : 'POST',
+        body: {
+          id: row.id,
+          title: row.title,
+          locationId: row.locationId,
+          eventType: row.eventType,
+          startsOn: row.date,
+          endsOn: row.endDate,
+          time: row.time,
+          capacity: row.capacity,
+          showInLvlupMemberPortal: row.showInLvlupMemberPortal,
+        },
+      }).then(function (res) {
+        if (res.offline) toast('bad', note + ' The sandbox API is offline.');
+        else if (!res.ok) toast('ok', note + ' The sandbox copy was left as it was.');
+        else toast('ok', note);
+      });
+      return;
+    }
+    toast('ok', note);
   }
 
   function initialsOf() {
@@ -1476,6 +1661,7 @@
       ui.liveMembers = null;
       ui.liveBilling = null;
       ui.liveShifts = null;
+      ui.liveEvents = null;
       ui.growthCells = null;
       ui.growthNote = '';
       return;
@@ -1495,6 +1681,12 @@
     });
     pullGrowth();
     if (!uiLib.token()) return;
+    uiLib.api('/v1/events?filter=all').then(function (res) {
+      if (res.ok && res.body && res.body.events && res.body.charges === false) {
+        ui.liveEvents = res.body.events;
+        render();
+      }
+    });
     uiLib.api('/v1/members?locationId=' + encodeURIComponent(schoolId())).then(function (res) {
       if (res.ok && res.body && res.body.members) {
         ui.liveMembers = res.body.members.map(mapMember);
@@ -1582,6 +1774,27 @@
   document.getElementById('app').addEventListener('change', function (event) {
     if (event.target.getAttribute('data-act') === 'pipe-move' && window.CrmGrowth) {
       window.CrmGrowth.move(event.target.getAttribute('data-id'), event.target.value, studioCtx());
+      return;
+    }
+    if (event.target.id === 'event-portal') {
+      ui.portalTouched = true;
+      ui.eventPortal = !!event.target.checked;
+      ui.eventName = (document.getElementById('event-name') || {}).value || ui.eventName;
+      ui.eventLocation = (document.getElementById('event-location') || {}).value || ui.eventLocation;
+      ui.eventType = (document.getElementById('event-type') || {}).value || ui.eventType;
+      ui.eventDate = (document.getElementById('event-date') || {}).value || ui.eventDate;
+      ui.eventTime = (document.getElementById('event-time') || {}).value || ui.eventTime;
+      render();
+      return;
+    }
+    if (event.target.id === 'event-location' || event.target.id === 'event-type' || event.target.id === 'event-date' || event.target.id === 'event-time') {
+      ui.eventLocation = (document.getElementById('event-location') || {}).value || ui.eventLocation;
+      ui.eventType = (document.getElementById('event-type') || {}).value || ui.eventType;
+      ui.eventDate = (document.getElementById('event-date') || {}).value || ui.eventDate;
+      ui.eventTime = (document.getElementById('event-time') || {}).value || ui.eventTime;
+      ui.eventName = (document.getElementById('event-name') || {}).value || '';
+      if (event.target.id === 'event-location' || event.target.id === 'event-type') syncPortalDefault();
+      render();
       return;
     }
     if (event.target.id === 'qbo-from' || event.target.id === 'qbo-through') {

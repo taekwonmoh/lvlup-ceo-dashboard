@@ -94,7 +94,9 @@ ATA Songahm for LVLUP color belts, stored as data so a wrong stripe rule is a ro
 
 ## Events, tournaments, parties
 
-`events`: location or “all LVLUP”, start, end, type (`camp`, `tournament`, `clinic`, `seminar`, `party`, `belt_test`, `other`), purpose (`leads`, `profit`, `retention`), price, capacity. This is the same shape the Monthly Plan already uses for planned events. The dashboard’s `ceo/events` photo feed can keep storing photos in Firebase Storage; the CRM row holds `photo_count` and a pointer, not the bytes.
+`events`: location or “all LVLUP”, start, end, type (`camp`, `summer_camp`, `tournament`, `clinic`, `seminar`, `party`, `pno`, `parents_night_out`, `belt_test`, `other`), purpose (`leads`, `profit`, `retention`), price, capacity. This is the same shape the Monthly Plan already uses for planned events. The dashboard’s `ceo/events` photo feed can keep storing photos in Firebase Storage; the CRM row holds `photo_count` and a pointer, not the bytes.
+
+`show_in_lvlup_member_portal` and `visible_to_brands` say which member portal lists the event. A Go Ninja event at `goninjaW` or `goninjaV` keeps `goninja` in `visible_to_brands`. Summer Camp and Parents' Night Out at those two schools default the flag on, which also adds `lvlup`. Any other event can be toggled. The helper is `crm_default_show_in_lvlup_member_portal`. RLS stays enabled and this column does not add an anon policy. Belt testing stays included with tuition.
 
 `event_registrations`: member or lead, event, paid invoice id if any.
 

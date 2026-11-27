@@ -375,11 +375,17 @@
   }
 
   function events(who) {
-    return '<h1>Events</h1><p class="lede">One tap signs up ' + esc(who.first) + '.</p>' +
-      rules.upcomingEvents(store.today).concat(store.extraEvents || []).map(function (event) {
+    var school = uiLib.school(who.school);
+    var brand = school.brand === 'Go Ninja' ? 'goninja' : 'lvlup';
+    var lede = brand === 'lvlup'
+      ? 'Summer Camps and Parents\' Night Out at Go Ninja Waunakee and Go Ninja Verona are listed here too.'
+      : 'One tap signs up ' + who.first + '.';
+    return '<h1>Events</h1><p class="lede">' + esc(lede) + '</p>' +
+      rules.memberPortalEvents(store.today, brand, store.extraEvents || []).map(function (event) {
         var on = store.eventSignups.some(function (row) { return row.eventId === event.id && row.personId === store.personId; });
         var place = uiLib.school(event.locationId);
-        return '<div class="card"><span class="badge">' + esc(event.type) + '</span><h3>' + esc(event.title) + '</h3><div>' + esc(rules.prettyDate(event.date) + ' · ' + event.time) + '</div><div class="meta">' + esc(place.name) + (place.city ? ' · ' + place.city : '') + '</div><p>' + esc(event.blurb || '') + '</p>' +
+        var when = rules.prettyDate(event.date) + (event.endDate && event.endDate !== event.date ? ' – ' + rules.prettyDate(event.endDate) : '') + ' · ' + rules.prettyTime(event.time);
+        return '<div class="card"><span class="badge">' + esc(event.type) + '</span><h3>' + esc(event.title) + '</h3><div>' + esc(when) + '</div><div class="meta">' + esc(place.name) + (place.city ? ' · ' + place.city : '') + '</div><p>' + esc(event.blurb || '') + '</p>' +
           (on ? '<div class="note">' + esc(who.first) + ' is signed up.</div><button type="button" class="big" data-act="event-off" data-id="' + esc(event.id) + '">Remove</button>'
             : '<button type="button" class="big primary" data-act="event-go" data-id="' + esc(event.id) + '">Sign up ' + esc(who.first) + '</button>') +
           '</div>';
