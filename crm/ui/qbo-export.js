@@ -384,7 +384,31 @@ var LvlupQbo = (() => {
     if (from.slice(0, 7) === through.slice(0, 7) && from.endsWith("-01")) return from.slice(0, 7);
     return from + "_" + through;
   }
-  function lineFee(line) {
+  function feeGroup(categoryId) {
+    if (categoryId === "tuition" || categoryId === "gn_classes" || categoryId === "gn_after_school" || categoryId === "private_lessons") return "tuition";
+    if (categoryId === "retail" || categoryId === "gn_retail") return "proshop";
+    if (categoryId === "events" || categoryId === "gn_events" || categoryId === "tournaments" || categoryId === "gn_summer_camp") return "events";
+    if (categoryId === "lvlup_parties" || categoryId === "gn_parties") return "parties";
+    if (categoryId === "belt_test") return "belt_test";
+    return "other";
+  }
+  function policyFeeCents(line, schedule) {
+    const captured = Math.max(0, line.grossCents - (line.creditCents || 0));
+    if (captured <= 0) return 0;
+    const group = feeGroup(line.categoryId);
+    if (group === "proshop" || group === "belt_test" || group === "other") return 0;
+    const method = line.method === "ach" ? "ach" : line.method === "card" ? "card" : "other";
+    if (method === "other") return 0;
+    const on = group === "tuition" ? schedule.tuition : group === "events" ? schedule.events : schedule.parties;
+    if (!on) return 0;
+    if (method === "ach") {
+      if (schedule.achMode === "flat") return Math.max(0, schedule.achFlatCents || 0);
+      return Math.round(captured * schedule.achBps / 10000);
+    }
+    return Math.round(captured * schedule.cardBps / 10000) + Math.max(0, schedule.cardFixedCents || 0);
+  }
+  function lineFee(line, schedule) {
+    if (schedule) return policyFeeCents(line, schedule);
     const captured = line.grossCents - line.creditCents;
     return processingFeeCents(captured, line.method);
   }
@@ -398,7 +422,7 @@ var LvlupQbo = (() => {
     const formulaOk = categories.every((row) => row.netCents === row.grossCents - row.refundCents - row.feeCents) && netCents === grossCents - refundCents - feeCents && depositCents === netCents - creditCents;
     return { count, grossCents, refundCents, feeCents, creditCents, netCents, depositCents, formulaOk };
   }
-  function buildEntity(company, period, catalog, lines) {
+  function buildEntity(company, period, catalog, lines, schedule) {
     const schools = new Set(company.schools);
     const buckets = /* @__PURE__ */ new Map();
     for (const line of lines) {
@@ -419,7 +443,7 @@ var LvlupQbo = (() => {
       bucket.count += line.count;
       bucket.grossCents += line.grossCents;
       bucket.refundCents += line.refundCents;
-      bucket.feeCents += lineFee(line);
+      bucket.feeCents += lineFee(line, schedule);
       bucket.creditCents += line.creditCents;
       if (line.memo) bucket.memos.push(line.memo);
       buckets.set(key, bucket);
@@ -631,7 +655,7 @@ var LvlupQbo = (() => {
     const period = periodRange(input);
     const companies = companiesFor(input.entity || "all");
     const lines = input.lines || QBO_SANDBOX_LINES;
-    const entities = companies.map((company) => buildEntity(company, period, catalog, lines));
+    const entities = companies.map((company) => buildEntity(company, period, catalog, lines, input.feeSchedule));
     const categories = sumCategories(entities, catalog);
     const creditCents = categories.reduce((sum, row) => sum + row.creditCents, 0);
     const totals = totalsOf(categories, creditCents);

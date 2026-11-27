@@ -19,7 +19,16 @@
     eventName: '',
     eventType: 'Belt test',
     eventDate: store.today,
-    todayView: location.hash === '#tasks' ? 'tasks' : 'desk',
+    todayView: location.hash === '#tasks' ? 'tasks' : location.hash === '#lobby' ? 'lobby' : 'desk',
+    peopleView: 'members',
+    listScope: 'all',
+    quickId: '',
+    holdScroll: false,
+    quizId: '',
+    quizAnswers: {},
+    quizPerson: '',
+    qrResult: '',
+    remoteStudio: null,
     onePhase: 'opening',
     oneTitle: '',
     liveNote: 'Live sandbox. Charges are off.',
@@ -59,6 +68,7 @@
   }
 
   function render() {
+    var keepY = ui.holdScroll ? window.scrollY : null;
     var go = String(schoolId()).indexOf('goninja') === 0 ? uiLib.logo('go') : '';
     document.getElementById('app').innerHTML =
       uiLib.header('staff') +
@@ -70,7 +80,28 @@
       '</main></div>' +
       '<nav class="bottom staff-tabs" aria-label="Front desk">' +
       TABS.map(function (tab) { return tabButton(tab, 'short'); }).join('') +
-      '</nav>' + connectSheet() + drawer() + qboDrawer();
+      '</nav>' + connectSheet() + drawer() + qboDrawer() +
+      (window.CrmStudio ? window.CrmStudio.bubbleHtml(studioCtx()) : '');
+    if (keepY != null) window.scrollTo(0, keepY);
+    ui.holdScroll = false;
+    if (window.CrmStudio) window.CrmStudio.placeQuick();
+  }
+
+  function studioCtx() {
+    return {
+      esc: esc,
+      icon: uiLib.icon,
+      store: store,
+      ui: ui,
+      asOf: store.today,
+      schoolId: schoolId(),
+      live: uiLib.dataMode() === 'live',
+      preview: uiLib.people(),
+      api: uiLib.api,
+      save: save,
+      render: render,
+      toast: toast,
+    };
   }
 
   function screen() {
@@ -228,7 +259,7 @@
       var on = view === id;
       return '<button type="button" role="tab" class="' + (on ? 'on' : '') + '" data-act="today-view" data-view="' + id + '" aria-selected="' + (on ? 'true' : 'false') + '">' + label + '</button>';
     }
-    return '<div class="segment" role="tablist" aria-label="Today">' + btn('desk', 'Front Desk') + btn('tasks', 'Tasks &amp; Clock-In') + '</div>';
+    return '<div class="segment cols-3" role="tablist" aria-label="Today">' + btn('desk', 'Front Desk') + btn('tasks', 'Tasks') + btn('lobby', 'Lobby QR') + '</div>';
   }
 
   function tasksView() {
@@ -275,8 +306,11 @@
   }
 
   function today() {
-    var view = ui.todayView === 'tasks' ? 'tasks' : 'desk';
-    return '<h1>Today</h1>' + todaySwitch(view) + (view === 'tasks' ? tasksView() : frontDesk());
+    var view = ui.todayView === 'tasks' ? 'tasks' : ui.todayView === 'lobby' ? 'lobby' : 'desk';
+    var pulse = view === 'desk' && window.CrmStudio ? window.CrmStudio.pulseHtml(studioCtx()) : '';
+    var ask = view === 'desk' && window.CrmGrowth ? window.CrmGrowth.askHtml(studioCtx()) + window.CrmGrowth.feedHtml(studioCtx()) : '';
+    var body = view === 'tasks' ? tasksView() : view === 'lobby' ? schoolChips() + window.CrmStudio.lobbyHtml(studioCtx()) : frontDesk();
+    return '<h1>Today</h1>' + ask + pulse + todaySwitch(view) + body;
   }
 
   function frontDesk() {
@@ -321,7 +355,19 @@
 
   function findPerson(id) {
     var live = (ui.liveMembers || []).filter(function (row) { return row.id === id; })[0];
-    return live || uiLib.person(id);
+    if (live) return live;
+    var preview = uiLib.people().filter(function (row) { return row.id === id; })[0];
+    var extra = window.CrmStudio && window.CrmStudio.lookup(id);
+    if (preview && extra) {
+      return Object.assign({}, preview, extra, {
+        note: preview.note || extra.note,
+        card: preview.card,
+        tag: preview.tag,
+        soldBy: preview.soldBy,
+        planCents: preview.planCents,
+      });
+    }
+    return preview || extra || uiLib.person(id);
   }
 
   function checkinRows() {
@@ -363,14 +409,28 @@
   }
 
   function people() {
+    var view = ui.peopleView || 'members';
+    var studio = window.CrmStudio;
+    var head = studio ? studio.switcher(studioCtx()) : '';
+    if (view === 'growth' && window.CrmGrowth) return head + window.CrmGrowth.page(studioCtx());
+    if (studio && view === 'report') return head + studio.reportHtml(studioCtx());
+    if (studio && view === 'retention') return head + studio.retentionHtml(studioCtx());
+    if (studio && view === 'testing') return head + studio.testingHtml(studioCtx());
+    if (studio && view === 'quizzes') return head + studio.quizzesHtml(studioCtx());
     var rows = filtered();
-    return '<h1>Members &amp; Leads</h1><p class="lede">Search, then tap a name. Pinned notes are at the top of the card.</p>' +
+    var title = view === 'leads' ? 'Leads' : 'Members';
+    var lede = view === 'leads'
+      ? 'Trials and new families. Tap the bubble for a draft. Nothing is sent.'
+      : 'Search, then tap a name. The bubble drafts a note without leaving the list.';
+    return head + '<h1>' + title + '</h1><p class="lede">' + lede + '</p>' +
       '<label>Search<input id="people-q" placeholder="Search the sample studio" value="' + esc(ui.query) + '"></label>' +
       '<div class="chips">' +
       chip('all', 'All') + chip('active', 'Active') + chip('expired', 'Expired Card') + chip('trial', 'Tag · Trial') + chip('alex', 'Sold by Alex') +
-      '</div><div class="stack">' + rows.map(function (row) {
-        return '<button type="button" class="rowbtn roster-row" data-act="open" data-id="' + esc(row.id) + '"><span class="avatar belt-gold"><span class="face">' + esc(row.first.slice(0, 1)) + '</span></span><span><strong>' + esc(row.first + ' ' + row.last) + '</strong><span class="meta">' + esc(row.belt + ' · ' + row.tag + ' · ' + uiLib.school(row.school).name) + '</span></span></button>';
-      }).join('') + '</div>';
+      '</div><div class="stack">' + (rows.length ? rows.map(function (row) {
+        var meta = esc(row.belt + ' · ' + row.tag + ' · ' + uiLib.school(row.school).name);
+        if (studio) return studio.line(studioCtx(), row, 'open', meta);
+        return '<button type="button" class="rowbtn roster-row" data-act="open" data-id="' + esc(row.id) + '"><span class="avatar belt-gold"><span class="face">' + esc(row.first.slice(0, 1)) + '</span></span><span><strong>' + esc(row.first + ' ' + row.last) + '</strong><span class="meta">' + meta + '</span></span></button>';
+      }).join('') : '<p class="quiet">No one in this view.</p>') + '</div>';
   }
 
   function chip(id, label) {
@@ -379,9 +439,14 @@
 
   function filtered() {
     var q = ui.query.trim().toLowerCase();
-    return roster().filter(function (row) {
+    var source = roster();
+    if (window.CrmStudio) source = window.CrmStudio.scoped(window.CrmStudio.merged(source), ui.listScope || 'all');
+    var leads = ui.peopleView === 'leads';
+    return source.filter(function (row) {
       if (row.role === 'parent') return false;
-      if (q && (row.first + ' ' + row.last + ' ' + row.tag).toLowerCase().indexOf(q) < 0) return false;
+      var isLead = row.status === 'lead' || row.role === 'lead' || row.tag === 'Trial';
+      if (leads ? !isLead : isLead) return false;
+      if (q && (row.first + ' ' + row.last + ' ' + (row.tag || '')).toLowerCase().indexOf(q) < 0) return false;
       if (ui.filter === 'active') return row.status === 'active';
       if (ui.filter === 'expired') return row.card === 'expired';
       if (ui.filter === 'trial') return row.tag === 'Trial';
@@ -503,7 +568,8 @@
   function qboIsLive() { return !!(uiLib.apiBase() && uiLib.token()); }
 
   function qboQueryKey() {
-    return [ui.qboEntity, ui.qboPeriod, ui.qboFrom, ui.qboThrough, store.today, uiLib.apiBase(), qboIsLive() ? '1' : '0'].join('|');
+    var pass = window.CrmGrowth && store.growth && store.growth.passExport !== false ? 'pass' : 'card';
+    return [ui.qboEntity, ui.qboPeriod, ui.qboFrom, ui.qboThrough, store.today, uiLib.apiBase(), qboIsLive() ? '1' : '0', pass].join('|');
   }
 
   function ensureQboLive() {
@@ -512,6 +578,7 @@
     if (ui.qboLiveKey === key) return;
     ui.qboLiveKey = key;
     var params = new URLSearchParams({ entity: ui.qboEntity, period: ui.qboPeriod, format: 'preview', asOf: store.today });
+    if (!store.growth || store.growth.passExport !== false) params.set('passThrough', '1');
     if (ui.qboPeriod === 'custom') {
       if (ui.qboFrom) params.set('from', ui.qboFrom);
       if (ui.qboThrough) params.set('through', ui.qboThrough);
@@ -542,6 +609,7 @@
       through: ui.qboThrough,
       asOf: store.today,
       catalog: catalog,
+      feeSchedule: window.CrmGrowth ? window.CrmGrowth.exportSchedule(store) : undefined,
     });
   }
 
@@ -726,6 +794,7 @@
       : '';
     return '<h1>Financials &amp; Billing</h1>' + uiLib.liveNote(ui.liveNote) + liveMoney +
       '<p class="lede">Sample month unless a finance sign-in loaded the sandbox summary. Nothing is charged.</p>' +
+      (window.CrmGrowth ? window.CrmGrowth.feePanel(studioCtx()) : '') +
       qboCard() +
       '<div class="note">' + esc(data.tuitionNote) + '</div>' +
       '<div class="tiles money-tiles"><div class="card"><div class="meta">Collected</div><div class="price">' + esc(uiLib.money(fin.collectedCents)) + '</div></div>' +
@@ -799,14 +868,18 @@
     }
     if (act === 'sign-open') { ui.signOpen = true; render(); return; }
     if (act === 'today-view') {
-      ui.todayView = el.getAttribute('data-view') === 'tasks' ? 'tasks' : 'desk';
-      history.replaceState(null, '', ui.todayView === 'tasks' ? '#tasks' : '#today');
+      var nextView = el.getAttribute('data-view');
+      ui.todayView = nextView === 'tasks' ? 'tasks' : nextView === 'lobby' ? 'lobby' : 'desk';
+      history.replaceState(null, '', ui.todayView === 'tasks' ? '#tasks' : ui.todayView === 'lobby' ? '#lobby' : '#today');
       render();
       return;
     }
+    if (window.CrmGrowth && window.CrmGrowth.handle(act, el, studioCtx())) return;
+    if (window.CrmStudio && window.CrmStudio.handle(act, el, studioCtx())) return;
     if (act === 'tab') {
       ui.tab = el.getAttribute('data-tab');
       ui.drawer = '';
+      ui.quickId = '';
       ui.toast = null;
       if (ui.tab === 'schedule') {
         var next = upcomingHere()[0];
@@ -850,6 +923,7 @@
     if (act === 'pay-undo') { delete store.paymentPreview[ui.drawer]; ui.editPay = false; save(); toast('ok', 'Draft restored. Nothing was charged.'); return; }
     if (act === 'open') {
       ui.drawer = el.getAttribute('data-id');
+      ui.quickId = '';
       ui.editPay = false;
       var opened = findPerson(ui.drawer);
       render();
@@ -1249,9 +1323,30 @@
     uiLib.api('/v1/desk/tasks?locationId=' + encodeURIComponent(schoolId())).then(function (res) {
       if (res.status === 404) ui.liveNote = 'Live sandbox is up. Task sync arrives with the next API deploy. Checks stay on this device. Charges are off.';
     });
+    uiLib.api('/v1/studio/overview?asOf=' + encodeURIComponent(store.today) + '&locationId=' + encodeURIComponent(schoolId())).then(function (res) {
+      if (res.ok && res.body && res.body.pulse && res.body.charges === false) {
+        ui.remoteStudio = res.body;
+        render();
+      }
+    });
   }
 
   document.getElementById('app').addEventListener('click', onClick);
+  document.getElementById('app').addEventListener('dragstart', function (event) {
+    var card = event.target.closest('[data-drag]');
+    if (!card || !event.dataTransfer) return;
+    event.dataTransfer.setData('text/plain', card.getAttribute('data-drag'));
+    event.dataTransfer.effectAllowed = 'move';
+  });
+  document.getElementById('app').addEventListener('dragover', function (event) {
+    if (event.target.closest('[data-stage]')) event.preventDefault();
+  });
+  document.getElementById('app').addEventListener('drop', function (event) {
+    var col = event.target.closest('[data-stage]');
+    if (!col || !event.dataTransfer) return;
+    event.preventDefault();
+    if (window.CrmGrowth) window.CrmGrowth.move(event.dataTransfer.getData('text/plain'), col.getAttribute('data-stage'), studioCtx());
+  });
   document.getElementById('app').addEventListener('input', function (event) {
     if (event.target.id === 'people-q' || event.target.id === 'checkin-q') {
       ui.query = event.target.value;
@@ -1264,8 +1359,13 @@
     if (event.target.id === 'desk-initials') deskState().initials = event.target.value;
     if (event.target.id === 'one-title') ui.oneTitle = event.target.value;
     if (event.target.id === 'one-phase') ui.onePhase = event.target.value;
+    if (event.target.id === 'quiz-person') ui.quizPerson = event.target.value;
   });
   document.getElementById('app').addEventListener('change', function (event) {
+    if (event.target.getAttribute('data-act') === 'pipe-move' && window.CrmGrowth) {
+      window.CrmGrowth.move(event.target.getAttribute('data-id'), event.target.value, studioCtx());
+      return;
+    }
     if (event.target.id === 'qbo-from' || event.target.id === 'qbo-through') {
       ui.qboFrom = (document.getElementById('qbo-from') || {}).value || '';
       ui.qboThrough = (document.getElementById('qbo-through') || {}).value || '';

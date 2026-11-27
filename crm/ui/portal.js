@@ -132,7 +132,7 @@
     };
   }
 
-  var KEEP = ['personId', 'staffSchool', 'orders', 'bookings', 'eventSignups', 'parties', 'practiced', 'messages', 'card', 'upgrade', 'contacts', 'kiosk', 'checkins', 'paymentPreview', 'emailToggles', 'extraEvents', 'duplicated', 'desk'];
+  var KEEP = ['personId', 'staffSchool', 'orders', 'bookings', 'eventSignups', 'parties', 'practiced', 'messages', 'card', 'upgrade', 'contacts', 'kiosk', 'checkins', 'paymentPreview', 'emailToggles', 'extraEvents', 'duplicated', 'desk', 'studio', 'growth'];
 
   function load() {
     var base = seed();
