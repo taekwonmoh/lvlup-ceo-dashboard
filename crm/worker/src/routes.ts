@@ -30,6 +30,7 @@ import { handleSandboxOtp, handleSandboxSession } from '../../src/sandbox-auth.t
 import { handleDesk } from '../../src/desk.ts';
 import { handleStudio } from '../../src/studio-ops.ts';
 import { handleGrowth } from '../../src/growth-desk.ts';
+import { handleCrossBrandEvents } from '../../src/cross-brand-events.ts';
 import type { SqlPool } from '../../src/query.ts';
 import { clientMessage } from './redact.ts';
 
@@ -230,6 +231,15 @@ export async function dispatchCrm(input: {
       return handleSandboxSession(await readJson(), env, input.tokenSecret, input.allowLocalTokens);
     }
     const actor = actorFrom(input.authorization, input.tokenSecret, input.allowLocalTokens);
+    if (parts[0] === 'v1' && parts[1] === 'events') {
+      return handleCrossBrandEvents({
+        method,
+        parts,
+        search: url.searchParams,
+        actor,
+        body: await readJson(),
+      });
+    }
     if (isProShopPath(method, parts)) {
       return await handleProShop({
         method,

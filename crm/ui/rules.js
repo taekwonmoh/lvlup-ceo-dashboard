@@ -45,7 +45,9 @@
   }
 
   function prettyTime(hhmm) {
-    var bits = String(hhmm).split(':');
+    var raw = String(hhmm || '');
+    if (/[ap]m/i.test(raw)) return raw;
+    var bits = raw.split(':');
     var h = Number(bits[0]);
     var min = bits[1] || '00';
     var suffix = h >= 12 ? 'PM' : 'AM';
@@ -147,16 +149,123 @@
     ];
   }
 
-  function upcomingEvents(today) {
-    var saturday = nextWeekday(today, 6);
-    var friday = nextWeekday(today, 5);
-    if (friday === today) friday = addDays(friday, 7);
+  var EVENT_LABELS = {
+    summer_camp: 'Summer Camp',
+    pno: "Parents' Night Out",
+    belt_test: 'Belt test',
+    clinic: 'Clinic',
+    tournament: 'Tournament',
+    party: 'Party',
+    seminar: 'Seminar',
+    other: 'Other',
+  };
+
+  function isGoNinjaLocation(locationId) {
+    return locationId === 'goninjaW' || locationId === 'goninjaV';
+  }
+
+  function normalizeEventType(value) {
+    var text = String(value || '').toLowerCase().replace(/['’]/g, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (text === 'camp' || text === 'summer camp' || text === 'summercamp') return 'summer_camp';
+    if (text === 'pno' || text === 'parents night out' || text === 'parents night') return 'pno';
+    if (text === 'belt test' || text === 'belttest') return 'belt_test';
+    if (text === 'clinic') return 'clinic';
+    if (text === 'tournament') return 'tournament';
+    if (text === 'party') return 'party';
+    if (text === 'seminar') return 'seminar';
+    return 'other';
+  }
+
+  function defaultShowInLvlupMemberPortal(locationId, eventType) {
+    var kind = normalizeEventType(eventType);
+    return isGoNinjaLocation(locationId) && (kind === 'summer_camp' || kind === 'pno');
+  }
+
+  function visibleToBrands(locationId, show) {
+    if (isGoNinjaLocation(locationId)) return show ? ['goninja', 'lvlup'] : ['goninja'];
+    return ['lvlup'];
+  }
+
+  function isCrossBrandLvlupOffer(event) {
+    return !!(event && isGoNinjaLocation(event.locationId) && event.showInLvlupMemberPortal === true);
+  }
+
+  function decorateEvent(raw) {
+    var eventType = normalizeEventType(raw.type || raw.eventType);
+    var show = raw.showInLvlupMemberPortal == null
+      ? defaultShowInLvlupMemberPortal(raw.locationId, eventType)
+      : raw.showInLvlupMemberPortal === true;
+    return {
+      id: raw.id,
+      title: raw.title,
+      type: EVENT_LABELS[eventType],
+      eventType: eventType,
+      date: raw.date,
+      endDate: raw.endDate || raw.date,
+      time: raw.time,
+      locationId: raw.locationId,
+      brand: isGoNinjaLocation(raw.locationId) ? 'goninja' : 'lvlup',
+      blurb: raw.blurb || '',
+      showInLvlupMemberPortal: show,
+      visibleToBrands: visibleToBrands(raw.locationId, show),
+      capacity: raw.capacity || 16,
+      registered: raw.registered || 0,
+      published: true,
+      memberPriceCents: eventType === 'belt_test' ? 0 : (raw.memberPriceCents || 0),
+      nonMemberPriceCents: eventType === 'belt_test' ? 0 : (raw.nonMemberPriceCents || 0),
+    };
+  }
+
+  function studioEvents() {
     return [
-      { id: 'belt-test', type: 'Belt test', title: 'Belt test', date: addDays(saturday, 14), time: '9:00 AM', locationId: 'waunakee', blurb: 'Color belts. In 2027, tuition includes every belt test.' },
-      { id: 'clinic', type: 'Clinic', title: 'Sparring clinic', date: saturday, time: '11:00 AM', locationId: 'verona', blurb: 'Bring sparring gear if you have it.' },
-      { id: 'tournament', type: 'Tournament', title: 'Winter tournament', date: addDays(saturday, 42), time: '8:00 AM', locationId: 'eastmad', blurb: 'East Madison · Madison, WI 53718' },
-      { id: 'parents-night', type: 'Parents Night Out', title: 'Parents Night Out', date: friday, time: '6:00 PM', locationId: 'eastmad', blurb: 'Drop off at East Madison · Madison, WI 53718' },
-    ];
+      { id: 'gnw-summer-camp', title: 'Summer Camp', type: 'Summer Camp', date: '2027-06-14', endDate: '2027-06-18', time: '09:00', locationId: 'goninjaW', blurb: 'Half day and full day at Go Ninja Waunakee. Ages 5 to 12. Sample week.', capacity: 24, registered: 6, memberPriceCents: 14900, nonMemberPriceCents: 17900 },
+      { id: 'gnv-summer-camp', title: 'Summer Camp', type: 'Summer Camp', date: '2027-06-21', endDate: '2027-06-25', time: '09:00', locationId: 'goninjaV', blurb: 'Half day and full day at Go Ninja Verona. Ages 5 to 12. Sample week.', capacity: 20, registered: 4, memberPriceCents: 14900, nonMemberPriceCents: 17900 },
+      { id: 'gnw-pno', title: "Parents' Night Out", type: "Parents' Night Out", date: '2026-12-11', time: '18:00', locationId: 'goninjaW', blurb: 'Friday evening at Go Ninja Waunakee. Games and a sample pizza night.', capacity: 16, registered: 5, memberPriceCents: 2500, nonMemberPriceCents: 3500 },
+      { id: 'gnv-pno', title: "Parents' Night Out", type: "Parents' Night Out", date: '2026-12-18', time: '18:00', locationId: 'goninjaV', blurb: 'Friday evening at Go Ninja Verona. Games and a sample pizza night.', capacity: 16, registered: 3, memberPriceCents: 2500, nonMemberPriceCents: 3500 },
+      { id: 'gnw-skills', title: 'Ninja skills night', type: 'Clinic', date: '2026-12-09', time: '17:30', locationId: 'goninjaW', blurb: 'A Go Ninja skills night. Stays on the Go Ninja portal unless someone checks the box.', capacity: 18, registered: 2, memberPriceCents: 0, nonMemberPriceCents: 1500, showInLvlupMemberPortal: false },
+      { id: 'belt-test', title: 'Belt test', type: 'Belt test', date: '2026-12-12', time: '09:00', locationId: 'waunakee', blurb: 'Color belts at Waunakee. Belt testing is included with tuition.', capacity: 40, registered: 12, memberPriceCents: 0, nonMemberPriceCents: 0, showInLvlupMemberPortal: false },
+      { id: 'clinic', title: 'Sparring clinic', type: 'Clinic', date: '2026-12-05', time: '11:00', locationId: 'verona', blurb: 'Bring sparring gear if you have it.', capacity: 20, registered: 8, memberPriceCents: 4000, nonMemberPriceCents: 5500, showInLvlupMemberPortal: false },
+      { id: 'tournament', title: 'Winter tournament', type: 'Tournament', date: '2027-01-16', time: '08:00', locationId: 'eastmad', blurb: 'East Madison. Sample tournament day.', capacity: 80, registered: 22, memberPriceCents: 7500, nonMemberPriceCents: 9000, showInLvlupMemberPortal: false },
+      { id: 'parents-night', title: "Parents' Night Out", type: "Parents' Night Out", date: '2026-12-04', time: '18:00', locationId: 'eastmad', blurb: 'Drop off at East Madison. This LVLUP night is not a Go Ninja cross-brand listing.', capacity: 18, registered: 7, memberPriceCents: 2500, nonMemberPriceCents: 3500, showInLvlupMemberPortal: false },
+    ].map(decorateEvent);
+  }
+
+  function filterStudioEvents(events, filter, locationId) {
+    if (filter === 'portal' || filter === 'cross-brand') {
+      return events.filter(isCrossBrandLvlupOffer);
+    }
+    if (filter === 'school') {
+      return events.filter(function (row) { return row.locationId === locationId; });
+    }
+    return events.slice();
+  }
+
+  function sortStaffEvents(events) {
+    return events.slice().sort(function (a, b) {
+      var rankA = isCrossBrandLvlupOffer(a) ? 0 : 1;
+      var rankB = isCrossBrandLvlupOffer(b) ? 0 : 1;
+      if (rankA !== rankB) return rankA - rankB;
+      return String(a.date).localeCompare(String(b.date)) || String(a.locationId).localeCompare(String(b.locationId));
+    });
+  }
+
+  function memberPortalEvents(today, brand, extras) {
+    var rows = studioEvents(today);
+    var ids = {};
+    rows.forEach(function (row) { ids[row.id] = true; });
+    (extras || []).forEach(function (row) {
+      if (!row || ids[row.id]) return;
+      rows.push(decorateEvent(row));
+      ids[row.id] = true;
+    });
+    return rows.filter(function (row) {
+      if (brand === 'goninja') return row.brand === 'goninja' || row.brand === 'lvlup';
+      return row.brand === 'lvlup' || row.showInLvlupMemberPortal === true;
+    });
+  }
+
+  function upcomingEvents(today) {
+    return memberPortalEvents(today, 'lvlup', []);
   }
 
   function partyDates(today) {
@@ -197,6 +306,16 @@
     classesForWeek: classesForWeek,
     videosFor: videosFor,
     upcomingEvents: upcomingEvents,
+    studioEvents: studioEvents,
+    decorateEvent: decorateEvent,
+    defaultShowInLvlupMemberPortal: defaultShowInLvlupMemberPortal,
+    visibleToBrands: visibleToBrands,
+    isCrossBrandLvlupOffer: isCrossBrandLvlupOffer,
+    isGoNinjaLocation: isGoNinjaLocation,
+    normalizeEventType: normalizeEventType,
+    filterStudioEvents: filterStudioEvents,
+    sortStaffEvents: sortStaffEvents,
+    memberPortalEvents: memberPortalEvents,
     partyDates: partyDates,
     monthCells: monthCells,
   };

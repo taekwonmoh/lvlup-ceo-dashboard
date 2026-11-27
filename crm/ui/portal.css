@@ -1150,6 +1150,60 @@ body[data-app="staff"] .ask-row .big { width: auto; }
   .feed-grid, .fee-pair, .fee-grid, .kanban { grid-template-columns: 1fr; }
 }
 
+.event-section { margin: 8px 0 18px; }
+.event-head h2 { margin-bottom: 4px; }
+.event-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
+.event-tools .chips { flex: 1 1 220px; }
+.event-tools .big { width: auto; min-height: 48px; margin: 0; }
+.event-board { display: grid; gap: 12px; }
+.event-board.open { align-items: start; }
+.event-card { margin: 0 0 10px; }
+.event-card h3 { margin: 8px 0 4px; }
+.event-card p { margin: 8px 0 0; }
+.event-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.event-card.goninja { border-top: 4px solid var(--obsidian); }
+.event-card.lvlup { border-top: 4px solid var(--blue); }
+.badge.portal {
+  background: var(--ice);
+  color: var(--blue-deep);
+  border: 1px solid #bfdbfe;
+}
+.event-editor { display: grid; gap: 10px; margin: 0; }
+.event-editor h2 { margin: 0; }
+label.portal-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 16px;
+  background: var(--ice);
+}
+label.portal-toggle input {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  margin-top: 2px;
+  accent-color: var(--blue-deep);
+}
+label.portal-toggle span { display: grid; gap: 4px; min-width: 0; }
+label.portal-toggle small { color: var(--muted); font-weight: 600; line-height: 1.35; }
+.event-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.event-actions .big { width: auto; flex: 1 1 140px; margin-top: 0; }
+.event-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+body[data-app="staff"] .event-tools .big,
+body[data-app="staff"] .event-actions .big { width: auto; margin-top: 0; }
+label.portal-toggle .badge { justify-self: start; }
+@media (max-width: 900px) {
+  .event-board.open .event-editor { order: -1; }
+  body[data-app="staff"] .event-tools .big { width: 100%; }
+}
+@media (min-width: 901px) {
+  .event-board.open { grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr); }
+}
+
 @keyframes staff-sheet-up {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
