@@ -25,6 +25,28 @@ export type WorkerDeps = {
 
 const MAX_BODY = 1_000_000;
 
+function previewOrigin(origin: string) {
+  return origin === 'https://staff.lvlupma.com' || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
+
+function corsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get('origin') || '';
+  if (!previewOrigin(origin)) return {};
+  return {
+    'access-control-allow-origin': origin,
+    'access-control-allow-methods': 'GET, POST, PATCH, PUT, OPTIONS',
+    'access-control-allow-headers': 'authorization, content-type',
+    'access-control-max-age': '600',
+    vary: 'Origin',
+  };
+}
+
+function withCors(response: Response, request: Request) {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(corsHeaders(request))) headers.set(key, value);
+  return new Response(response.body, { status: response.status, headers });
+}
+
 function json(status: number, body: unknown, secrets: string[]) {
   return Response.json(sanitizeJson(body, secrets), {
     status,
@@ -92,6 +114,9 @@ export async function handleWorkerRequest(request: Request, env: CrmWorkerEnv, c
   }
 
   try {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders(request) });
+    }
     if (request.method === 'GET' && url.pathname === '/v1/health') {
       let connected = false;
       if (source.via !== 'none') {
@@ -103,7 +128,7 @@ export async function handleWorkerRequest(request: Request, env: CrmWorkerEnv, c
         if (!connected) console.error(JSON.stringify({ event: 'db_probe_failed', connected: false }));
       }
       const db: DbStatus = { configured: source.via !== 'none', via: source.via, connected };
-      return json(200, healthBody(env, db), secrets);
+      return withCors(json(200, healthBody(env, db), secrets), request);
     }
 
     let cached: string | null = null;
@@ -133,12 +158,12 @@ export async function handleWorkerRequest(request: Request, env: CrmWorkerEnv, c
       secrets,
     });
     if (result.text != null) {
-      return new Response(result.text, {
+      return withCors(new Response(result.text, {
         status: result.status,
         headers: { 'content-type': result.contentType || 'text/csv; charset=utf-8', 'cache-control': 'no-store' },
-      });
+      }), request);
     }
-    return json(result.status, result.body, secrets);
+    return withCors(json(result.status, result.body, secrets), request);
   } finally {
     if (owns) await closePool(pool, ctx);
   }
