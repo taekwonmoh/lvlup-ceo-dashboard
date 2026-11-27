@@ -256,7 +256,7 @@ export async function handlePlatform(input: {
       const member = await pool.query(`select id, family_id, location_id from members where id = $1`, [memberId]);
       if (!member.rowCount) throw new CrmError(404, 'not_found', 'Not found.');
       if (role === 'family' && !actor.familyIds.includes(member.rows[0].family_id)) throw new CrmError(404, 'not_found', 'Not found.');
-      if (role === 'member' && actor.memberId !== memberId) throw new CrmError(404, 'not_found', 'Not found.');
+      if ((role as string) === 'member' && actor.memberId !== memberId) throw new CrmError(404, 'not_found', 'Not found.');
       const booked = await pool.query(
         `select count(*)::int as n from bookings where session_id = $1 and status = 'booked'`,
         [parts[2]],
@@ -308,14 +308,30 @@ export async function handlePlatform(input: {
 
   if (method === 'POST' && parts[1] === 'check-ins' && parts[2] === 'geofence') {
     if (role !== 'family' || !actor.familyIds.includes(body.familyId)) throw new CrmError(404, 'not_found', 'Not found.');
-    return { status: 200, body: await checkInFamily(pool, { ...body, source: 'geofence_auto', now, requireGeofence: true }) };
+    return { status: 200, body: await checkInFamily(pool, {
+      familyId: body.familyId,
+      locationId: body.locationId,
+      source: 'geofence_auto',
+      latitude: body.latitude,
+      longitude: body.longitude,
+      now,
+      requireGeofence: true,
+    }) };
   }
 
   if (method === 'POST' && parts[1] === 'check-ins' && parts[2] === 'family') {
     if (!['qr_scan', 'kiosk', 'manual'].includes(body.source)) throw new CrmError(400, 'bad_source', 'Unknown check-in source.');
     if (role === 'family' && !actor.familyIds.includes(body.familyId)) throw new CrmError(404, 'not_found', 'Not found.');
     if (role !== 'family') staffSchool(actor, body.locationId);
-    return { status: 200, body: await checkInFamily(pool, { ...body, now, requireGeofence: false }) };
+    return { status: 200, body: await checkInFamily(pool, {
+      familyId: body.familyId,
+      locationId: body.locationId,
+      source: body.source,
+      latitude: body.latitude,
+      longitude: body.longitude,
+      now,
+      requireGeofence: false,
+    }) };
   }
 
   if (method === 'POST' && parts[1] === 'members' && parts[3] === 'geofence-opt-in') {

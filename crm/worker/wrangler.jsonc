@@ -2,13 +2,30 @@
   "name": "lvlup-crm-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-26",
+  // pg uses Node's net stack. Required for Hyperdrive's connectionString.
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": false,
+  // Sandbox testing only. Do not add a routes or custom domain block.
+  "workers_dev": true,
   "preview_urls": false,
   "observability": {
     "enabled": true,
     "traces": { "enabled": true }
   },
+  // Hyperdrive config lvlup-crm-db. The id is not a secret.
+  // The database password stays in Hyperdrive and is never written here.
+  // Do not reuse Supabase project xxyndswrierztzdbjvrd.
+  // The Worker reads env.HYPERDRIVE.connectionString and never logs or returns it.
+  // Local wrangler dev can still set DATABASE_URL in worker/.dev.vars.
+  // Do not add a route or custom domain. api.lvlupma.com stays unattached.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "d711e181a6bb4f869ca9ac79f69382f7"
+    }
+  ],
+  "rules": [
+    { "type": "Text", "globs": ["**/*.csv"], "fallthrough": true }
+  ],
   "vars": {
     "AUTHORIZENET_MODE": "sandbox",
     "BILLING_CHARGES_ENABLED": "0",
