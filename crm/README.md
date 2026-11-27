@@ -16,6 +16,6 @@ The Cloudflare Worker in `crm/worker` serves the same `/v1` routes. It prefers `
 
 The staff dashboard preview is `index.html?crmPreview=1` on localhost. It uses mock names and does not write Firebase. Without that query the dashboard is unchanged.
 
-The member app and the front-desk CRM are separate pages under `crm/preview/`. They do not change `index.html`. See `docs/crm/PORTAL-PREVIEW.md`.
+The member app and the front-desk CRM are separate pages under `crm/preview/`. They do not change `index.html`. The Go Ninja web preview is `crm/preview/goninja.html`. See `docs/crm/PORTAL-PREVIEW.md`.
 
 See `docs/crm/README.md` for the design and the open questions. Provisioning, the January 2027 cutover checklist, and the Phase 1 / Phase 2 split are in `docs/crm/platform-runbook.md` and `docs/crm/ROADMAP.md`. Nothing here is deployed.

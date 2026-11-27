@@ -1157,3 +1157,18 @@ body[data-app="staff"] .ask-row .big { width: auto; }
 @media (prefers-reduced-motion: reduce) {
   body[data-app="staff"] .drawer .panel { animation: none; }
 }
+
+.hh-card { margin: 0 0 16px; }
+.hh-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.hh-top .big { width: auto; flex: none; margin-top: 4px; }
+.hh-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.hh-line { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; }
+.hh-total { font-weight: 800; }
+.hh-actions { display: grid; gap: 8px; margin-top: 8px; }
+.hh-card .chips { margin-top: 8px; }
+.hh-card .chips a { display: inline-flex; align-items: center; text-decoration: none; }
+@media (max-width: 900px) {
+  .hh-top { flex-direction: column; }
+  .hh-top .big { width: 100%; }
+  .hh-grid { grid-template-columns: 1fr; }
+}
