@@ -6,6 +6,8 @@ Status is against this repo’s CRM backbone. **Built** means the model or the p
 
 Wave 1 of the later product-update list (profiles, tags, forms, consent, and invites) is in [GYMDESK-UPDATES-WAVE1.md](GYMDESK-UPDATES-WAVE1.md). Those routes are dry-run. They do not send email and they do not change billing status.
 
+Wave 2 (schedule and booking, membership and billing preview, templates, and system emails) is in [GYMDESK-UPDATES-WAVE2.md](GYMDESK-UPDATES-WAVE2.md). Those routes are dry-run. They do not charge a card, post to QuickBooks, or send email.
+
 ## Decisions already in the engine
 
 - **[R]** Mini-Tigers and grandfathered memberships bill monthly. Everything else bills every 4 weeks. `cadenceForPlan` in `crm/src/billing.ts`.

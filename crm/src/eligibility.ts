@@ -46,3 +46,26 @@ export function testingEligibility(input: {
     reasons,
   };
 }
+
+/** One attendance row counts toward every program attached to that session. */
+export function programsCredited(programs: string[]): string[] {
+  const seen = new Set<string>();
+  for (const code of programs) {
+    const trimmed = String(code || '').trim();
+    if (trimmed) seen.add(trimmed);
+  }
+  return [...seen];
+}
+
+export function attendanceCountsFor(programs: string[], targetProgram: string): boolean {
+  return programsCredited(programs).includes(targetProgram);
+}
+
+export function classCountForProgram(rows: Array<{ programs: string[] }>, targetProgram: string): number {
+  return rows.filter(row => attendanceCountsFor(row.programs, targetProgram)).length;
+}
+
+/** Seat count stays on the session. Extra programs do not add seats. */
+export function sessionSeatCapacity(capacity: number): number {
+  return capacity;
+}

@@ -22,8 +22,11 @@ import type { ScheduleExport } from '../../src/schedule.ts';
 import { handlePlatform, isAuthedPlatformPath, isPublicPlatformPath } from '../../src/platform-api.ts';
 import type { StagingHold, StagingWaiver } from '../../src/import-job.ts';
 import { handleWave1, isPublicWave1Path, isStaffWave1Path } from '../../src/wave1-routes.ts';
+import { handleWave2, isStaffWave2Path, quoteProcessingFee } from '../../src/wave2-routes.ts';
 import type { SqlPool } from '../../src/query.ts';
 import { clientMessage } from './redact.ts';
+
+export type DispatchResult = { status: number; body: unknown; text?: string; contentType?: string };
 
 export type CrmRuntimeEnv = {
   AUTHORIZENET_MODE?: string;
@@ -121,7 +124,7 @@ export async function dispatchCrm(input: {
   loaders?: CrmLoaders;
   redact?: boolean;
   secrets?: string[];
-}): Promise<{ status: number; body: unknown }> {
+}): Promise<DispatchResult> {
   const { method, url, pool, env } = input;
   const loaders = input.loaders || unavailableLoaders;
   const secrets = input.secrets || [];
@@ -202,6 +205,17 @@ export async function dispatchCrm(input: {
       if (result) return result;
     }
     const actor = actorFrom(input.authorization, input.tokenSecret, input.allowLocalTokens);
+    if (isStaffWave2Path(method, parts, url.searchParams)) {
+      return await handleWave2({
+        method,
+        parts,
+        search: url.searchParams,
+        actor,
+        body: await readJson(),
+        pool: pool as unknown as SqlPool,
+        env,
+      });
+    }
     if (isStaffWave1Path(method, parts, url.searchParams)) {
       return await handleWave1({
         method,
@@ -308,7 +322,13 @@ export async function dispatchCrm(input: {
         catalog,
         redemptions,
       });
-      return { status: 200, body: quote };
+      const processingFeeCents = await quoteProcessingFee(
+        pool as unknown as SqlPool,
+        String(body.locationId || ''),
+        quote.dueCents,
+        body.method,
+      );
+      return { status: 200, body: { ...quote, processingFeeCents, dueCents: quote.dueCents + processingFeeCents } };
     }
 
     if (method === 'POST' && url.pathname === '/v1/promo-codes') {
@@ -366,7 +386,10 @@ export async function dispatchCrm(input: {
       try { submitCharge(); }
       catch (err) {
         if (err instanceof CrmError && err.code === 'charges_disabled') {
-          return { status: 200, body: { submitted: false, request } };
+          const processingFeeCents = body.locationId
+            ? await quoteProcessingFee(pool as unknown as SqlPool, String(body.locationId), Number(body.amountCents) || 0, body.method)
+            : 0;
+          return { status: 200, body: { submitted: false, request, processingFeeCents } };
         }
         throw err;
       }

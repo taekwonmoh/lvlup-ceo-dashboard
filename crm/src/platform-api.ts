@@ -22,6 +22,14 @@ import { curriculumForRank, vimeoPlayerUrl } from './curriculum.ts';
 import { handleComms } from './comms-routes.ts';
 import { advanceReferral, attributeReferral, creditBalance, handleRolloverRoutes } from './rollover-routes.ts';
 import { assertMinorGuardian, splitName } from './names.ts';
+import { billingStart } from './billing-wave2.ts';
+import {
+  activeKioskSession,
+  consumeSessionCredit,
+  familyHasLocationAccess,
+  noteFirstCheckin,
+  promoteEarliestWaitlist,
+} from './schedule-booking.ts';
 
 export type Db = {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }>;
@@ -273,6 +281,7 @@ export async function handlePlatform(input: {
         }
         status = 'waitlist';
       }
+      if (status === 'booked') await consumeSessionCredit(pool, memberId, chicagoToday(new Date(session.rows[0].starts_at)));
       const saved = await pool.query(
         `insert into bookings (session_id, kind, member_id, status) values ($1, 'member', $2, $3) returning id, status`,
         [parts[2], memberId, status],
@@ -294,15 +303,8 @@ export async function handlePlatform(input: {
     await pool.query(`update bookings set status = 'cancelled' where id = $1`, [parts[2]]);
     let promoted = null;
     if (wasBooked) {
-      const next = await pool.query(
-        `update bookings set status = 'booked'
-         where id = (
-           select id from bookings where session_id = $1 and status = 'waitlist'
-           order by created_at, id limit 1
-         ) returning id`,
-        [booking.rows[0].session_id],
-      );
-      promoted = next.rows[0]?.id || null;
+      const seat = await promoteEarliestWaitlist(pool, booking.rows[0].session_id);
+      promoted = seat?.id || null;
     }
     return { status: 200, body: { cancelled: true, promotedBookingId: promoted } };
   }
@@ -332,6 +334,7 @@ export async function handlePlatform(input: {
       longitude: body.longitude,
       now,
       requireGeofence: false,
+      sessionId: body.sessionId || null,
     }) };
   }
 
@@ -369,9 +372,10 @@ export async function handlePlatform(input: {
     const payments = parsePayments(fx.paymentsCsv);
     const rows = await pool.query(
       `select ms.gymdesk_member_id, ms.family_id, ms.location_id, ms.status, ms.biller, ms.next_bill_on, ms.paid_through_on,
+              ms.started_on, ms.anchor_on, ms.billing_starts_on_first_checkin, ms.first_checkin_at,
               ms.discount_bps, ms.prepaid, ms.rollover_enabled, ms.rollover_cancelled, ms.rollover_cadence,
               ms.rollover_amount_cents, ms.rollover_anchor_on, ms.rollover_anchor_day,
-              p.amount_cents, h.status as hold_status, h.start_on, h.end_on
+              p.amount_cents, p.start_on_first_checkin, h.status as hold_status, h.start_on, h.end_on
        from memberships ms
        join plans p on p.id = ms.plan_id
        left join lateral (
@@ -396,25 +400,34 @@ export async function handlePlatform(input: {
       });
       creditsByFamily.set(credit.family_id, list);
     }
-    const members: ShadowMember[] = rows.rows.map(row => ({
-      memberId: row.gymdesk_member_id,
-      locationId: row.location_id,
-      status: row.status,
-      biller: row.biller,
-      nextBillOn: asDay(row.next_bill_on),
-      paidThroughOn: asDay(row.paid_through_on),
-      amountCents: row.amount_cents,
-      discountBps: row.discount_bps,
-      prepaid: row.prepaid,
-      rolloverEnabled: row.rollover_enabled,
-      rolloverCancelled: row.rollover_cancelled,
-      rolloverCadence: row.rollover_cadence,
-      rolloverAmountCents: row.rollover_amount_cents,
-      rolloverAnchorOn: asDay(row.rollover_anchor_on),
-      rolloverAnchorDay: row.rollover_anchor_day,
-      credits: creditsByFamily.get(row.family_id) || [],
-      hold: row.hold_status ? { status: row.hold_status, startOn: asDay(row.start_on) || '', endOn: asDay(row.end_on) || '' } : null,
-    }));
+    const members: ShadowMember[] = rows.rows.map(row => {
+      const firstCheckin = row.billing_starts_on_first_checkin === true || row.start_on_first_checkin === true;
+      const start = billingStart({
+        startedOn: asDay(row.started_on) || '',
+        anchorOn: asDay(row.anchor_on),
+        enabled: firstCheckin,
+        firstCheckinOn: asDay(row.first_checkin_at),
+      });
+      return {
+        memberId: row.gymdesk_member_id,
+        locationId: row.location_id,
+        status: row.status,
+        biller: row.biller,
+        nextBillOn: start.waiting ? null : (firstCheckin ? start.anchor : asDay(row.next_bill_on)),
+        paidThroughOn: asDay(row.paid_through_on),
+        amountCents: row.amount_cents,
+        discountBps: row.discount_bps,
+        prepaid: row.prepaid,
+        rolloverEnabled: row.rollover_enabled,
+        rolloverCancelled: row.rollover_cancelled,
+        rolloverCadence: row.rollover_cadence,
+        rolloverAmountCents: row.rollover_amount_cents,
+        rolloverAnchorOn: asDay(row.rollover_anchor_on),
+        rolloverAnchorDay: row.rollover_anchor_day,
+        credits: creditsByFamily.get(row.family_id) || [],
+        hold: row.hold_status ? { status: row.hold_status, startOn: asDay(row.start_on) || '', endOn: asDay(row.end_on) || '' } : null,
+      };
+    });
     const report = compareShadowDay({ on: body.on, merchantLocationId: body.merchantLocationId, members, payments });
     await pool.query(
       `insert into billing_shadow_runs (merchant_location_id, run_on, summary) values ($1, $2, $3::jsonb)
@@ -907,6 +920,7 @@ async function checkInFamily(pool: PoolLike, input: {
   longitude?: number;
   now: Date;
   requireGeofence: boolean;
+  sessionId?: string | null;
 }) {
   const family = await pool.query(`select geofence_checkin_opt_in from families where id = $1`, [input.familyId]);
   if (!family.rowCount) throw new CrmError(404, 'not_found', 'Not found.');
@@ -931,16 +945,21 @@ async function checkInFamily(pool: PoolLike, input: {
     if (!fence.inside) throw new CrmError(422, 'outside_geofence', 'Outside the school geofence.');
   }
   const window = school.rows[0];
+  const preset = input.sessionId || await activeKioskSession(pool, input.locationId, input.now);
   const bookings = await pool.query(
     `select b.id as booking_id, b.member_id, m.geofence_checkin_opt_in, s.id as session_id, s.starts_at
      from bookings b
      join members m on m.id = b.member_id
      join class_sessions s on s.id = b.session_id
-     where m.family_id = $1 and s.location_id = $2 and b.status = 'booked' and b.kind = 'member' and s.status = 'scheduled'`,
-    [input.familyId, input.locationId],
+     where m.family_id = $1 and s.location_id = $2 and b.status = 'booked' and b.kind = 'member' and s.status = 'scheduled'
+       and ($3::uuid is null or s.id = $3::uuid)`,
+    [input.familyId, input.locationId, preset],
   );
   const checkedIn = [];
-  const skipped = [];
+  const skipped: Array<{ memberId: string | null; reason: string; alert: boolean }> = [];
+  if (preset && !bookings.rowCount) {
+    skipped.push({ memberId: null, reason: 'not_booked', alert: true });
+  }
   for (const booking of bookings.rows) {
     const starts = new Date(booking.starts_at).getTime();
     const open = sessionInCheckinWindow({
@@ -949,24 +968,37 @@ async function checkInFamily(pool: PoolLike, input: {
       beforeMin: window.checkin_minutes_before,
       afterMin: window.checkin_minutes_after,
     });
-    if (!open) { skipped.push({ memberId: booking.member_id, reason: 'outside_window' }); continue; }
+    if (!await familyHasLocationAccess(pool, booking.member_id, input.locationId)) {
+      skipped.push({ memberId: booking.member_id, reason: 'no_location_access', alert: true });
+      continue;
+    }
+    if (!open) { skipped.push({ memberId: booking.member_id, reason: 'outside_window', alert: true }); continue; }
     if (input.requireGeofence && !booking.geofence_checkin_opt_in) {
-      skipped.push({ memberId: booking.member_id, reason: 'opted_out' });
+      skipped.push({ memberId: booking.member_id, reason: 'opted_out', alert: true });
       continue;
     }
     const existing = await pool.query(
       `select id from attendance where member_id = $1 and session_id = $2`,
       [booking.member_id, booking.session_id],
     );
-    if (existing.rowCount) { skipped.push({ memberId: booking.member_id, reason: 'duplicate' }); continue; }
+    if (existing.rowCount) { skipped.push({ memberId: booking.member_id, reason: 'duplicate', alert: true }); continue; }
+    const attendedOn = chicagoToday(input.now);
     await pool.query(
       `insert into attendance (session_id, member_id, location_id, attended_on, status, source)
        values ($1, $2, $3, $4, 'present', $5)`,
-      [booking.session_id, booking.member_id, input.locationId, chicagoToday(input.now), input.source],
+      [booking.session_id, booking.member_id, input.locationId, attendedOn, input.source],
     );
+    await noteFirstCheckin(pool, booking.member_id, attendedOn);
     checkedIn.push({ memberId: booking.member_id, sessionId: booking.session_id, source: input.source });
   }
-  return { checkedIn, skipped, coordinateStored: false };
+  return {
+    checkedIn,
+    skipped,
+    failed: skipped.filter(row => row.alert),
+    alert: skipped.some(row => row.alert) && checkedIn.length === 0,
+    sessionId: preset,
+    coordinateStored: false,
+  };
 }
 
 export async function shadowMembersFromRows(rows: any[]): Promise<ShadowMember[]> {

@@ -104,3 +104,26 @@ export function expandTemplates(input: {
   }
   return out;
 }
+
+export const SCHEDULE_VIEWS = ['month', 'week', 'day', 'list'] as const;
+export type ScheduleView = (typeof SCHEDULE_VIEWS)[number];
+
+/** Stable window for GET /v1/schedule. Weeks start Monday. List is 28 days. */
+export function scheduleRange(view: ScheduleView, date: string): { from: string; to: string } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('date must be YYYY-MM-DD');
+  if (view === 'day') return { from: date, to: date };
+  if (view === 'week') {
+    const dow = weekdayOf(date);
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const from = addDays(date, mondayOffset);
+    return { from, to: addDays(from, 6) };
+  }
+  if (view === 'month') {
+    const from = date.slice(0, 8) + '01';
+    const [year, month] = date.split('-').map(Number);
+    const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return { from, to: date.slice(0, 8) + String(last).padStart(2, '0') };
+  }
+  if (view === 'list') return { from: date, to: addDays(date, 27) };
+  throw new Error('Unknown schedule view');
+}
