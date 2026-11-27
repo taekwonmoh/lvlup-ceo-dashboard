@@ -22,26 +22,37 @@
   };
 
   var TABS = [
-    ['today', 'Today', 'home'],
-    ['people', 'Members & Leads', 'users'],
-    ['schedule', 'Schedule & Events', 'calendar'],
-    ['money', 'Financials & Billing', 'chart'],
-    ['inbox', 'Messages & Automations', 'message'],
+    ['today', 'Today', 'home', 'Today'],
+    ['people', 'Members & Leads', 'users', 'Members'],
+    ['schedule', 'Schedule & Events', 'calendar', 'Schedule'],
+    ['money', 'Financials & Billing', 'chart', 'Billing'],
+    ['inbox', 'Messages & Automations', 'message', 'Messages'],
   ];
 
   function save() { uiLib.save(store); }
   function toast(tone, text) { ui.toast = { tone: tone, text: text }; render(); }
   function schoolId() { return store.staffSchool || 'waunakee'; }
 
+  function tabButton(tab, kind) {
+    var on = ui.tab === tab[0];
+    var label = kind === 'short' ? tab[3] : tab[1];
+    return '<button type="button" class="' + (kind === 'short' ? 'navbtn' : 'railbtn') + (on ? ' on' : '') + '" data-act="tab" data-tab="' + tab[0] + '"' + (on ? ' aria-current="page"' : '') + '>' +
+      uiLib.icon(tab[2]) + '<span>' + esc(label) + '</span></button>';
+  }
+
   function render() {
+    var go = String(schoolId()).indexOf('goninja') === 0 ? uiLib.logo('go') : '';
     document.getElementById('app').innerHTML =
       uiLib.header('staff') +
-      '<div class="desk"><nav class="rail" aria-label="Front desk"><div class="rail-logo">' + uiLib.logo('mark') + (String(schoolId()).indexOf('goninja') === 0 ? uiLib.logo('go') : '') + '</div>' + TABS.map(function (tab) {
-        return '<button type="button" class="railbtn' + (ui.tab === tab[0] ? ' on' : '') + '" data-act="tab" data-tab="' + tab[0] + '">' + uiLib.icon(tab[2]) + '<span>' + esc(tab[1]) + '</span></button>';
-      }).join('') + '</nav><main class="desk-main">' +
+      '<div class="desk"><nav class="rail" aria-label="Front desk"><div class="rail-logo">' + uiLib.logo('mark') + go + '</div>' +
+      TABS.map(function (tab) { return tabButton(tab, 'full'); }).join('') +
+      '</nav><main class="desk-main">' +
       uiLib.toast(ui.toast) +
       screen() +
-      '</main></div>' + connectSheet() + drawer();
+      '</main></div>' +
+      '<nav class="bottom staff-tabs" aria-label="Front desk">' +
+      TABS.map(function (tab) { return tabButton(tab, 'short'); }).join('') +
+      '</nav>' + connectSheet() + drawer();
   }
 
   function screen() {
@@ -53,7 +64,7 @@
   }
 
   function schoolChips() {
-    return '<div class="chips" aria-label="School">' + data.schools.map(function (row) {
+    return '<div class="chips school-strip" aria-label="School">' + data.schools.map(function (row) {
       return '<button type="button" class="chip' + (schoolId() === row.id ? ' on' : '') + '" data-act="school" data-id="' + esc(row.id) + '">' + esc(row.name) + '</button>';
     }).join('') + '</div>';
   }
@@ -93,7 +104,7 @@
       schoolChips() +
       '<h2>' + heading + '</h2>' + (rows.length ? rows.map(function (cls) {
         var isLocked = locked && store.kiosk.classId === cls.id;
-        return '<div class="card"><h3>' + esc(cls.title) + '</h3><div>' + esc(rules.prettyDate(cls.date) + ' · ' + rules.prettyTime(cls.time) + ' · ' + cls.program) + '</div>' +
+        return '<div class="card' + (isLocked ? ' kiosk-lock' : '') + '"><h3>' + esc(cls.title) + '</h3><div>' + esc(rules.prettyDate(cls.date) + ' · ' + rules.prettyTime(cls.time) + ' · ' + cls.program) + '</div>' +
           (isLocked
             ? '<div class="note">Kiosk locked on ' + esc(cls.title) + ' · ' + esc(rules.prettyTime(cls.time)) + '.</div><button type="button" class="big" data-act="kiosk-off">Unlock kiosk</button>'
             : '<button type="button" class="big primary" data-act="kiosk" data-id="' + esc(cls.id) + '">' + uiLib.icon('lock') + ' Lock kiosk on this class</button>') +
@@ -136,7 +147,7 @@
       var track = next === 'shipped'
         ? '<label>Tracking, optional<input id="track-' + esc(order.id) + '" placeholder="SAMPLETRACK"></label>'
         : '';
-      return '<div class="card"><strong>' + uiLib.icon(method === 'studio_pickup' ? 'store' : 'truck') + ' ' + esc(rules.orderStatusLabel(order, uiLib.names())) + '</strong><div class="meta">' + esc(who.first + ' · ' + (order.lines[0] ? order.lines[0].name : 'Item')) + '</div>' +
+      return '<div class="card queue-card"><strong>' + uiLib.icon(method === 'studio_pickup' ? 'store' : 'truck') + ' <span>' + esc(rules.orderStatusLabel(order, uiLib.names())) + '</span></strong><div class="meta">' + esc(who.first + ' · ' + (order.lines[0] ? order.lines[0].name : 'Item')) + '</div>' +
         track +
         (next ? '<button type="button" class="big primary" data-act="fulfill" data-id="' + esc(order.id) + '">' + esc(rules.actionLabel(next)) + '</button>' : '') +
         '</div>';
@@ -181,9 +192,10 @@
       : '<div class="split"><div><div class="meta">Upcoming draft</div><strong>' + esc(uiLib.money(cents)) + '</strong></div><button type="button" class="ghost" data-act="pay-edit">Edit</button></div>' +
         (store.paymentPreview[who.id] != null ? '<button type="button" class="textbtn" data-act="pay-undo">Undo</button>' : '');
     var next = nextClassFor(who);
-    return '<div class="drawer"><div class="panel"><button type="button" class="textbtn" data-act="close">Close</button>' +
+    return '<div class="drawer" role="dialog" aria-modal="true" aria-label="' + esc(who.first + ' ' + who.last) + '"><div class="panel">' +
+      '<div class="sheet-pin"><div class="pin-note">Pinned note · ' + esc(who.note) + '</div>' +
+      '<button type="button" class="sheet-close" data-act="close">' + uiLib.icon('x') + ' Close</button></div>' +
       '<h1>' + esc(who.first + ' ' + who.last) + '</h1><p class="lede">' + esc(who.program + ' · ' + uiLib.school(who.school).name) + '</p>' +
-      '<div class="pin-note">Pinned note · ' + esc(who.note) + '</div>' +
       '<h2>Emergency and pickup</h2>' + (contacts.length ? contacts.map(function (row) {
         return '<div class="card"><strong>' + esc(row.name) + '</strong><div class="meta">' + esc(row.kind + ' · ' + row.relationship) + '</div></div>';
       }).join('') : '<p class="quiet">None saved.</p>') +
@@ -271,16 +283,18 @@
     var max = fin.categories[0].cents;
     return '<h1>Financials</h1><p class="lede">Sample month. Not a live account. Nothing is charged.</p>' +
       '<div class="note">' + esc(data.tuitionNote) + '</div>' +
-      '<div class="tiles"><div class="card"><div class="meta">Collected</div><div class="price">' + esc(uiLib.money(fin.collectedCents)) + '</div></div>' +
+      '<div class="tiles money-tiles"><div class="card"><div class="meta">Collected</div><div class="price">' + esc(uiLib.money(fin.collectedCents)) + '</div></div>' +
       '<div class="card"><div class="meta">Last month</div><div class="price">' + esc(uiLib.money(fin.lastMonthCents)) + '</div></div>' +
       '<div class="card"><div class="meta">Scheduled</div><div class="price">' + esc(uiLib.money(fin.scheduledCents)) + '</div></div>' +
       '<div class="card"><div class="meta">Past due</div><div class="price">' + esc(uiLib.money(fin.pastDueCents)) + '</div></div></div>' +
       '<h2>Income categories</h2>' + fin.categories.map(function (row) {
-        return '<div class="card"><div class="split"><strong>' + esc(row.name) + '</strong><span>' + esc(uiLib.money(row.cents)) + '</span></div><div class="bar"><span style="width:' + Math.round((row.cents / max) * 100) + '%"></span></div></div>';
+        return '<div class="card"><div class="split"><strong>' + esc(row.name) + '</strong><span class="tabular">' + esc(uiLib.money(row.cents)) + '</span></div><div class="bar"><span style="width:' + Math.round((row.cents / max) * 100) + '%"></span></div></div>';
       }).join('') +
-      '<h2>Sold by</h2><table><tr><th>Name</th><th>Memberships</th><th>Amount</th></tr>' + fin.soldBy.map(function (row) {
-        return '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.memberships) + '</td><td>' + esc(uiLib.money(row.cents)) + '</td></tr>';
-      }).join('') + '</table>';
+      '<h2>Sold by</h2><div class="sold" role="table" aria-label="Sold by">' +
+      '<div class="sold-row sold-head" role="row"><span role="columnheader">Name</span><span role="columnheader">Memberships</span><span role="columnheader">Amount</span></div>' +
+      fin.soldBy.map(function (row) {
+        return '<div class="sold-row" role="row"><span data-label="Name">' + esc(row.name) + '</span><span data-label="Memberships">' + esc(row.memberships) + '</span><span class="tabular" data-label="Amount">' + esc(uiLib.money(row.cents)) + '</span></div>';
+      }).join('') + '</div>';
   }
 
   function inbox() {
@@ -304,7 +318,7 @@
       '<h2>System emails · ' + esc(uiLib.school(school).name) + '</h2>' + schoolChips() +
       data.emailCodes.map(function (row) {
         var on = emailOn(school, row.code);
-        return '<button type="button" class="rowbtn" data-act="email" data-code="' + esc(row.code) + '">' + esc(row.name) + '<span class="meta">' + (on ? 'On' : 'Off') + ' · tap to switch</span></button>';
+        return '<button type="button" class="rowbtn email-row" data-act="email" data-code="' + esc(row.code) + '"><span>' + esc(row.name) + '</span><span class="meta">' + (on ? 'On' : 'Off') + ' · tap to switch</span></button>';
       }).join('') +
       '<button type="button" class="textbtn" data-act="connect">Sandbox connection</button>';
   }
