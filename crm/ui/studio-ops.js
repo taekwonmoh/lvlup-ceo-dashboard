@@ -356,7 +356,7 @@
 
   function switcher(ctx) {
     var esc = ctx.esc;
-    var views = [['members', 'Members'], ['leads', 'Leads'], ['retention', 'Retention'], ['testing', 'Testing'], ['quizzes', 'Quizzes']];
+    var views = [['members', 'Members'], ['leads', 'Leads'], ['retention', 'Retention'], ['testing', 'Testing'], ['quizzes', 'Quizzes'], ['growth', 'Growth']];
     var chips = views.map(function (view) {
       var on = ctx.ui.peopleView === view[0] ? ' on' : '';
       return '<button type="button" class="chip' + on + '" data-act="people-view" data-view="' + view[0] + '">' + esc(view[1]) + '</button>';

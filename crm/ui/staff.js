@@ -308,8 +308,9 @@
   function today() {
     var view = ui.todayView === 'tasks' ? 'tasks' : ui.todayView === 'lobby' ? 'lobby' : 'desk';
     var pulse = view === 'desk' && window.CrmStudio ? window.CrmStudio.pulseHtml(studioCtx()) : '';
+    var ask = view === 'desk' && window.CrmGrowth ? window.CrmGrowth.askHtml(studioCtx()) + window.CrmGrowth.feedHtml(studioCtx()) : '';
     var body = view === 'tasks' ? tasksView() : view === 'lobby' ? schoolChips() + window.CrmStudio.lobbyHtml(studioCtx()) : frontDesk();
-    return '<h1>Today</h1>' + pulse + todaySwitch(view) + body;
+    return '<h1>Today</h1>' + ask + pulse + todaySwitch(view) + body;
   }
 
   function frontDesk() {
@@ -411,6 +412,7 @@
     var view = ui.peopleView || 'members';
     var studio = window.CrmStudio;
     var head = studio ? studio.switcher(studioCtx()) : '';
+    if (view === 'growth' && window.CrmGrowth) return head + window.CrmGrowth.page(studioCtx());
     if (studio && view === 'retention') return head + studio.retentionHtml(studioCtx());
     if (studio && view === 'testing') return head + studio.testingHtml(studioCtx());
     if (studio && view === 'quizzes') return head + studio.quizzesHtml(studioCtx());
@@ -565,7 +567,8 @@
   function qboIsLive() { return !!(uiLib.apiBase() && uiLib.token()); }
 
   function qboQueryKey() {
-    return [ui.qboEntity, ui.qboPeriod, ui.qboFrom, ui.qboThrough, store.today, uiLib.apiBase(), qboIsLive() ? '1' : '0'].join('|');
+    var pass = window.CrmGrowth && store.growth && store.growth.passExport !== false ? 'pass' : 'card';
+    return [ui.qboEntity, ui.qboPeriod, ui.qboFrom, ui.qboThrough, store.today, uiLib.apiBase(), qboIsLive() ? '1' : '0', pass].join('|');
   }
 
   function ensureQboLive() {
@@ -574,6 +577,7 @@
     if (ui.qboLiveKey === key) return;
     ui.qboLiveKey = key;
     var params = new URLSearchParams({ entity: ui.qboEntity, period: ui.qboPeriod, format: 'preview', asOf: store.today });
+    if (!store.growth || store.growth.passExport !== false) params.set('passThrough', '1');
     if (ui.qboPeriod === 'custom') {
       if (ui.qboFrom) params.set('from', ui.qboFrom);
       if (ui.qboThrough) params.set('through', ui.qboThrough);
@@ -604,6 +608,7 @@
       through: ui.qboThrough,
       asOf: store.today,
       catalog: catalog,
+      feeSchedule: window.CrmGrowth ? window.CrmGrowth.exportSchedule(store) : undefined,
     });
   }
 
@@ -788,6 +793,7 @@
       : '';
     return '<h1>Financials &amp; Billing</h1>' + uiLib.liveNote(ui.liveNote) + liveMoney +
       '<p class="lede">Sample month unless a finance sign-in loaded the sandbox summary. Nothing is charged.</p>' +
+      (window.CrmGrowth ? window.CrmGrowth.feePanel(studioCtx()) : '') +
       qboCard() +
       '<div class="note">' + esc(data.tuitionNote) + '</div>' +
       '<div class="tiles money-tiles"><div class="card"><div class="meta">Collected</div><div class="price">' + esc(uiLib.money(fin.collectedCents)) + '</div></div>' +
@@ -867,6 +873,7 @@
       render();
       return;
     }
+    if (window.CrmGrowth && window.CrmGrowth.handle(act, el, studioCtx())) return;
     if (window.CrmStudio && window.CrmStudio.handle(act, el, studioCtx())) return;
     if (act === 'tab') {
       ui.tab = el.getAttribute('data-tab');
@@ -1324,6 +1331,21 @@
   }
 
   document.getElementById('app').addEventListener('click', onClick);
+  document.getElementById('app').addEventListener('dragstart', function (event) {
+    var card = event.target.closest('[data-drag]');
+    if (!card || !event.dataTransfer) return;
+    event.dataTransfer.setData('text/plain', card.getAttribute('data-drag'));
+    event.dataTransfer.effectAllowed = 'move';
+  });
+  document.getElementById('app').addEventListener('dragover', function (event) {
+    if (event.target.closest('[data-stage]')) event.preventDefault();
+  });
+  document.getElementById('app').addEventListener('drop', function (event) {
+    var col = event.target.closest('[data-stage]');
+    if (!col || !event.dataTransfer) return;
+    event.preventDefault();
+    if (window.CrmGrowth) window.CrmGrowth.move(event.dataTransfer.getData('text/plain'), col.getAttribute('data-stage'), studioCtx());
+  });
   document.getElementById('app').addEventListener('input', function (event) {
     if (event.target.id === 'people-q' || event.target.id === 'checkin-q') {
       ui.query = event.target.value;
@@ -1339,6 +1361,10 @@
     if (event.target.id === 'quiz-person') ui.quizPerson = event.target.value;
   });
   document.getElementById('app').addEventListener('change', function (event) {
+    if (event.target.getAttribute('data-act') === 'pipe-move' && window.CrmGrowth) {
+      window.CrmGrowth.move(event.target.getAttribute('data-id'), event.target.value, studioCtx());
+      return;
+    }
     if (event.target.id === 'qbo-from' || event.target.id === 'qbo-through') {
       ui.qboFrom = (document.getElementById('qbo-from') || {}).value || '';
       ui.qboThrough = (document.getElementById('qbo-through') || {}).value || '';

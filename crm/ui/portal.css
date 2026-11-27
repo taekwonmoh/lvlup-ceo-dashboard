@@ -969,6 +969,27 @@ body[data-app="staff"] .action-row .big { width: auto; flex: 1 1 148px; margin-t
 .quiz-card .choice { margin-bottom: 8px; }
 .quiz-score { display: grid; gap: 6px; }
 
+.ask-bar, .priority, .fee-panel { margin: 0 0 16px; }
+.ask-row { display: flex; gap: 8px; align-items: end; }
+.ask-row .grow { flex: 1; min-width: 0; }
+.ask-row .big { width: auto; min-width: 96px; }
+.feed-grid, .fee-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.feed-card .big { margin-top: 8px; }
+.fee-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
+.fee-matrix { display: grid; gap: 8px; margin: 12px 0; }
+.fee-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
+.fee-row .meta { display: block; }
+.kanban { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.kanban-col { min-width: 0; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 10px; }
+.kanban-card { background: var(--paper); border-radius: 12px; padding: 10px; margin: 8px 0; }
+.kanban-card .big { margin-top: 8px; }
+body[data-app="staff"] .ask-row .big { width: auto; }
+@media (max-width: 900px) {
+  .ask-row { flex-direction: column; align-items: stretch; }
+  body[data-app="staff"] .ask-row .big { width: 100%; }
+  .feed-grid, .fee-pair, .fee-grid, .kanban { grid-template-columns: 1fr; }
+}
+
 @keyframes staff-sheet-up {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
