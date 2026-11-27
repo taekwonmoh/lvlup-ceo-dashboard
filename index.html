@@ -2313,13 +2313,14 @@ const WALL_TYPES = [
 /*  -  -  Task Definitions  -  -  */
 // ── Shared task building blocks ────────────────────────────────────────────
 const TASK_STOPLIGHT = {id:'stoplight', cat:'Pre-Class Admin', count:true, min:2, unit:'students', autoOnly:true, playbook:'student_outreach', proof:{kind:'stoplight', min:2}, text:'Reach 2 students on the stoplight: Log each student on the Students page with a method and your initials. This completes from those names. A number by itself does not.'};
-const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', text:'Check today rosters: Class counts for the day (Tigers 7, Kids 11, Teens 5) and first names of any new or trial students, or no new / no trials.'};
+const TASK_ROSTERS   = {id:'rosters',   cat:'Pre-Class Admin', text:'Check today rosters: Today’s class counts and any new or trial students are reviewed.'};
 // Wrap-up lives on the dashboard. Old Slack EOS ids (eos, j_eos, eos_report) still satisfy this via TASK_ALIASES.
 const TASK_CLOSING   = {id:'closing', cat:'Closing', proof:{kind:'scorecard', noteOptional:true, notePlaceholder:'One-line note if something is still outstanding (optional)'}, text:'Close the school: Log trials and enrollments today (0 is fine). Add a one-line note if something is outstanding. The floor photo covers straightening the floor.'};
 // Bathroom verification photo. `days` is 0=Sun … 6=Sat. Leads are Monday only.
 // Front desk days are chosen per school in frontDeskBathroomDays (Tue–Sat, open days only).
 // A day that is not in `days` is omitted by dailyTasksForDate, so it is not a miss.
-// Training-floor photos stay daily. Front desk still tidies bathrooms every shift inside fd_lobby.
+// The training-floor row stays daily. Ash, Joey, and Tarik still upload a photo.
+// Bryan and Miranda check the same id off. Front desk still tidies bathrooms every shift inside fd_lobby.
 // priorPhoto: this task already required a photo before the proof system. The sheet still
 // requires the photo. Older records with no proofV still count in history the old way.
 function bathroomPhoto(days){ return {id:'ph_bathroom', cat:'Facility Refresh', photo:true, priorPhoto:true, multi:true, icon:'📸', days:days, text:'Bathroom Refresh: freshen up each bathroom, then snap a photo.'}; }
@@ -2335,13 +2336,17 @@ const TASK_BUFFER = {id:'cc_content', icon:'📱', contentPillars:true, posts:3,
 
 // ── Per-employee daily task lists ──────────────────────────────────────────
 const TASK_OPEN_PHOTO = {id:'opening', cat:'Pre-Class Admin', photo:true, icon:'📸'};
+// Bryan checks these off. Ash, Tarik, and Joey keep TASK_STOPLIGHT / TASK_PH_FLOOR / TASK_CLOSING.
+const BRYAN_STOPLIGHT = {id:'stoplight', cat:'Pre-Class Admin', playbook:'student_outreach', proof:{kind:'check', noteOptional:true, notePlaceholder:'Who you reached (optional)'}, text:'Reach 2 students on the stoplight: Check it off when the outreach is done. A note is optional.'};
+const BRYAN_PH_FLOOR = {id:'ph_floor', cat:'Facility Refresh', proof:{kind:'check'}, text:'Training Floor: The floor and bag racks are clean and ready.'};
+const BRYAN_CLOSING = Object.assign({}, TASK_CLOSING, {text:'Close the school: Log trials and enrollments today (0 is fine). Add a one-line note if something is outstanding.'});
 const BRYAN_DAILY = [
   Object.assign({}, TASK_OPEN_PHOTO, {text:'Open the school: One wide photo of the instructor station with the TV announcements on.'}),
-  TASK_STOPLIGHT,
+  BRYAN_STOPLIGHT,
   TASK_ROSTERS,
   bathroomPhoto([1]),
-  TASK_PH_FLOOR,
-  TASK_CLOSING,
+  BRYAN_PH_FLOOR,
+  BRYAN_CLOSING,
 ];
 const ASH_DAILY = [
   Object.assign({}, TASK_OPEN_PHOTO, {text:'Open the school: One wide photo of the instructor station with the TV announcements on.'}),
@@ -2373,24 +2378,24 @@ const TARIK_DAILY = [
 const MIRANDA_DAILY = [
   {id:'opening', cat:'Pre-Class Admin', photo:true, icon:'📸', text:'Open Go Ninja: One prep photo of the floor and the front, ready for the day.'},
   bathroomPhoto([1]),
-  {id:'ph_floor', cat:'Facility Refresh', photo:true, priorPhoto:true, icon:'📸', text:'Gym Floor: wide photo of the obstacle / training area showing a clean, professional look.'},
+  {id:'ph_floor', cat:'Facility Refresh', proof:{kind:'check'}, text:'Gym Floor: The obstacle and training area is clean and ready.'},
   {id:'closing', cat:'Closing', photo:true, icon:'📸', proof:{kind:'photo', noteOptional:true, notePlaceholder:'What is left for the next day (optional)'}, text:'Close Go Ninja: Closing photo of the front desk and lobby. Add a one-line note if anything is left. The note is optional. The bathroom photo stays Monday only.'},
 ];
 // ── Per-employee weekly task lists ─────────────────────────────────────────
 function lvlupWeekly(board){ return [
-  {id:'schedule', text:'Confirm this week coverage: Coverage is set, or note the holes and who is covering.'},
+  {id:'schedule', text:'Confirm this week coverage: This week’s coverage is confirmed.'},
   ...weeklyPhotos(board),
   {id:'mop_mats', photo:true, icon:'📸', text:'Wet-mop the mats: Photo of the mopped floor.'},
-  {id:'dots', text:'Inspect floor dots: Replaced N dots, or all good — none needed.'},
+  {id:'dots', text:'Inspect floor dots: Floor dots are inspected, and any worn ones are replaced.'},
   {id:'supplies', text:'Check supplies and log restocks: Completes when a restock is logged in Ops → Inventory, or check it off if no restock is needed.'},
   {id:'ad_invites', hasNotes:true, proof:{kind:'lines', min:2, placeholder:'One student name per line. Talked to parents, not yet scheduled is ok.'}, text:'Invite 2 students to AD: Two student names. Talked to parents, not yet scheduled is ok — names are still required.'},
-  {id:'lifelinks', text:'Award LifeLink clips: Names of students who received clips, or none due this week.'},
+  {id:'lifelinks', text:'Award LifeLink clips: LifeLink clips due this week are awarded.'},
   {id:'bday_report', text:'Invite birthday families: Check it off when eligible families have been invited, or there were no eligible birthdays this week. A party you book can be logged on Book a party.'},
-  {id:'events_promote', text:'Promote this week events in class: Event names and which classes you told, or no upcoming events this week.'},
+  {id:'events_promote', text:'Promote this week events in class: This week’s events are promoted in class, or there are no upcoming events.'},
   {id:'mia_report', proof:{kind:'rows', min:1, store:'rows', none:'No at-risk students this week', noneNeedsNote:true, fields:[{key:'name',label:'Student'},{key:'date',label:'Booster date',type:'date'}]}, text:'Book booster lessons for at-risk students: Student name and the booster date, or No at-risk students this week with a one-line note.'},
-  {id:'lead_audit', text:'Clear leads older than 48 hours: All leads contacted, or the names still open and the next action.'},
+  {id:'lead_audit', text:'Clear leads older than 48 hours: Leads older than 48 hours are cleared.'},
   {id:'new_checkin', proof:{kind:'rows', min:1, store:'rows', none:'No one at day 30 this week', fields:[{key:'name',label:'Student'},{key:'date',label:'Date called',type:'date'},{key:'result',label:'Result (3–5 words)'}]}, text:'Call this week 30-day students: Student name, date called, and a short result, or No one at day 30 this week.'},
-  {id:'social_plan', text:'Plan next week social posts: Three short post ideas (topic and pillar), or point at the Capture Content uploads already in the dashboard.'},
+  {id:'social_plan', text:'Plan next week social posts: Next week’s social posts are planned.'},
   {id:'pto_review', text:'Action pending time-off: Completes when this school has no pending requests, or check it off after you have actioned them.'},
   {id:'post_schedule', text:'Publish next week schedule: Completes when next week is published on the dashboard, or check it off and note what is still open with your team.'},
   // About every 2 months: first the week of Mon Nov 9, 2026 (2026-W46), then every 8 weeks.
@@ -2403,7 +2408,37 @@ function lvlupWeekly(board){ return [
   ]},
   TASK_BUFFER,
 ]; }
-const BRYAN_WEEKLY = lvlupWeekly('mirror');
+// A one-click checkoff copied from a shared row. Photo, note, and count fields stay off
+// so Ash, Joey, and Tarik keep the original objects from their own lvlupWeekly() call.
+function checkoffFrom(task, text, notePlaceholder){
+  const next={id:task.id, text:text};
+  if(task.cat) next.cat=task.cat;
+  if(task.week!=null) next.week=task.week;
+  if(task.days) next.days=task.days.slice();
+  if(task.every){ next.every=task.every; next.from=task.from; }
+  if(task.since) next.since=task.since;
+  if(task.playbook) next.playbook=task.playbook;
+  if(task.subs) next.subs=task.subs.slice();
+  next.proof=notePlaceholder
+    ? {kind:'check', noteOptional:true, notePlaceholder:notePlaceholder}
+    : {kind:'check'};
+  return next;
+}
+const BRYAN_WEEKLY_CHECKOFFS = {
+  ph_announce: 'Announcements: Refresh the mirror with upcoming events.',
+  ph_station: 'Instructor Station: Deep clean and organize it.',
+  ph_signage: 'Event Signage: In-school signage for upcoming events is current.',
+  dust_displays: 'Display Dusting: Dust the belt displays and the hooks and wood strips that hang the equipment (about every 2 months).',
+  ad_invites: ['Invite 2 students to AD: Check it off when two students have been invited. A note is optional.', 'Student names (optional)'],
+  mia_report: ['Book booster lessons for at-risk students: Check it off when boosters are booked, or there is no one at risk this week. A note is optional.', 'Who you booked, or that there was no one (optional)'],
+  new_checkin: ['Call this week 30-day students: Check it off when those calls are made, or no one is at day 30. A note is optional.', 'Who you called and how it went (optional)'],
+};
+const BRYAN_WEEKLY = lvlupWeekly('mirror').map(function(t){
+  const spec=BRYAN_WEEKLY_CHECKOFFS[t.id];
+  if(!spec) return t;
+  if(Array.isArray(spec)) return checkoffFrom(t, spec[0], spec[1]);
+  return checkoffFrom(t, spec);
+});
 const ASH_WEEKLY   = lvlupWeekly('mirror');
 const JOEY_WEEKLY  = lvlupWeekly('mirror');
 // Weekly rows are one check for the week. `every` counts weeks, so this list
@@ -2413,10 +2448,10 @@ const TARIK_GARBAGE = {id:'lvlup_garbage', since:'2026-W47', icon:'🗑️', tex
 const TARIK_WEEKLY = lvlupWeekly('whiteboard').flatMap(t => t.id==='mop_mats' ? [t, TARIK_GARBAGE] : [t]);
 const MIRANDA_WEEKLY = [
   {id:'m_party_reset',    photo:true, priorPhoto:true, icon:'📸', text:'Friday Event Prep: Reset the party room for weekend birthday parties, then snap a verification photo.'},
-  {id:'m_party_cleanup',  photo:true, priorPhoto:true, proof:{kind:'photoOrNone', none:'No party this week'}, text:'Party Room Breakdown: Photo after the party, or No party this week.'},
+  {id:'m_party_cleanup',  photo:true, priorPhoto:true, icon:'📸', proof:{kind:'photoOrNone', none:'No party this week', noteOptional:true, notePlaceholder:'What is left from the party (optional)'}, text:'Party Room Breakdown: Photo after the party, or No party this week. A note is optional.'},
   {id:'m_mop_mats',       photo:true, priorPhoto:true, icon:'📸', text:'Mat Maintenance: Mop mats and sanitize obstacles, then snap a photo.'},
-  {id:'ph_station',  photo:true, priorPhoto:true, icon:'📸', text:'Front Desk / Instructor Station: clean and organize it, then snap a photo.'},
-  {id:'ph_signage',  photo:true, priorPhoto:true, icon:'📸', text:'Event Signage: snap a photo of the in-school signage for upcoming events.'},
+  {id:'ph_station',  proof:{kind:'check'}, text:'Front Desk / Instructor Station: Clean and organize it.'},
+  {id:'ph_signage',  proof:{kind:'check'}, text:'Event Signage: In-school signage for upcoming events is current.'},
   {id:'m_party_supplies', text:'Check party supplies: Completes when a restock is logged in Ops → Inventory, or check it off if no restock is needed.'},
   TASK_BUFFER,
 ];
@@ -2497,7 +2532,9 @@ function proofFieldsOk(task, rec){
   if(kind==='photoNote') return ((rec.photos)||[]).length>0 && !!notes;
   if(kind==='photoOrNone'){
     if(rec.none||proofNoneMatch(task, notes)) return true;
-    return !!notes && ((rec.photos)||[]).length>0;
+    if(!((rec.photos)||[]).length) return false;
+    if(p.noteOptional) return true;
+    return !!notes;
   }
   if(kind==='count'){
     const min=(p.min||task.min||1);
@@ -2622,7 +2659,7 @@ function taskBurstIds(entries){
 }
 function taskHasOptionalNote(task){
   const kind=proofKindOf(task);
-  return !!(task&&task.proof&&task.proof.noteOptional&&(kind==='check'||kind==='photo'));
+  return !!(task&&task.proof&&task.proof.noteOptional&&(kind==='check'||kind==='photo'||kind==='photoOrNone'));
 }
 function proofIsPhotoSave(task, payload){
   if(!payload) return false;
@@ -2656,8 +2693,12 @@ function taskBucket(empId, section, sKey){
 }
 // Photos and plain checkoffs (including a checkoff with an optional note) do not
 // count toward the quick-click review. Proof that still asks for input does.
+// "No party this week" is one click, so it does not count either.
 function burstSkip(task, payload){
   if(proofKindOf(task)==='check') return true;
+  const kind=proofKindOf(task);
+  if(kind==='photoOrNone'&&payload&&payload.none) return true;
+  if(kind==='photoOrNone'&&task&&task.proof&&task.proof.noteOptional) return true;
   return proofIsPhotoSave(task, payload);
 }
 function attachBurst(section, taskId, payload){
@@ -3017,15 +3058,20 @@ function confirmBurstAt(empId, section, sKey, taskId){
 }
 const EMP_WEEKLY = {bryanG:BRYAN_WEEKLY,ash:ASH_WEEKLY,joeyZ:JOEY_WEEKLY,mirandaS:MIRANDA_WEEKLY, tarikM:TARIK_WEEKLY};
 // Legacy shared arrays kept as fallback ────────────────────────────────────
-const LVLUP_DAILY = BRYAN_DAILY;
-const LVLUP_WEEKLY_REC = BRYAN_WEEKLY;
+// Unknown instructor seats keep the full-proof lists. Bryan's copies are lighter.
+const LVLUP_DAILY = ASH_DAILY;
+const LVLUP_WEEKLY_REC = ASH_WEEKLY;
 const GONINJA_DAILY = MIRANDA_DAILY;
 const GONINJA_WEEKLY_REC = MIRANDA_WEEKLY;
 const LVLUP_MONTHLY = [
-  {id:'lm_reviews', text:'Google Reviews: Ask 2 happy families for a review. List the family names, or asked, they declined.'},
+  {id:'lm_reviews', text:'Google Reviews: Happy families are asked for a Google review.'},
   {id:'lm_checkin', text:'Team Check-in: 1:1 with your assistant instructors — name and date.'},
   {id:'lm_sanitize', photo:true, icon:'📸', text:'Deep Sanitize: Monthly deep-sanitize of all mats and high-touch surfaces, then snap a photo.'},
 ];
+const BRYAN_MONTHLY = LVLUP_MONTHLY.map(function(t){
+  if(t.id!=='lm_sanitize') return t;
+  return {id:'lm_sanitize', proof:{kind:'check'}, text:'Deep Sanitize: Monthly deep-sanitize of all mats and high-touch surfaces.'};
+});
 // Front desk staff (Waunakee, Verona)
 // fd_questions is not a scored task from FD_QUESTIONS_SCORED_BEFORE forward.
 // Days before that cutoff still include it so older completion totals stay put.
@@ -3185,39 +3231,39 @@ const GONINJA_CYCLE = {
     {id:'w1a1',cat:'Admin',proof:{kind:'check'},text:'Announce new cycle theme'},
     {id:'w1a2',cat:'Admin',text:'Update class schedules/calendar'},
     {id:'w1s1',cat:'Student Mgmt',proof:{kind:'check'},text:'Check enrollment numbers'},
-    {id:'w1c1',cat:'Cleaning',text:'Deep clean mats & equipment'},
+    {id:'w1c1',cat:'Cleaning',proof:{kind:'check'},text:'Deep clean mats & equipment'},
   ]},
   2:{name:'Engagement Push',tasks:[
     {id:'w2a1',cat:'Admin',proof:{kind:'check'},text:'Update signage for new cycle'},
     {id:'w2a2',cat:'Admin',text:'Plan community engagement event'},
     {id:'w2s1',cat:'Student Mgmt',text:'Follow up with absent students'},
-    {id:'w2c1',cat:'Cleaning',text:'Deep clean front desk & lobby'},
+    {id:'w2c1',cat:'Cleaning',proof:{kind:'check'},text:'Deep clean front desk & lobby'},
   ]},
   3:{name:'Momentum Building',tasks:[
     {id:'w3a1',cat:'Admin',text:'Launch promo or special event'},
     {id:'w3s1',cat:'Student Mgmt',proof:{kind:'check'},text:'Run attendance report'},
     {id:'w3s2',cat:'Student Mgmt',proof:{kind:'check'},text:'Reach out to at-risk students'},
-    {id:'w3c1',cat:'Cleaning',text:'Deep clean lobby & retail area'},
+    {id:'w3c1',cat:'Cleaning',proof:{kind:'check'},text:'Deep clean lobby & retail area'},
   ]},
   4:{name:'Mid-Cycle Check',tasks:[
     {id:'w4a1',cat:'Admin',text:'Review event calendar for next month'},
     {id:'w4s1',cat:'Student Mgmt',proof:{kind:'check'},text:'Attendance follow-up'},
-    {id:'w4c1',cat:'Cleaning',text:'Deep clean storage rooms'},
+    {id:'w4c1',cat:'Cleaning',proof:{kind:'check'},text:'Deep clean storage rooms'},
   ]},
   5:{name:'Event Prep',tasks:[
     {id:'w5a1',cat:'Admin',text:'Finalize upcoming event details'},
     {id:'w5s1',cat:'Student Mgmt',text:'Send event reminders to families'},
-    {id:'w5c1',cat:'Cleaning',text:'General cleaning & organization'},
+    {id:'w5c1',cat:'Cleaning',proof:{kind:'check'},text:'General cleaning & organization'},
   ]},
   6:{name:'Growth Push',tasks:[
     {id:'w6a1',cat:'Admin',proof:{kind:'check'},text:'Push enrollment & referral campaign'},
     {id:'w6s1',cat:'Student Mgmt',text:'Follow up with trial attendees'},
-    {id:'w6c1',cat:'Cleaning',text:'Deep clean front desk & lobby'},
+    {id:'w6c1',cat:'Cleaning',proof:{kind:'check'},text:'Deep clean front desk & lobby'},
   ]},
   7:{name:'Wrap-Up Prep',tasks:[
     {id:'w7a1',cat:'Admin',text:'Prepare end-of-cycle communications'},
     {id:'w7s1',cat:'Student Mgmt',proof:{kind:'check'},text:'Final attendance check'},
-    {id:'w7c1',cat:'Cleaning',text:'Deep clean - full facility'},
+    {id:'w7c1',cat:'Cleaning',proof:{kind:'check'},text:'Deep clean - full facility'},
   ]},
   8:{name:'Cycle Close',tasks:[
     {id:'w8a1',cat:'Admin',proof:{kind:'check'},text:'Send cycle recap to families'},
@@ -3248,6 +3294,18 @@ const LVLUP_CYCLE_CHECKLIST = [
   {id:'cc_belts',       week:0, text:'Confirm testing inventory: Belts, stripes, patches, and certificates are in stock, or the order is placed.'},
   {id:'cc_survey',      week:8, text:'Send the parent survey.'},
 ];
+const BRYAN_CYCLE_CHECKOFFS = {
+  cc_w1_outreach: ['Reach students who did not test: Check it off when that outreach is done. A note is optional.', 'Who you reached (optional)'],
+  cc_w3_attn: ['Follow up with low-attendance or missing-stripe students: Check it off when the follow-up is done, or there is no one to follow up. A note is optional.', 'Names and what you did (optional)'],
+  cc_w5_attn: ['Follow up with low-attendance or missing-stripe students: Check it off when the follow-up is done, or there is no one to follow up. A note is optional.', 'Names and what you did (optional)'],
+  cc_bday: ['Book a party: 2 birthday parties this cycle. Check it off when they are booked. A note is optional.', 'Child, family, and party date (optional)'],
+  cc_upgrades: ['Upgrade 2 students to AD or Legacy: Check it off when two upgrades are done. A note is optional.', 'Student names (optional)'],
+};
+const BRYAN_CYCLE_CHECKLIST = LVLUP_CYCLE_CHECKLIST.map(function(t){
+  const spec=BRYAN_CYCLE_CHECKOFFS[t.id];
+  if(!spec) return t;
+  return checkoffFrom(t, spec[0], spec[1]);
+});
 const FRONTDESK_CYCLE_CHECKLIST = [
   // ── Ongoing (any time this cycle) ──
   {id:'fd_cc_parties',   week:0, proof:{kind:'bookings', min:2}, playbook:'birthday_party', text:'Book a party: 2 birthday parties this cycle. Child name, family or guardian, and party date for each.'},
@@ -12096,10 +12154,10 @@ function weeklyTaskDue(task, weekKey){
 function weeklyTasksFor(empId, weekKey){
   return getWeeklyRec(empId).filter(t=>weeklyTaskDue(t, weekKey));
 }
-function getMonthlyTasks(empId){return isGoNinja(empId)?GONINJA_MONTHLY:isFrontDesk(empId)?FRONTDESK_MONTHLY:LVLUP_MONTHLY;}
+function getMonthlyTasks(empId){return isGoNinja(empId)?GONINJA_MONTHLY:isFrontDesk(empId)?FRONTDESK_MONTHLY:empId==='bryanG'?BRYAN_MONTHLY:LVLUP_MONTHLY;}
 function getAsNeededTasks(empId){return isGoNinja(empId)?[]:isFrontDesk(empId)?FRONTDESK_ASNEEDED:LVLUP_ASNEEDED;}
 function getCycleTasks(locId){return isGoNinja(locId)?GONINJA_CYCLE:LVLUP_CYCLE;}
-function getCycleChecklist(empId){return isFrontDesk(empId)?FRONTDESK_CYCLE_CHECKLIST:LVLUP_CYCLE_CHECKLIST;}
+function getCycleChecklist(empId){return isFrontDesk(empId)?FRONTDESK_CYCLE_CHECKLIST:empId==='bryanG'?BRYAN_CYCLE_CHECKLIST:LVLUP_CYCLE_CHECKLIST;}
 function getCycleChecklistKey(){
   const c=getCurrentCycleInfo();
   if(!c)return 'cycle-current';
@@ -12699,6 +12757,15 @@ function renderProofEditor(section, task, rec, locked){
   if(kind==='invites') return renderInviteProof(section, task);
   if(kind==='bookings') return renderBookingProof(section, task);
   if(kind==='rows') return renderRowsProof(section, task);
+  if(kind==='photoOrNone'&&p.noteOptional){
+    const phrase=proofNonePhrase(task);
+    if(!phrase) return '';
+    let h='<div class="proof-box" data-proof-form="photoOrNone">';
+    h+='<button type="button" data-none-option="1" onclick="proofUseNone(\''+section+'\',\''+task.id+'\')" style="padding:6px 12px;background:#fff;color:#1a1a2e;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">'+esc(phrase)+'</button>';
+    h+=taskProofStatusHtml(section, task.id);
+    h+='</div>';
+    return h;
+  }
   if(kind==='photoOrNone'||kind==='photoNote') return renderNoteProof(section, task, rec);
   return '';
 }

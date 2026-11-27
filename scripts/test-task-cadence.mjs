@@ -524,7 +524,178 @@ const gnAnnounce = taskForProof('cycle', gnWeek[1].tasks.find(t => t.id === 'w1a
 const gnSign = taskForProof('cycle', gnWeek[2].tasks.find(t => t.id === 'w2a1'));
 const gnClean = taskForProof('cycle', gnWeek[1].tasks.find(t => t.id === 'w1c1'));
 check(proofKindOf(gnAnnounce) === 'check' && proofKindOf(gnSign) === 'check', 'Go Ninja cycle rows that used to guess a note are explicit checkoffs');
-check(proofKindOf(gnClean) === 'photo', 'Go Ninja cleaning cycle rows still ask for a photo');
+const gnCleanIds = ['w1c1', 'w2c1', 'w3c1', 'w4c1', 'w5c1', 'w6c1', 'w7c1'];
+check(gnCleanIds.every(id => {
+  let task = null;
+  Object.keys(gnWeek).forEach(w => {
+    const found = (gnWeek[w].tasks || []).find(t => t.id === id);
+    if (found) task = taskForProof('cycle', found);
+  });
+  return proofKindOf(task) === 'check' && taskBonusComplete(task, { ts: 1, proofV: 1 }) && !/photo|snap|note required/i.test(task.text || '');
+}), 'Go Ninja deep-clean rows are one-click checkoffs and do not ask for a photo');
+check(proofKindOf(gnClean) === 'check', 'w1c1 no longer turns the word clean into a photo');
+const gnReset = taskForProof('cycle', gnWeek[8].tasks.find(t => t.id === 'w8c1'));
+check(proofKindOf(gnReset) === 'check', 'the week-8 facility reset stays a checkoff');
+const lvlupClean = taskForProof('cycle', grab('getCycleTasks')('ash')[1].tasks.find(t => t.id === 'w1c1'));
+check(proofKindOf(lvlupClean) === 'photo', 'LVLUP cycle cleaning rows still ask for a photo');
+
+const getMonthlyTasks = grab('getMonthlyTasks');
+const getCycleChecklist = grab('getCycleChecklist');
+const burstSkip = grab('burstSkip');
+const proofUseNone = grab('proofUseNone');
+const saveOptionalTaskNote = grab('saveOptionalTaskNote');
+function taskBy(list, id) { return (list || []).find(t => t.id === id); }
+function kindOf(task) { return proofKindOf(task); }
+
+const mDay = '2026-11-16';
+const mDaily = dailyTasksForDate('mirandaS', mDay);
+check(kindOf(taskBy(mDaily, 'opening')) === 'photo' && !taskBonusComplete(taskBy(mDaily, 'opening'), { ts: 1, proofV: 1 }), 'Miranda’s open still needs a photo');
+check(kindOf(taskBy(mDaily, 'ph_bathroom')) === 'photo', 'Miranda’s Monday bathroom photo stays');
+check(kindOf(taskBy(mDaily, 'ph_floor')) === 'check' && taskBonusComplete(taskBy(mDaily, 'ph_floor'), { ts: 1, proofV: 1 }) && !/photo|snap/i.test(taskBy(mDaily, 'ph_floor').text), 'Miranda’s gym floor counts on click and does not ask for a photo');
+const mWeekTasks = weeklyTasksFor('mirandaS', getTaskWeekKey(mDay));
+check(kindOf(taskBy(mWeekTasks, 'm_mop_mats')) === 'photo' && kindOf(taskBy(mWeekTasks, 'm_party_reset')) === 'photo', 'Miranda still photographs mats and the party reset');
+check(kindOf(taskBy(mWeekTasks, 'm_party_cleanup')) === 'photoOrNone', 'party breakdown stays a photo or no-party choice');
+check(kindOf(taskBy(mWeekTasks, 'ph_station')) === 'check' && kindOf(taskBy(mWeekTasks, 'ph_signage')) === 'check', 'Miranda’s station and signage are checkoffs');
+check(kindOf(taskBy(mWeekTasks, 'cc_content')) === 'posts', 'Miranda still uploads 3 pieces of content');
+check(!/photo|snap/i.test(taskBy(mWeekTasks, 'ph_station').text + taskBy(mWeekTasks, 'ph_signage').text), 'Miranda’s simplified weekly rows do not ask for a photo');
+const partyTask = taskBy(mWeekTasks, 'm_party_cleanup');
+check(taskBonusComplete(partyTask, { ts: 1, proofV: 1, photos: ['u'] }), 'a party photo completes the breakdown without a note');
+check(!taskBonusComplete(partyTask, { ts: 1, proofV: 1, notes: 'wiped the tables' }), 'a note alone does not complete the party breakdown');
+check(taskBonusComplete(partyTask, { ts: 1, proofV: 1, none: true, notes: 'No party this week' }), 'No party this week completes the breakdown');
+check(taskBonusComplete(partyTask, { ts: 1, proofV: 1, photos: ['u'], notes: 'confetti in the rug' }), 'an optional party note does not block the photo');
+const nonePayload = { ts: Date.now(), proofV: 1, none: true, notes: 'No party this week' };
+check(burstSkip(partyTask, nonePayload) === true, 'No party this week does not count toward burst review');
+check(burstSkip(partyTask, { ts: 1, proofV: 1, notes: 'tables wiped' }) === true, 'an optional party note does not count toward burst review');
+check(burstSkip(partyTask, { ts: 1, proofV: 1, photos: ['u'] }) === true, 'the party photo does not count toward burst review');
+
+state.tasksLoc = 'mirandaS';
+state.tasksDate = mDay;
+state._proofNow = '2026-11-16T18:00:00Z';
+if (!state.tasksData.mirandaS) state.tasksData.mirandaS = {};
+state.tasksData.mirandaS.daily = state.tasksData.mirandaS.daily || {};
+state.tasksData.mirandaS.weekly = state.tasksData.mirandaS.weekly || {};
+const partyWeek = getTaskWeekKey(mDay);
+const beforeMiranda = sandbox.__writes.length;
+completeTask('daily', 'ph_floor');
+completeTask('weekly', 'ph_station');
+completeTask('weekly', 'ph_signage');
+proofUseNone('weekly', 'm_party_cleanup');
+const mLiveDay = state.tasksData.mirandaS.daily[mDay];
+const mLiveWeek = state.tasksData.mirandaS.weekly[partyWeek];
+check(mLiveDay.ph_floor && mLiveDay.ph_floor.proofV === 1 && !mLiveDay.ph_floor.burst && taskBonusComplete(taskBy(mDaily, 'ph_floor'), mLiveDay.ph_floor), 'Miranda’s floor click counts and is not flagged');
+check(mLiveWeek.ph_station && mLiveWeek.ph_signage && !mLiveWeek.ph_station.burst && !mLiveWeek.ph_signage.burst, 'Miranda’s station and signage clicks are not flagged');
+check(mLiveWeek.m_party_cleanup && mLiveWeek.m_party_cleanup.none && !mLiveWeek.m_party_cleanup.burst && taskBonusComplete(partyTask, mLiveWeek.m_party_cleanup), 'saving No party this week counts and is not flagged');
+check(sandbox.__writes.slice(beforeMiranda).every(w => String(w.path).indexOf('/burst') < 0 && String(w.path).indexOf('needsReview') < 0), 'Miranda’s checkoffs and No party this week do not write a burst flag');
+setEl('notes_weekly_m_party_cleanup', 'tables wiped');
+saveOptionalTaskNote('weekly', 'm_party_cleanup', { explicit: true });
+check(mLiveWeek.m_party_cleanup.notes === 'tables wiped' && mLiveWeek.m_party_cleanup.none && !mLiveWeek.m_party_cleanup.burst && taskBonusComplete(partyTask, mLiveWeek.m_party_cleanup), 'a party note can be saved later and the task stays complete');
+
+const keptDaily = ['opening', 'ph_bathroom', 'closing'];
+keptDaily.forEach(id => {
+  const bryan = taskBy(dailyTasksForDate('bryanG', mDay), id);
+  const ash = taskBy(dailyTasksForDate('ash', mDay), id);
+  const tarik = taskBy(dailyTasksForDate('tarikM', mDay), id);
+  const joey = taskBy(dailyTasksForDate('joeyZ', mDay), id);
+  check(kindOf(bryan) === kindOf(ash) && kindOf(bryan) !== 'check', 'Bryan keeps proof on ' + id);
+  check(kindOf(ash) === kindOf(tarik) && kindOf(ash) === kindOf(joey), id + ' is unchanged for Ash, Tarik, and Joey');
+});
+const bClose = taskBy(dailyTasksForDate('bryanG', mDay), 'closing');
+check(!/floor photo/i.test(bClose.text) && !taskBonusComplete(bClose, { ts: 1, proofV: 1 }) && taskBonusComplete(bClose, { ts: 1, proofV: 1, trials: 1, enrollments: 0 }), 'Bryan’s closing is still the scorecard and does not mention a floor photo');
+check(/floor photo/i.test(taskBy(dailyTasksForDate('ash', mDay), 'closing').text), 'Ash’s closing still points at the floor photo');
+const bStop = taskBy(dailyTasksForDate('bryanG', mDay), 'stoplight');
+const bFloor = taskBy(dailyTasksForDate('bryanG', mDay), 'ph_floor');
+check(!bStop.autoOnly && kindOf(bStop) === 'check' && taskBonusComplete(bStop, { ts: 2, proofV: 1 }), 'Bryan’s stoplight counts on click with no Students-page log');
+check(kindOf(bFloor) === 'check' && !/photo|snap/i.test(bFloor.text) && taskBonusComplete(bFloor, { ts: 1, proofV: 1 }), 'Bryan’s training floor counts on click');
+['ash', 'tarikM', 'joeyZ'].forEach(emp => {
+  const stop = taskBy(dailyTasksForDate(emp, mDay), 'stoplight');
+  const floor = taskBy(dailyTasksForDate(emp, mDay), 'ph_floor');
+  check(!!stop.autoOnly && kindOf(stop) === 'stoplight' && !taskBonusComplete(stop, { ts: 2, proofV: 1, count: 2, notes: '2' }), emp + ' stoplight still requires named Students-page logs');
+  check(kindOf(floor) === 'photo' && !taskBonusComplete(floor, { ts: 1, proofV: 1 }) && taskBonusComplete(floor, { ts: 1, proofV: 1, photos: ['u'] }), emp + ' training-floor photo is unchanged');
+});
+check(kindOf(taskBy(dailyTasksForDate('joeyZ', '2026-11-09'), 'j_wetmop')) === 'linked', 'Joey’s wet-mop still depends on the floor photo');
+check(kindOf(taskBy(dailyTasksForDate('joeyZ', '2026-11-13'), 'j_spray')) === 'linked', 'Joey’s spray-mop still depends on the floor photo');
+
+const dustOn = getTaskWeekKey('2026-11-09');
+const dustOff = getTaskWeekKey('2026-11-16');
+const bDust = taskBy(weeklyTasksFor('bryanG', dustOn), 'dust_displays');
+const aDust = taskBy(weeklyTasksFor('ash', dustOn), 'dust_displays');
+check(bDust && bDust.every === 8 && kindOf(bDust) === 'check' && !/photo|snap/i.test(bDust.text) && taskBonusComplete(bDust, { ts: 1, proofV: 1 }), 'Bryan dusts on the same weeks without a photo');
+check(aDust && kindOf(aDust) === 'photo' && /snap a photo/.test(aDust.text), 'Ash still photographs display dusting');
+check(!weeklyTasksFor('bryanG', dustOff).some(t => t.id === 'dust_displays') && !weeklyTasksFor('joeyZ', dustOff).some(t => t.id === 'dust_displays') && !weeklyTasksFor('tarikM', dustOff).some(t => t.id === 'dust_displays'), 'dusting stays off the off-weeks');
+['ph_announce', 'ph_station', 'ph_signage', 'ad_invites', 'mia_report', 'new_checkin'].forEach(id => {
+  const bryan = taskBy(weeklyTasksFor('bryanG', dustOn), id);
+  check(kindOf(bryan) === 'check' && taskBonusComplete(bryan, { ts: 1, proofV: 1 }) && !/snap a photo|names are still required|one-line note/i.test(bryan.text), 'Bryan weekly ' + id + ' counts on click');
+  ['ash', 'joeyZ', 'tarikM'].forEach(emp => {
+    const task = taskBy(weeklyTasksFor(emp, dustOn), id);
+    check(kindOf(task) !== 'check', emp + ' keeps proof on weekly ' + id);
+  });
+});
+check(kindOf(taskBy(weeklyTasksFor('bryanG', dustOn), 'mop_mats')) === 'photo' && kindOf(taskBy(weeklyTasksFor('ash', dustOn), 'mop_mats')) === 'photo', 'mat photos stay for Bryan and Ash');
+check(kindOf(taskBy(weeklyTasksFor('bryanG', dustOn), 'cc_content')) === 'posts', 'Bryan still uploads 3 pieces of content');
+const tarikAnn = taskBy(weeklyTasksFor('tarikM', dustOn), 'ph_announce');
+const bryanAnn = taskBy(weeklyTasksFor('bryanG', dustOn), 'ph_announce');
+check(/whiteboard/.test(tarikAnn.text) && /photo/.test(tarikAnn.text) && kindOf(tarikAnn) === 'photo', 'Tarik still photographs the whiteboard');
+check(/mirror/.test(bryanAnn.text) && !/photo|snap/i.test(bryanAnn.text), 'Bryan refreshes the mirror without a photo');
+check(kindOf(taskBy(getMonthlyTasks('bryanG'), 'lm_sanitize')) === 'check' && taskBonusComplete(taskBy(getMonthlyTasks('bryanG'), 'lm_sanitize'), { ts: 1, proofV: 1 }), 'Bryan’s deep sanitize counts on click');
+['ash', 'joeyZ', 'tarikM'].forEach(emp => {
+  check(kindOf(taskBy(getMonthlyTasks(emp), 'lm_sanitize')) === 'photo', emp + ' still photographs the deep sanitize');
+});
+['cc_w1_outreach', 'cc_w3_attn', 'cc_w5_attn', 'cc_bday', 'cc_upgrades'].forEach(id => {
+  const bryan = taskBy(getCycleChecklist('bryanG'), id);
+  check(kindOf(bryan) === 'check' && !bryan.autoOnly && taskBonusComplete(bryan, { ts: 1, proofV: 1 }), 'Bryan cycle ' + id + ' counts on click');
+  ['ash', 'joeyZ', 'tarikM'].forEach(emp => {
+    const task = taskBy(getCycleChecklist(emp), id);
+    check(kindOf(task) !== 'check' && task.proof && task.proof.kind !== 'check', emp + ' keeps proof on cycle ' + id);
+  });
+});
+check(!!taskBy(getCycleChecklist('ash'), 'cc_w1_outreach').autoOnly && !taskBy(getCycleChecklist('bryanG'), 'cc_w1_outreach').autoOnly, 'only Bryan can check cycle outreach off by hand');
+
+const staleCopy = ['Tigers 7', 'first names', 'note the holes', 'Replaced N', 'Names of students who received', 'Event names and which classes', 'names still open', 'Three short post ideas', 'List the family names'];
+const copyTasks = []
+  .concat(taskBy(dailyTasksForDate('ash', mDay), 'rosters'))
+  .concat(['schedule', 'dots', 'lifelinks', 'events_promote', 'lead_audit', 'social_plan'].map(id => taskBy(weeklyTasksFor('joeyZ', dustOn), id)))
+  .concat(taskBy(getMonthlyTasks('tarikM'), 'lm_reviews'));
+check(staleCopy.every(phrase => copyTasks.every(t => t.text.indexOf(phrase) < 0)), 'checkoff copy no longer asks for names, counts, or notes');
+check(copyTasks.every(t => kindOf(t) === 'check'), 'those rows are still one-click checkoffs');
+check(taskBy(weeklyTasksFor('ash', dustOn), 'lead_audit').text === taskBy(weeklyTasksFor('bryanG', dustOn), 'lead_audit').text, 'the shared lead-audit checkoff uses the same wording');
+
+state.tasksLoc = 'bryanG';
+state.tasksDate = mDay;
+state._proofNow = '2026-11-16T18:00:00Z';
+if (!state.tasksData.bryanG) state.tasksData.bryanG = {};
+state.tasksData.bryanG.daily = state.tasksData.bryanG.daily || {};
+state.tasksData.bryanG.weekly = state.tasksData.bryanG.weekly || {};
+const beforeBryanClicks = sandbox.__writes.length;
+['stoplight', 'ph_floor'].forEach(id => completeTask('daily', id));
+['ph_announce', 'ph_station', 'ph_signage', 'ad_invites', 'mia_report', 'new_checkin'].forEach(id => completeTask('weekly', id));
+const bLiveDay = state.tasksData.bryanG.daily[mDay];
+const bLiveWeek = state.tasksData.bryanG.weekly[getTaskWeekKey(mDay)];
+check(bLiveDay.stoplight && bLiveDay.stoplight.proofV === 1 && !bLiveDay.stoplight.notes && !bLiveDay.stoplight.burst && taskBonusComplete(bStop, bLiveDay.stoplight), 'Bryan’s stoplight click counts with an empty note');
+check(bLiveDay.ph_floor && !bLiveDay.ph_floor.burst && taskBonusComplete(bFloor, bLiveDay.ph_floor), 'Bryan’s floor click counts');
+check(['ph_announce', 'ph_station', 'ph_signage', 'ad_invites', 'mia_report', 'new_checkin'].every(id => bLiveWeek[id] && bLiveWeek[id].proofV === 1 && !bLiveWeek[id].burst && taskBonusComplete(taskBy(weeklyTasksFor('bryanG', getTaskWeekKey(mDay)), id), bLiveWeek[id])), 'Bryan’s simplified weekly clicks count and are not flagged');
+check(sandbox.__writes.slice(beforeBryanClicks).every(w => String(w.path).indexOf('/burst') < 0 && String(w.path).indexOf('needsReview') < 0), 'Bryan’s checkoffs do not write a burst flag');
+setEl('notes_weekly_ad_invites', 'Sam and Riley');
+saveOptionalTaskNote('weekly', 'ad_invites', { explicit: true });
+check(bLiveWeek.ad_invites.notes === 'Sam and Riley' && !bLiveWeek.ad_invites.burst && taskBonusComplete(taskBy(weeklyTasksFor('bryanG', getTaskWeekKey(mDay)), 'ad_invites'), bLiveWeek.ad_invites), 'Bryan can save an optional invite note and the task stays complete');
+state.tasksLoc = 'ash';
+const beforeAshStop = sandbox.__writes.length;
+completeTask('daily', 'stoplight');
+check(sandbox.__writes.length === beforeAshStop, 'Ash still cannot check stoplight off by hand');
+delete state.tasksData.mirandaS.weekly[partyWeek].m_party_cleanup;
+state.tasksCycleWeekManual = true;
+state.tasksCycleWeek = 1;
+const gnSheet = sheet('mirandaS', mDay);
+state.tasksCycleWeekManual = false;
+function kindNear(html, id) {
+  const at = html.indexOf('data-task-id="' + id + '"');
+  if (at < 0) return '';
+  const m = html.slice(at, at + 90).match(/data-proof-kind="([^"]+)"/);
+  return m ? m[1] : '';
+}
+check(kindNear(gnSheet, 'ph_floor') === 'check' && kindNear(gnSheet, 'opening') === 'photo' && kindNear(gnSheet, 'closing') === 'photo', 'Miranda’s sheet matches the kept and simplified daily proofs');
+check(kindNear(gnSheet, 'ph_station') === 'check' && kindNear(gnSheet, 'm_mop_mats') === 'photo' && kindNear(gnSheet, 'm_party_cleanup') === 'photoOrNone', 'Miranda’s sheet matches the kept and simplified weekly proofs');
+check(gnSheet.indexOf('No party this week') >= 0 && gnSheet.indexOf('data-none-option="1"') >= 0 && gnSheet.indexOf('data-optional-note="1"') >= 0, 'party breakdown offers No party this week and an optional note');
+check(kindNear(gnSheet, 'w1c1') === 'check' && gnSheet.indexOf('data-task-id="w1c1"') >= 0, 'the week-1 deep clean is a checkoff on Miranda’s sheet');
 state._proofNow = null;
 
 state.tasksLoc = 'ash';
@@ -556,7 +727,19 @@ const bdayAt = monProof.indexOf('data-task-id="bday_report"');
 check(bdayAt >= 0 && monProof.slice(bdayAt, bdayAt + 90).indexOf('data-proof-kind="check"') >= 0, 'birthday invites are a checkoff');
 check(monProof.indexOf('Book a party') >= 0 && monProof.indexOf('Ava') >= 0, 'a saved party booking shows the child name');
 const bryanProof = sheet('bryanG', '2026-11-16');
-check(bryanProof.indexOf('data-proof-form="bookings"') >= 0, 'cycle party booking fields are on the sheet');
+check(kindNear(monProof, 'cc_bday') === 'bookings' && monProof.indexOf('Ava') >= 0, 'Ash still logs two parties on Book a party');
+check(bryanProof.indexOf('data-task-id="cc_bday"') >= 0 && bryanProof.indexOf('data-proof-form="bookings"') < 0, 'Bryan checks off Book a party without the booking form');
+check(kindNear(monProof, 'ph_floor') === 'photo' && kindNear(monProof, 'stoplight') === 'stoplight', 'Ash’s sheet still requires the floor photo and Students-page stoplight');
+check(kindNear(bryanProof, 'ph_floor') === 'check' && kindNear(bryanProof, 'stoplight') === 'check', 'Bryan’s floor and stoplight are checkoffs on the sheet');
+check(kindNear(bryanProof, 'opening') === 'photo' && kindNear(bryanProof, 'closing') === 'scorecard' && kindNear(bryanProof, 'mop_mats') === 'photo', 'Bryan’s sheet keeps the open, close, and mat proofs');
+function taskSlice(html, id) {
+  const at = html.indexOf('data-task-id="' + id + '"');
+  if (at < 0) return '';
+  const next = html.indexOf('data-task-id="', at + 20);
+  return html.slice(at, next < 0 ? html.length : next);
+}
+const bryanStop = taskSlice(bryanProof, 'stoplight');
+check(bryanStop.indexOf('Students page') < 0 && bryanStop.indexOf('data-optional-note="1"') >= 0, 'Bryan’s stoplight has an optional note and no Students-page box');
 check(monProof.indexOf('data-task-id="ph_bathroom"') >= 0, 'Monday bathroom photo is still on the lead sheet');
 check(monProof.indexOf('data-task-id="ph_floor"') >= 0, 'training floor photo is still daily');
 
