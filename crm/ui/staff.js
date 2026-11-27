@@ -27,6 +27,16 @@
     liveBilling: null,
     liveShifts: null,
     signOpen: false,
+    qboEntity: 'all',
+    qboPeriod: 'month',
+    qboFrom: '',
+    qboThrough: '',
+    qboMap: false,
+    qboRemote: null,
+    qboLiveKey: '',
+    qboLiveError: '',
+    qboDraft: null,
+    qboMapError: '',
   };
 
   var TABS = [
@@ -60,7 +70,7 @@
       '</main></div>' +
       '<nav class="bottom staff-tabs" aria-label="Front desk">' +
       TABS.map(function (tab) { return tabButton(tab, 'short'); }).join('') +
-      '</nav>' + connectSheet() + drawer();
+      '</nav>' + connectSheet() + drawer() + qboDrawer();
   }
 
   function screen() {
@@ -483,13 +493,240 @@
     }).join('');
   }
 
+  function qboEdits() {
+    try {
+      var saved = JSON.parse(localStorage.getItem('lvlupQboMapV1') || '[]');
+      return Array.isArray(saved) ? saved : [];
+    } catch (err) { return []; }
+  }
+
+  function qboIsLive() { return !!(uiLib.apiBase() && uiLib.token()); }
+
+  function qboQueryKey() {
+    return [ui.qboEntity, ui.qboPeriod, ui.qboFrom, ui.qboThrough, store.today, uiLib.apiBase(), qboIsLive() ? '1' : '0'].join('|');
+  }
+
+  function ensureQboLive() {
+    if (!qboIsLive()) { ui.qboRemote = null; ui.qboLiveKey = ''; return; }
+    var key = qboQueryKey();
+    if (ui.qboLiveKey === key) return;
+    ui.qboLiveKey = key;
+    var params = new URLSearchParams({ entity: ui.qboEntity, period: ui.qboPeriod, format: 'preview', asOf: store.today });
+    if (ui.qboPeriod === 'custom') {
+      if (ui.qboFrom) params.set('from', ui.qboFrom);
+      if (ui.qboThrough) params.set('through', ui.qboThrough);
+    }
+    fetch(uiLib.apiBase() + '/v1/financials/quickbooks-export?' + params.toString(), {
+      headers: { authorization: 'Bearer ' + uiLib.token() },
+    }).then(function (res) {
+      return res.json().then(function (body) { return { ok: res.ok, body: body }; });
+    }).then(function (res) {
+      if (ui.qboLiveKey !== key) return;
+      ui.qboRemote = res.ok ? res.body : null;
+      ui.qboLiveError = res.ok ? '' : ((res.body && res.body.error && res.body.error.message) || 'Could not load the export.');
+      render();
+    }).catch(function () {
+      if (ui.qboLiveKey !== key) return;
+      ui.qboRemote = null;
+      ui.qboLiveError = 'Could not reach the sandbox API. Showing the sample file.';
+      render();
+    });
+  }
+
+  function qboLocal() {
+    var catalog = window.LvlupQbo.applyMappingEdits(window.LvlupQbo.defaultCatalog(), qboEdits());
+    return window.LvlupQbo.buildQuickbooksExport({
+      entity: ui.qboEntity,
+      period: ui.qboPeriod,
+      from: ui.qboFrom,
+      through: ui.qboThrough,
+      asOf: store.today,
+      catalog: catalog,
+    });
+  }
+
+  function qboReport() {
+    if (ui.qboPeriod === 'custom' && (!ui.qboFrom || !ui.qboThrough)) return null;
+    if (qboIsLive() && ui.qboRemote && ui.qboRemote.entities) return ui.qboRemote;
+    try { return qboLocal(); }
+    catch (err) { ui.qboLiveError = err && err.message ? err.message : 'Check the dates.'; return null; }
+  }
+
+  function qboField(id, field, fallback) {
+    var lists = [ui.qboDraft || [], qboEdits()];
+    for (var i = 0; i < lists.length; i++) {
+      var hit = lists[i].filter(function (row) { return row.id === id; })[0];
+      if (hit && hit[field] != null) return hit[field];
+    }
+    return fallback;
+  }
+
+  function downloadText(filename, text) {
+    var blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+  }
+
+  function qboDownload(kind) {
+    var report = qboReport();
+    if (!report) { toast('bad', 'Choose a start and end date first.'); return; }
+    var files = kind === 'journal' ? (report.journalFiles || []) : (report.files || []);
+    if (!files.length) { toast('bad', 'Nothing to download for that range.'); return; }
+    files.forEach(function (file, index) {
+      setTimeout(function () { downloadText(file.filename, file.body); }, index * 250);
+    });
+    var fromApi = qboIsLive() && ui.qboRemote;
+    var count = files.length === 1 ? 'Saved the file. ' : 'Saved ' + files.length + ' files. ';
+    toast('ok', count + (fromApi ? 'Loaded from the sandbox export. Nothing was sent to QuickBooks.' : 'Demo file on this iPad. Nothing was sent to QuickBooks.'));
+  }
+
+  function qboCard() {
+    ensureQboLive();
+    var entities = [
+      ['all', 'All 3 Entities'],
+      ['moh', "Moh's Martial Arts LLC"],
+      ['lvlup2', 'LVLUP Martial Arts 2 LLC'],
+      ['lvlup3', 'LVLUP Martial Arts 3 LLC'],
+    ];
+    var periods = [['month', 'This Month'], ['last', 'Last Month'], ['custom', 'Custom']];
+    var pills = function (rows, current, act) {
+      return '<div class="qbo-pill-row" role="group">' + rows.map(function (row) {
+        return '<button type="button" class="chip' + (current === row[0] ? ' on' : '') + '" data-act="' + act + '" data-id="' + esc(row[0]) + '">' + esc(row[1]) + '</button>';
+      }).join('') + '</div>';
+    };
+    var report = qboReport();
+    var dates = ui.qboPeriod === 'custom'
+      ? '<div class="qbo-dates"><label>Start<input id="qbo-from" type="date" value="' + esc(ui.qboFrom) + '"></label><label>End<input id="qbo-through" type="date" value="' + esc(ui.qboThrough) + '"></label></div>'
+      : '';
+    if (!report) {
+      return qboShell(pills(entities, ui.qboEntity, 'qbo-entity'), pills(periods, ui.qboPeriod, 'qbo-period'), dates, '<p class="lede">Choose both dates. The file stays on this iPad until you download it.</p>');
+    }
+    var view = report.entities.length === 1 ? report.entities[0] : null;
+    var cats = view ? view.categories : report.summary.categories;
+    var totals = view ? view.totals : report.summary;
+    var balanced = view ? view.journal.balanced && view.totals.formulaOk : report.summary.balanced;
+    var mode = qboIsLive() && ui.qboRemote ? 'Live sandbox' : 'Demo';
+    var splits = report.entities.length > 1
+      ? '<div class="qbo-entity-totals">' + report.entities.map(function (entity) {
+        return '<div><span>' + esc(entity.legalName) + '</span><strong>' + esc(uiLib.money(entity.totals.depositCents)) + '</strong></div>';
+      }).join('') + '</div>'
+      : '';
+    var table = '<div class="qbo-table-wrap"><table class="qbo-table"><thead><tr><th>Category</th><th>Count</th><th>Gross</th><th>Refunds</th><th>Fees</th><th>Net</th></tr></thead><tbody>' +
+      cats.map(function (row) {
+        return '<tr><td class="qbo-name"><strong>' + esc(row.name) + '</strong><span class="qbo-acct">' + esc(row.accountName) + '</span></td>' +
+          '<td class="qbo-nums" data-label="Count">' + esc(row.count) + '</td>' +
+          '<td class="qbo-nums" data-label="Gross">' + esc(uiLib.money(row.grossCents)) + '</td>' +
+          '<td class="qbo-nums" data-label="Refunds">' + esc(uiLib.money(row.refundCents)) + '</td>' +
+          '<td class="qbo-nums" data-label="Fees">' + esc(uiLib.money(row.feeCents)) + '</td>' +
+          '<td class="qbo-nums" data-label="Net">' + esc(uiLib.money(row.netCents)) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    var check = '<div class="qbo-check' + (balanced ? '' : ' bad') + '" role="status">' +
+      (balanced ? 'Debits = Credits' : 'Out of balance') +
+      ' · Net = Gross − Refunds − Fees · Deposit ' + esc(uiLib.money(totals.depositCents)) +
+      ' · Family credits ' + esc(uiLib.money(totals.creditCents)) + '</div>';
+    var note = ui.qboLiveError ? '<div class="toast bad" role="alert">' + esc(ui.qboLiveError) + '</div>' : '';
+    return qboShell(pills(entities, ui.qboEntity, 'qbo-entity'), pills(periods, ui.qboPeriod, 'qbo-period'), dates,
+      note + splits + check +
+      '<div class="qbo-actions"><button type="button" class="big primary" data-act="qbo-csv">Download QuickBooks CSV</button>' +
+      '<button type="button" class="big" data-act="qbo-journal">Download QBO Journal Entry CSV</button>' +
+      '<button type="button" class="big qbo-edit" data-act="qbo-map">Edit QuickBooks Account Names</button></div>' +
+      table +
+      '<p class="meta">' + esc(mode) + ' · ' + esc(report.period.label) + ' · ' + esc(report.period.from) + ' to ' + esc(report.period.through) + '. Nothing is charged.</p>');
+  }
+
+  function qboShell(entities, periods, dates, body) {
+    return '<section class="qbo-card" id="qbo-export" data-qbo="export">' +
+      '<div class="qbo-top"><div class="qbo-logos">' + uiLib.logo('mark') + uiLib.logo('go') + '</div>' +
+      '<div class="qbo-copy"><p class="qbo-kicker">QuickBooks</p><h2>QuickBooks Export for Richelle</h2>' +
+      '<p class="lede">One file per LLC. Account names match her chart. Nothing is sent to QuickBooks.</p></div></div>' +
+      entities + periods + dates + body + '</section>';
+  }
+
+  function qboDrawer() {
+    if (!ui.qboMap || !window.LvlupQbo) return '';
+    var catalog = window.LvlupQbo.defaultCatalog();
+    var block = function (title, rows, account) {
+      return '<h2 class="qbo-brand">' + esc(title) + '</h2>' + rows.map(function (row) {
+        var accountField = account
+          ? '<label>QuickBooks account name<input id="qbo-acct-' + esc(row.id) + '" value="' + esc(qboField(row.id, 'accountName', row.accountName)) + '" autocomplete="off"></label>'
+          : '';
+        var classLabel = account ? 'Class, if it should not follow the school' : 'QuickBooks class / location';
+        return '<div class="card qbo-map-row"><strong>' + esc(row.name) + '</strong>' + accountField +
+          '<label>' + esc(classLabel) + '<input id="qbo-class-' + esc(row.id) + '" value="' + esc(qboField(row.id, 'className', row.className)) + '" autocomplete="off"></label></div>';
+      }).join('');
+    };
+    return '<div class="drawer qbo-drawer" data-qbo="mapping"><div class="panel"><button type="button" class="textbtn" data-act="qbo-map-close">Close</button>' +
+      '<div class="qbo-logos">' + uiLib.logo('mark') + uiLib.logo('go') + '</div>' +
+      '<h1>Edit QuickBooks Account Names</h1><p class="lede">Change a name once. The next download uses it. Nothing is posted to QuickBooks.</p>' +
+      (ui.qboMapError ? '<div class="toast bad" role="alert">' + esc(ui.qboMapError) + '</div>' : '') +
+      block('LVLUP Martial Arts', catalog.categories.filter(function (row) { return row.brand === 'lvlup'; }), true) +
+      block('Go Ninja', catalog.categories.filter(function (row) { return row.brand === 'goninja'; }), true) +
+      block('Refunds, fees, and the deposit', catalog.accounts, true) +
+      block('School class / location', catalog.schools, false) +
+      '<button type="button" class="big primary" data-act="qbo-map-save">Save account names</button>' +
+      '<button type="button" class="big" data-act="qbo-map-reset">Restore suggested names</button></div></div>';
+  }
+
+  function saveQboMap() {
+    var catalog = window.LvlupQbo.defaultCatalog();
+    var edits = [];
+    catalog.categories.concat(catalog.accounts).forEach(function (row) {
+      var account = document.getElementById('qbo-acct-' + row.id);
+      var klass = document.getElementById('qbo-class-' + row.id);
+      edits.push({
+        id: row.id,
+        accountName: account ? account.value : row.accountName,
+        className: klass ? klass.value : '',
+      });
+    });
+    catalog.schools.forEach(function (row) {
+      var klass = document.getElementById('qbo-class-' + row.id);
+      edits.push({ id: row.id, className: klass ? klass.value : row.className });
+    });
+    try { window.LvlupQbo.applyMappingEdits(window.LvlupQbo.defaultCatalog(), edits); }
+    catch (err) {
+      ui.qboDraft = edits;
+      ui.qboMapError = err && err.message ? err.message : 'Check the account names.';
+      render();
+      return;
+    }
+    try { localStorage.setItem('lvlupQboMapV1', JSON.stringify(edits)); } catch (err) { /* private mode */ }
+    ui.qboDraft = null;
+    ui.qboMapError = '';
+    ui.qboMap = false;
+    ui.qboLiveKey = '';
+    if (qboIsLive()) {
+      fetch(uiLib.apiBase() + '/v1/financials/quickbooks-categories', {
+        method: 'PUT',
+        headers: { authorization: 'Bearer ' + uiLib.token(), 'content-type': 'application/json' },
+        body: JSON.stringify({ rows: edits }),
+      }).then(function (res) {
+        return res.json().then(function (body) { return { ok: res.ok, body: body }; });
+      }).then(function (res) {
+        toast(res.ok ? 'ok' : 'bad', res.ok ? 'Account names saved in the sandbox. Nothing was posted to QuickBooks.' : ((res.body && res.body.error && res.body.error.message) || 'Could not save.'));
+      }).catch(function () {
+        toast('ok', 'Saved on this iPad. The sandbox API did not answer.');
+      });
+      return;
+    }
+    toast('ok', 'Account names saved on this iPad. Nothing was posted to QuickBooks.');
+  }
+
   function money() {
     var fin = data.financials;
     var max = fin.categories[0].cents;
     var liveMoney = ui.liveBilling && ui.liveBilling.tiles
       ? '<div class="note">Sandbox billing summary. Charges are off. Collected ' + esc(uiLib.money(ui.liveBilling.tiles.collected.cents)) + '.</div>'
       : '';
-    return '<h1>Financials</h1>' + uiLib.liveNote(ui.liveNote) + liveMoney + '<p class="lede">Sample month unless a finance sign-in loaded the sandbox summary. Nothing is charged.</p>' +
+    return '<h1>Financials &amp; Billing</h1>' + uiLib.liveNote(ui.liveNote) + liveMoney +
+      '<p class="lede">Sample month unless a finance sign-in loaded the sandbox summary. Nothing is charged.</p>' +
+      qboCard() +
       '<div class="note">' + esc(data.tuitionNote) + '</div>' +
       '<div class="tiles money-tiles"><div class="card"><div class="meta">Collected</div><div class="price">' + esc(uiLib.money(fin.collectedCents)) + '</div></div>' +
       '<div class="card"><div class="meta">Last month</div><div class="price">' + esc(uiLib.money(fin.lastMonthCents)) + '</div></div>' +
@@ -680,6 +917,31 @@
     if (act === 'task-toggle') { toggleTask(el.getAttribute('data-id')); return; }
     if (act === 'task-add') { addOneOff(); return; }
     if (act === 'reset') { store = uiLib.reset(); ui.connect = false; ui.drawer = ''; toast('ok', 'Sample data is fresh.'); return; }
+    if (act === 'qbo-entity') { ui.qboEntity = el.getAttribute('data-id'); ui.qboRemote = null; ui.qboLiveKey = ''; render(); return; }
+    if (act === 'qbo-period') {
+      ui.qboPeriod = el.getAttribute('data-id');
+      ui.qboRemote = null;
+      ui.qboLiveKey = '';
+      if (ui.qboPeriod === 'custom' && !ui.qboFrom) {
+        ui.qboFrom = store.today.slice(0, 8) + '01';
+        ui.qboThrough = store.today;
+      }
+      render();
+      return;
+    }
+    if (act === 'qbo-csv') { qboDownload('csv'); return; }
+    if (act === 'qbo-journal') { qboDownload('journal'); return; }
+    if (act === 'qbo-map') { ui.qboMap = true; ui.qboDraft = null; ui.qboMapError = ''; ui.drawer = ''; render(); return; }
+    if (act === 'qbo-map-close') { ui.qboMap = false; ui.qboDraft = null; ui.qboMapError = ''; render(); return; }
+    if (act === 'qbo-map-save') { saveQboMap(); return; }
+    if (act === 'qbo-map-reset') {
+      try { localStorage.removeItem('lvlupQboMapV1'); } catch (err) { /* ignore */ }
+      ui.qboDraft = null;
+      ui.qboMapError = '';
+      ui.qboLiveKey = '';
+      toast('ok', 'Suggested account names are back. Nothing was posted to QuickBooks.');
+      return;
+    }
   }
 
   function savePay() {
@@ -1002,6 +1264,16 @@
     if (event.target.id === 'desk-initials') deskState().initials = event.target.value;
     if (event.target.id === 'one-title') ui.oneTitle = event.target.value;
     if (event.target.id === 'one-phase') ui.onePhase = event.target.value;
+  });
+  document.getElementById('app').addEventListener('change', function (event) {
+    if (event.target.id === 'qbo-from' || event.target.id === 'qbo-through') {
+      ui.qboFrom = (document.getElementById('qbo-from') || {}).value || '';
+      ui.qboThrough = (document.getElementById('qbo-through') || {}).value || '';
+      ui.qboRemote = null;
+      ui.qboLiveKey = '';
+      ui.qboLiveError = '';
+      render();
+    }
   });
   window.addEventListener('storage', function () { store = uiLib.load(); render(); });
   setInterval(function () {
